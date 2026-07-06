@@ -661,7 +661,7 @@ const profileTitle = {
   fontSize: "18px", // slightly smaller for mobile
   fontWeight: "900",
   margin: 0,
-  color: "#0a090a",
+  color: "#1317fa",
   letterSpacing: "0.5px",
   textShadow: "0 2px 4px rgba(0,0,0,0.9)",
   overflow: "hidden",
