@@ -643,7 +643,7 @@ const journalistPhotoStyle = {
   height: "50px",
   borderRadius: "50%",
   objectFit: "cover",
-  border: "2px solid #ff6600",
+  border: "2px solid #f2f4f7",
   boxShadow: "0 0 10px rgb(0, 0, 0)",
   flexShrink: 0,
   cursor: "pointer",
@@ -661,7 +661,7 @@ const profileTitle = {
   fontSize: "18px", // slightly smaller for mobile
   fontWeight: "900",
   margin: 0,
-  color: "#ff3c00",
+  color: "#0a090a",
   letterSpacing: "0.5px",
   textShadow: "0 2px 4px rgba(0,0,0,0.9)",
   overflow: "hidden",
@@ -708,7 +708,7 @@ const tickerContainer = {
 };
 
 const tickerLabel = {
-  background: "linear-gradient(90deg, #ff8800, #f37e10)",
+  background: "linear-gradient(90deg, #fffdfc, #f7f7f7)",
   color: "#000",
   fontWeight: "900",
   fontSize: "12px",
