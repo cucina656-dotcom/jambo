@@ -491,7 +491,7 @@ export default function DedicationCard({
 
             <div>
               <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
-              <div style={roleText}>Uwo uyitura/izina</div>
+              <div style={roleText}>name</div>
             </div>
           </div>
         </div>
