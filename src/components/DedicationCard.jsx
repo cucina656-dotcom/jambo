@@ -439,7 +439,7 @@ export default function DedicationCard({
               <div style={nameEmphasis}>
                 {senderName || "Uwohereje"} {flag}
               </div>
-              <div style={roleText}>Boss Wakbabaje</div>
+              <div style={roleText}>Uwatoye Indirimbo</div>
             </div>
           </div>
           <div style={toPill}>{badgeStyle} Yo kuri</div>
@@ -456,7 +456,7 @@ export default function DedicationCard({
             )}
             <div>
               <div style={nameEmphasis}>{recipientName || "Uwakiriye"}</div>
-              <div style={roleText}>Uwo bishakiye</div>
+              <div style={roleText}>Uwatuwe indirimbo</div>
             </div>
           </div>
         </div>
@@ -464,8 +464,7 @@ export default function DedicationCard({
           {message || "Nakoranye ijonge kuri iyi ndirimbo kuko inyibutsa pure vibes zawe!"}
         </p>
         <div style={statsLine}>
-          <span>👁 {views.toLocaleString()} bavyonye</span>
-          <span>{badgeStyle} {reactions} banyuzwe</span>
+          <span>👁 {views.toLocaleString()} ababirebye</span>
           <span>💬 {comments} comments</span>
         </div>
         <button type="button" onClick={openWriteComment} style={commentMainBtn}>
@@ -543,7 +542,7 @@ const card = {
   maxWidth: "430px",
   margin: "0 auto 18px auto",
   overflow: "hidden",
-  background: "linear-gradient(180deg, #020617 0%, #0f172a 100%)", // Dark blue look
+  background: "linear-gradient(180deg, #020617 0%, #0f172a 100%)",
   color: "#f8fafc",
   borderRadius: "24px",
   border: "1px solid rgba(59, 130, 246, 0.2)",
@@ -723,7 +722,7 @@ const actionLabel = {
 
 const dedicationBody = {
   padding: "14px 14px 16px 14px",
-  background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)", // Sleek dark blue card body
+  background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)",
 };
 
 const peopleRow = {
@@ -743,7 +742,7 @@ const person = {
 const nameEmphasis = {
   fontWeight: "900",
   fontSize: "14px",
-  color: "#60a5fa", // Blue contrast color
+  color: "#60a5fa",
   lineHeight: 1.15,
   maxWidth: "128px",
   overflow: "hidden",
