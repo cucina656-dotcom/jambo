@@ -365,12 +365,12 @@ function Home() {
               data-index={index}
               style={feedPost}
             >
-              {/* Top Progress Bar Line mimicking screenshot stories layout */}
+              {/* Top Progress Bar Line */}
               <div style={storyProgressBarContainer}>
                 <div style={storyProgressBarActive}></div>
               </div>
 
-              {/* Story UI Top Info Panel: Badge, Name & Subtitle Info */}
+              {/* Story UI Top Info Panel */}
               <div style={profileCard}>
                 <img
                   src={post.logo_url || DEFAULT_LOGO}
@@ -392,7 +392,7 @@ function Home() {
                   </div>
                 </div>
 
-                {/* Right actions matching screenshot top corner */}
+                {/* Right actions */}
                 <div style={topRightControls}>
                   <span style={controlIcon}>•••</span>
                   <span style={controlIcon} className="volume-btn">🔊</span>
@@ -400,38 +400,43 @@ function Home() {
                 </div>
               </div>
 
-              {/* Video Card Layer Design formatted like the centered viewport box */}
+              {/* Extended Video Card Layout positioned elegantly underneath the badge area */}
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
               
-              {post.subtitle && (
-                <div style={tickerContainer}>
-                  {tapInUrl ? (
-                    <a
-                      href={tapInUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={tickerLabel}
-                    >
-                      Gwamo
-                    </a>
-                  ) : (
-                    <div style={tickerLabel}>Tapin</div>
-                  )}
-                  <div style={tickerWrapper}>
-                    <div style={tickerScrollingContent}>{post.subtitle}</div>
+              {/* Action row at the bottom aligning Marquee and Action button horizontally */}
+              <div style={bottomHorizontalActionsRow}>
+                {post.subtitle && (
+                  <div style={tickerContainer}>
+                    {tapInUrl ? (
+                      <a
+                        href={tapInUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={tickerLabel}
+                      >
+                        Gwamo
+                      </a>
+                    ) : (
+                      <div style={tickerLabel}>Gwamo</div>
+                    )}
+                    <div style={tickerWrapper}>
+                      <div style={tickerScrollingContent}>{post.subtitle}</div>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                
+                <button type="button" onClick={openEditor} style={plusBtn}>
+                  ⚡ +
+                </button>
+              </div>
             </section>
           );
         })}
       </main>
-      <button type="button" onClick={openEditor} style={plusBtn}>
-        ⚡  +
-      </button>
+
       {showEditor && (
         <EditorModal
           newCreatorIdentity={newCreatorIdentity}
@@ -549,7 +554,7 @@ function EditorModal({
   );
 }
 
-/* UI Elements Styles Matching UI Screens */
+/* Updated Responsive Layout Style Schema */
 const page = {
   height: "100vh",
   minHeight: "100svh",
@@ -579,9 +584,6 @@ const feedPost = {
   position: "relative",
   overflow: "hidden",
   background: "linear-gradient(to bottom, #757d88 0%, #4a5058 100%)",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
 };
 
 const storyProgressBarContainer = {
@@ -602,7 +604,6 @@ const storyProgressBarActive = {
   borderRadius: "10px",
 };
 
-// Top Header UI Layer
 const profileCard = {
   position: "absolute",
   top: "24px",
@@ -614,12 +615,14 @@ const profileCard = {
   gap: "10px",
 };
 
+// Profile Badge with striking neon glow visual effects
 const journalistPhotoStyle = {
   width: "42px",
   height: "42px",
   borderRadius: "50%",
   objectFit: "cover",
-  border: "1px solid rgba(255,255,255,0.4)",
+  border: "2px solid #00ffcc",
+  boxShadow: "0 0 10px #00ffcc, 0 0 3px #00ffcc",
   flexShrink: 0,
   cursor: "pointer",
 };
@@ -687,11 +690,12 @@ const controlIcon = {
   textShadow: "0 1px 2px rgba(0,0,0,0.5)",
 };
 
-/* Video card design container box centered inside the view layout */
+/* Video Card: Top extended closer to the badge with a small remaining vertical space gap */
 const videoCardViewport = {
   width: "100%",
-  height: "54%",
-  position: "relative",
+  height: "58%",
+  position: "absolute",
+  top: "76px", 
   overflow: "hidden",
   background: "#000",
   boxShadow: "0 4px 30px rgba(0, 0, 0, 0.4)",
@@ -717,16 +721,26 @@ const darkOverlay = {
   position: "absolute",
   inset: 0,
   zIndex: 1,
-  background: "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.3) 100%)",
+  background: "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.2) 100%)",
   pointerEvents: "none",
 };
 
-const tickerContainer = {
+/* Combined horizontal container alignment for Marquee and Create Action Button */
+const bottomHorizontalActionsRow = {
   position: "absolute",
-  bottom: "100px",
-  left: "16px",
-  right: "16px",
-  zIndex: 6,
+  bottom: "45px",
+  left: "14px",
+  right: "14px",
+  zIndex: 30,
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  width: "calc(100% - 28px)",
+};
+
+const tickerContainer = {
+  flex: 1,
+  height: "46px",
   display: "flex",
   alignItems: "center",
   background: "rgba(255, 255, 255, 0.15)",
@@ -736,16 +750,21 @@ const tickerContainer = {
   overflow: "hidden",
 };
 
+// Left label customized with explicit deep black backdrop
 const tickerLabel = {
-  background: "#ffffff",
-  color: "#000000",
+  background: "#000000",
+  color: "#ffffff",
   fontWeight: "700",
   fontSize: "13px",
-  padding: "10px 20px",
-  borderRadius: "30px",
+  padding: "0 22px",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  borderRadius: "30px 0 0 30px",
   zIndex: 2,
   flexShrink: 0,
   textDecoration: "none",
+  borderRight: "1px solid rgba(255,255,255,0.15)",
 };
 
 const tickerWrapper = {
@@ -777,24 +796,22 @@ if (typeof window !== "undefined" && !document.getElementById("ticker-keyframes"
   document.head.appendChild(styleEl);
 }
 
+// Action Button perfectly aligned vertically to the right side of the marquee text bar
 const plusBtn = {
-  position: "fixed",
-  right: "16px",
-  bottom: "24px",
-  zIndex: 30,
-  width: "50px",
-  height: "50px",
+  width: "46px",
+  height: "46px",
   borderRadius: "50%",
   border: "none",
   background: "#ffffff",
   color: "#000000",
-  fontSize: "20px",
+  fontSize: "18px",
   fontWeight: "700",
   boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  flexShrink: 0,
 };
 
 const modalOverlay = {
