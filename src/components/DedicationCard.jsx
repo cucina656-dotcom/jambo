@@ -494,7 +494,7 @@ export default function DedicationCard({
 
             <div>
               <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
-              <div style={roleText}>Uwo uyitura/izina</div>
+              <div style={roleText}>to</div>
             </div>
           </div>
         </div>
@@ -1088,7 +1088,7 @@ const closeImageBtn = {
   fontSize: "20px",
   borderRadius: "50%",
   width: "40px",
-  height: "40px",
+  height: "40px",	
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
