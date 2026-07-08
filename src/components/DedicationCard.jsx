@@ -437,7 +437,7 @@ export default function DedicationCard({
           </div>
 
           <button type="button" onClick={react} style={sideBtn}>
-            <span style={sideIcon}>{hasReacted ? badgeStyle : "🤍"}</span>
+            <span style={sideIcon}>{hasReacted ? "❤️" : "🤍"}</span>
             <span style={actionLabel}>{reactions}</span>
           </button>
 
@@ -475,7 +475,10 @@ export default function DedicationCard({
             </div>
           </div>
 
-          <div style={toPill}>{badgeStyle} to</div>
+          <button type="button" onClick={react} style={toPill}>
+            <span>❤️</span>
+            <span>to</span>
+          </button>
 
           <div style={person}>
             {recipientPhoto ? (
@@ -847,14 +850,21 @@ const smallPlaceholder = {
 };
 
 const toPill = {
-  padding: "6px 9px",
+  padding: "7px 11px",
   borderRadius: "999px",
-  background: "rgba(37, 99, 235, 0.18)",
-  color: "#bfdbfe",
+  background: "linear-gradient(135deg, rgba(255, 77, 109, 0.22), rgba(37, 99, 235, 0.22))",
+  color: "#f8fbff",
   fontSize: "11px",
-  fontWeight: "900",
-  border: "1px solid rgba(147, 197, 253, 0.24)",
+  fontWeight: "950",
+  border: "1px solid rgba(255, 255, 255, 0.24)",
   flexShrink: 0,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "5px",
+  textTransform: "uppercase",
+  boxShadow: "0 10px 22px rgba(255, 77, 109, 0.16)",
 };
 
 const messageText = {
