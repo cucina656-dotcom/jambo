@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 function Admin() {
   const [pin, setPin] = useState("");
   const [orders, setOrders] = useState([]);
+  const [orderReports, setOrderReports] = useState({ totalOrders: 0, totalRevenue: 0 });
   const [media, setMedia] = useState([]);
   const [dedications, setDedications] = useState([]);
   const [comments, setComments] = useState([]);
@@ -36,6 +37,7 @@ function Admin() {
         return;
       }
       setOrders(data.orders || []);
+      setOrderReports(data.reports || { totalOrders: 0, totalRevenue: 0 });
       setMessage("Orders loaded successfully");
     } catch (error) {
       setMessage("Failed to connect to Worker API");
@@ -362,10 +364,6 @@ function Admin() {
   const successOrders = orders.filter((o) => o.delivery_status === "Success");
   const failedOrders = orders.filter((o) => o.delivery_status === "Failed");
   const pendingOrders = orders.filter((o) => o.delivery_status === "Pending");
-  const revenue = successOrders.reduce(
-    (total, order) => total + Number(order.price || 0),
-    0
-  );
 
   useEffect(() => {
     if (pin.length >= 3) {
@@ -387,7 +385,6 @@ function Admin() {
   return (
     <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <h1>🔐 Admin Panel</h1>
-
       <input
         type="password"
         placeholder="Enter Admin PIN"
@@ -410,7 +407,6 @@ function Admin() {
         <button disabled={!isAdmin} onClick={loadComments}>Load Comments</button>
         <button disabled={!isAdmin} onClick={loadHomeContent}>Load Home Content</button>
       </div>
-
       {message && <p><strong>{message}</strong></p>}
 
       {/* Tab Navigation */}
@@ -525,7 +521,6 @@ function Admin() {
             >
               🚀 Own Part of ChillaX
             </h2>
-
             <p
               style={{
                 fontSize: "18px",
@@ -534,15 +529,12 @@ function Admin() {
             >
               feedX is growing into a platform for food,
               entertainment, media and community engagement.
-
               We are welcoming investors, business partners
               and strategic shareholders interested in helping
               scale the platform.
-
               Contact us today to discuss investment,
               partnership opportunities or share purchases.
             </p>
-
             <a
               href="https://wa.me/25076554329"
               target="_blank"
@@ -562,6 +554,155 @@ function Admin() {
               📱 WhatsApp 250788484366
             </a>
           </div>
+
+          {/* Orders Summary Cards */}
+          {orders.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "15px",
+                marginBottom: "25px",
+              }}
+            >
+              <div
+                style={{
+                  background: "#e3f2fd",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  border: "1px solid #90caf9",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "28px", color: "#0d47a1" }}>
+                  {orderReports.totalOrders}
+                </h3>
+                <p style={{ margin: "5px 0 0", color: "#0d47a1", fontWeight: "bold" }}>
+                  Total Orders
+                </p>
+              </div>
+              <div
+                style={{
+                  background: "#e8f5e9",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  border: "1px solid #a5d6a7",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "28px", color: "#1b5e20" }}>
+                  ${orderReports.totalRevenue.toFixed(2)}
+                </h3>
+                <p style={{ margin: "5px 0 0", color: "#1b5e20", fontWeight: "bold" }}>
+                  Total Revenue
+                </p>
+              </div>
+              <div
+                style={{
+                  background: "#fff3e0",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  border: "1px solid #ffcc80",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "28px", color: "#e65100" }}>
+                  {pendingOrders.length}
+                </h3>
+                <p style={{ margin: "5px 0 0", color: "#e65100", fontWeight: "bold" }}>
+                  Pending
+                </p>
+              </div>
+              <div
+                style={{
+                  background: "#e8f5e9",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  border: "1px solid #a5d6a7",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "28px", color: "#1b5e20" }}>
+                  {successOrders.length}
+                </h3>
+                <p style={{ margin: "5px 0 0", color: "#1b5e20", fontWeight: "bold" }}>
+                  Completed
+                </p>
+              </div>
+              <div
+                style={{
+                  background: "#ffebee",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  border: "1px solid #ef9a9a",
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: "28px", color: "#b71c1c" }}>
+                  {failedOrders.length}
+                </h3>
+                <p style={{ margin: "5px 0 0", color: "#b71c1c", fontWeight: "bold" }}>
+                  Failed
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Orders List */}
+          {orders.length === 0 && <p>No orders loaded yet. Enter PIN and click Load Orders.</p>}
+          {orders.map((order) => (
+            <div
+              key={order.id}
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: "12px",
+                padding: "20px",
+                marginBottom: "15px",
+                background: "#fafafa",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <div>
+                  <p><strong>Order ID:</strong> #{order.id}</p>
+                  <p><strong>Food:</strong> {order.food_name}</p>
+                  <p><strong>Price:</strong> ${Number(order.price || 0).toFixed(2)}</p>
+                  <p><strong>WhatsApp:</strong> {order.whatsapp}</p>
+                </div>
+                <div>
+                  <p><strong>Status:</strong> 
+                    <span style={{
+                      display: "inline-block",
+                      padding: "2px 10px",
+                      borderRadius: "4px",
+                      background: 
+                        order.delivery_status === "Success" ? "#28a745" :
+                        order.delivery_status === "Failed" ? "#dc3545" : "#ffc107",
+                      color: order.delivery_status === "Pending" ? "#333" : "white",
+                      marginLeft: "5px",
+                      fontWeight: "bold",
+                      fontSize: "12px",
+                    }}>
+                      {order.delivery_status}
+                    </span>
+                  </p>
+                  <p><strong>Delivery Method:</strong> {order.delivery_method || "N/A"}</p>
+                  <p><strong>Location:</strong> {order.location || "M Cantine Shop"}</p>
+                  <p><strong>Time Placed:</strong> {order.created_at ? new Date(order.created_at).toLocaleString() : "N/A"}</p>
+                </div>
+              </div>
+              {order.delivery_note && (
+                <div style={{ marginTop: "10px", background: "#e9ecef", padding: "10px", borderRadius: "4px" }}>
+                  <strong>Note:</strong> {order.delivery_note}
+                </div>
+              )}
+            </div>
+          ))}
         </>
       )}
 
@@ -603,7 +744,6 @@ function Admin() {
                   <p><strong>Recipient Photo:</strong> {dedication.recipient_photo ? "✅" : "❌"}</p>
                 </div>
               </div>
-
               <div
                 style={{
                   display: "grid",
@@ -683,7 +823,6 @@ function Admin() {
                   </select>
                 </div>
               </div>
-
               <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
                 <button
                   onClick={() => handleSave(dedication.id)}
@@ -924,7 +1063,7 @@ function Admin() {
                     <p>
                       <strong>WhatsApp:</strong>{" "}
                       {comment.commenter_whatsapp
-                        ? `***${comment.commenter_whatsapp.slice(-2)}`
+                        ? `****${comment.commenter_whatsapp.slice(-2)}`
                         : "Anonymous"}
                     </p>
                   </div>
@@ -1037,7 +1176,8 @@ function Admin() {
                   <p><strong>Created:</strong> {new Date(content.created_at).toLocaleString()}</p>
                   <p><strong>Media Type:</strong> {content.media_type || "video"}</p>
                   <p><strong>Status Label:</strong> {content.status_label || "Open"}</p>
-                  <p><strong>User Status:</strong>{" "}
+                  <p>
+                    <strong>User Status:</strong>{" "}
                     <span style={{
                       color: content.user_status === "Blocked" ? "#dc3545" : "#28a745",
                       fontWeight: "bold",
@@ -1066,11 +1206,9 @@ function Admin() {
                   )}
                 </div>
               </div>
-
               <div style={{ marginTop: "10px" }}>
                 <p><strong>Media URL:</strong> <span style={{ wordBreak: "break-all", fontSize: "12px" }}>{content.video_url || "N/A"}</span></p>
               </div>
-
               <div style={{ display: "flex", gap: "10px", marginTop: "15px", flexWrap: "wrap" }}>
                 {!content.is_visible && (
                   <button
