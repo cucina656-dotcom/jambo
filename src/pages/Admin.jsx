@@ -1055,4 +1055,271 @@ function Admin() {
                   <small style={{ color: "#666" }}>
                     Flag will appear based on this number:{" "}
                     {newComment.commenter_whatsapp &&
-                      getFlagFrom
+                      getFlagFromWhatsapp(newComment.commenter_whatsapp)}
+                  </small>
+                </div>
+                <button
+                  onClick={addComment}
+                  disabled={!isAdmin}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#28a745",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: isAdmin ? "pointer" : "not-allowed",
+                    opacity: isAdmin ? 1 : 0.5,
+                  }}
+                >
+                  💾 Save Comment
+                </button>
+              </div>
+            </div>
+          )}
+
+          {comments.length === 0 && <p>No comments found.</p>}
+          {comments.map((comment) => {
+            const dedication = dedications.find(d => d.id === comment.dedication_id);
+            return (
+              <div
+                key={comment.id}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "12px",
+                  padding: "15px",
+                  marginBottom: "15px",
+                  background: "#fafafa",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "10px",
+                  }}
+                >
+                  <div>
+                    <p><strong>ID:</strong> {comment.id}</p>
+                    <p>
+                      <strong>Dedication:</strong> #{comment.dedication_id}
+                      {dedication && ` - ${dedication.sender_name} → ${dedication.recipient_name}`}
+                    </p>
+                    <p>
+                      <strong>Flag:</strong>{" "}
+                      {getFlagFromWhatsapp(comment.commenter_whatsapp)}
+                    </p>
+                  </div>
+                  <div>
+                    <p><strong>Created:</strong> {new Date(comment.created_at).toLocaleString()}</p>
+                    <p>
+                      <strong>WhatsApp:</strong>{" "}
+                      {comment.commenter_whatsapp
+                        ? `****${comment.commenter_whatsapp.slice(-2)}`
+                        : "Anonymous"}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ marginTop: "10px" }}>
+                  <p><strong>Comment:</strong></p>
+                  <p style={{ background: "#e9ecef", padding: "10px", borderRadius: "4px" }}>
+                    {comment.comment}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteComment(comment.id)}
+                  disabled={!isAdmin}
+                  style={{
+                    marginTop: "10px",
+                    padding: "8px 16px",
+                    background: "#dc3545",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: isAdmin ? "pointer" : "not-allowed",
+                    opacity: isAdmin ? 1 : 0.5,
+                  }}
+                >
+                  🗑 Delete Comment
+                </button>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Media Ranking Tab */}
+      {activeTab === "media" && (
+        <>
+          <h2>🏆 Most Watched Media</h2>
+          {media.length === 0 && <p>No media ranking loaded yet.</p>}
+          {media.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: "12px",
+                padding: "15px",
+                marginBottom: "10px",
+              }}
+            >
+              <h3>#{index + 1} {item.title || "Untitled Media"}</h3>
+              <p>Views: {item.views || 0}</p>
+              <p>Watch Time: {Math.round((item.watch_seconds || 0) / 3600)}h</p>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Home Content Tab */}
+      {activeTab === "home" && (
+        <>
+          <h2>🏠 Home Content Management</h2>
+          {homeContent.length === 0 && (
+            <p>No home content loaded yet. Enter PIN and click Load Home Content.</p>
+          )}
+          {homeContent.map((content) => (
+            <div
+              key={content.id}
+              style={{
+                border: content.is_visible ? "2px solid #28a745" : "1px solid #ddd",
+                borderRadius: "12px",
+                padding: "20px",
+                marginBottom: "20px",
+                background: content.is_visible ? "#f0fff4" : "#fafafa",
+                boxShadow: content.is_visible ? "0 0 20px rgba(40,167,69,0.15)" : "none",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "15px",
+                }}
+              >
+                <div>
+                  <p><strong>ID:</strong> {content.id}</p>
+                  <p>
+                    <strong>Status:</strong>{" "}
+                    <span style={{
+                      color: content.is_visible ? "#28a745" : "#6c757d",
+                      fontWeight: "bold",
+                    }}>
+                      {content.is_visible ? "✅ Visible" : "⚪ Hidden"}
+                    </span>
+                  </p>
+                  <p><strong>Title:</strong> {content.title || "Untitled"}</p>
+                  <p><strong>Creator Identity:</strong> {content.creator_identity || "N/A"}</p>
+                  <p>
+                    <strong>Creator Type:</strong>{" "}
+                    <span style={{
+                      background: content.creator_type === "website" ? "#007bff" : "#25D366",
+                      color: "white",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                    }}>
+                      {content.creator_type || "unknown"}
+                    </span>
+                  </p>
+                  <p><strong>Subtitle:</strong> {content.subtitle || "N/A"}</p>
+                </div>
+                <div>
+                  <p><strong>Created:</strong> {new Date(content.created_at).toLocaleString()}</p>
+                  <p><strong>Media Type:</strong> {content.media_type || "video"}</p>
+                  <p><strong>Status Label:</strong> {content.status_label || "Open"}</p>
+                  <p>
+                    <strong>User Status:</strong>{" "}
+                    <span style={{
+                      color: content.user_status === "Blocked" ? "#dc3545" : "#28a745",
+                      fontWeight: "bold",
+                    }}>
+                      {content.user_status || "Active"}
+                    </span>
+                  </p>
+                  {content.logo_url && (
+                    <div>
+                      <p style={{ fontSize: "12px", marginBottom: "4px" }}>Logo:</p>
+                      <img
+                        src={content.logo_url}
+                        alt="Logo"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "1px solid #ddd",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop: "10px" }}>
+                <p><strong>Media URL:</strong> <span style={{ wordBreak: "break-all", fontSize: "12px" }}>{content.video_url || "N/A"}</span></p>
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "15px", flexWrap: "wrap" }}>
+                {!content.is_visible && (
+                  <button
+                    onClick={() => updateHomeVisibility(content.id, true)}
+                    disabled={!isAdmin}
+                    style={{
+                      padding: "10px 20px",
+                      background: "#28a745",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: isAdmin ? "pointer" : "not-allowed",
+                      opacity: isAdmin ? 1 : 0.5,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    📺 Display on Home
+                  </button>
+                )}
+                {content.is_visible && (
+                  <button
+                    onClick={() => updateHomeVisibility(content.id, false)}
+                    disabled={!isAdmin}
+                    style={{
+                      padding: "10px 20px",
+                      background: "#ffc107",
+                      color: "#333",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: isAdmin ? "pointer" : "not-allowed",
+                      opacity: isAdmin ? 1 : 0.5,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    👁️ Hide
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteHomeContent(content.id)}
+                  disabled={!isAdmin}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#dc3545",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: isAdmin ? "pointer" : "not-allowed",
+                    opacity: isAdmin ? 1 : 0.5,
+                    fontWeight: "bold",
+                  }}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default Admin;
