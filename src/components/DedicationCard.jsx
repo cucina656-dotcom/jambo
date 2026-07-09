@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-
 function getFlagFromWhatsapp(number = "") {
   // Africa
   if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿"; // Algeria
@@ -58,7 +56,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬"; // Uganda
   if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲"; // Zambia
   if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼"; // Zimbabwe
-
   // Asia
   if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫"; // Afghanistan
   if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲"; // Armenia
@@ -108,7 +105,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿"; // Uzbekistan
   if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳"; // Vietnam
   if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪"; // Yemen
-
   // Europe
   if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱"; // Albania
   if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩"; // Andorra
@@ -155,7 +151,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦"; // Ukraine
   if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧"; // United Kingdom
   if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦"; // Vatican City
-
   // North America
   if (number.startsWith("+1") || number.startsWith("1")) {
     // US, Canada, and Caribbean countries with +1
@@ -184,7 +179,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳"; // Honduras
   if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮"; // Nicaragua
   if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦"; // Panama
-
   // South America
   if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷"; // Argentina
   if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴"; // Bolivia
@@ -198,7 +192,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷"; // Suriname
   if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾"; // Uruguay
   if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪"; // Venezuela
-
   // Oceania
   if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺"; // Australia
   if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯"; // Fiji
@@ -211,10 +204,8 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴"; // Tonga
   if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻"; // Tuvalu
   if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺"; // Vanuatu
-
   return "🌍"; // Default if no match
 }
-
 export default function DedicationCard({
   id,
   senderPhoto,
@@ -244,11 +235,9 @@ export default function DedicationCard({
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
   const [isVisible, setIsVisible] = useState(false);
-
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
-
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -261,21 +250,17 @@ export default function DedicationCard({
         rootMargin: "0px",
       }
     );
-
     if (cardRef.current) {
       observer.observe(cardRef.current);
     }
-
     return () => {
       if (cardRef.current) {
         observer.unobserve(cardRef.current);
       }
     };
   }, []);
-
   useEffect(() => {
     if (!videoRef.current) return;
-
     if (isVisible) {
       if (videoRef.current.paused) {
         videoRef.current.play().catch((err) => {
@@ -288,14 +273,11 @@ export default function DedicationCard({
       }
     }
   }, [isVisible]);
-
   async function loadComments() {
     if (!id) return;
-
     try {
       const res = await fetch(`${API_URL}/api/dedications/comments?id=${id}`);
       const data = await res.json();
-
       if (data.success) {
         setCommentsList(data.comments || []);
       }
@@ -303,24 +285,19 @@ export default function DedicationCard({
       console.error("Failed to load comments", error);
     }
   }
-
   async function react() {
     if (hasReacted) return;
     if (!id) return alert("Missing dedication ID");
-
     setHasReacted(true);
     setReactions((v) => v + 1);
     localStorage.setItem(`chillax_reacted_${id}`, "true");
-
     try {
       const res = await fetch(`${API_URL}/api/dedications/react`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-
       const data = await res.json();
-
       if (!data.success) {
         setHasReacted(false);
         setReactions((v) => v - 1);
@@ -332,15 +309,12 @@ export default function DedicationCard({
       localStorage.removeItem(`chillax_reacted_${id}`);
     }
   }
-
   async function sendComment() {
     if (!id) return alert("Missing dedication ID");
     if (!commenterWhatsapp.trim()) return alert("Enter your WhatsApp number first.");
     if (!commentText.trim()) return;
-
     const textToSend = commentText.trim();
     const whatsappToSend = commenterWhatsapp.trim();
-
     const newComment = {
       id: Date.now(),
       dedication_id: id,
@@ -348,11 +322,9 @@ export default function DedicationCard({
       commenter_whatsapp: whatsappToSend,
       created_at: new Date().toISOString(),
     };
-
     setCommentsList((prev) => [newComment, ...prev]);
     setComments((v) => v + 1);
     setCommentText("");
-
     try {
       const res = await fetch(`${API_URL}/api/dedications/comment`, {
         method: "POST",
@@ -363,9 +335,7 @@ export default function DedicationCard({
           commenter_whatsapp: whatsappToSend,
         }),
       });
-
       const data = await res.json();
-
       if (!data.success) {
         setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
         setComments((v) => v - 1);
@@ -375,26 +345,22 @@ export default function DedicationCard({
       setComments((v) => v - 1);
     }
   }
-
   function openViewCommentsOnly() {
     setCommentsOpen(true);
     setWriteCommentOpen(false);
     loadComments();
   }
-
   function openWriteComment() {
     setCommentsOpen(true);
     setWriteCommentOpen(true);
     loadComments();
   }
-
   function shareToWhatsApp() {
     const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${
       recipientName || "someone"
     }`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
-
   return (
     <div ref={cardRef} style={card}>
       <div style={mediaCard}>
@@ -410,14 +376,11 @@ export default function DedicationCard({
         ) : (
           <div style={fallbackBg}></div>
         )}
-
         <div style={mediaShade}></div>
-
         <div style={topBadge}>
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
-
         <div style={rightActions}>
           <div style={profileMini}>
             {recipientPhoto ? (
@@ -430,29 +393,24 @@ export default function DedicationCard({
             ) : (
               <div style={miniPlaceholder}>R</div>
             )}
-
             <button type="button" onClick={onDedicateClick} style={followBtn}>
               ＋
             </button>
           </div>
-
           <button type="button" onClick={react} style={sideBtn}>
             <span style={sideIcon}>{hasReacted ? "❤️" : "🤍"}</span>
             <span style={actionLabel}>{reactions}</span>
           </button>
-
           <button type="button" onClick={openViewCommentsOnly} style={sideBtn}>
             <span style={sideIcon}>💬</span>
             <span style={actionLabel}>{comments}</span>
           </button>
-
           <button type="button" onClick={shareToWhatsApp} style={sideBtn}>
             <span style={sideIcon}>↗</span>
             <span style={actionLabel}>Share</span>
           </button>
         </div>
       </div>
-
       <div style={dedicationBody}>
         <div style={peopleRow}>
           <div style={person}>
@@ -466,7 +424,6 @@ export default function DedicationCard({
             ) : (
               <div style={smallPlaceholder}>S</div>
             )}
-
             <div>
               <div style={nameEmphasis}>
                 {senderName || "Sender"} {flag}
@@ -474,12 +431,9 @@ export default function DedicationCard({
               <div style={roleText}>Sender</div>
             </div>
           </div>
-
           <button type="button" onClick={react} style={toPill}>
             <span>❤️</span>
-            <span>to</span>
           </button>
-
           <div style={person}>
             {recipientPhoto ? (
               <img
@@ -491,32 +445,26 @@ export default function DedicationCard({
             ) : (
               <div style={smallPlaceholder}>R</div>
             )}
-
             <div>
               <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
               <div style={roleText}>to</div>
             </div>
           </div>
         </div>
-
         <p style={messageText}>
           {message || "I chose this song because it reminds me of you."}
         </p>
-
         <div style={statsLine}>
           <span>👁 {views.toLocaleString()} views</span>
           <span>💬 {comments}</span>
         </div>
-
         <button type="button" onClick={openWriteComment} style={commentMainBtn}>
           Add a public comment...
         </button>
       </div>
-
       {commentsOpen && (
         <div style={commentOverlay}>
           <div style={commentHandleBar}></div>
-
           <div style={commentHeader}>
             <h3 style={commentTitle}>Comments ({comments})</h3>
             <button
@@ -530,7 +478,6 @@ export default function DedicationCard({
               ✕
             </button>
           </div>
-
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
               <p style={noComments}>Be the first to comment on this dedication.</p>
@@ -545,7 +492,6 @@ export default function DedicationCard({
               ))
             )}
           </div>
-
           {writeCommentOpen && (
             <div style={writeBox}>
               <input
@@ -554,7 +500,6 @@ export default function DedicationCard({
                 placeholder="WhatsApp e.g +250788123456"
                 style={commentInputTop}
               />
-
               <div style={sendRow}>
                 <input
                   value={commentText}
@@ -562,7 +507,6 @@ export default function DedicationCard({
                   placeholder="Write comment..."
                   style={commentInputBottom}
                 />
-
                 <button type="button" onClick={sendComment} style={sendBtn}>
                   Send
                 </button>
@@ -571,7 +515,6 @@ export default function DedicationCard({
           )}
         </div>
       )}
-
       {fullImage && (
         <div style={imagePopup} onClick={() => setFullImage(null)}>
           <img src={fullImage} alt="Full view" style={fullImageStyle} />
@@ -583,7 +526,6 @@ export default function DedicationCard({
     </div>
   );
 }
-
 const card = {
   position: "relative",
   width: "100%",
@@ -601,7 +543,6 @@ const card = {
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   WebkitFontSmoothing: "antialiased",
 };
-
 const mediaCard = {
   position: "relative",
   width: "100%",
@@ -611,7 +552,6 @@ const mediaCard = {
   borderRadius: "28px 28px 0 0",
   borderBottom: "1px solid rgba(147, 197, 253, 0.18)",
 };
-
 const videoBg = {
   position: "absolute",
   inset: 0,
@@ -622,7 +562,6 @@ const videoBg = {
   background: "#020817",
   zIndex: 0,
 };
-
 const fallbackBg = {
   position: "absolute",
   inset: 0,
@@ -630,7 +569,6 @@ const fallbackBg = {
     "radial-gradient(circle at 28% 18%, rgba(56, 189, 248, 0.65), transparent 32%), radial-gradient(circle at 82% 72%, rgba(37, 99, 235, 0.55), transparent 34%), linear-gradient(160deg, #020817, #06142e 48%, #0f2f6f)",
   zIndex: 0,
 };
-
 const mediaShade = {
   position: "absolute",
   inset: 0,
@@ -639,7 +577,6 @@ const mediaShade = {
   zIndex: 1,
   pointerEvents: "none",
 };
-
 const topBadge = {
   position: "absolute",
   top: "14px",
@@ -667,7 +604,6 @@ const topBadge = {
   textOverflow: "ellipsis",
   boxShadow: "0 12px 30px rgba(2, 8, 23, 0.35)",
 };
-
 const badgeDot = {
   width: "7px",
   height: "7px",
@@ -676,7 +612,6 @@ const badgeDot = {
   boxShadow: "0 0 16px rgba(56, 189, 248, 1)",
   flexShrink: 0,
 };
-
 const rightActions = {
   position: "absolute",
   right: "12px",
@@ -687,12 +622,10 @@ const rightActions = {
   alignItems: "center",
   gap: "12px",
 };
-
 const profileMini = {
   position: "relative",
   marginBottom: "2px",
 };
-
 const miniPhoto = {
   width: "48px",
   height: "48px",
@@ -702,7 +635,6 @@ const miniPhoto = {
   cursor: "pointer",
   boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
 };
-
 const miniPlaceholder = {
   width: "48px",
   height: "48px",
@@ -717,7 +649,6 @@ const miniPlaceholder = {
   fontSize: "16px",
   boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
 };
-
 const followBtn = {
   position: "absolute",
   bottom: "-8px",
@@ -739,7 +670,6 @@ const followBtn = {
   lineHeight: 1,
   boxShadow: "0 10px 22px rgba(37, 99, 235, 0.55)",
 };
-
 const sideBtn = {
   border: "1px solid rgba(147, 197, 253, 0.30)",
   background: "rgba(8, 25, 58, 0.68)",
@@ -759,12 +689,10 @@ const sideBtn = {
   WebkitBackdropFilter: "blur(16px)",
   boxShadow: "0 12px 24px rgba(2, 8, 23, 0.34)",
 };
-
 const sideIcon = {
   fontSize: "19px",
   lineHeight: 1,
 };
-
 const actionLabel = {
   fontSize: "10px",
   fontWeight: "900",
@@ -772,27 +700,23 @@ const actionLabel = {
   color: "#dbeafe",
   textShadow: "0 1px 5px rgba(2, 8, 23, 0.9)",
 };
-
 const dedicationBody = {
   padding: "15px 14px 16px 14px",
   background:
     "radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.13), transparent 28%), linear-gradient(180deg, rgba(7, 22, 51, 0.98) 0%, rgba(5, 18, 42, 1) 100%)",
 };
-
 const peopleRow = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
   flexWrap: "wrap",
 };
-
 const person = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
   minWidth: 0,
 };
-
 const nameEmphasis = {
   fontWeight: "900",
   fontSize: "14px",
@@ -803,14 +727,12 @@ const nameEmphasis = {
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
-
 const roleText = {
   fontSize: "10px",
   fontWeight: "800",
   color: "#8fb8f7",
   marginTop: "2px",
 };
-
 const smallPhotoCircle = {
   width: "36px",
   height: "36px",
@@ -821,7 +743,6 @@ const smallPhotoCircle = {
   boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
   flexShrink: 0,
 };
-
 const smallPhotoSquare = {
   width: "36px",
   height: "36px",
@@ -832,7 +753,6 @@ const smallPhotoSquare = {
   boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
   flexShrink: 0,
 };
-
 const smallPlaceholder = {
   width: "36px",
   height: "36px",
@@ -848,7 +768,6 @@ const smallPlaceholder = {
   boxShadow: "0 9px 20px rgba(2, 8, 23, 0.34)",
   flexShrink: 0,
 };
-
 const toPill = {
   padding: "7px 11px",
   borderRadius: "999px",
@@ -866,7 +785,6 @@ const toPill = {
   textTransform: "uppercase",
   boxShadow: "0 10px 22px rgba(255, 77, 109, 0.16)",
 };
-
 const messageText = {
   margin: "12px 0 0 0",
   padding: "13px 14px",
@@ -880,7 +798,6 @@ const messageText = {
   boxShadow: "0 10px 26px rgba(2, 8, 23, 0.25)",
   wordBreak: "break-word",
 };
-
 const statsLine = {
   display: "flex",
   alignItems: "center",
@@ -891,7 +808,6 @@ const statsLine = {
   color: "#9cc8ff",
   marginTop: "10px",
 };
-
 const commentMainBtn = {
   width: "100%",
   border: "1px solid rgba(147, 197, 253, 0.20)",
@@ -906,7 +822,6 @@ const commentMainBtn = {
   marginTop: "10px",
   boxShadow: "0 8px 18px rgba(2, 8, 23, 0.18)",
 };
-
 const commentOverlay = {
   position: "fixed",
   left: "50%",
@@ -930,7 +845,6 @@ const commentOverlay = {
   borderTop: "1px solid rgba(147, 197, 253, 0.22)",
   boxShadow: "0 -20px 55px rgba(2, 8, 23, 0.58)",
 };
-
 const commentHandleBar = {
   width: "38px",
   height: "4px",
@@ -939,7 +853,6 @@ const commentHandleBar = {
   margin: "10px auto 14px auto",
   flexShrink: 0,
 };
-
 const commentHeader = {
   display: "flex",
   justifyContent: "space-between",
@@ -948,14 +861,12 @@ const commentHeader = {
   borderBottom: "1px solid rgba(147, 197, 253, 0.14)",
   flexShrink: 0,
 };
-
 const commentTitle = {
   margin: 0,
   fontSize: "17px",
   fontWeight: "900",
   color: "#f8fbff",
 };
-
 const closeBtn = {
   border: "1px solid rgba(147, 197, 253, 0.18)",
   background: "rgba(15, 35, 76, 0.82)",
@@ -967,7 +878,6 @@ const closeBtn = {
   height: "34px",
   borderRadius: "50%",
 };
-
 const commentsListBox = {
   flex: 1,
   overflowY: "auto",
@@ -976,7 +886,6 @@ const commentsListBox = {
   gap: "12px",
   padding: "16px 0",
 };
-
 const commentItem = {
   display: "flex",
   flexDirection: "column",
@@ -987,27 +896,23 @@ const commentItem = {
   border: "1px solid rgba(147, 197, 253, 0.16)",
   boxShadow: "0 10px 24px rgba(2, 8, 23, 0.22)",
 };
-
 const commentFrom = {
   fontSize: "12px",
   fontWeight: "900",
   color: "#7dd3fc",
 };
-
 const commentBody = {
   fontSize: "14px",
   lineHeight: "1.4",
   color: "#eaf2ff",
   wordBreak: "break-word",
 };
-
 const noComments = {
   textAlign: "center",
   color: "#9cc8ff",
   fontSize: "14px",
   marginTop: "32px",
 };
-
 const writeBox = {
   borderTop: "1px solid rgba(147, 197, 253, 0.14)",
   paddingTop: "12px",
@@ -1016,14 +921,12 @@ const writeBox = {
   gap: "8px",
   flexShrink: 0,
 };
-
 const sendRow = {
   display: "grid",
   gridTemplateColumns: "1fr auto",
   gap: "10px",
   alignItems: "center",
 };
-
 const commentInputTop = {
   width: "100%",
   boxSizing: "border-box",
@@ -1035,7 +938,6 @@ const commentInputTop = {
   padding: "10px 12px",
   fontSize: "13px",
 };
-
 const commentInputBottom = {
   width: "100%",
   boxSizing: "border-box",
@@ -1047,7 +949,6 @@ const commentInputBottom = {
   padding: "11px 14px",
   fontSize: "14px",
 };
-
 const sendBtn = {
   border: "none",
   background: "linear-gradient(135deg, #38bdf8, #2563eb)",
@@ -1059,7 +960,6 @@ const sendBtn = {
   borderRadius: "999px",
   boxShadow: "0 10px 22px rgba(37, 99, 235, 0.36)",
 };
-
 const imagePopup = {
   position: "fixed",
   inset: 0,
@@ -1070,14 +970,12 @@ const imagePopup = {
   justifyContent: "center",
   padding: "16px",
 };
-
 const fullImageStyle = {
   maxWidth: "100%",
   maxHeight: "85vh",
   objectFit: "contain",
   borderRadius: "14px",
 };
-
 const closeImageBtn = {
   position: "fixed",
   top: "max(16px, env(safe-area-inset-top))",
