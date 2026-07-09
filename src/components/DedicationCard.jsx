@@ -133,7 +133,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹"; // Malta
   if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩"; // Moldova
   if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨"; // Monaco
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪"; // Montenegro
+  if (number.startsWith("+382") || number.startsWith("382")) return "🇲 Montenegro
   if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱"; // Netherlands
   if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰"; // North Macedonia
   if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴"; // Norway
@@ -382,21 +382,9 @@ export default function DedicationCard({
           {dedicationTitle || mediaTitle}
         </div>
         <div style={rightActions}>
-          <div style={profileMini}>
-            {recipientPhoto ? (
-              <img
-                src={recipientPhoto}
-                alt={recipientName}
-                style={miniPhoto}
-                onClick={() => setFullImage(recipientPhoto)}
-              />
-            ) : (
-              <div style={miniPlaceholder}>R</div>
-            )}
-            <button type="button" onClick={onDedicateClick} style={followBtn}>
-              ＋
-            </button>
-          </div>
+          <button type="button" onClick={onDedicateClick} style={standaloneFollowBtn}>
+            ＋
+          </button>
           <button type="button" onClick={react} style={sideBtn}>
             <span style={sideIcon}>{hasReacted ? "❤️" : "🤍"}</span>
             <span style={actionLabel}>{reactions}</span>
@@ -622,45 +610,14 @@ const rightActions = {
   alignItems: "center",
   gap: "12px",
 };
-const profileMini = {
-  position: "relative",
-  marginBottom: "2px",
-};
-const miniPhoto = {
+const standaloneFollowBtn = {
   width: "48px",
   height: "48px",
-  borderRadius: "16px",
-  objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.98)",
-  cursor: "pointer",
-  boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
-};
-const miniPlaceholder = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
-  background: "rgba(15, 52, 114, 0.72)",
-  border: "2px solid rgba(226, 242, 255, 0.98)",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900",
-  fontSize: "16px",
-  boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
-};
-const followBtn = {
-  position: "absolute",
-  bottom: "-8px",
-  left: "50%",
-  transform: "translateX(-50%)",
-  width: "24px",
-  height: "24px",
-  borderRadius: "50%",
-  border: "2px solid #eaf6ff",
+  borderRadius: "17px",
+  border: "1px solid rgba(147, 197, 253, 0.30)",
   background: "linear-gradient(135deg, #38bdf8, #2563eb)",
   color: "#ffffff",
-  fontSize: "15px",
+  fontSize: "22px",
   fontWeight: "900",
   cursor: "pointer",
   display: "flex",
@@ -668,7 +625,8 @@ const followBtn = {
   justifyContent: "center",
   padding: 0,
   lineHeight: 1,
-  boxShadow: "0 10px 22px rgba(37, 99, 235, 0.55)",
+  boxShadow: "0 12px 24px rgba(37, 99, 235, 0.4)",
+  marginBottom: "2px"
 };
 const sideBtn = {
   border: "1px solid rgba(147, 197, 253, 0.30)",
@@ -986,7 +944,7 @@ const closeImageBtn = {
   fontSize: "20px",
   borderRadius: "50%",
   width: "40px",
-  height: "40px",	
+  height: "40px",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
