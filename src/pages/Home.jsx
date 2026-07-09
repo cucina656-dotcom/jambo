@@ -349,12 +349,6 @@ function Home() {
             post.creator_type,
             post.creator_identity
           );
-          const formattedDate = new Date(post.created_at || Date.now()).toLocaleDateString();
-          const formattedTime = new Date(post.created_at || Date.now()).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const timeMarqueeString = `${formattedDate} • ${formattedTime}`;
 
           return (
             <section
@@ -370,7 +364,7 @@ function Home() {
                 <div style={storyProgressBarActive}></div>
               </div>
 
-              {/* Story UI Top Info Panel */}
+              {/* Story UI Top Info Panel - Cleaned Up */}
               <div style={profileCard}>
                 <img
                   src={post.logo_url || DEFAULT_LOGO}
@@ -384,29 +378,17 @@ function Home() {
                 <div style={profileTextBox}>
                   <div style={nameRow}>
                     <h1 style={profileTitle}>{post.title || DEFAULT_TITLE}</h1>
-                    <span style={timeDot}>•</span>
-                    <span style={timeLabel}>6h</span>
                   </div>
-                  <div style={subtitleLabel}>
-                    {post.subtitle ? post.subtitle.toUpperCase() : "LIFESTYLE UPDATE..."}
-                  </div>
-                </div>
-
-                {/* Right actions */}
-                <div style={topRightControls}>
-                  <span style={controlIcon}>•••</span>
-                  <span style={controlIcon} className="volume-btn">🔊</span>
-                  <span style={controlIcon}>✕</span>
                 </div>
               </div>
 
-              {/* Extended Video Card Layout positioned elegantly underneath the badge area */}
+              {/* Extended Video Card Layout reaching closer to both top & bottom row with a safe gap */}
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
               
-              {/* Action row at the bottom aligning Marquee and Action button horizontally */}
+              {/* Action row at the bottom moved up significantly to avoid getting cut off */}
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
@@ -554,7 +536,7 @@ function EditorModal({
   );
 }
 
-/* Updated Responsive Layout Style Schema */
+/* Structural CSS Layout Sheet Styles */
 const page = {
   height: "100vh",
   minHeight: "100svh",
@@ -612,13 +594,13 @@ const profileCard = {
   zIndex: 10,
   display: "flex",
   alignItems: "center",
-  gap: "10px",
+  gap: "12px",
 };
 
 // Profile Badge with striking neon glow visual effects
 const journalistPhotoStyle = {
-  width: "42px",
-  height: "42px",
+  width: "44px",
+  height: "44px",
   borderRadius: "50%",
   objectFit: "cover",
   border: "2px solid #00ffcc",
@@ -641,7 +623,7 @@ const nameRow = {
 };
 
 const profileTitle = {
-  fontSize: "15px",
+  fontSize: "16px",
   fontWeight: "700",
   margin: 0,
   color: "#ffffff",
@@ -649,51 +631,13 @@ const profileTitle = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-  textShadow: "0 1px 3px rgba(0,0,0,0.6)",
+  textShadow: "0 1px 4px rgba(0,0,0,0.7)",
 };
 
-const timeDot = {
-  color: "rgba(255,255,255,0.75)",
-  fontSize: "13px",
-};
-
-const timeLabel = {
-  color: "rgba(255,255,255,0.75)",
-  fontSize: "13px",
-  fontWeight: "500",
-};
-
-const subtitleLabel = {
-  fontSize: "11px",
-  color: "rgba(255,255,255,0.75)",
-  fontWeight: "600",
-  letterSpacing: "0.5px",
-  marginTop: "2px",
-  textOverflow: "ellipsis",
-  overflow: "hidden",
-  whiteSpace: "nowrap",
-  maxWidth: "200px",
-};
-
-const topRightControls = {
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-  color: "#ffffff",
-  fontSize: "16px",
-  paddingRight: "4px",
-};
-
-const controlIcon = {
-  cursor: "pointer",
-  opacity: 0.95,
-  textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-};
-
-/* Video Card: Top extended closer to the badge with a small remaining vertical space gap */
+/* Video Card: Extended heights perfectly between the profile header and the bottom action line */
 const videoCardViewport = {
   width: "100%",
-  height: "58%",
+  height: "64%",
   position: "absolute",
   top: "76px", 
   overflow: "hidden",
@@ -725,10 +669,10 @@ const darkOverlay = {
   pointerEvents: "none",
 };
 
-/* Combined horizontal container alignment for Marquee and Create Action Button */
+/* Lifted action container to display cleanly without getting cut off at the bottom */
 const bottomHorizontalActionsRow = {
   position: "absolute",
-  bottom: "45px",
+  bottom: "110px", 
   left: "14px",
   right: "14px",
   zIndex: 30,
@@ -750,7 +694,6 @@ const tickerContainer = {
   overflow: "hidden",
 };
 
-// Left label customized with explicit deep black backdrop
 const tickerLabel = {
   background: "#000000",
   color: "#ffffff",
@@ -796,7 +739,6 @@ if (typeof window !== "undefined" && !document.getElementById("ticker-keyframes"
   document.head.appendChild(styleEl);
 }
 
-// Action Button perfectly aligned vertically to the right side of the marquee text bar
 const plusBtn = {
   width: "46px",
   height: "46px",
