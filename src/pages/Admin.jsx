@@ -38,7 +38,7 @@ function Admin() {
       }
       setOrders(data.orders || []);
       setOrderReports(data.reports || { totalOrders: 0, totalRevenue: 0 });
-      setMessage("Orders loaded successfully");
+      setMessage(`Orders loaded successfully (${data.orders?.length || 0} orders)`);
     } catch (error) {
       setMessage("Failed to connect to Worker API");
       console.error(error);
@@ -141,6 +141,15 @@ function Admin() {
       console.error(error);
     }
   };
+
+  // Auto-load orders when PIN becomes valid
+  useEffect(() => {
+    if (isAdmin) {
+      loadOrders();
+      loadDedications();
+      loadComments();
+    }
+  }, [pin]);
 
   const updateHomeVisibility = async (id, isVisible) => {
     if (!isAdmin) return;
@@ -365,13 +374,6 @@ function Admin() {
   const failedOrders = orders.filter((o) => o.delivery_status === "Failed");
   const pendingOrders = orders.filter((o) => o.delivery_status === "Pending");
 
-  useEffect(() => {
-    if (pin.length >= 3) {
-      loadDedications();
-      loadComments();
-    }
-  }, [pin]);
-
   function getFlagFromWhatsapp(number = "") {
     if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼";
     if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪";
@@ -509,6 +511,7 @@ function Admin() {
                 "linear-gradient(135deg,#0f172a,#1e3a8a,#2563eb)",
               color: "white",
               marginBottom: "20px",
+              marginTop: "20px",
               textAlign: "center",
               boxShadow: "0 15px 40px rgba(37,99,235,0.35)",
             }}
@@ -575,7 +578,7 @@ function Admin() {
                 }}
               >
                 <h3 style={{ margin: 0, fontSize: "28px", color: "#0d47a1" }}>
-                  {orderReports.totalOrders}
+                  {orderReports.totalOrders || orders.length}
                 </h3>
                 <p style={{ margin: "5px 0 0", color: "#0d47a1", fontWeight: "bold" }}>
                   Total Orders
@@ -591,7 +594,7 @@ function Admin() {
                 }}
               >
                 <h3 style={{ margin: 0, fontSize: "28px", color: "#1b5e20" }}>
-                  ${orderReports.totalRevenue.toFixed(2)}
+                  ${orderReports.totalRevenue?.toFixed(2) || "0.00"}
                 </h3>
                 <p style={{ margin: "5px 0 0", color: "#1b5e20", fontWeight: "bold" }}>
                   Total Revenue
@@ -649,7 +652,7 @@ function Admin() {
           )}
 
           {/* Orders List */}
-          {orders.length === 0 && <p>No orders loaded yet. Enter PIN and click Load Orders.</p>}
+          {orders.length === 0 && <p style={{ marginTop: "20px" }}>No orders found. Try placing a test order from the kitchen page.</p>}
           {orders.map((order) => (
             <div
               key={order.id}
@@ -688,7 +691,7 @@ function Admin() {
                       fontWeight: "bold",
                       fontSize: "12px",
                     }}>
-                      {order.delivery_status}
+                      {order.delivery_status || "Pending"}
                     </span>
                   </p>
                   <p><strong>Delivery Method:</strong> {order.delivery_method || "N/A"}</p>
