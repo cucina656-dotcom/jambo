@@ -359,11 +359,6 @@ function Home() {
               data-index={index}
               style={feedPost}
             >
-              {/* Top Progress Bar Line */}
-              <div style={storyProgressBarContainer}>
-                <div style={storyProgressBarActive}></div>
-              </div>
-
               {/* Story UI Top Info Panel - Cleaned Up */}
               <div style={profileCard}>
                 <img
@@ -568,24 +563,6 @@ const feedPost = {
   background: "linear-gradient(to bottom, #757d88 0%, #4a5058 100%)",
 };
 
-const storyProgressBarContainer = {
-  position: "absolute",
-  top: "12px",
-  left: "12px",
-  right: "12px",
-  height: "2.5px",
-  background: "rgba(255,255,255,0.35)",
-  borderRadius: "10px",
-  zIndex: 10,
-};
-
-const storyProgressBarActive = {
-  width: "35%",
-  height: "100%",
-  background: "#ffffff",
-  borderRadius: "10px",
-};
-
 const profileCard = {
   position: "absolute",
   top: "24px",
@@ -721,7 +698,7 @@ const tickerScrollingContent = {
   display: "inline-block",
   whiteSpace: "nowrap",
   paddingLeft: "100%",
-  animation: "tickerMarquee 15s linear infinite",
+  animation: "tickerMarquee 20s linear infinite",
   color: "#ffffff",
   fontSize: "13px",
   fontWeight: "600",
