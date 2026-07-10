@@ -631,7 +631,7 @@ const badgeDot = {
   flexShrink: 0,
 };
 
-// UPDATED STYLES FOR FLOATING SIDE BUTTONS
+// UPDATED STYLES - ALL BUTTONS ARE TRANSPARENT
 const rightActions = {
   position: "absolute",
   right: "10px",
@@ -666,7 +666,7 @@ const followBtn = {
 
 const sideBtn = {
   border: "none",
-  background: "transparent",
+  background: "rgba(0, 0, 0, 0.18)",
   color: "#ffffff",
   width: "38px",
   minHeight: "42px",
@@ -680,8 +680,8 @@ const sideBtn = {
   cursor: "pointer",
   outline: "none",
   boxShadow: "none",
-  backdropFilter: "none",
-  WebkitBackdropFilter: "none",
+  backdropFilter: "blur(2px)",
+  WebkitBackdropFilter: "blur(2px)",
 };
 
 const sideIcon = {
