@@ -128,7 +128,7 @@ function Home() {
           subtitle: data.subtitle || "",
           logo_url: data.logo_url || DEFAULT_LOGO,
           media_url: data.video_url || DEFAULT_VIDEO,
-          media_type: data.media_type || "video",
+          media_type: data.media_type || "",
         },
       ]);
     } catch (error) {
@@ -218,6 +218,21 @@ function Home() {
       alert("Please enter a media URL or upload a media file");
       return;
     }
+    
+    // Detect media type
+    let detectedMediaType = "";
+    if (newMediaFile) {
+      detectedMediaType = newMediaFile.type.startsWith("image/")
+        ? "image"
+        : "video";
+    } else if (isImageUrl(mediaToSave)) {
+      detectedMediaType = "image";
+    } else if (isDirectVideoUrl(mediaToSave)) {
+      detectedMediaType = "video";
+    } else if (mediaToSave) {
+      detectedMediaType = "embed";
+    }
+    
     try {
       setSaving(true);
       const formData = new FormData();
@@ -225,6 +240,7 @@ function Home() {
       formData.append("creator_type", detectCreatorType(identity));
       formData.append("title", newTitle.trim() || DEFAULT_TITLE);
       formData.append("subtitle", subtitle.trim());
+      formData.append("media_type", detectedMediaType);
       if (mediaToSave) {
         formData.append("video_url", mediaToSave);
       }
@@ -257,9 +273,19 @@ function Home() {
   const renderMedia = (post, index) => {
     const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
     const mediaType = post.media_type || "";
-    const isImage = mediaType === "image" || isImageUrl(mediaUrl);
-    const isVideo = mediaType === "video" || isDirectVideoUrl(mediaUrl);
-    const isEmbed = mediaType === "embed" || (!isImage && !isVideo);
+    
+    const isImage =
+      mediaType === "image" ||
+      (!mediaType && isImageUrl(mediaUrl));
+    
+    const isVideo =
+      mediaType === "video" ||
+      (!mediaType && isDirectVideoUrl(mediaUrl));
+    
+    const isEmbed =
+      mediaType === "embed" ||
+      (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+    
     if (isImage) {
       return (
         <img
