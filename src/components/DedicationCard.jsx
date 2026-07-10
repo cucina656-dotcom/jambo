@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Heart, MessageSquare, Share2 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
@@ -392,28 +393,56 @@ export default function DedicationCard({
           {dedicationTitle || mediaTitle}
         </div>
         <div style={rightActions}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               if (onDedicateClick) onDedicateClick();
-            }} 
+            }}
             style={followBtn}
             aria-label="Dedicate Song"
           >
             ＋
           </button>
-          
-          <button type="button" onClick={react} style={sideBtn}>
-            <span style={sideIcon}>{hasReacted ? "❤️" : "🤍"}</span>
+
+          <button
+            type="button"
+            onClick={react}
+            style={sideBtn}
+            aria-label="Like"
+          >
+            <span style={sideIconWrap}>
+              <Heart
+                size={27}
+                strokeWidth={2.4}
+                fill={hasReacted ? "white" : "none"}
+                color="white"
+              />
+            </span>
             <span style={actionLabel}>{reactions}</span>
           </button>
-          <button type="button" onClick={openViewCommentsOnly} style={sideBtn}>
-            <span style={sideIcon}>💬</span>
+
+          <button
+            type="button"
+            onClick={openViewCommentsOnly}
+            style={sideBtn}
+            aria-label="Comments"
+          >
+            <span style={sideIconWrap}>
+              <MessageSquare size={26} strokeWidth={2.4} color="white" />
+            </span>
             <span style={actionLabel}>{comments}</span>
           </button>
-          <button type="button" onClick={shareToWhatsApp} style={sideBtn}>
-            <span style={sideIcon}>↗</span>
+
+          <button
+            type="button"
+            onClick={shareToWhatsApp}
+            style={sideBtn}
+            aria-label="Share"
+          >
+            <span style={sideIconWrap}>
+              <Share2 size={27} strokeWidth={2.4} color="white" />
+            </span>
             <span style={actionLabel}>Share</span>
           </button>
         </div>
@@ -550,473 +579,4 @@ const card = {
   borderRadius: "28px",
   border: "1px solid rgba(147, 197, 253, 0.22)",
   boxShadow:
-    "0 24px 60px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(59, 130, 246, 0.08) inset",
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  WebkitFontSmoothing: "antialiased",
-};
-
-const mediaCard = {
-  position: "relative",
-  width: "100%",
-  aspectRatio: "4 / 5",
-  overflow: "hidden",
-  background: "#020817",
-  borderRadius: "28px 28px 0 0",
-  borderBottom: "1px solid rgba(147, 197, 253, 0.18)",
-};
-
-const videoBg = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  objectPosition: "center center",
-  background: "#020817",
-  zIndex: 0,
-};
-
-const fallbackBg = {
-  position: "absolute",
-  inset: 0,
-  background:
-    "radial-gradient(circle at 28% 18%, rgba(56, 189, 248, 0.65), transparent 32%), radial-gradient(circle at 82% 72%, rgba(37, 99, 235, 0.55), transparent 34%), linear-gradient(160deg, #020817, #06142e 48%, #0f2f6f)",
-  zIndex: 0,
-};
-
-const mediaShade = {
-  position: "absolute",
-  inset: 0,
-  background:
-    "linear-gradient(180deg, rgba(2,8,23,0.66) 0%, rgba(2,8,23,0.08) 42%, rgba(2,8,23,0.82) 100%)",
-  zIndex: 1,
-  pointerEvents: "none",
-};
-
-const topBadge = {
-  position: "absolute",
-  top: "14px",
-  left: "14px",
-  right: "74px",
-  zIndex: 2,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "8px",
-  width: "fit-content",
-  maxWidth: "calc(100% - 88px)",
-  padding: "8px 12px",
-  borderRadius: "999px",
-  background: "rgba(8, 25, 58, 0.66)",
-  backdropFilter: "blur(18px)",
-  WebkitBackdropFilter: "blur(18px)",
-  border: "1px solid rgba(147, 197, 253, 0.34)",
-  color: "#f8fbff",
-  fontSize: "12px",
-  fontWeight: "900",
-  letterSpacing: "0.75px",
-  textTransform: "uppercase",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  boxShadow: "0 12px 30px rgba(2, 8, 23, 0.35)",
-};
-
-const badgeDot = {
-  width: "7px",
-  height: "7px",
-  borderRadius: "50%",
-  background: "#38bdf8",
-  boxShadow: "0 0 16px rgba(56, 189, 248, 1)",
-  flexShrink: 0,
-};
-
-// UPDATED STYLES - ALL BUTTONS ARE TRANSPARENT
-const rightActions = {
-  position: "absolute",
-  right: "10px",
-  bottom: "18px",
-  zIndex: 3,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "10px",
-};
-
-const followBtn = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "50%",
-  border: "none",
-  background: "rgba(0, 0, 0, 0.18)",
-  color: "#ffffff",
-  fontSize: "25px",
-  fontWeight: "800",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 0,
-  lineHeight: 1,
-  textShadow: "0 2px 6px rgba(0,0,0,0.85)",
-  boxShadow: "none",
-  backdropFilter: "blur(2px)",
-  WebkitBackdropFilter: "blur(2px)",
-};
-
-const sideBtn = {
-  border: "none",
-  background: "rgba(0, 0, 0, 0.18)",
-  color: "#ffffff",
-  width: "38px",
-  minHeight: "42px",
-  borderRadius: "50%",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "2px",
-  padding: "0",
-  cursor: "pointer",
-  outline: "none",
-  boxShadow: "none",
-  backdropFilter: "blur(2px)",
-  WebkitBackdropFilter: "blur(2px)",
-};
-
-const sideIcon = {
-  fontSize: "24px",
-  lineHeight: 1,
-  color: "#ffffff",
-  textShadow: "0 2px 6px rgba(0,0,0,0.9)",
-};
-
-const actionLabel = {
-  fontSize: "10px",
-  fontWeight: "800",
-  lineHeight: 1,
-  color: "#ffffff",
-  textShadow: "0 2px 6px rgba(0,0,0,0.95)",
-};
-
-const dedicationBody = {
-  padding: "15px 14px 16px 14px",
-  background:
-    "radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.13), transparent 28%), linear-gradient(180deg, rgba(7, 22, 51, 0.98) 0%, rgba(5, 18, 42, 1) 100%)",
-};
-
-const peopleRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  flexWrap: "wrap",
-};
-
-const person = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  minWidth: 0,
-};
-
-const nameEmphasis = {
-  fontWeight: "900",
-  fontSize: "14px",
-  color: "#f8fbff",
-  lineHeight: 1.15,
-  maxWidth: "128px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const roleText = {
-  fontSize: "10px",
-  fontWeight: "800",
-  color: "#8fb8f7",
-  marginTop: "2px",
-};
-
-const smallPhotoCircle = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
-  cursor: "pointer",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
-  flexShrink: 0,
-};
-
-const smallPhotoSquare = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "12px",
-  objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
-  cursor: "pointer",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
-  flexShrink: 0,
-};
-
-const smallPlaceholder = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #0f3b82, #38bdf8)",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "13px",
-  fontWeight: "900",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.34)",
-  flexShrink: 0,
-};
-
-const toPill = {
-  padding: "7px 11px",
-  borderRadius: "999px",
-  background: "linear-gradient(135deg, rgba(255, 77, 109, 0.22), rgba(37, 99, 235, 0.22))",
-  color: "#f8fbff",
-  fontSize: "11px",
-  fontWeight: "950",
-  border: "1px solid rgba(255, 255, 255, 0.24)",
-  flexShrink: 0,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "5px",
-  textTransform: "uppercase",
-  boxShadow: "0 10px 22px rgba(255, 77, 109, 0.16)",
-};
-
-const messageText = {
-  margin: "12px 0 0 0",
-  padding: "13px 14px",
-  fontSize: "14px",
-  lineHeight: "1.5",
-  fontWeight: "650",
-  color: "#eaf2ff",
-  background: "rgba(15, 35, 76, 0.74)",
-  borderRadius: "18px",
-  border: "1px solid rgba(147, 197, 253, 0.18)",
-  boxShadow: "0 10px 26px rgba(2, 8, 23, 0.25)",
-  wordBreak: "break-word",
-};
-
-const statsLine = {
-  display: "flex",
-  alignItems: "center",
-  flexWrap: "wrap",
-  gap: "8px",
-  fontSize: "12px",
-  fontWeight: "900",
-  color: "#9cc8ff",
-  marginTop: "10px",
-};
-
-const commentMainBtn = {
-  width: "100%",
-  border: "1px solid rgba(147, 197, 253, 0.20)",
-  borderRadius: "999px",
-  background: "rgba(15, 35, 76, 0.72)",
-  color: "#bfdbfe",
-  padding: "11px 14px",
-  fontSize: "13px",
-  fontWeight: "800",
-  textAlign: "left",
-  cursor: "pointer",
-  marginTop: "10px",
-  boxShadow: "0 8px 18px rgba(2, 8, 18, 0.18)",
-};
-
-const commentOverlay = {
-  position: "fixed",
-  left: "50%",
-  transform: "translateX(-50%)",
-  right: "auto",
-  bottom: 0,
-  width: "100%",
-  maxWidth: "430px",
-  height: "70svh",
-  zIndex: 10,
-  background:
-    "linear-gradient(180deg, rgba(7, 22, 51, 0.98), rgba(3, 12, 29, 0.98))",
-  backdropFilter: "blur(25px)",
-  WebkitBackdropFilter: "blur(25px)",
-  borderTopLeftRadius: "24px",
-  borderTopRightRadius: "24px",
-  padding: "0 16px 16px 16px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  borderTop: "1px solid rgba(147, 197, 253, 0.22)",
-  boxShadow: "0 -20px 55px rgba(2, 8, 23, 0.58)",
-};
-
-const commentHandleBar = {
-  width: "38px",
-  height: "4px",
-  background: "rgba(147, 197, 253, 0.38)",
-  borderRadius: "999px",
-  margin: "10px auto 14px auto",
-  flexShrink: 0,
-};
-
-const commentHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingBottom: "12px",
-  borderBottom: "1px solid rgba(147, 197, 253, 0.14)",
-  flexShrink: 0,
-};
-
-const commentTitle = {
-  margin: 0,
-  fontSize: "17px",
-  fontWeight: "900",
-  color: "#f8fbff",
-};
-
-const closeBtn = {
-  border: "1px solid rgba(147, 197, 253, 0.18)",
-  background: "rgba(15, 35, 76, 0.82)",
-  color: "#eaf2ff",
-  fontSize: "16px",
-  cursor: "pointer",
-  padding: "0",
-  width: "34px",
-  height: "34px",
-  borderRadius: "50%",
-};
-
-const commentsListBox = {
-  flex: 1,
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "12px",
-  padding: "16px 0",
-};
-
-const commentItem = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "5px",
-  padding: "12px",
-  borderRadius: "17px",
-  background: "rgba(15, 35, 76, 0.78)",
-  border: "1px solid rgba(147, 197, 253, 0.16)",
-  boxShadow: "0 10px 24px rgba(2, 8, 23, 0.22)",
-};
-
-const commentFrom = {
-  fontSize: "12px",
-  fontWeight: "900",
-  color: "#7dd3fc",
-};
-
-const commentBody = {
-  fontSize: "14px",
-  lineHeight: "1.4",
-  color: "#eaf2ff",
-  wordBreak: "break-word",
-};
-
-const noComments = {
-  textAlign: "center",
-  color: "#9cc8ff",
-  fontSize: "14px",
-  marginTop: "32px",
-};
-
-const writeBox = {
-  borderTop: "1px solid rgba(147, 197, 253, 0.14)",
-  paddingTop: "12px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  flexShrink: 0,
-};
-
-const sendRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "10px",
-  alignItems: "center",
-};
-
-const commentInputTop = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(147, 197, 253, 0.22)",
-  borderRadius: "13px",
-  background: "rgba(2, 8, 23, 0.46)",
-  color: "#f8fbff",
-  outline: "none",
-  padding: "10px 12px",
-  fontSize: "13px",
-};
-
-const commentInputBottom = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(147, 197, 253, 0.22)",
-  borderRadius: "999px",
-  background: "rgba(2, 8, 23, 0.46)",
-  color: "#f8fbff",
-  outline: "none",
-  padding: "11px 14px",
-  fontSize: "14px",
-};
-
-const sendBtn = {
-  border: "none",
-  background: "linear-gradient(135deg, #38bdf8, #2563eb)",
-  color: "#ffffff",
-  fontWeight: "900",
-  fontSize: "14px",
-  cursor: "pointer",
-  padding: "11px 16px",
-  borderRadius: "999px",
-  boxShadow: "0 10px 22px rgba(37, 99, 235, 0.36)",
-};
-
-const imagePopup = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  background: "rgba(0,0,0,0.95)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "16px",
-};
-
-const fullImageStyle = {
-  maxWidth: "100%",
-  maxHeight: "85vh",
-  objectFit: "contain",
-  borderRadius: "14px",
-};
-
-const closeImageBtn = {
-  position: "fixed",
-  top: "max(16px, env(safe-area-inset-top))",
-  right: "16px",
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(8, 25, 58, 0.72)",
-  color: "#ffffff",
-  fontSize: "20px",
-  borderRadius: "50%",
-  width: "40px",
-  height: "40px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
+    "0 24px 60px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(59, 
