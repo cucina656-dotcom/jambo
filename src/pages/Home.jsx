@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Header from "../components/Header";
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
@@ -19,6 +20,7 @@ function isDirectVideoUrl(url = "") {
     clean.endsWith(".avi")
   );
 }
+
 function isImageUrl(url = "") {
   const clean = url.toLowerCase().split("?")[0].split("#")[0];
   return (
@@ -31,6 +33,7 @@ function isImageUrl(url = "") {
     clean.endsWith(".svg")
   );
 }
+
 function getEmbedUrl(url = "") {
   if (!url) return "";
   const youtubeMatch = url.match(
@@ -54,6 +57,7 @@ function getEmbedUrl(url = "") {
   if (url.includes("/embed/") || url.includes("player.")) return url;
   return url;
 }
+
 function detectCreatorType(value = "") {
   const clean = value.trim().toLowerCase();
   if (!clean) return "";
@@ -66,6 +70,7 @@ function detectCreatorType(value = "") {
   }
   return "whatsapp";
 }
+
 function buildTapInUrl(type = "", value = "") {
   const clean = value.trim();
   if (!clean) return "";
@@ -255,7 +260,6 @@ function Home() {
     const isImage = mediaType === "image" || isImageUrl(mediaUrl);
     const isVideo = mediaType === "video" || isDirectVideoUrl(mediaUrl);
     const isEmbed = mediaType === "embed" || (!isImage && !isVideo);
-
     if (isImage) {
       return (
         <img
@@ -315,7 +319,7 @@ function Home() {
         <div style={emptyStateStyle}>
           <p>No posts yet. Create your first post!</p>
           <button type="button" onClick={openEditor} style={emptyStateButton}>
-            ⚡      Create Post
+            ⚡       Create Post
           </button>
         </div>
         {showEditor && (
@@ -349,7 +353,6 @@ function Home() {
             post.creator_type,
             post.creator_identity
           );
-
           return (
             <section
               key={post.id || index}
@@ -359,7 +362,7 @@ function Home() {
               data-index={index}
               style={feedPost}
             >
-              {/* Story UI Top Info Panel - Cleaned Up */}
+              {/* Story UI Top Info Panel */}
               <div style={profileCard}>
                 <img
                   src={post.logo_url || DEFAULT_LOGO}
@@ -376,14 +379,13 @@ function Home() {
                   </div>
                 </div>
               </div>
-
-              {/* Extended Video Card Layout reaching closer to both top & bottom row with a safe gap */}
+              {/* Extended Video Card Layout */}
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
-              
-              {/* Action row at the bottom moved up significantly to avoid getting cut off */}
+
+              {/* Action row at the bottom */}
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
@@ -404,16 +406,16 @@ function Home() {
                     </div>
                   </div>
                 )}
-                
+
                 <button type="button" onClick={openEditor} style={plusBtn}>
-                  ⚡ +
+                  <span style={lightningIcon}>⚡</span>
+                  <span style={plusIcon}>+</span>
                 </button>
               </div>
             </section>
           );
         })}
       </main>
-
       {showEditor && (
         <EditorModal
           newCreatorIdentity={newCreatorIdentity}
@@ -460,7 +462,7 @@ function EditorModal({
   return (
     <div style={modalOverlay}>
       <div style={modalCard}>
-        <h2 style={modalTitle}>  ⚡     Create New Post</h2>
+        <h2 style={modalTitle}>   ⚡      Create New Post</h2>
         <input
           type="text"
           placeholder="WhatsApp number or website URL *"
@@ -504,7 +506,7 @@ function EditorModal({
           />
         </label>
         <div style={helpTextStyle}>
-          💡   Enter a media URL OR upload an image/video from your device.
+          💡    Enter a media URL OR upload an image/video from your device.
         </div>
         <textarea
           placeholder="Subtitle text optional"
@@ -531,11 +533,11 @@ function EditorModal({
   );
 }
 
-/* Structural CSS Layout Sheet Styles */
+/* Structural CSS Layout Sheet Styles matching Screenshot UI */
 const page = {
   height: "100vh",
   minHeight: "100svh",
-  background: "#5b626a", 
+  background: "#0d0e12",
   color: "white",
   overflow: "hidden",
   position: "relative",
@@ -549,7 +551,7 @@ const feedContainer = {
   overflowY: "scroll",
   scrollSnapType: "y mandatory",
   WebkitOverflowScrolling: "touch",
-  background: "#5b626a",
+  background: "#0d0e12",
 };
 
 const feedPost = {
@@ -560,28 +562,31 @@ const feedPost = {
   scrollSnapStop: "always",
   position: "relative",
   overflow: "hidden",
-  background: "linear-gradient(to bottom, #757d88 0%, #4a5058 100%)",
+  background: "linear-gradient(to bottom, #141722 0%, #0a0b0e 100%)",
 };
 
 const profileCard = {
   position: "absolute",
-  top: "24px",
-  left: "12px",
-  right: "12px",
+  top: "0px",
+  left: "0px",
+  right: "0px",
   zIndex: 10,
   display: "flex",
   alignItems: "center",
-  gap: "12px",
+  gap: "14px",
+  background: "linear-gradient(to bottom, rgba(29, 35, 46, 0.8) 0%, rgba(29, 35, 46, 0.6) 100%)",
+  backdropFilter: "blur(12px)",
+  padding: "16px 20px",
+  borderBottom: "1px solid rgba(0, 255, 204, 0.15)",
 };
 
-// Profile Badge with striking neon glow visual effects
 const journalistPhotoStyle = {
-  width: "44px",
-  height: "44px",
+  width: "50px",
+  height: "50px",
   borderRadius: "50%",
   objectFit: "cover",
   border: "2px solid #00ffcc",
-  boxShadow: "0 0 10px #00ffcc, 0 0 3px #00ffcc",
+  boxShadow: "0 0 14px rgba(0, 255, 204, 0.5), inset 0 0 8px rgba(0, 255, 204, 0.3)",
   flexShrink: 0,
   cursor: "pointer",
 };
@@ -600,26 +605,25 @@ const nameRow = {
 };
 
 const profileTitle = {
-  fontSize: "16px",
+  fontSize: "19px",
   fontWeight: "700",
   margin: 0,
-  color: "#ffffff",
-  letterSpacing: "0.2px",
+  color: "#38bdf8",
+  letterSpacing: "0.4px",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-  textShadow: "0 1px 4px rgba(0,0,0,0.7)",
 };
 
-/* Video Card: Extended heights perfectly between the profile header and the bottom action line */
 const videoCardViewport = {
   width: "100%",
-  height: "64%",
+  height: "100%",
   position: "absolute",
-  top: "76px", 
+  top: "0px",
+  bottom: "0px",
+  left: "0px",
   overflow: "hidden",
   background: "#000",
-  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.4)",
 };
 
 const mediaLayer = {
@@ -642,41 +646,41 @@ const darkOverlay = {
   position: "absolute",
   inset: 0,
   zIndex: 1,
-  background: "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.2) 100%)",
+  background: "linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 75%, rgba(0,0,0,0.6) 100%)",
   pointerEvents: "none",
 };
 
-/* Lifted action container to display cleanly without getting cut off at the bottom */
 const bottomHorizontalActionsRow = {
   position: "absolute",
-  bottom: "110px", 
-  left: "14px",
-  right: "14px",
+  bottom: "40px",
+  left: "16px",
+  right: "16px",
   zIndex: 30,
   display: "flex",
   alignItems: "center",
-  gap: "10px",
-  width: "calc(100% - 28px)",
+  gap: "12px",
+  width: "calc(100% - 32px)",
 };
 
 const tickerContainer = {
   flex: 1,
-  height: "46px",
+  height: "54px",
   display: "flex",
   alignItems: "center",
-  background: "rgba(255, 255, 255, 0.15)",
+  background: "rgba(30, 41, 59, 0.6)",
   backdropFilter: "blur(20px)",
   borderRadius: "30px",
-  border: "1px solid rgba(255,255,255,0.25)",
+  border: "1px solid rgba(56, 189, 248, 0.25)",
   overflow: "hidden",
+  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
 };
 
 const tickerLabel = {
   background: "#000000",
-  color: "#ffffff",
+  color: "#ec4899",
   fontWeight: "700",
-  fontSize: "13px",
-  padding: "0 22px",
+  fontSize: "14px",
+  padding: "0 26px",
   height: "100%",
   display: "flex",
   alignItems: "center",
@@ -684,7 +688,7 @@ const tickerLabel = {
   zIndex: 2,
   flexShrink: 0,
   textDecoration: "none",
-  borderRight: "1px solid rgba(255,255,255,0.15)",
+  borderRight: "1px solid rgba(56, 189, 248, 0.2)",
 };
 
 const tickerWrapper = {
@@ -699,8 +703,8 @@ const tickerScrollingContent = {
   whiteSpace: "nowrap",
   paddingLeft: "100%",
   animation: "tickerMarquee 45s linear infinite",
-  color: "#ffffff",
-  fontSize: "13px",
+  color: "#38bdf8",
+  fontSize: "14px",
   fontWeight: "600",
 };
 
@@ -717,27 +721,42 @@ if (typeof window !== "undefined" && !document.getElementById("ticker-keyframes"
 }
 
 const plusBtn = {
-  width: "46px",
-  height: "46px",
+  width: "56px",
+  height: "56px",
   borderRadius: "50%",
   border: "none",
   background: "#ffffff",
-  color: "#000000",
-  fontSize: "18px",
-  fontWeight: "700",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+  boxShadow: "0 0 16px rgba(236, 72, 153, 0.6), 0 4px 12px rgba(0,0,0,0.4)",
   cursor: "pointer",
   display: "flex",
+  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0,
+  padding: 0,
+  position: "relative",
+};
+
+const lightningIcon = {
+  color: "#f59e0b",
+  fontSize: "16px",
+  fontWeight: "700",
+  lineHeight: "1",
+  marginBottom: "1px",
+};
+
+const plusIcon = {
+  color: "#ec4899",
+  fontSize: "16px",
+  fontWeight: "700",
+  lineHeight: "1",
 };
 
 const modalOverlay = {
   position: "fixed",
   inset: 0,
   zIndex: 10000,
-  background: "rgba(0,0,0,0.85)",
+  background: "rgba(10, 11, 14, 0.9)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -751,12 +770,12 @@ const modalCard = {
   height: "auto",
   maxHeight: "82vh",
   overflowY: "auto",
-  background: "#1c1e21",
+  background: "#1e293b",
   color: "white",
   borderRadius: "16px",
   padding: "20px",
   boxSizing: "border-box",
-  border: "1px solid rgba(255,255,255,0.1)",
+  border: "1px solid rgba(56, 189, 248, 0.2)",
 };
 
 const modalTitle = {
@@ -764,6 +783,7 @@ const modalTitle = {
   fontSize: "18px",
   fontWeight: "700",
   textAlign: "center",
+  color: "#38bdf8",
 };
 
 const inputStyle = {
@@ -773,7 +793,7 @@ const inputStyle = {
   marginBottom: "10px",
   borderRadius: "8px",
   border: "1px solid rgba(255,255,255,0.15)",
-  background: "rgba(255,255,255,0.07)",
+  background: "rgba(15, 23, 42, 0.6)",
   color: "white",
   outline: "none",
   fontSize: "14px",
@@ -792,8 +812,8 @@ const fileLabel = {
   padding: "10px",
   marginBottom: "10px",
   borderRadius: "8px",
-  border: "1px dashed rgba(255,255,255,0.3)",
-  background: "rgba(255,255,255,0.02)",
+  border: "1px dashed rgba(56, 189, 248, 0.4)",
+  background: "rgba(15, 23, 42, 0.3)",
   color: "#bcc0c4",
   fontSize: "12px",
 };
@@ -811,6 +831,7 @@ const previewLogo = {
   objectFit: "cover",
   borderRadius: "50%",
   marginBottom: "10px",
+  border: "2px solid #00ffcc",
 };
 
 const helpTextStyle = {
@@ -818,7 +839,7 @@ const helpTextStyle = {
   color: "#bcc0c4",
   marginBottom: "12px",
   padding: "8px",
-  background: "rgba(255,255,255,0.05)",
+  background: "rgba(15, 23, 42, 0.4)",
   borderRadius: "6px",
 };
 
@@ -827,11 +848,12 @@ const saveBtn = {
   padding: "12px",
   borderRadius: "8px",
   border: "none",
-  background: "#1877f2",
+  background: "#ec4899",
   color: "white",
   fontWeight: "700",
   marginTop: "6px",
   cursor: "pointer",
+  boxShadow: "0 0 12px rgba(236, 72, 153, 0.4)",
 };
 
 const cancelBtn = {
@@ -851,7 +873,7 @@ const loadingStyle = {
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  color: "white",
+  color: "#38bdf8",
   fontSize: "16px",
 };
 
@@ -894,7 +916,8 @@ const zoomImageStyle = {
   maxHeight: "340px",
   borderRadius: "50%",
   objectFit: "cover",
-  border: "2px solid #fff",
+  border: "2px solid #00ffcc",
+  boxShadow: "0 0 20px rgba(0, 255, 204, 0.6)",
 };
 
 export default Home;
