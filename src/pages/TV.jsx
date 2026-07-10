@@ -159,7 +159,6 @@ function TV() {
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
               <label style={labelStyle}>Ifoto yuwo uyitura</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
-              <input style={inputStyle} placeholder="Dedication title e.g Happy Birthday" value={dedicationTitle} onChange={(e) => setDedicationTitle(e.target.value)} />
               
               <div style={badgeContainer}>
                 <label style={labelStyle}>Badge Style</label>
