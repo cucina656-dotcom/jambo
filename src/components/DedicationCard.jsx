@@ -34,7 +34,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷"; // Liberia
   if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾"; // Libya
   if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬"; // Madagascar
-  if (number.startsWith("+265") || number.startsWith("265")) return "🇲履"; // Malawi
+  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼"; // Malawi
   if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱"; // Mali
   if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷"; // Mauritania
   if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺"; // Mauritius
@@ -88,7 +88,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵"; // Nepal
   if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵"; // North Korea
   if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲"; // Oman
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵眷"; // Pakistan
+  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰"; // Pakistan
   if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸"; // Palestine
   if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭"; // Philippines
   if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦"; // Qatar
@@ -135,7 +135,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹"; // Malta
   if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩"; // Moldova
   if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨"; // Monaco
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲 Montenegro"; // Montenegro
+  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪"; // Montenegro
   if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱"; // Netherlands
   if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰"; // North Macedonia
   if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴"; // Norway
@@ -144,7 +144,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴"; // Romania
   if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺"; // Russia
   if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲"; // San Marino
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷 Serbia"; // Serbia
+  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸"; // Serbia
   if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰"; // Slovakia
   if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮"; // Slovenia
   if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸"; // Spain
@@ -188,7 +188,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨"; // Ecuador
   if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾"; // Guyana
   if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾"; // Paraguay
-  if (number.startsWith("+51") || number.startsWith("51")) return "🇵 Peru"; // Peru
+  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪"; // Peru
   if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷"; // Suriname
   if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾"; // Uruguay
   if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪"; // Venezuela
@@ -392,7 +392,6 @@ export default function DedicationCard({
           {dedicationTitle || mediaTitle}
         </div>
         <div style={rightActions}>
-          {/* ONLY the floating plus button remains here. Image badges and layout frames have been completely removed */}
           <button 
             type="button" 
             onClick={(e) => {
@@ -632,67 +631,72 @@ const badgeDot = {
   flexShrink: 0,
 };
 
+// UPDATED STYLES FOR FLOATING SIDE BUTTONS
 const rightActions = {
   position: "absolute",
-  right: "12px",
-  bottom: "14px",
+  right: "10px",
+  bottom: "18px",
   zIndex: 3,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  gap: "12px",
+  gap: "10px",
 };
 
 const followBtn = {
-  position: "relative",
-  width: "48px",
-  height: "48px",
-  borderRadius: "17px",
-  border: "2px solid #eaf6ff",
-  background: "linear-gradient(135deg, #38bdf8, #2563eb)",
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(0, 0, 0, 0.18)",
   color: "#ffffff",
-  fontSize: "22px",
-  fontWeight: "900",
+  fontSize: "25px",
+  fontWeight: "800",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   padding: 0,
   lineHeight: 1,
-  boxShadow: "0 10px 22px rgba(37, 99, 235, 0.55)",
+  textShadow: "0 2px 6px rgba(0,0,0,0.85)",
+  boxShadow: "none",
+  backdropFilter: "blur(2px)",
+  WebkitBackdropFilter: "blur(2px)",
 };
 
 const sideBtn = {
-  border: "1px solid rgba(147, 197, 253, 0.30)",
-  background: "rgba(8, 25, 58, 0.68)",
+  border: "none",
+  background: "transparent",
   color: "#ffffff",
-  width: "48px",
-  minHeight: "48px",
-  borderRadius: "17px",
+  width: "38px",
+  minHeight: "42px",
+  borderRadius: "50%",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
   gap: "2px",
-  padding: "6px 4px",
+  padding: "0",
   cursor: "pointer",
   outline: "none",
-  backdropFilter: "blur(16px)",
-  WebkitBackdropFilter: "blur(16px)",
-  boxShadow: "0 12px 24px rgba(2, 8, 23, 0.34)",
+  boxShadow: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
 };
 
 const sideIcon = {
-  fontSize: "19px",
+  fontSize: "24px",
   lineHeight: 1,
+  color: "#ffffff",
+  textShadow: "0 2px 6px rgba(0,0,0,0.9)",
 };
 
 const actionLabel = {
   fontSize: "10px",
-  fontWeight: "900",
-  lineHeight: 1.1,
-  color: "#dbeafe",
-  textShadow: "0 1px 5px rgba(2, 8, 23, 0.9)",
+  fontWeight: "800",
+  lineHeight: 1,
+  color: "#ffffff",
+  textShadow: "0 2px 6px rgba(0,0,0,0.95)",
 };
 
 const dedicationBody = {
@@ -1010,7 +1014,7 @@ const closeImageBtn = {
   fontSize: "20px",
   borderRadius: "50%",
   width: "40px",
-height: "40px",
+  height: "40px",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
