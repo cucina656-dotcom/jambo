@@ -698,7 +698,7 @@ const tickerScrollingContent = {
   display: "inline-block",
   whiteSpace: "nowrap",
   paddingLeft: "100%",
-  animation: "tickerMarquee 30s linear infinite",
+  animation: "tickerMarquee 45s linear infinite",
   color: "#ffffff",
   fontSize: "13px",
   fontWeight: "600",
