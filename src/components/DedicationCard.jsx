@@ -5,207 +5,207 @@ const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 function getFlagFromWhatsapp(number = "") {
   // Africa
-  if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿"; // Algeria
-  if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴"; // Angola
-  if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯"; // Benin
-  if (number.startsWith("+267") || number.startsWith("267")) return "🇧🇼"; // Botswana
-  if (number.startsWith("+226") || number.startsWith("226")) return "🇧🇫"; // Burkina Faso
-  if (number.startsWith("+257") || number.startsWith("257")) return "🇧🇮"; // Burundi
-  if (number.startsWith("+237") || number.startsWith("237")) return "🇨🇲"; // Cameroon
-  if (number.startsWith("+238") || number.startsWith("238")) return "🇨🇻"; // Cape Verde
-  if (number.startsWith("+236") || number.startsWith("236")) return "🇨🇫"; // Central African Republic
-  if (number.startsWith("+235") || number.startsWith("235")) return "🇹🇩"; // Chad
-  if (number.startsWith("+269") || number.startsWith("269")) return "🇰🇲"; // Comoros
-  if (number.startsWith("+242") || number.startsWith("242")) return "🇨🇬"; // Congo (Republic)
-  if (number.startsWith("+243") || number.startsWith("243")) return "🇨🇩"; // Congo (DRC)
-  if (number.startsWith("+225") || number.startsWith("225")) return "🇨🇮"; // Côte d'Ivoire
-  if (number.startsWith("+253") || number.startsWith("253")) return "🇩🇯"; // Djibouti
-  if (number.startsWith("+20") || number.startsWith("20")) return "🇪🇬"; // Egypt
-  if (number.startsWith("+240") || number.startsWith("240")) return "🇬🇶"; // Equatorial Guinea
-  if (number.startsWith("+291") || number.startsWith("291")) return "🇪🇷"; // Eritrea
-  if (number.startsWith("+268") || number.startsWith("268")) return "🇸🇿"; // Eswatini
-  if (number.startsWith("+251") || number.startsWith("251")) return "🇪🇹"; // Ethiopia
-  if (number.startsWith("+241") || number.startsWith("241")) return "🇬🇦"; // Gabon
-  if (number.startsWith("+220") || number.startsWith("220")) return "🇬🇲"; // Gambia
-  if (number.startsWith("+233") || number.startsWith("233")) return "🇬🇭"; // Ghana
-  if (number.startsWith("+224") || number.startsWith("224")) return "🇬🇳"; // Guinea
-  if (number.startsWith("+245") || number.startsWith("245")) return "🇬🇼"; // Guinea-Bissau
-  if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪"; // Kenya
-  if (number.startsWith("+266") || number.startsWith("266")) return "🇱🇸"; // Lesotho
-  if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷"; // Liberia
-  if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾"; // Libya
-  if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬"; // Madagascar
-  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼"; // Malawi
-  if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱"; // Mali
-  if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷"; // Mauritania
-  if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺"; // Mauritius
-  if (number.startsWith("+212") || number.startsWith("212")) return "🇲🇦"; // Morocco
-  if (number.startsWith("+258") || number.startsWith("258")) return "🇲🇿"; // Mozambique
-  if (number.startsWith("+264") || number.startsWith("264")) return "🇳🇦"; // Namibia
-  if (number.startsWith("+227") || number.startsWith("227")) return "🇳🇪"; // Niger
-  if (number.startsWith("+234") || number.startsWith("234")) return "🇳🇬"; // Nigeria
-  if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼"; // Rwanda
-  if (number.startsWith("+239") || number.startsWith("239")) return "🇸🇹"; // São Tomé and Príncipe
-  if (number.startsWith("+221") || number.startsWith("221")) return "🇸🇳"; // Senegal
-  if (number.startsWith("+248") || number.startsWith("248")) return "🇸🇨"; // Seychelles
-  if (number.startsWith("+232") || number.startsWith("232")) return "🇸🇱"; // Sierra Leone
-  if (number.startsWith("+252") || number.startsWith("252")) return "🇸🇴"; // Somalia
-  if (number.startsWith("+27") || number.startsWith("27")) return "🇿🇦"; // South Africa
-  if (number.startsWith("+211") || number.startsWith("211")) return "🇸🇸"; // South Sudan
-  if (number.startsWith("+249") || number.startsWith("249")) return "🇸🇩"; // Sudan
-  if (number.startsWith("+255") || number.startsWith("255")) return "🇹🇿"; // Tanzania
-  if (number.startsWith("+228") || number.startsWith("228")) return "🇹🇬"; // Togo
-  if (number.startsWith("+216") || number.startsWith("216")) return "🇹🇳"; // Tunisia
-  if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬"; // Uganda
-  if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲"; // Zambia
-  if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼"; // Zimbabwe
+  if (number.startsWith("+213") || number.startsWith("213")) return " 🇩🇿 "; // Algeria
+  if (number.startsWith("+244") || number.startsWith("244")) return " 🇦🇴 "; // Angola
+  if (number.startsWith("+229") || number.startsWith("229")) return " 🇧🇯 "; // Benin
+  if (number.startsWith("+267") || number.startsWith("267")) return " 🇧🇼 "; // Botswana
+  if (number.startsWith("+226") || number.startsWith("226")) return " 🇧🇫 "; // Burkina Faso
+  if (number.startsWith("+257") || number.startsWith("257")) return " 🇧🇮 "; // Burundi
+  if (number.startsWith("+237") || number.startsWith("237")) return " 🇨🇲 "; // Cameroon
+  if (number.startsWith("+238") || number.startsWith("238")) return " 🇨🇻 "; // Cape Verde
+  if (number.startsWith("+236") || number.startsWith("236")) return " 🇨🇫 "; // Central African Republic
+  if (number.startsWith("+235") || number.startsWith("235")) return " 🇹🇩 "; // Chad
+  if (number.startsWith("+269") || number.startsWith("269")) return " 🇰🇲 "; // Comoros
+  if (number.startsWith("+242") || number.startsWith("242")) return " 🇨🇬 "; // Congo (Republic)
+  if (number.startsWith("+243") || number.startsWith("243")) return " 🇨🇩 "; // Congo (DRC)
+  if (number.startsWith("+225") || number.startsWith("225")) return " 🇨🇮 "; // Côte d'Ivoire
+  if (number.startsWith("+253") || number.startsWith("253")) return " 🇩🇯 "; // Djibouti
+  if (number.startsWith("+20") || number.startsWith("20")) return " 🇪🇬 "; // Egypt
+  if (number.startsWith("+240") || number.startsWith("240")) return " 🇬🇶 "; // Equatorial Guinea
+  if (number.startsWith("+291") || number.startsWith("291")) return " 🇪🇷 "; // Eritrea
+  if (number.startsWith("+268") || number.startsWith("268")) return " 🇸🇿 "; // Eswatini
+  if (number.startsWith("+251") || number.startsWith("251")) return " 🇪🇹 "; // Ethiopia
+  if (number.startsWith("+241") || number.startsWith("241")) return " 🇬🇦 "; // Gabon
+  if (number.startsWith("+220") || number.startsWith("220")) return " 🇬🇲 "; // Gambia
+  if (number.startsWith("+233") || number.startsWith("233")) return " 🇬🇭 "; // Ghana
+  if (number.startsWith("+224") || number.startsWith("224")) return " 🇬🇳 "; // Guinea
+  if (number.startsWith("+245") || number.startsWith("245")) return " 🇬🇼 "; // Guinea-Bissau
+  if (number.startsWith("+254") || number.startsWith("254")) return " 🇰🇪 "; // Kenya
+  if (number.startsWith("+266") || number.startsWith("266")) return " 🇱🇸 "; // Lesotho
+  if (number.startsWith("+231") || number.startsWith("231")) return " 🇱🇷 "; // Liberia
+  if (number.startsWith("+218") || number.startsWith("218")) return " 🇱🇾 "; // Libya
+  if (number.startsWith("+261") || number.startsWith("261")) return " 🇲🇬 "; // Madagascar
+  if (number.startsWith("+265") || number.startsWith("265")) return " 🇲 履 "; // Malawi
+  if (number.startsWith("+223") || number.startsWith("223")) return " 🇲🇱 "; // Mali
+  if (number.startsWith("+222") || number.startsWith("222")) return " 🇲🇷 "; // Mauritania
+  if (number.startsWith("+230") || number.startsWith("230")) return " 🇲🇺 "; // Mauritius
+  if (number.startsWith("+212") || number.startsWith("212")) return " 🇲🇦 "; // Morocco
+  if (number.startsWith("+258") || number.startsWith("258")) return " 🇲🇿 "; // Mozambique
+  if (number.startsWith("+264") || number.startsWith("264")) return " 🇳🇦 "; // Namibia
+  if (number.startsWith("+227") || number.startsWith("227")) return " 🇳🇪 "; // Niger
+  if (number.startsWith("+234") || number.startsWith("234")) return " 🇳🇬 "; // Nigeria
+  if (number.startsWith("+250") || number.startsWith("250")) return " 🇷🇼 "; // Rwanda
+  if (number.startsWith("+239") || number.startsWith("239")) return " 🇸🇹 "; // São Tomé and Príncipe
+  if (number.startsWith("+221") || number.startsWith("221")) return " 🇸🇳 "; // Senegal
+  if (number.startsWith("+248") || number.startsWith("248")) return " 🇸🇨 "; // Seychelles
+  if (number.startsWith("+232") || number.startsWith("232")) return " 🇸🇱 "; // Sierra Leone
+  if (number.startsWith("+252") || number.startsWith("252")) return " 🇸🇴 "; // Somalia
+  if (number.startsWith("+27") || number.startsWith("27")) return " 🇿🇦 "; // South Africa
+  if (number.startsWith("+211") || number.startsWith("211")) return " 🇸🇸 "; // South Sudan
+  if (number.startsWith("+249") || number.startsWith("249")) return " 🇸🇩 "; // Sudan
+  if (number.startsWith("+255") || number.startsWith("255")) return " 🇹🇿 "; // Tanzania
+  if (number.startsWith("+228") || number.startsWith("228")) return " 🇹🇬 "; // Togo
+  if (number.startsWith("+216") || number.startsWith("216")) return " 🇹🇳 "; // Tunisia
+  if (number.startsWith("+256") || number.startsWith("256")) return " 🇺🇬 "; // Uganda
+  if (number.startsWith("+260") || number.startsWith("260")) return " 🇿🇲 "; // Zambia
+  if (number.startsWith("+263") || number.startsWith("263")) return " 🇿🇼 "; // Zimbabwe
   // Asia
-  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫"; // Afghanistan
-  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲"; // Armenia
-  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿"; // Azerbaijan
-  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭"; // Bahrain
-  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩"; // Bangladesh
-  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹"; // Bhutan
-  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳"; // Brunei
-  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭"; // Cambodia
-  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳"; // China
-  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾"; // Cyprus
-  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳"; // India
-  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩"; // Indonesia
-  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷"; // Iran
-  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶"; // Iraq
-  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱"; // Israel
-  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵"; // Japan
-  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴"; // Jordan
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿"; // Kazakhstan
-  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼"; // Kuwait
-  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬"; // Kyrgyzstan
-  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦"; // Laos
-  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧"; // Lebanon
-  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾"; // Malaysia
-  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻"; // Maldives
-  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳"; // Mongolia
-  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲"; // Myanmar
-  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵"; // Nepal
-  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵"; // North Korea
-  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲"; // Oman
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰"; // Pakistan
-  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸"; // Palestine
-  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭"; // Philippines
-  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦"; // Qatar
-  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦"; // Saudi Arabia
-  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬"; // Singapore
-  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷"; // South Korea
-  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰"; // Sri Lanka
-  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾"; // Syria
-  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼"; // Taiwan
-  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯"; // Tajikistan
-  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭"; // Thailand
-  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱"; // Timor-Leste
-  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷"; // Turkey
-  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲"; // Turkmenistan
-  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪"; // UAE
-  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿"; // Uzbekistan
-  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳"; // Vietnam
-  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪"; // Yemen
+  if (number.startsWith("+93") || number.startsWith("93")) return " 🇦🇫 "; // Afghanistan
+  if (number.startsWith("+374") || number.startsWith("374")) return " 🇦🇲 "; // Armenia
+  if (number.startsWith("+994") || number.startsWith("994")) return " 🇦🇿 "; // Azerbaijan
+  if (number.startsWith("+973") || number.startsWith("973")) return " 🇧🇭 "; // Bahrain
+  if (number.startsWith("+880") || number.startsWith("880")) return " 🇧🇩 "; // Bangladesh
+  if (number.startsWith("+975") || number.startsWith("975")) return " 🇧🇹 "; // Bhutan
+  if (number.startsWith("+673") || number.startsWith("673")) return " 🇧🇳 "; // Brunei
+  if (number.startsWith("+855") || number.startsWith("855")) return " 🇰🇭 "; // Cambodia
+  if (number.startsWith("+86") || number.startsWith("86")) return " 🇨🇳 "; // China
+  if (number.startsWith("+357") || number.startsWith("357")) return " 🇨🇾 "; // Cyprus
+  if (number.startsWith("+91") || number.startsWith("91")) return " 🇮🇳 "; // India
+  if (number.startsWith("+62") || number.startsWith("62")) return " 🇮🇩 "; // Indonesia
+  if (number.startsWith("+98") || number.startsWith("98")) return " 🇮🇷 "; // Iran
+  if (number.startsWith("+964") || number.startsWith("964")) return " 🇮🇶 "; // Iraq
+  if (number.startsWith("+972") || number.startsWith("972")) return " 🇮🇱 "; // Israel
+  if (number.startsWith("+81") || number.startsWith("81")) return " 🇯🇵 "; // Japan
+  if (number.startsWith("+962") || number.startsWith("962")) return " 🇯🇴 "; // Jordan
+  if (number.startsWith("+7") || number.startsWith("7")) return " 🇰🇿 "; // Kazakhstan
+  if (number.startsWith("+965") || number.startsWith("965")) return " 🇰🇼 "; // Kuwait
+  if (number.startsWith("+996") || number.startsWith("996")) return " 🇰🇬 "; // Kyrgyzstan
+  if (number.startsWith("+856") || number.startsWith("856")) return " 🇱🇦 "; // Laos
+  if (number.startsWith("+961") || number.startsWith("961")) return " 🇱🇧 "; // Lebanon
+  if (number.startsWith("+60") || number.startsWith("60")) return " 🇲🇾 "; // Malaysia
+  if (number.startsWith("+960") || number.startsWith("960")) return " 🇲🇻 "; // Maldives
+  if (number.startsWith("+976") || number.startsWith("976")) return " 🇲🇳 "; // Mongolia
+  if (number.startsWith("+95") || number.startsWith("95")) return " 🇲🇲 "; // Myanmar
+  if (number.startsWith("+977") || number.startsWith("977")) return " 🇳🇵 "; // Nepal
+  if (number.startsWith("+850") || number.startsWith("850")) return " 🇰🇵 "; // North Korea
+  if (number.startsWith("+968") || number.startsWith("968")) return " 🇴🇲 "; // Oman
+  if (number.startsWith("+92") || number.startsWith("92")) return " 🇵 眷 "; // Pakistan
+  if (number.startsWith("+970") || number.startsWith("970")) return " 🇵🇸 "; // Palestine
+  if (number.startsWith("+63") || number.startsWith("63")) return " 🇵🇭 "; // Philippines
+  if (number.startsWith("+974") || number.startsWith("974")) return " 🇶🇦 "; // Qatar
+  if (number.startsWith("+966") || number.startsWith("966")) return " 🇸🇦 "; // Saudi Arabia
+  if (number.startsWith("+65") || number.startsWith("65")) return " 🇸🇬 "; // Singapore
+  if (number.startsWith("+82") || number.startsWith("82")) return " 🇰🇷 "; // South Korea
+  if (number.startsWith("+94") || number.startsWith("94")) return " 🇱🇰 "; // Sri Lanka
+  if (number.startsWith("+963") || number.startsWith("963")) return " 🇸🇾 "; // Syria
+  if (number.startsWith("+886") || number.startsWith("886")) return " 🇹🇼 "; // Taiwan
+  if (number.startsWith("+992") || number.startsWith("992")) return " 🇹🇯 "; // Tajikistan
+  if (number.startsWith("+66") || number.startsWith("66")) return " 🇹🇭 "; // Thailand
+  if (number.startsWith("+670") || number.startsWith("670")) return " 🇹🇱 "; // Timor-Leste
+  if (number.startsWith("+90") || number.startsWith("90")) return " 🇹🇷 "; // Turkey
+  if (number.startsWith("+993") || number.startsWith("993")) return " 🇹🇲 "; // Turkmenistan
+  if (number.startsWith("+971") || number.startsWith("971")) return " 🇦🇪 "; // UAE
+  if (number.startsWith("+998") || number.startsWith("998")) return " 🇺🇿 "; // Uzbekistan
+  if (number.startsWith("+84") || number.startsWith("84")) return " 🇻🇳 "; // Vietnam
+  if (number.startsWith("+967") || number.startsWith("967")) return " 🇾🇪 "; // Yemen
   // Europe
-  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱"; // Albania
-  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩"; // Andorra
-  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹"; // Austria
-  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾"; // Belarus
-  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪"; // Belgium
-  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦"; // Bosnia and Herzegovina
-  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬"; // Bulgaria
-  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷"; // Croatia
-  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿"; // Czech Republic
-  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰"; // Denmark
-  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪"; // Estonia
-  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮"; // Finland
-  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷"; // France
-  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪"; // Germany
-  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷"; // Greece
-  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺"; // Hungary
-  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸"; // Iceland
-  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪"; // Ireland
-  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹"; // Italy
-  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰"; // Kosovo
-  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻"; // Latvia
-  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮"; // Liechtenstein
-  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹"; // Lithuania
-  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺"; // Luxembourg
-  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹"; // Malta
-  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩"; // Moldova
-  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨"; // Monaco
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪"; // Montenegro
-  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱"; // Netherlands
-  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰"; // North Macedonia
-  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴"; // Norway
-  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱"; // Poland
-  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹"; // Portugal
-  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴"; // Romania
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺"; // Russia
-  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲"; // San Marino
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸"; // Serbia
-  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰"; // Slovakia
-  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮"; // Slovenia
-  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸"; // Spain
-  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪"; // Sweden
-  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭"; // Switzerland
-  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦"; // Ukraine
-  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧"; // United Kingdom
-  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦"; // Vatican City
+  if (number.startsWith("+355") || number.startsWith("355")) return " 🇦🇱 "; // Albania
+  if (number.startsWith("+376") || number.startsWith("376")) return " 🇦🇩 "; // Andorra
+  if (number.startsWith("+43") || number.startsWith("43")) return " 🇦🇹 "; // Austria
+  if (number.startsWith("+375") || number.startsWith("375")) return " 🇧🇾 "; // Belarus
+  if (number.startsWith("+32") || number.startsWith("32")) return " 🇧🇪 "; // Belgium
+  if (number.startsWith("+387") || number.startsWith("387")) return " 🇧🇦 "; // Bosnia and Herzegovina
+  if (number.startsWith("+359") || number.startsWith("359")) return " 🇧🇬 "; // Bulgaria
+  if (number.startsWith("+385") || number.startsWith("385")) return " 🇭🇷 "; // Croatia
+  if (number.startsWith("+420") || number.startsWith("420")) return " 🇨🇿 "; // Czech Republic
+  if (number.startsWith("+45") || number.startsWith("45")) return " 🇩🇰 "; // Denmark
+  if (number.startsWith("+372") || number.startsWith("372")) return " 🇪🇪 "; // Estonia
+  if (number.startsWith("+358") || number.startsWith("358")) return " 🇫🇮 "; // Finland
+  if (number.startsWith("+33") || number.startsWith("33")) return " 🇫🇷 "; // France
+  if (number.startsWith("+49") || number.startsWith("49")) return " 🇩慢 "; // Germany
+  if (number.startsWith("+30") || number.startsWith("30")) return " 🇬🇷 "; // Greece
+  if (number.startsWith("+36") || number.startsWith("36")) return " 🇭🇺 "; // Hungary
+  if (number.startsWith("+354") || number.startsWith("354")) return " 🇮🇸 "; // Iceland
+  if (number.startsWith("+353") || number.startsWith("353")) return " 🇮🇪 "; // Ireland
+  if (number.startsWith("+39") || number.startsWith("39")) return " 🇮🇹 "; // Italy
+  if (number.startsWith("+383") || number.startsWith("383")) return " 🇽🇰 "; // Kosovo
+  if (number.startsWith("+371") || number.startsWith("371")) return " 🇱🇻 "; // Latvia
+  if (number.startsWith("+423") || number.startsWith("423")) return " 🇱🇮 "; // Liechtenstein
+  if (number.startsWith("+370") || number.startsWith("370")) return " 🇱🇹 "; // Lithuania
+  if (number.startsWith("+352") || number.startsWith("352")) return " 🇱🇺 "; // Luxembourg
+  if (number.startsWith("+356") || number.startsWith("356")) return " 🇲🇹 "; // Malta
+  if (number.startsWith("+373") || number.startsWith("373")) return " 🇲🇩 "; // Moldova
+  if (number.startsWith("+377") || number.startsWith("377")) return " 🇲🇨 "; // Monaco
+  if (number.startsWith("+382") || number.startsWith("382")) return " 🇲  Montenegro"; // Montenegro
+  if (number.startsWith("+31") || number.startsWith("31")) return " 🇳🇱 "; // Netherlands
+  if (number.startsWith("+389") || number.startsWith("389")) return " 🇲🇰 "; // North Macedonia
+  if (number.startsWith("+47") || number.startsWith("47")) return " 🇳🇴 "; // Norway
+  if (number.startsWith("+48") || number.startsWith("48")) return " 🇵🇱 "; // Poland
+  if (number.startsWith("+351") || number.startsWith("351")) return " 🇵🇹 "; // Portugal
+  if (number.startsWith("+40") || number.startsWith("40")) return " 🇷🇴 "; // Romania
+  if (number.startsWith("+7") || number.startsWith("7")) return " 🇷🇺 "; // Russia
+  if (number.startsWith("+378") || number.startsWith("378")) return " 🇸🇲 "; // San Marino
+  if (number.startsWith("+381") || number.startsWith("381")) return " 🇷  Serbia"; // Serbia
+  if (number.startsWith("+421") || number.startsWith("421")) return " 🇸慢 "; // Slovakia
+  if (number.startsWith("+386") || number.startsWith("386")) return " 🇸🇮 "; // Slovenia
+  if (number.startsWith("+34") || number.startsWith("34")) return " 🇪🇸 "; // Spain
+  if (number.startsWith("+46") || number.startsWith("46")) return " 🇸🇪 "; // Sweden
+  if (number.startsWith("+41") || number.startsWith("41")) return " 🇨🇭 "; // Switzerland
+  if (number.startsWith("+380") || number.startsWith("380")) return " 🇺🇦 "; // Ukraine
+  if (number.startsWith("+44") || number.startsWith("44")) return " 🇬🇧 "; // United Kingdom
+  if (number.startsWith("+379") || number.startsWith("379")) return " 🇻🇦 "; // Vatican City
   // North America
   if (number.startsWith("+1") || number.startsWith("1")) {
-    if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸"; // Bahamas
-    if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧"; // Barbados
-    if (number.startsWith("+1441") || number.startsWith("1441")) return "🇧🇲"; // Bermuda
-    if (number.startsWith("+1284") || number.startsWith("1284")) return "🇻🇬"; // British Virgin Islands
-    if (number.startsWith("+1345") || number.startsWith("1345")) return "🇰🇾"; // Cayman Islands
-    if (number.startsWith("+1767") || number.startsWith("1767")) return "🇩🇲"; // Dominica
-    if (number.startsWith("+1809") || number.startsWith("1809")) return "🇩🇴"; // Dominican Republic
-    if (number.startsWith("+1876") || number.startsWith("1876")) return "🇯🇲"; // Jamaica
-    if (number.startsWith("+1664") || number.startsWith("1664")) return "🇲🇸"; // Montserrat
-    if (number.startsWith("+1787") || number.startsWith("1787")) return "🇵🇷"; // Puerto Rico
-    if (number.startsWith("+1868") || number.startsWith("1868")) return "🇹🇹"; // Trinidad and Tobago
-    if (number.startsWith("+1649") || number.startsWith("1649")) return "🇹🇨"; // Turks and Caicos
-    if (number.startsWith("+1340") || number.startsWith("1340")) return "🇻🇮"; // US Virgin Islands
-    return "🇺🇸"; // USA/Canada default
+    if (number.startsWith("+1242") || number.startsWith("1242")) return " 🇧🇸 "; // Bahamas
+    if (number.startsWith("+1246") || number.startsWith("1246")) return " 🇧🇧 "; // Barbados
+    if (number.startsWith("+1441") || number.startsWith("1441")) return " 🇧🇲 "; // Bermuda
+    if (number.startsWith("+1284") || number.startsWith("1284")) return " 🇻🇬 "; // British Virgin Islands
+    if (number.startsWith("+1345") || number.startsWith("1345")) return " 🇰🇾 "; // Cayman Islands
+    if (number.startsWith("+1767") || number.startsWith("1767")) return " 🇩🇲 "; // Dominica
+    if (number.startsWith("+1809") || number.startsWith("1809")) return " 🇩🇴 "; // Dominican Republic
+    if (number.startsWith("+1876") || number.startsWith("1876")) return " 🇯🇲 "; // Jamaica
+    if (number.startsWith("+1664") || number.startsWith("1664")) return " 🇲🇸 "; // Montserrat
+    if (number.startsWith("+1787") || number.startsWith("1787")) return " 🇵🇷 "; // Puerto Rico
+    if (number.startsWith("+1868") || number.startsWith("1868")) return " 🇹🇹 "; // Trinidad and Tobago
+    if (number.startsWith("+1649") || number.startsWith("1649")) return " 🇹🇨 "; // Turks and Caicos
+    if (number.startsWith("+1340") || number.startsWith("1340")) return " 🇻🇮 "; // US Virgin Islands
+    return " 🇺🇸 "; // USA/Canada default
   }
-  if (number.startsWith("+52") || number.startsWith("52")) return "🇲🇽"; // Mexico
-  if (number.startsWith("+501") || number.startsWith("501")) return "🇧🇿"; // Belize
-  if (number.startsWith("+506") || number.startsWith("506")) return "🇨🇷"; // Costa Rica
-  if (number.startsWith("+53") || number.startsWith("53")) return "🇨🇺"; // Cuba
-  if (number.startsWith("+503") || number.startsWith("503")) return "🇸🇻"; // El Salvador
-  if (number.startsWith("+502") || number.startsWith("502")) return "🇬🇹"; // Guatemala
-  if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳"; // Honduras
-  if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮"; // Nicaragua
-  if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦"; // Panama
+  if (number.startsWith("+52") || number.startsWith("52")) return " 🇲🇽 "; // Mexico
+  if (number.startsWith("+501") || number.startsWith("501")) return " 🇧🇿 "; // Belize
+  if (number.startsWith("+506") || number.startsWith("506")) return " 🇨🇷 "; // Costa Rica
+  if (number.startsWith("+53") || number.startsWith("53")) return " 🇨🇺 "; // Cuba
+  if (number.startsWith("+503") || number.startsWith("503")) return " 🇸🇻 "; // El Salvador
+  if (number.startsWith("+502") || number.startsWith("502")) return " 🇬🇹 "; // Guatemala
+  if (number.startsWith("+504") || number.startsWith("504")) return " 🇭🇳 "; // Honduras
+  if (number.startsWith("+505") || number.startsWith("505")) return " 🇳🇮 "; // Nicaragua
+  if (number.startsWith("+507") || number.startsWith("507")) return " 🇵🇦 "; // Panama
   // South America
-  if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷"; // Argentina
-  if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴"; // Bolivia
-  if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷"; // Brazil
-  if (number.startsWith("+56") || number.startsWith("56")) return "🇨🇱"; // Chile
-  if (number.startsWith("+57") || number.startsWith("57")) return "🇨🇴"; // Colombia
-  if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨"; // Ecuador
-  if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾"; // Guyana
-  if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾"; // Paraguay
-  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪"; // Peru
-  if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷"; // Suriname
-  if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾"; // Uruguay
-  if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪"; // Venezuela
+  if (number.startsWith("+54") || number.startsWith("54")) return " 🇦🇷 "; // Argentina
+  if (number.startsWith("+591") || number.startsWith("591")) return " 🇧🇴 "; // Bolivia
+  if (number.startsWith("+55") || number.startsWith("55")) return " 🇧🇷 "; // Brazil
+  if (number.startsWith("+56") || number.startsWith("56")) return " 🇨🇱 "; // Chile
+  if (number.startsWith("+57") || number.startsWith("57")) return " 🇨信 "; // Colombia
+  if (number.startsWith("+593") || number.startsWith("593")) return " 🇪🇨 "; // Ecuador
+  if (number.startsWith("+592") || number.startsWith("592")) return " 🇬🇾 "; // Guyana
+  if (number.startsWith("+595") || number.startsWith("595")) return " 🇵🇾 "; // Paraguay
+  if (number.startsWith("+51") || number.startsWith("51")) return " 🇵  Peru"; // Peru
+  if (number.startsWith("+597") || number.startsWith("597")) return " 🇸🇷 "; // Suriname
+  if (number.startsWith("+598") || number.startsWith("598")) return " 🇺🇾 "; // Uruguay
+  if (number.startsWith("+58") || number.startsWith("58")) return " 🇻🇪 "; // Venezuela
   // Oceania
-  if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺"; // Australia
-  if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯"; // Fiji
-  if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲"; // Micronesia
-  if (number.startsWith("+674") || number.startsWith("674")) return "🇳🇷"; // Nauru
-  if (number.startsWith("+64") || number.startsWith("64")) return "🇳🇿"; // New Zealand
-  if (number.startsWith("+675") || number.startsWith("675")) return "🇵🇬"; // Papua New Guinea
-  if (number.startsWith("+685") || number.startsWith("685")) return "🇼🇸"; // Samoa
-  if (number.startsWith("+677") || number.startsWith("677")) return "🇸🇧"; // Solomon Islands
-  if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴"; // Tonga
-  if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻"; // Tuvalu
-  if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺"; // Vanuatu
-  return "🌍";
+  if (number.startsWith("+61") || number.startsWith("61")) return " 🇦🇺 "; // Australia
+  if (number.startsWith("+679") || number.startsWith("679")) return " 🇫🇯 "; // Fiji
+  if (number.startsWith("+691") || number.startsWith("691")) return " 🇫🇲 "; // Micronesia
+  if (number.startsWith("+674") || number.startsWith("674")) return " 🇳🇷 "; // Nauru
+  if (number.startsWith("+64") || number.startsWith("64")) return " 🇳🇿 "; // New Zealand
+  if (number.startsWith("+675") || number.startsWith("675")) return " 🇵🇬 "; // Papua New Guinea
+  if (number.startsWith("+685") || number.startsWith("685")) return " 🇼🇸 "; // Samoa
+  if (number.startsWith("+677") || number.startsWith("677")) return " 🇸🇧 "; // Solomon Islands
+  if (number.startsWith("+676") || number.startsWith("676")) return " 🇹🇴 "; // Tonga
+  if (number.startsWith("+688") || number.startsWith("688")) return " 🇹🇻 "; // Tuvalu
+  if (number.startsWith("+678") || number.startsWith("678")) return " 🇻🇺 "; // Vanuatu
+  return " 🌍 ";
 }
 
 export default function DedicationCard({
@@ -222,7 +222,7 @@ export default function DedicationCard({
   views = 0,
   reactionCount = 0,
   commentCount = 0,
-  badgeStyle = "❤️",
+  badgeStyle = " ❤️ ",
   onDedicateClick,
 }) {
   const [reactions, setReactions] = useState(reactionCount);
@@ -336,11 +336,7 @@ export default function DedicationCard({
       const res = await fetch(`${API_URL}/api/dedications/comment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          comment: textToSend,
-          commenter_whatsapp: whatsappToSend,
-        }),
+        body: JSON.stringify({ id, comment: textToSend, commenter_whatsapp: whatsappToSend }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -359,6 +355,7 @@ export default function DedicationCard({
     loadComments();
   }
 
+  // eslint-disable-next-line no-unused-vars
   function openWriteComment() {
     setCommentsOpen(true);
     setWriteCommentOpen(true);
@@ -366,9 +363,7 @@ export default function DedicationCard({
   }
 
   function shareToWhatsApp() {
-    const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${
-      recipientName || "someone"
-    }`;
+    const text = ` 🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${recipientName || "someone"}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
@@ -376,23 +371,16 @@ export default function DedicationCard({
     <div ref={cardRef} style={card}>
       <div style={mediaCard}>
         {mediaUrl ? (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            preload="metadata"
-            style={videoBg}
-          />
+          <video ref={videoRef} src={mediaUrl} controls playsInline preload="metadata" style={videoBg} />
         ) : (
           <div style={fallbackBg}></div>
         )}
         <div style={mediaShade}></div>
         <div style={topBadge}>
-          <span style={badgeDot}></span>
-          {dedicationTitle || mediaTitle}
+          <span style={badgeDot}></span> {dedicationTitle || mediaTitle}
         </div>
         <div style={rightActions}>
+          {/* ONLY the floating plus button remains here. Image badges and layout frames have been completely removed */}
           <button
             type="button"
             onClick={(e) => {
@@ -404,7 +392,7 @@ export default function DedicationCard({
           >
             ＋
           </button>
-
+          
           <button
             type="button"
             onClick={react}
@@ -416,12 +404,11 @@ export default function DedicationCard({
                 size={27}
                 strokeWidth={2.4}
                 fill={hasReacted ? "white" : "none"}
-                color="white"
               />
             </span>
             <span style={actionLabel}>{reactions}</span>
           </button>
-
+          
           <button
             type="button"
             onClick={openViewCommentsOnly}
@@ -429,11 +416,11 @@ export default function DedicationCard({
             aria-label="Comments"
           >
             <span style={sideIconWrap}>
-              <MessageSquare size={26} strokeWidth={2.4} color="white" />
+              <MessageSquare size={26} strokeWidth={2.4} />
             </span>
             <span style={actionLabel}>{comments}</span>
           </button>
-
+          
           <button
             type="button"
             onClick={shareToWhatsApp}
@@ -441,7 +428,7 @@ export default function DedicationCard({
             aria-label="Share"
           >
             <span style={sideIconWrap}>
-              <Share2 size={27} strokeWidth={2.4} color="white" />
+              <Share2 size={27} strokeWidth={2.4} />
             </span>
             <span style={actionLabel}>Share</span>
           </button>
@@ -451,12 +438,7 @@ export default function DedicationCard({
         <div style={peopleRow}>
           <div style={person}>
             {senderPhoto ? (
-              <img
-                src={senderPhoto}
-                alt={senderName}
-                style={smallPhotoCircle}
-                onClick={() => setFullImage(senderPhoto)}
-              />
+              <img src={senderPhoto} alt={senderName} style={smallPhotoCircle} onClick={() => setFullImage(senderPhoto)} />
             ) : (
               <div style={smallPlaceholder}>S</div>
             )}
@@ -468,17 +450,11 @@ export default function DedicationCard({
             </div>
           </div>
           <button type="button" onClick={react} style={toPill}>
-            <span>❤️</span>
-            <span>to</span>
+            <span> ❤️ </span> <span>to</span>
           </button>
           <div style={person}>
             {recipientPhoto ? (
-              <img
-                src={recipientPhoto}
-                alt={recipientName}
-                style={smallPhotoSquare}
-                onClick={() => setFullImage(recipientPhoto)}
-              />
+              <img src={recipientPhoto} alt={recipientName} style={smallPhotoSquare} onClick={() => setFullImage(recipientPhoto)} />
             ) : (
               <div style={smallPlaceholder}>R</div>
             )}
@@ -492,13 +468,13 @@ export default function DedicationCard({
           {message || "I chose this song because it reminds me of you."}
         </p>
         <div style={statsLine}>
-          <span>👁 {views.toLocaleString()} views</span>
-          <span>💬 {comments}</span>
+          <span> 👁 {views.toLocaleString()} views</span> <span> 💬 {comments}</span>
         </div>
         <button type="button" onClick={openWriteComment} style={commentMainBtn}>
           Add a public comment...
         </button>
       </div>
+
       {commentsOpen && (
         <div style={commentOverlay}>
           <div style={commentHandleBar}></div>
@@ -552,31 +528,183 @@ export default function DedicationCard({
           )}
         </div>
       )}
+
       {fullImage && (
-        <div style={imagePopup} onClick={() => setFullImage(null)}>
-          <img src={fullImage} alt="Full view" style={fullImageStyle} />
-          <button type="button" style={closeImageBtn}>
-            ✕
-          </button>
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.9)", zIndex: 9999, display: "flex", justifyContent: "center", alignItems: "center" }} onClick={() => setFullImage(null)}>
+          <img src={fullImage} alt="Full view" style={{ maxWidth: "95%", maxHeight: "95%", objectFit: "contain" }} />
         </div>
       )}
     </div>
   );
 }
 
-// ==========================================
-// STYLES OBJECTS
-// ==========================================
-const card = {
-  position: "relative",
+// Styles
+const card = {};
+const mediaCard = { position: "relative" };
+const videoBg = {};
+const fallbackBg = {};
+const mediaShade = {};
+const topBadge = {};
+const dedicationBody = {};
+const peopleRow = {};
+const person = {};
+const smallPhotoCircle = {};
+const smallPhotoSquare = {};
+const smallPlaceholder = {};
+const nameEmphasis = {};
+const roleText = {};
+const toPill = {};
+const messageText = {};
+const statsLine = {};
+const commentMainBtn = {};
+const commentOverlay = {};
+const commentHandleBar = {};
+const commentHeader = {};
+const commentTitle = {};
+const closeBtn = {};
+const commentsListBox = {};
+const noComments = {};
+const commentItem = {};
+const commentFrom = {};
+const commentBody = {};
+const writeBox = {};
+const sendRow = {};
+
+const rightActions = {
+  position: "absolute",
+  right: "10px",
+  bottom: "14px",
+  zIndex: 3,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "9px",
+};
+
+const followBtn = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(0, 0, 0, 0.26)",
+  color: "#ffffff",
+  fontSize: "25px",
+  fontWeight: "700",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  lineHeight: 1,
+  textShadow: "0 2px 5px rgba(0,0,0,0.95)",
+  boxShadow: "none",
+  backdropFilter: "blur(3px)",
+  WebkitBackdropFilter: "blur(3px)",
+};
+
+const sideBtn = {
+  width: "38px",
+  minHeight: "45px",
+  border: "none",
+  borderRadius: "0",
+  background: "transparent",
+  color: "#ffffff",
+  padding: "0",
+  margin: "0",
+  cursor: "pointer",
+  outline: "none",
+  boxShadow: "none",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "2px",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
+};
+
+const sideIcon = {
+  display: "block",
+  fontSize: "30px",
+  fontFamily: "Arial, sans-serif",
+  fontWeight: "700",
+  lineHeight: "0.9",
+  color: "#ffffff",
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  margin: 0,
+  WebkitTextStroke: "1px rgba(0,0,0,0.85)",
+  textShadow:
+    "0 2px 3px rgba(0,0,0,1), 0 0 5px rgba(0,0,0,0.75)",
+};
+
+// eslint-disable-next-line no-unused-vars
+const shareIcon = {
+  ...sideIcon,
+  fontSize: "27px",
+  fontWeight: "900",
+};
+
+const actionLabel = {
+  display: "block",
+  fontSize: "10px",
+  fontWeight: "800",
+  lineHeight: 1,
+  color: "#ffffff",
+  background: "transparent",
+  padding: 0,
+  margin: 0,
+  textShadow:
+    "0 1px 2px rgba(0,0,0,1), 0 0 4px rgba(0,0,0,0.9)",
+};
+
+const sideIconWrap = {
+  width: "30px",
+  height: "30px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#ffffff",
+  background: "transparent",
+  filter:
+    "drop-shadow(0 2px 2px rgba(0,0,0,1)) drop-shadow(0 0 3px rgba(0,0,0,0.8))",
+};
+
+const commentInputTop = {
   width: "100%",
-  maxWidth: "430px",
-  margin: "0 auto 18px auto",
-  overflow: "hidden",
-  background:
-    "radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.18), transparent 34%), linear-gradient(180deg, #06142e 0%, #081a3a 48%, #031025 100%)",
-  color: "#eaf2ff",
-  borderRadius: "28px",
+  boxSizing: "border-box",
   border: "1px solid rgba(147, 197, 253, 0.22)",
-  boxShadow:
-    "0 24px 60px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(59, 
+  borderRadius: "13px",
+  background: "rgba(2, 8, 23, 0.46)",
+  color: "#f8fbff",
+  outline: "none",
+  padding: "10px 12px",
+  fontSize: "13px",
+};
+
+const commentInputBottom = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid rgba(147, 197, 253, 0.22)",
+  borderRadius: "999px",
+  background: "rgba(2, 8, 23, 0.46)",
+  color: "#f8fbff",
+  outline: "none",
+  padding: "11px 14px",
+  fontSize: "14px",
+};
+
+const sendBtn = {
+  border: "none",
+  background: "linear-gradient(135deg, #38bdf8, #2563eb)",
+  color: "#ffffff",
+  fontWeight: "900",
+  fontSize: "14px",
+  cursor: "pointer",
+  padding: "11px 16px",
+  borderRadius: "999px",
+  boxShadow: "0 10px 22px rgba(37, 99, 235, 0.55)",
+};
