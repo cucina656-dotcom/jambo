@@ -463,7 +463,6 @@ export default function DedicationCard({
           </div>
           <button type="button" onClick={react} style={toPill}>
             <span>❤️</span>
-            <span>to</span>
           </button>
           <div style={person}>
             {recipientPhoto ? (
