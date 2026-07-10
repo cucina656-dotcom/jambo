@@ -394,10 +394,10 @@ function Home() {
                         rel="noreferrer"
                         style={tickerLabel}
                       >
-                        Gwamo
+                        Ngwino
                       </a>
                     ) : (
-                      <div style={tickerLabel}>Gwamo</div>
+                      <div style={tickerLabel}>Ngwino</div>
                     )}
                     <div style={tickerWrapper}>
                       <div style={tickerScrollingContent}>{post.subtitle}</div>
