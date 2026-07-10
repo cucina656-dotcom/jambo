@@ -379,13 +379,14 @@ function Home() {
                   </div>
                 </div>
               </div>
-              {/* Extended Video Card Layout */}
+
+              {/* Extended Video Card Layout - Adjusted heights & top alignments for Android viewports */}
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
 
-              {/* Action row at the bottom */}
+              {/* Action row at the bottom - Shifted upward to prevent overlapping or screen cutoffs */}
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
@@ -615,15 +616,15 @@ const profileTitle = {
   whiteSpace: "nowrap",
 };
 
+/* Video Card adjusted down to 52% and scaled to fit neatly within the mobile boundaries */
 const videoCardViewport = {
   width: "100%",
-  height: "100%",
+  height: "52%",
   position: "absolute",
-  top: "0px",
-  bottom: "0px",
-  left: "0px",
+  top: "92px",
   overflow: "hidden",
   background: "#000",
+  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.5)",
 };
 
 const mediaLayer = {
@@ -635,10 +636,11 @@ const mediaLayer = {
   justifyContent: "center",
 };
 
+/* Using 'contain' ensures the whole video/image fits perfectly without over-zooming on phone ratios */
 const mediaStyle = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
   display: "block",
 };
 
@@ -650,9 +652,10 @@ const darkOverlay = {
   pointerEvents: "none",
 };
 
+/* Action row lifted perfectly above system navigation cuts to keep it fully operational */
 const bottomHorizontalActionsRow = {
   position: "absolute",
-  bottom: "40px",
+  bottom: "135px",
   left: "16px",
   right: "16px",
   zIndex: 30,
