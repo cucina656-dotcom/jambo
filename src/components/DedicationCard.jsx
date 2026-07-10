@@ -34,7 +34,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷"; // Liberia
   if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾"; // Libya
   if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬"; // Madagascar
-  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼"; // Malawi
+  if (number.startsWith("+265") || number.startsWith("265")) return "🇲履"; // Malawi
   if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱"; // Mali
   if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷"; // Mauritania
   if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺"; // Mauritius
@@ -88,7 +88,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵"; // Nepal
   if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵"; // North Korea
   if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲"; // Oman
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰"; // Pakistan
+  if (number.startsWith("+92") || number.startsWith("92")) return "🇵眷"; // Pakistan
   if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸"; // Palestine
   if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭"; // Philippines
   if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦"; // Qatar
@@ -127,7 +127,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸"; // Iceland
   if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪"; // Ireland
   if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹"; // Italy
-  if (number.startsWith("+383") || number.startsWith("383")) return "🇽康"; // Kosovo
+  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰"; // Kosovo
   if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻"; // Latvia
   if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮"; // Liechtenstein
   if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹"; // Lithuania
@@ -135,7 +135,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹"; // Malta
   if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩"; // Moldova
   if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨"; // Monaco
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪"; // Montenegro
+  if (number.startsWith("+382") || number.startsWith("382")) return "🇲 Montenegro"; // Montenegro
   if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱"; // Netherlands
   if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰"; // North Macedonia
   if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴"; // Norway
@@ -144,7 +144,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴"; // Romania
   if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺"; // Russia
   if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲"; // San Marino
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸"; // Serbia
+  if (number.startsWith("+381") || number.startsWith("381")) return "🇷 Serbia"; // Serbia
   if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰"; // Slovakia
   if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮"; // Slovenia
   if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸"; // Spain
@@ -188,7 +188,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨"; // Ecuador
   if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾"; // Guyana
   if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾"; // Paraguay
-  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪"; // Peru
+  if (number.startsWith("+51") || number.startsWith("51")) return "🇵 Peru"; // Peru
   if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷"; // Suriname
   if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾"; // Uruguay
   if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪"; // Venezuela
@@ -358,14 +358,12 @@ export default function DedicationCard({
     loadComments();
   }
 
-  // Adjusted context hierarchy: user instructions override empty elements
   function openWriteComment() {
     setCommentsOpen(true);
     setWriteCommentOpen(true);
     loadComments();
   }
 
-  // Strict handling of layout context and dynamic parameters
   function shareToWhatsApp() {
     const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${
       recipientName || "someone"
@@ -394,20 +392,19 @@ export default function DedicationCard({
           {dedicationTitle || mediaTitle}
         </div>
         <div style={rightActions}>
-          {/* Modified item alignment block: Only render mini profile overlay frame if photo exists */}
-          {recipientPhoto && (
-            <div style={profileMini}>
-              <img
-                src={recipientPhoto}
-                alt={recipientName}
-                style={miniPhoto}
-                onClick={() => setFullImage(recipientPhoto)}
-              />
-              <button type="button" onClick={onDedicateClick} style={followBtn}>
-                ＋
-              </button>
-            </div>
-          )}
+          {/* ONLY the floating plus button remains here. Image badges and layout frames have been completely removed */}
+          <button 
+            type="button" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDedicateClick) onDedicateClick();
+            }} 
+            style={followBtn}
+            aria-label="Dedicate Song"
+          >
+            ＋
+          </button>
+          
           <button type="button" onClick={react} style={sideBtn}>
             <span style={sideIcon}>{hasReacted ? "❤️" : "🤍"}</span>
             <span style={actionLabel}>{reactions}</span>
@@ -646,48 +643,15 @@ const rightActions = {
   gap: "12px",
 };
 
-const profileMini = {
-  position: "relative",
-  marginBottom: "2px",
-};
-
-const miniPhoto = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
-  objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.98)",
-  cursor: "pointer",
-  boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
-};
-
-const miniPlaceholder = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
-  background: "rgba(15, 52, 114, 0.72)",
-  border: "2px solid rgba(226, 242, 255, 0.98)",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900",
-  fontSize: "16px",
-  boxShadow: "0 14px 28px rgba(2, 8, 23, 0.5)",
-};
-
 const followBtn = {
-  position: "absolute",
-  bottom: "-8px",
-  left: "50%",
-  transform: "translateX(-50%)",
-  width: "24px",
-  height: "24px",
-  borderRadius: "50%",
+  position: "relative",
+  width: "48px",
+  height: "48px",
+  borderRadius: "17px",
   border: "2px solid #eaf6ff",
   background: "linear-gradient(135deg, #38bdf8, #2563eb)",
   color: "#ffffff",
-  fontSize: "15px",
+  fontSize: "22px",
   fontWeight: "900",
   cursor: "pointer",
   display: "flex",
@@ -1046,7 +1010,7 @@ const closeImageBtn = {
   fontSize: "20px",
   borderRadius: "50%",
   width: "40px",
-  height: "40px",
+height: "40px",
   cursor: "pointer",
   display: "flex",
   alignItems: "center",
