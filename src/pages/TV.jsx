@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
 
@@ -21,9 +21,52 @@ function TV() {
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
 
+  // Track the HTML video elements dynamically
+  const videoRefs = useRef({});
+  const containerRefs = useRef({});
+
   useEffect(() => {
     loadDedications();
   }, []);
+
+  // Strict Intersection Observer to ensure only 1 media plays at a time based on viewport scrolling
+  useEffect(() => {
+    if (feed.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const itemId = entry.target.dataset.id;
+          const currentVideo = videoRefs.current[itemId];
+
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // Pause all other active video media elements first
+            Object.keys(videoRefs.current).forEach((id) => {
+              if (id !== itemId && videoRefs.current[id]) {
+                videoRefs.current[id].pause();
+              }
+            });
+            // Play the currently visible video media
+            if (currentVideo) {
+              currentVideo.play().catch(() => {});
+            }
+          } else {
+            // Pause if scrolled away
+            if (currentVideo) {
+              currentVideo.pause();
+            }
+          }
+        });
+      },
+      { threshold: [0.5] }
+    );
+
+    Object.values(containerRefs.current).forEach((container) => {
+      if (container) observer.observe(container);
+    });
+
+    return () => observer.disconnect();
+  }, [feed]);
 
   async function loadDedications() {
     try {
@@ -155,6 +198,7 @@ function TV() {
               <label style={labelStyle}>Ifoto yuwo uyitura</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
               
+              {/* Standalone label removed perfectly here */}
               <input style={inputStyle} placeholder="Dedication title e.g Happy Birthday" value={dedicationTitle} onChange={(e) => setDedicationTitle(e.target.value)} />
               
               <div style={badgeContainer}>
@@ -214,26 +258,33 @@ function TV() {
             </div>
           )}
           {feed.map((item) => (
-            <DedicationCard
+            <div
               key={item.id}
-              id={item.id}
-              senderPhoto={item.sender_photo}
-              senderName={item.sender_name}
-              senderWhatsapp={item.sender_whatsapp}
-              recipientPhoto={item.recipient_photo}
-              recipientName={item.recipient_name}
-              dedicationTitle={item.dedication_title}
-              message={item.message}
-              mediaTitle={item.title}
-              mediaUrl={item.media_url}
-              views={item.views || 0}
-              reactionCount={item.reaction_count || 0}
-              commentCount={item.comment_count || 0}
-              badgeStyle={item.dedication_badge || "❤️"}
-              onDedicateClick={() => {
-                setShowForm(true);
-              }}
-            />
+              data-id={item.id}
+              ref={(el) => (containerRefs.current[item.id] = el)}
+              style={{ width: "100%" }}
+            >
+              <DedicationCard
+                id={item.id}
+                senderPhoto={item.sender_photo}
+                senderName={item.sender_name}
+                senderWhatsapp={item.sender_whatsapp}
+                recipientPhoto={item.recipient_photo}
+                recipientName={item.recipient_name}
+                dedicationTitle={item.dedication_title}
+                message={item.message}
+                mediaTitle={item.title}
+                mediaUrl={item.media_url}
+                views={item.views || 0}
+                reactionCount={item.reaction_count || 0}
+                commentCount={item.comment_count || 0}
+                badgeStyle={item.dedication_badge || "❤️"}
+                videoRef={(el) => (videoRefs.current[item.id] = el)}
+                onDedicateClick={() => {
+                  setShowForm(true);
+                }}
+              />
+            </div>
           ))}
         </section>
       </main>
@@ -252,7 +303,7 @@ const page = {
 
 const main = {
   width: "100%",
-  maxWidth: "470px", /* Standard Instagram feed layout width */
+  maxWidth: "470px",
   margin: "0 auto",
   padding: "60px 0px 40px",
   boxSizing: "border-box",
@@ -355,7 +406,7 @@ const labelStyle = {
 const fileStyle = {
   width: "100%",
   marginBottom: "16px",
-  color: "#0095f6", /* Instagram standard link/action blue */
+  color: "#0095f6",
   fontSize: "13px",
   fontWeight: "600",
 };
