@@ -142,9 +142,9 @@ function TV() {
       <main style={main}>
         <section style={topSection}>
           <h1 style={title}>Reba TV</h1>
-          <p style={text}>All Song Dedications ⭐.</p>
+          <p style={text}>Abatuye indirimbo nabo zagenewe bose.</p>
           <button onClick={() => setShowForm(true)} style={dedicateBtn}>
-            🎵 Tura indirimbo Friend/Brothers
+            🎵 Tura indirimbo umuntu
           </button>
         </section>
 
@@ -159,7 +159,6 @@ function TV() {
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
               <label style={labelStyle}>Ifoto yuwo uyitura</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
-              <input style={inputStyle} placeholder="Dedication title e.g Happy Birthday" value={dedicationTitle} onChange={(e) => setDedicationTitle(e.target.value)} />
               
               <div style={badgeContainer}>
                 <label style={labelStyle}>Badge Style</label>
@@ -180,7 +179,7 @@ function TV() {
                     onClick={() => setBadgeStyle("👉")}
                     style={{
                       ...badgeButton,
-                      background: badgeStyle === "👉" ? "rgba(80, 71, 255, 0.3)" : "rgba(255,255,255,0.08)",
+                      background: badgeStyle === "👉" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
                       border: badgeStyle === "👉" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
                     }}
                   >
@@ -242,7 +241,7 @@ function TV() {
 
 const page = {
   minHeight: "100svh",
-  background: "radial-gradient(circle at top, #0a090a 0%, #080808 42%, #0a0a0a 100%)",
+  background: "radial-gradient(circle at top, #eeabf7 0%, #080808 42%, #0a0a0a 100%)",
   color: "white",
   overflowX: "hidden",
 };
@@ -411,4 +410,3 @@ const emptyCard = {
 };
 
 export default TV;
-
