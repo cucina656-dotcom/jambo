@@ -23,46 +23,43 @@ function TV() {
 
   // Refs for Intersection Observer
   const cardRefs = useRef({});
+  const [activeIndex, setActiveIndex] = useState(null);
 
   useEffect(() => {
     loadDedications();
   }, []);
 
-  // Intersection Observer to pause videos when not visible
+  // Intersection Observer to track which card is most visible
   useEffect(() => {
     if (!feed.length) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          const index = Number(entry.target.dataset.index);
-          // Find the DedicationCard component instance and its video
-          const cardElement = entry.target;
-          const videoElement = cardElement.querySelector('video');
-          
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            // This card is visible - play its video if it exists
-            if (videoElement && videoElement.paused) {
-              videoElement.play().catch(() => {});
-            }
-          } else {
-            // This card is not visible - pause its video
-            if (videoElement && !videoElement.paused) {
-              videoElement.pause();
-            }
-          }
-        });
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visibleEntries.length > 0) {
+          const mostVisibleIndex = Number(
+            visibleEntries[0].target.dataset.index
+          );
+          setActiveIndex(mostVisibleIndex);
+        } else {
+          setActiveIndex(null);
+        }
       },
-      { threshold: [0.5] }
+      {
+        threshold: [0, 0.25, 0.5, 0.75, 1],
+      }
     );
 
-    // Observe all card elements
-    Object.values(cardRefs.current).forEach((ref) => {
-      if (ref) observer.observe(ref);
+    Object.values(cardRefs.current).forEach((element) => {
+      if (element) observer.observe(element);
     });
 
     return () => {
       observer.disconnect();
+      setActiveIndex(null);
     };
   }, [feed]);
 
@@ -276,6 +273,7 @@ function TV() {
                 reactionCount={item.reaction_count || 0}
                 commentCount={item.comment_count || 0}
                 badgeStyle={item.dedication_badge || "❤️"}
+                isActive={activeIndex === index}
                 onDedicateClick={() => {
                   setShowForm(true);
                 }}
