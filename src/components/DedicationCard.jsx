@@ -3,6 +3,56 @@ import { Plus, Heart, MessageSquare, Share2 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
+function isDirectVideoUrl(url = "") {
+  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".ogg") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".m4v") ||
+    clean.endsWith(".mkv") ||
+    clean.endsWith(".avi")
+  );
+}
+
+function isImageUrl(url = "") {
+  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  return (
+    clean.endsWith(".jpg") ||
+    clean.endsWith(".jpeg") ||
+    clean.endsWith(".png") ||
+    clean.endsWith(".gif") ||
+    clean.endsWith(".webp") ||
+    clean.endsWith(".bmp") ||
+    clean.endsWith(".svg")
+  );
+}
+
+function getEmbedUrl(url = "") {
+  if (!url) return "";
+  const youtubeMatch = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  );
+  if (youtubeMatch) {
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
+  }
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (shortsMatch) {
+    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
+  }
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
+  }
+  const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
+  if (dailymotionMatch) {
+    return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=1&mute=0&loop=1`;
+  }
+  if (url.includes("/embed/") || url.includes("player.")) return url;
+  return url;
+}
+
 function getFlagFromWhatsapp(number = "") {
   // Africa
   if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿"; // Algeria
@@ -241,6 +291,13 @@ export default function DedicationCard({
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
+  // Determine media type
+  const mediaType = mediaUrl ? (
+    isImageUrl(mediaUrl) ? "image" :
+    isDirectVideoUrl(mediaUrl) ? "video" :
+    "embed"
+  ) : "none";
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -372,21 +429,57 @@ export default function DedicationCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  // Render media based on type
+  const renderMedia = () => {
+    if (!mediaUrl) {
+      return <div style={fallbackBg}></div>;
+    }
+
+    if (mediaType === "image") {
+      return (
+        <img
+          src={mediaUrl}
+          alt={dedicationTitle || mediaTitle}
+          style={imageBg}
+          onClick={() => setFullImage(mediaUrl)}
+        />
+      );
+    }
+
+    if (mediaType === "video") {
+      return (
+        <video
+          ref={videoRef}
+          src={mediaUrl}
+          controls
+          playsInline
+          preload="metadata"
+          style={videoBg}
+          muted={false}
+        />
+      );
+    }
+
+    if (mediaType === "embed") {
+      return (
+        <iframe
+          src={getEmbedUrl(mediaUrl)}
+          title={dedicationTitle || mediaTitle}
+          style={videoBg}
+          frameBorder="0"
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+          allowFullScreen
+        />
+      );
+    }
+
+    return <div style={fallbackBg}></div>;
+  };
+
   return (
     <div ref={cardRef} style={card}>
       <div style={mediaCard}>
-        {mediaUrl ? (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            preload="metadata"
-            style={videoBg}
-          />
-        ) : (
-          <div style={fallbackBg}></div>
-        )}
+        {renderMedia()}
         <div style={mediaShade}></div>
         <div style={topBadge}>
           <span style={badgeDot}></span>
@@ -597,6 +690,18 @@ const videoBg = {
   objectPosition: "center center",
   background: "#020817",
   zIndex: 0,
+};
+
+const imageBg = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "center center",
+  background: "#020817",
+  zIndex: 0,
+  cursor: "pointer",
 };
 
 const fallbackBg = {
