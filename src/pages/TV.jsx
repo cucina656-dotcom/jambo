@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 function TV() {
-  const videoRefs = useRef({});
-  const cardRefs = useRef({});
   const [feed, setFeed] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,7 +20,6 @@ function TV() {
   const [message, setMessage] = useState("");
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
-  const [activeCardIndex, setActiveCardIndex] = useState(0);
 
   useEffect(() => {
     loadDedications();
@@ -41,43 +38,6 @@ function TV() {
       console.log("Failed to load dedications", err);
     }
   }
-
-  /* Intersection Observer to strictly play only the visible video while scrolling */
-  useEffect(() => {
-    if (!feed.length) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const index = Number(entry.target.dataset.index);
-          const video = videoRefs.current[index];
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
-            setActiveCardIndex(index);
-            Object.entries(videoRefs.current).forEach(([key, item]) => {
-              if (Number(key) !== index && item) {
-                item.pause();
-              }
-            });
-            if (video) {
-              video.play().catch(() => {});
-            }
-          } else {
-            if (video) {
-              video.pause();
-            }
-          }
-        });
-      },
-      { threshold: [0.6] }
-    );
-
-    Object.values(cardRefs.current).forEach((card) => {
-      if (card) observer.observe(card);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [feed]);
 
   function handlePhotoUpload(e, setter, fileSetter) {
     const file = e.target.files[0];
@@ -195,7 +155,6 @@ function TV() {
               <label style={labelStyle}>Ifoto yuwo uyitura</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
               
-              <label style={labelStyle}>Dedication title e.g Happy Birthday</label>
               <input style={inputStyle} placeholder="Dedication title e.g Happy Birthday" value={dedicationTitle} onChange={(e) => setDedicationTitle(e.target.value)} />
               
               <div style={badgeContainer}>
@@ -206,8 +165,9 @@ function TV() {
                     onClick={() => setBadgeStyle("❤️")}
                     style={{
                       ...badgeButton,
-                      background: badgeStyle === "❤️" ? "rgba(236,72,153,0.2)" : "rgba(255,255,255,0.05)",
-                      border: badgeStyle === "❤️" ? "2px solid #ec7299" : "1px solid rgba(255,255,255,0.1)",
+                      background: badgeStyle === "❤️" ? "#262626" : "transparent",
+                      borderColor: badgeStyle === "❤️" ? "#ffffff" : "#363636",
+                      color: badgeStyle === "❤️" ? "#ffffff" : "#a8a8a8",
                     }}
                   >
                     ❤️ Heart
@@ -217,8 +177,9 @@ function TV() {
                     onClick={() => setBadgeStyle("👉")}
                     style={{
                       ...badgeButton,
-                      background: badgeStyle === "👉" ? "rgba(56,189,248,0.2)" : "rgba(255,255,255,0.05)",
-                      border: badgeStyle === "👉" ? "2px solid #38bdf8" : "1px solid rgba(255,255,255,0.1)",
+                      background: badgeStyle === "👉" ? "#262626" : "transparent",
+                      borderColor: badgeStyle === "👉" ? "#ffffff" : "#363636",
+                      color: badgeStyle === "👉" ? "#ffffff" : "#a8a8a8",
                     }}
                   >
                     👉 Pointer
@@ -235,7 +196,7 @@ function TV() {
               
               <div style={buttonRow}>
                 <button type="submit" style={submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {isSubmitting ? "Submitting..." : "Share"}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} style={cancelBtn}>
                   Cancel
@@ -248,38 +209,31 @@ function TV() {
         <section style={feedSection}>
           {feed.length === 0 && (
             <div style={emptyCard}>
-              <h2>Nta ndirimbo ihari</h2>
-              <p>Ba uwa 1 uture indirimbo Abawe.</p>
+              <h2 style={emptyTitle}>Nta ndirombo</h2>
+              <p style={emptyText}>Ba uwa 1 uture indirimbo Abawe.</p>
             </div>
           )}
-          {feed.map((item, index) => (
-            <div 
-              key={item.id} 
-              ref={(ref) => { if (ref) cardRefs.current[index] = ref; }}
-              data-index={index}
-              style={cardContainer}
-            >
-              <DedicationCard
-                id={item.id}
-                senderPhoto={item.sender_photo}
-                senderName={item.sender_name}
-                senderWhatsapp={item.sender_whatsapp}
-                recipientPhoto={item.recipient_photo}
-                recipientName={item.recipient_name}
-                dedicationTitle={item.dedication_title}
-                message={item.message}
-                mediaTitle={item.title}
-                mediaUrl={item.media_url}
-                views={item.views || 0}
-                reactionCount={item.reaction_count || 0}
-                commentCount={item.comment_count || 0}
-                badgeStyle={item.dedication_badge || "❤️"}
-                videoRef={(ref) => { if (ref) videoRefs.current[index] = ref; }}
-                onDedicateClick={() => {
-                  setShowForm(true);
-                }}
-              />
-            </div>
+          {feed.map((item) => (
+            <DedicationCard
+              key={item.id}
+              id={item.id}
+              senderPhoto={item.sender_photo}
+              senderName={item.sender_name}
+              senderWhatsapp={item.sender_whatsapp}
+              recipientPhoto={item.recipient_photo}
+              recipientName={item.recipient_name}
+              dedicationTitle={item.dedication_title}
+              message={item.message}
+              mediaTitle={item.title}
+              mediaUrl={item.media_url}
+              views={item.views || 0}
+              reactionCount={item.reaction_count || 0}
+              commentCount={item.comment_count || 0}
+              badgeStyle={item.dedication_badge || "❤️"}
+              onDedicateClick={() => {
+                setShowForm(true);
+              }}
+            />
           ))}
         </section>
       </main>
@@ -287,70 +241,68 @@ function TV() {
   );
 }
 
-/* Styles structured strictly for mobile responsiveness */
+/* Polished Dark-Mode Instagram Aesthetic Styles */
 const page = {
   minHeight: "100svh",
-  background: "#09090b",
-  color: "white",
+  background: "#000000",
+  color: "#f5f5f5",
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   overflowX: "hidden",
 };
 
 const main = {
   width: "100%",
-  maxWidth: "460px",
+  maxWidth: "470px", /* Standard Instagram feed layout width */
   margin: "0 auto",
-  padding: "80px 8px 40px",
+  padding: "60px 0px 40px",
   boxSizing: "border-box",
 };
 
 const topSection = {
   textAlign: "center",
   marginBottom: "24px",
+  padding: "0 16px",
 };
 
 const title = {
-  fontSize: "28px",
-  fontWeight: "900",
+  fontSize: "24px",
+  fontWeight: "700",
+  letterSpacing: "-0.5px",
   margin: "0 0 4px",
 };
 
 const text = {
-  color: "#a1a1aa",
+  color: "#a8a8a8",
   margin: "0 0 16px",
   fontSize: "14px",
 };
 
 const dedicateBtn = {
   border: "none",
-  borderRadius: "999px",
-  padding: "12px 20px",
-  background: "linear-gradient(135deg, #ec4899, #6366f1)",
-  color: "white",
-  fontWeight: "800",
+  borderRadius: "8px",
+  padding: "10px 20px",
+  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+  color: "#ffffff",
+  fontWeight: "600",
   fontSize: "14px",
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(236,72,153,0.3)",
 };
 
 const feedSection = {
   display: "flex",
   flexDirection: "column",
-  gap: "20px",
-};
-
-const cardContainer = {
-  width: "100%",
+  gap: "16px",
 };
 
 const formOverlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 3000,
-  background: "rgba(0,0,0,0.85)",
+  zIndex: 2000,
+  background: "rgba(0, 0, 0, 0.85)",
   display: "flex",
-  alignItems: "flex-start",
+  alignItems: "center",
   justifyContent: "center",
-  padding: "70px 12px 20px",
+  padding: "20px 16px",
   boxSizing: "border-box",
   overflowY: "auto",
 };
@@ -358,55 +310,58 @@ const formOverlay = {
 const formCard = {
   width: "100%",
   maxWidth: "400px",
-  padding: "16px",
-  borderRadius: "18px",
-  background: "#18181b",
-  border: "1px solid rgba(255,255,255,0.1)",
+  padding: "24px 16px",
+  borderRadius: "12px",
+  background: "#121212",
+  border: "1px solid #262626",
   boxSizing: "border-box",
 };
 
 const formTitle = {
-  margin: "0 0 16px",
-  fontSize: "20px",
-  fontWeight: "800",
+  margin: "0 0 20px",
+  fontSize: "18px",
+  fontWeight: "600",
+  textAlign: "center",
+  color: "#ffffff",
 };
 
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
   marginBottom: "12px",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(255,255,255,0.05)",
-  color: "white",
+  padding: "10px 12px",
+  borderRadius: "4px",
+  border: "1px solid #363636",
+  background: "#1c1c1e",
+  color: "#ffffff",
   outline: "none",
-  fontSize: "15px",
+  fontSize: "14px",
 };
 
 const textareaStyle = {
   ...inputStyle,
   minHeight: "80px",
-  resize: "vertical",
+  resize: "none",
 };
 
 const labelStyle = {
   display: "block",
-  fontSize: "13px",
-  fontWeight: "700",
-  color: "#f472b6",
-  margin: "2px 0 6px",
+  fontSize: "12px",
+  fontWeight: "600",
+  color: "#a8a8a8",
+  margin: "0 0 6px 2px",
 };
 
 const fileStyle = {
   width: "100%",
-  marginBottom: "14px",
-  color: "#d4d4d8",
+  marginBottom: "16px",
+  color: "#0095f6", /* Instagram standard link/action blue */
   fontSize: "13px",
+  fontWeight: "600",
 };
 
 const badgeContainer = {
-  marginBottom: "12px",
+  marginBottom: "16px",
 };
 
 const badgeOptions = {
@@ -416,48 +371,60 @@ const badgeOptions = {
 
 const badgeButton = {
   flex: 1,
-  padding: "10px",
-  borderRadius: "10px",
-  color: "white",
-  fontWeight: "700",
+  padding: "8px",
+  borderRadius: "4px",
+  border: "1px solid",
   fontSize: "14px",
+  fontWeight: "600",
   cursor: "pointer",
 };
 
 const buttonRow = {
   display: "flex",
-  gap: "10px",
-  marginTop: "12px",
+  flexDirection: "column",
+  gap: "8px",
+  marginTop: "16px",
 };
 
 const submitBtn = {
-  flex: 1,
+  width: "100%",
   border: "none",
-  borderRadius: "999px",
+  borderRadius: "8px",
   padding: "12px",
-  background: "#ec4899",
-  color: "white",
-  fontWeight: "800",
+  background: "#0095f6",
+  color: "#ffffff",
+  fontWeight: "600",
+  fontSize: "14px",
   cursor: "pointer",
 };
 
 const cancelBtn = {
-  flex: 1,
-  border: "1px solid rgba(255,255,255,0.15)",
-  borderRadius: "999px",
-  padding: "12px",
+  width: "100%",
+  border: "none",
   background: "transparent",
-  color: "white",
-  fontWeight: "800",
+  color: "#f5f5f5",
+  padding: "8px",
+  fontWeight: "600",
+  fontSize: "14px",
   cursor: "pointer",
 };
 
 const emptyCard = {
-  padding: "24px",
-  borderRadius: "16px",
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  padding: "40px 16px",
   textAlign: "center",
+  borderTop: "1px solid #262626",
+};
+
+const emptyTitle = {
+  fontSize: "18px",
+  fontWeight: "600",
+  margin: "0 0 8px",
+};
+
+const emptyText = {
+  color: "#a8a8a8",
+  fontSize: "14px",
+  margin: 0,
 };
 
 export default TV;
