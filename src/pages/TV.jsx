@@ -142,9 +142,9 @@ function TV() {
       <main style={main}>
         <section style={topSection}>
           <h1 style={title}>Reba TV</h1>
-          <p style={text}>Abatuye indirimbo nabo zagenewe bose.</p>
+          <p style={text}>All Song Dedications ⭐</p>
           <button onClick={() => setShowForm(true)} style={dedicateBtn}>
-            🎵 Tura indirimbo umuntu
+            🎵 Tura indirimbo friends/brothers
           </button>
         </section>
 
