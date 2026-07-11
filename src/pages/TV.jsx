@@ -1,9 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
-
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-
 function TV() {
   const [feed, setFeed] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -20,25 +18,20 @@ function TV() {
   const [message, setMessage] = useState("");
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
-
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
-
   useEffect(() => {
     loadDedications();
   }, []);
-
   // Intersection Observer to track which card is most visible
   useEffect(() => {
     if (!feed.length) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
         const visibleEntries = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
         if (visibleEntries.length > 0) {
           const mostVisibleIndex = Number(
             visibleEntries[0].target.dataset.index
@@ -52,17 +45,14 @@ function TV() {
         threshold: [0, 0.25, 0.5, 0.75, 1],
       }
     );
-
     Object.values(cardRefs.current).forEach((element) => {
       if (element) observer.observe(element);
     });
-
     return () => {
       observer.disconnect();
       setActiveIndex(null);
     };
   }, [feed]);
-
   async function loadDedications() {
     try {
       const res = await fetch(`${API_URL}/api/dedications`);
@@ -76,21 +66,18 @@ function TV() {
       console.log("Failed to load dedications", err);
     }
   }
-
   function handlePhotoUpload(e, setter, fileSetter) {
     const file = e.target.files[0];
     if (!file) return;
     setter(URL.createObjectURL(file));
     fileSetter(file);
   }
-
   function handleMediaUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
     setMediaUrl(URL.createObjectURL(file));
     setMediaFile(file);
   }
-
   async function handleSubmit(e) {
     e.preventDefault();
     if (isSubmitting) return;
@@ -102,9 +89,7 @@ function TV() {
       alert("Please add media (URL or file upload).");
       return;
     }
-
     setIsSubmitting(true);
-
     try {
       const formData = new FormData();
       formData.append("sender_name", senderName);
@@ -113,7 +98,6 @@ function TV() {
       formData.append("message", message);
       formData.append("dedication_title", dedicationTitle || "");
       formData.append("dedication_badge", badgeStyle);
-
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
       } else if (senderPhoto && senderPhoto.startsWith("http")) {
@@ -121,7 +105,6 @@ function TV() {
       } else {
         formData.append("sender_photo", "");
       }
-
       if (recipientPhotoFile) {
         formData.append("recipient_photo_file", recipientPhotoFile);
       } else if (recipientPhoto && recipientPhoto.startsWith("http")) {
@@ -129,30 +112,24 @@ function TV() {
       } else {
         formData.append("recipient_photo", "");
       }
-
       if (mediaFile) {
         formData.append("media_file", mediaFile);
       } else if (mediaUrl && mediaUrl.startsWith("http")) {
         formData.append("media_url", mediaUrl);
       }
-
       const res = await fetch(`${API_URL}/api/dedications`, {
         method: "POST",
         body: formData,
       });
-
       const data = await res.json();
-
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
         return;
       }
-
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
       }
-
       setSenderName("");
       setSenderWhatsapp("");
       setSenderPhoto("");
@@ -173,29 +150,37 @@ function TV() {
       setIsSubmitting(false);
     }
   }
-
   return (
     <div style={page}>
       <Header />
+      <style>{`
+        .tv-card-wrapper button[aria-label],
+        .tv-card-wrapper button[title] {
+          background: transparent !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+      `}</style>
       <main style={main}>
         <section style={topSection}>
-          <h1 style={title}>Reba TV</h1>
-          <p style={text}>All Song Dedications ⭐</p>
+          <h1 style={title}>TV</h1>
+          <p style={text}>Songs for special people ⭐</p>
           <button onClick={() => setShowForm(true)} style={dedicateBtn}>
-            🎵 Tura indirimbo friends/brothers
+            🎵 Dedicate a song
           </button>
         </section>
-
         {showForm && (
           <section style={formOverlay}>
             <form onSubmit={handleSubmit} style={formCard}>
               <h2 style={formTitle}>Create Dedication</h2>
               <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
               <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
-              <label style={labelStyle}>Ifoto yawe</label>
+              <label style={labelStyle}>Your photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setSenderPhoto, setSenderPhotoFile)} />
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-              <label style={labelStyle}>Ifoto yuwo uyitura</label>
+              <label style={labelStyle}>Their photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
               
               <div style={badgeContainer}>
@@ -225,9 +210,8 @@ function TV() {
                   </button>
                 </div>
               </div>
-
-              <input style={inputStyle} placeholder="shyiramo youtube chanel (optional if uploading)" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
-              <label style={labelStyle}>Injiza video y'indirimbo</label>
+              <input style={inputStyle} placeholder="Media link (optional)" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
+              <label style={labelStyle}>Upload song media</label>
               <input style={fileStyle} type="file" accept="video/*,audio/*,image/*" onChange={handleMediaUpload} />
               <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
               <div style={buttonRow}>
@@ -241,12 +225,11 @@ function TV() {
             </form>
           </section>
         )}
-
         <section style={feedSection}>
           {feed.length === 0 && (
             <div style={emptyCard}>
-              <h2>Nta ndirombo</h2>
-              <p>Ba uwa 1 uture indirimbo Abawe.</p>
+              <h2>No songs yet</h2>
+              <p>Be first. Make someone smile.</p>
             </div>
           )}
           {feed.map((item, index) => (
@@ -257,6 +240,7 @@ function TV() {
               }}
               data-index={index}
               style={cardWrapper}
+              className="tv-card-wrapper"
             >
               <DedicationCard
                 id={item.id}
@@ -285,11 +269,9 @@ function TV() {
     </div>
   );
 }
-
 // ==========================================
 // DARK INSTAGRAM-STYLED STYLES
 // ==========================================
-
 const page = {
   minHeight: "100svh",
   background: "#0a0a0a",
@@ -297,21 +279,18 @@ const page = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   overflowX: "hidden",
 };
-
 const main = {
   width: "100%",
   maxWidth: "520px",
   margin: "0 auto",
-  padding: "90px 4px 40px",
+  padding: "72px 0 40px",
   boxSizing: "border-box",
 };
-
 const topSection = {
   textAlign: "center",
-  marginBottom: "18px",
+  marginBottom: "10px",
   padding: "0 16px",
 };
-
 const title = {
   fontSize: "clamp(28px, 8vw, 36px)",
   fontWeight: "900",
@@ -322,7 +301,6 @@ const title = {
   backgroundClip: "text",
   letterSpacing: "-0.5px",
 };
-
 const text = {
   color: "rgba(255,255,255,0.6)",
   lineHeight: "1.45",
@@ -330,7 +308,6 @@ const text = {
   fontSize: "14px",
   fontWeight: "400",
 };
-
 const dedicateBtn = {
   border: "none",
   borderRadius: "999px",
@@ -344,19 +321,18 @@ const dedicateBtn = {
   transition: "transform 0.2s ease",
   letterSpacing: "0.3px",
 };
-
 const feedSection = {
   display: "flex",
   flexDirection: "column",
   gap: "18px",
-  padding: "0 4px",
+  padding: "0",
 };
-
 const cardWrapper = {
-  width: "100%",
+  width: "calc(100% + 8px)",
+  marginLeft: "-4px",
+  transform: "translateY(-2px)",
   transition: "all 0.2s ease",
 };
-
 // Form Styles (preserved from original with dark theme)
 const formOverlay = {
   position: "fixed",
@@ -372,7 +348,6 @@ const formOverlay = {
   boxSizing: "border-box",
   overflowY: "auto",
 };
-
 const formCard = {
   width: "100%",
   maxWidth: "430px",
@@ -383,7 +358,6 @@ const formCard = {
   boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
   boxSizing: "border-box",
 };
-
 const formTitle = {
   margin: "0 0 16px",
   fontSize: "22px",
@@ -391,7 +365,6 @@ const formTitle = {
   color: "#ffffff",
   textAlign: "center",
 };
-
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
@@ -405,14 +378,12 @@ const inputStyle = {
   fontSize: "15px",
   transition: "border-color 0.2s ease",
 };
-
 const textareaStyle = {
   ...inputStyle,
   minHeight: "92px",
   resize: "vertical",
   fontFamily: 'inherit',
 };
-
 const labelStyle = {
   display: "block",
   fontSize: "13px",
@@ -420,7 +391,6 @@ const labelStyle = {
   color: "rgba(255,255,255,0.7)",
   margin: "4px 0 6px",
 };
-
 const fileStyle = {
   width: "100%",
   marginBottom: "12px",
@@ -428,16 +398,13 @@ const fileStyle = {
   fontSize: "14px",
   padding: "8px 0",
 };
-
 const badgeContainer = {
   marginBottom: "10px",
 };
-
 const badgeOptions = {
   display: "flex",
   gap: "10px",
 };
-
 const badgeButton = {
   flex: 1,
   padding: "10px 14px",
@@ -449,13 +416,11 @@ const badgeButton = {
   transition: "all 0.2s ease",
   backgroundColor: "rgba(255,255,255,0.05)",
 };
-
 const buttonRow = {
   display: "flex",
   gap: "10px",
   marginTop: "14px",
 };
-
 const submitBtn = {
   flex: 1,
   border: "none",
@@ -468,7 +433,6 @@ const submitBtn = {
   fontSize: "15px",
   transition: "opacity 0.2s ease",
 };
-
 const cancelBtn = {
   flex: 1,
   border: "1px solid rgba(255,255,255,0.12)",
@@ -481,7 +445,6 @@ const cancelBtn = {
   fontSize: "15px",
   transition: "all 0.2s ease",
 };
-
 const emptyCard = {
   padding: "40px 24px",
   borderRadius: "20px",
@@ -489,5 +452,4 @@ const emptyCard = {
   border: "1px solid rgba(255,255,255,0.06)",
   textAlign: "center",
 };
-
 export default TV;
