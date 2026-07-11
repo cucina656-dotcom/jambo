@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
 
@@ -21,52 +21,9 @@ function TV() {
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
 
-  // Track the HTML video elements dynamically
-  const videoRefs = useRef({});
-  const containerRefs = useRef({});
-
   useEffect(() => {
     loadDedications();
   }, []);
-
-  // Strict Intersection Observer to ensure only 1 media plays at a time based on viewport scrolling
-  useEffect(() => {
-    if (feed.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const itemId = entry.target.dataset.id;
-          const currentVideo = videoRefs.current[itemId];
-
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            // Pause all other active video media elements first
-            Object.keys(videoRefs.current).forEach((id) => {
-              if (id !== itemId && videoRefs.current[id]) {
-                videoRefs.current[id].pause();
-              }
-            });
-            // Play the currently visible video media
-            if (currentVideo) {
-              currentVideo.play().catch(() => {});
-            }
-          } else {
-            // Pause if scrolled away
-            if (currentVideo) {
-              currentVideo.pause();
-            }
-          }
-        });
-      },
-      { threshold: [0.5] }
-    );
-
-    Object.values(containerRefs.current).forEach((container) => {
-      if (container) observer.observe(container);
-    });
-
-    return () => observer.disconnect();
-  }, [feed]);
 
   async function loadDedications() {
     try {
@@ -107,7 +64,9 @@ function TV() {
       alert("Please add media (URL or file upload).");
       return;
     }
+
     setIsSubmitting(true);
+
     try {
       const formData = new FormData();
       formData.append("sender_name", senderName);
@@ -116,6 +75,7 @@ function TV() {
       formData.append("message", message);
       formData.append("dedication_title", dedicationTitle || "");
       formData.append("dedication_badge", badgeStyle);
+
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
       } else if (senderPhoto && senderPhoto.startsWith("http")) {
@@ -123,6 +83,7 @@ function TV() {
       } else {
         formData.append("sender_photo", "");
       }
+
       if (recipientPhotoFile) {
         formData.append("recipient_photo_file", recipientPhotoFile);
       } else if (recipientPhoto && recipientPhoto.startsWith("http")) {
@@ -130,6 +91,7 @@ function TV() {
       } else {
         formData.append("recipient_photo", "");
       }
+
       if (mediaFile) {
         formData.append("media_file", mediaFile);
       } else if (mediaUrl && mediaUrl.startsWith("http")) {
@@ -140,15 +102,19 @@ function TV() {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
+
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
         return;
       }
+
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
       }
+
       setSenderName("");
       setSenderWhatsapp("");
       setSenderPhoto("");
@@ -186,19 +152,13 @@ function TV() {
           <section style={formOverlay}>
             <form onSubmit={handleSubmit} style={formCard}>
               <h2 style={formTitle}>Create Dedication</h2>
-              
               <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
               <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
-              
               <label style={labelStyle}>Ifoto yawe</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setSenderPhoto, setSenderPhotoFile)} />
-              
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-              
               <label style={labelStyle}>Ifoto yuwo uyitura</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
-              
-              {/* Standalone label removed perfectly here */}
               <input style={inputStyle} placeholder="Dedication title e.g Happy Birthday" value={dedicationTitle} onChange={(e) => setDedicationTitle(e.target.value)} />
               
               <div style={badgeContainer}>
@@ -209,9 +169,8 @@ function TV() {
                     onClick={() => setBadgeStyle("❤️")}
                     style={{
                       ...badgeButton,
-                      background: badgeStyle === "❤️" ? "#262626" : "transparent",
-                      borderColor: badgeStyle === "❤️" ? "#ffffff" : "#363636",
-                      color: badgeStyle === "❤️" ? "#ffffff" : "#a8a8a8",
+                      background: badgeStyle === "❤️" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "❤️" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
                     }}
                   >
                     ❤️ Heart
@@ -221,9 +180,8 @@ function TV() {
                     onClick={() => setBadgeStyle("👉")}
                     style={{
                       ...badgeButton,
-                      background: badgeStyle === "👉" ? "#262626" : "transparent",
-                      borderColor: badgeStyle === "👉" ? "#ffffff" : "#363636",
-                      color: badgeStyle === "👉" ? "#ffffff" : "#a8a8a8",
+                      background: badgeStyle === "👉" ? "rgba(80, 71, 255, 0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "👉" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
                     }}
                   >
                     👉 Pointer
@@ -232,15 +190,12 @@ function TV() {
               </div>
 
               <input style={inputStyle} placeholder="shyiramo youtube chanel (optional if uploading)" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
-              
               <label style={labelStyle}>Injiza video y'indirimbo</label>
               <input style={fileStyle} type="file" accept="video/*,audio/*,image/*" onChange={handleMediaUpload} />
-              
               <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
-              
               <div style={buttonRow}>
                 <button type="submit" style={submitBtn} disabled={isSubmitting}>
-                  {isSubmitting ? "Submitting..." : "Share"}
+                  {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} style={cancelBtn}>
                   Cancel
@@ -253,38 +208,31 @@ function TV() {
         <section style={feedSection}>
           {feed.length === 0 && (
             <div style={emptyCard}>
-              <h2 style={emptyTitle}>Nta ndirombo</h2>
-              <p style={emptyText}>Ba uwa 1 uture indirimbo Abawe.</p>
+              <h2>Nta ndirombo</h2>
+              <p>Ba uwa 1 uture indirimbo Abawe.</p>
             </div>
           )}
           {feed.map((item) => (
-            <div
+            <DedicationCard
               key={item.id}
-              data-id={item.id}
-              ref={(el) => (containerRefs.current[item.id] = el)}
-              style={{ width: "100%" }}
-            >
-              <DedicationCard
-                id={item.id}
-                senderPhoto={item.sender_photo}
-                senderName={item.sender_name}
-                senderWhatsapp={item.sender_whatsapp}
-                recipientPhoto={item.recipient_photo}
-                recipientName={item.recipient_name}
-                dedicationTitle={item.dedication_title}
-                message={item.message}
-                mediaTitle={item.title}
-                mediaUrl={item.media_url}
-                views={item.views || 0}
-                reactionCount={item.reaction_count || 0}
-                commentCount={item.comment_count || 0}
-                badgeStyle={item.dedication_badge || "❤️"}
-                videoRef={(el) => (videoRefs.current[item.id] = el)}
-                onDedicateClick={() => {
-                  setShowForm(true);
-                }}
-              />
-            </div>
+              id={item.id}
+              senderPhoto={item.sender_photo}
+              senderName={item.sender_name}
+              senderWhatsapp={item.sender_whatsapp}
+              recipientPhoto={item.recipient_photo}
+              recipientName={item.recipient_name}
+              dedicationTitle={item.dedication_title}
+              message={item.message}
+              mediaTitle={item.title}
+              mediaUrl={item.media_url}
+              views={item.views || 0}
+              reactionCount={item.reaction_count || 0}
+              commentCount={item.comment_count || 0}
+              badgeStyle={item.dedication_badge || "❤️"}
+              onDedicateClick={() => {
+                setShowForm(true);
+              }}
+            />
           ))}
         </section>
       </main>
@@ -292,190 +240,175 @@ function TV() {
   );
 }
 
-/* Polished Dark-Mode Instagram Aesthetic Styles */
 const page = {
   minHeight: "100svh",
-  background: "#000000",
-  color: "#f5f5f5",
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  background: "radial-gradient(circle at top, #0a090a 0%, #080808 42%, #0a0a0a 100%)",
+  color: "white",
   overflowX: "hidden",
 };
 
 const main = {
   width: "100%",
-  maxWidth: "470px",
+  maxWidth: "520px",
   margin: "0 auto",
-  padding: "60px 0px 40px",
+  padding: "90px 4px 40px",
   boxSizing: "border-box",
 };
 
 const topSection = {
   textAlign: "center",
-  marginBottom: "24px",
-  padding: "0 16px",
+  marginBottom: "18px",
 };
 
 const title = {
-  fontSize: "24px",
-  fontWeight: "700",
-  letterSpacing: "-0.5px",
-  margin: "0 0 4px",
+  fontSize: "clamp(26px, 8vw, 34px)",
+  fontWeight: "900",
+  margin: "0 0 8px",
 };
 
 const text = {
-  color: "#a8a8a8",
-  margin: "0 0 16px",
+  color: "#cbd5e1",
+  lineHeight: "1.45",
+  margin: "0 0 14px",
   fontSize: "14px",
 };
 
 const dedicateBtn = {
   border: "none",
-  borderRadius: "8px",
-  padding: "10px 20px",
-  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-  color: "#ffffff",
-  fontWeight: "600",
-  fontSize: "14px",
+  borderRadius: "999px",
+  padding: "12px 22px",
+  background: "linear-gradient(135deg, #ec94c0, #5e25e4, #facc15)",
+  color: "white",
+  fontWeight: "900",
+  fontSize: "15px",
   cursor: "pointer",
+  boxShadow: "0 12px 28px rgba(236,72,153,0.35)",
 };
 
 const feedSection = {
   display: "flex",
   flexDirection: "column",
-  gap: "16px",
+  gap: "22px",
 };
 
 const formOverlay = {
   position: "fixed",
   inset: 0,
   zIndex: 2000,
-  background: "rgba(0, 0, 0, 0.85)",
+  background: "rgba(0,0,0,0.82)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
-  padding: "20px 16px",
+  padding: "76px 10px 18px",
   boxSizing: "border-box",
   overflowY: "auto",
 };
 
 const formCard = {
   width: "100%",
-  maxWidth: "400px",
-  padding: "24px 16px",
-  borderRadius: "12px",
-  background: "#121212",
-  border: "1px solid #262626",
+  maxWidth: "430px",
+  padding: "16px",
+  borderRadius: "22px",
+  background: "#0f172a",
+  border: "1px solid rgba(236,72,153,0.35)",
+  boxShadow: "0 0 35px rgba(236,72,153,0.28)",
   boxSizing: "border-box",
 };
 
 const formTitle = {
-  margin: "0 0 20px",
-  fontSize: "18px",
-  fontWeight: "600",
-  textAlign: "center",
-  color: "#ffffff",
+  margin: "0 0 12px",
+  fontSize: "22px",
 };
 
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
-  marginBottom: "12px",
-  padding: "10px 12px",
-  borderRadius: "4px",
-  border: "1px solid #363636",
-  background: "#1c1c1e",
-  color: "#ffffff",
+  marginBottom: "10px",
+  padding: "13px",
+  borderRadius: "14px",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.08)",
+  color: "white",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "16px",
 };
 
 const textareaStyle = {
   ...inputStyle,
-  minHeight: "80px",
-  resize: "none",
+  minHeight: "92px",
+  resize: "vertical",
 };
 
 const labelStyle = {
   display: "block",
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#a8a8a8",
-  margin: "0 0 6px 2px",
+  fontSize: "13px",
+  fontWeight: "800",
+  color: "#f9a8d4",
+  margin: "4px 0 6px",
 };
 
 const fileStyle = {
   width: "100%",
-  marginBottom: "16px",
-  color: "#0095f6",
-  fontSize: "13px",
-  fontWeight: "600",
+  marginBottom: "12px",
+  color: "#cbd5e1",
+  fontSize: "14px",
 };
 
 const badgeContainer = {
-  marginBottom: "16px",
+  marginBottom: "10px",
 };
 
 const badgeOptions = {
   display: "flex",
-  gap: "8px",
+  gap: "10px",
 };
 
 const badgeButton = {
   flex: 1,
-  padding: "8px",
-  borderRadius: "4px",
-  border: "1px solid",
-  fontSize: "14px",
-  fontWeight: "600",
+  padding: "10px 14px",
+  borderRadius: "14px",
+  color: "white",
+  fontWeight: "700",
+  fontSize: "15px",
   cursor: "pointer",
+  transition: "all 0.2s ease",
 };
 
 const buttonRow = {
   display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  marginTop: "16px",
+  gap: "10px",
+  marginTop: "10px",
 };
 
 const submitBtn = {
-  width: "100%",
+  flex: 1,
   border: "none",
-  borderRadius: "8px",
-  padding: "12px",
-  background: "#0095f6",
-  color: "#ffffff",
-  fontWeight: "600",
-  fontSize: "14px",
+  borderRadius: "999px",
+  padding: "13px",
+  background: "#f8bee0",
+  color: "white",
+  fontWeight: "900",
   cursor: "pointer",
 };
 
 const cancelBtn = {
-  width: "100%",
-  border: "none",
+  flex: 1,
+  border: "1px solid rgba(255,255,255,0.15)",
+  borderRadius: "999px",
+  padding: "13px",
   background: "transparent",
-  color: "#f5f5f5",
-  padding: "8px",
-  fontWeight: "600",
-  fontSize: "14px",
+  color: "white",
+  fontWeight: "900",
   cursor: "pointer",
 };
 
 const emptyCard = {
-  padding: "40px 16px",
+  padding: "24px",
+  borderRadius: "22px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.1)",
   textAlign: "center",
-  borderTop: "1px solid #262626",
-};
-
-const emptyTitle = {
-  fontSize: "18px",
-  fontWeight: "600",
-  margin: "0 0 8px",
-};
-
-const emptyText = {
-  color: "#a8a8a8",
-  fontSize: "14px",
-  margin: 0,
 };
 
 export default TV;
+
