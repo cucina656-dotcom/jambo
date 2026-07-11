@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
 
@@ -21,9 +21,50 @@ function TV() {
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
 
+  // Refs for Intersection Observer
+  const cardRefs = useRef({});
+
   useEffect(() => {
     loadDedications();
   }, []);
+
+  // Intersection Observer to pause videos when not visible
+  useEffect(() => {
+    if (!feed.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const index = Number(entry.target.dataset.index);
+          // Find the DedicationCard component instance and its video
+          const cardElement = entry.target;
+          const videoElement = cardElement.querySelector('video');
+          
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // This card is visible - play its video if it exists
+            if (videoElement && videoElement.paused) {
+              videoElement.play().catch(() => {});
+            }
+          } else {
+            // This card is not visible - pause its video
+            if (videoElement && !videoElement.paused) {
+              videoElement.pause();
+            }
+          }
+        });
+      },
+      { threshold: [0.5] }
+    );
+
+    // Observe all card elements
+    Object.values(cardRefs.current).forEach((ref) => {
+      if (ref) observer.observe(ref);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [feed]);
 
   async function loadDedications() {
     try {
@@ -211,27 +252,35 @@ function TV() {
               <p>Ba uwa 1 uture indirimbo Abawe.</p>
             </div>
           )}
-          {feed.map((item) => (
-            <DedicationCard
+          {feed.map((item, index) => (
+            <div
               key={item.id}
-              id={item.id}
-              senderPhoto={item.sender_photo}
-              senderName={item.sender_name}
-              senderWhatsapp={item.sender_whatsapp}
-              recipientPhoto={item.recipient_photo}
-              recipientName={item.recipient_name}
-              dedicationTitle={item.dedication_title}
-              message={item.message}
-              mediaTitle={item.title}
-              mediaUrl={item.media_url}
-              views={item.views || 0}
-              reactionCount={item.reaction_count || 0}
-              commentCount={item.comment_count || 0}
-              badgeStyle={item.dedication_badge || "❤️"}
-              onDedicateClick={() => {
-                setShowForm(true);
+              ref={(ref) => {
+                if (ref) cardRefs.current[index] = ref;
               }}
-            />
+              data-index={index}
+              style={cardWrapper}
+            >
+              <DedicationCard
+                id={item.id}
+                senderPhoto={item.sender_photo}
+                senderName={item.sender_name}
+                senderWhatsapp={item.sender_whatsapp}
+                recipientPhoto={item.recipient_photo}
+                recipientName={item.recipient_name}
+                dedicationTitle={item.dedication_title}
+                message={item.message}
+                mediaTitle={item.title}
+                mediaUrl={item.media_url}
+                views={item.views || 0}
+                reactionCount={item.reaction_count || 0}
+                commentCount={item.comment_count || 0}
+                badgeStyle={item.dedication_badge || "❤️"}
+                onDedicateClick={() => {
+                  setShowForm(true);
+                }}
+              />
+            </div>
           ))}
         </section>
       </main>
@@ -239,10 +288,15 @@ function TV() {
   );
 }
 
+// ==========================================
+// DARK INSTAGRAM-STYLED STYLES
+// ==========================================
+
 const page = {
   minHeight: "100svh",
-  background: "radial-gradient(circle at top, #eeabf7 0%, #080808 42%, #0a0a0a 100%)",
-  color: "white",
+  background: "#0a0a0a",
+  color: "#ffffff",
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   overflowX: "hidden",
 };
 
@@ -257,44 +311,62 @@ const main = {
 const topSection = {
   textAlign: "center",
   marginBottom: "18px",
+  padding: "0 16px",
 };
 
 const title = {
-  fontSize: "clamp(26px, 8vw, 34px)",
+  fontSize: "clamp(28px, 8vw, 36px)",
   fontWeight: "900",
-  margin: "0 0 8px",
+  margin: "0 0 6px",
+  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+  WebkitBackgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  backgroundClip: "text",
+  letterSpacing: "-0.5px",
 };
 
 const text = {
-  color: "#cbd5e1",
+  color: "rgba(255,255,255,0.6)",
   lineHeight: "1.45",
   margin: "0 0 14px",
   fontSize: "14px",
+  fontWeight: "400",
 };
 
 const dedicateBtn = {
   border: "none",
   borderRadius: "999px",
-  padding: "12px 22px",
-  background: "linear-gradient(135deg, #ec94c0, #5e25e4, #facc15)",
+  padding: "14px 28px",
+  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
   color: "white",
-  fontWeight: "900",
+  fontWeight: "700",
   fontSize: "15px",
   cursor: "pointer",
-  boxShadow: "0 12px 28px rgba(236,72,153,0.35)",
+  boxShadow: "0 8px 28px rgba(220, 39, 67, 0.35)",
+  transition: "transform 0.2s ease",
+  letterSpacing: "0.3px",
 };
 
 const feedSection = {
   display: "flex",
   flexDirection: "column",
-  gap: "22px",
+  gap: "18px",
+  padding: "0 4px",
 };
 
+const cardWrapper = {
+  width: "100%",
+  transition: "all 0.2s ease",
+};
+
+// Form Styles (preserved from original with dark theme)
 const formOverlay = {
   position: "fixed",
   inset: 0,
   zIndex: 2000,
-  background: "rgba(0,0,0,0.82)",
+  background: "rgba(0,0,0,0.85)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
@@ -306,51 +378,57 @@ const formOverlay = {
 const formCard = {
   width: "100%",
   maxWidth: "430px",
-  padding: "16px",
-  borderRadius: "22px",
-  background: "#0f172a",
-  border: "1px solid rgba(236,72,153,0.35)",
-  boxShadow: "0 0 35px rgba(236,72,153,0.28)",
+  padding: "20px",
+  borderRadius: "20px",
+  background: "#1a1a1a",
+  border: "1px solid rgba(255,255,255,0.06)",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
   boxSizing: "border-box",
 };
 
 const formTitle = {
-  margin: "0 0 12px",
+  margin: "0 0 16px",
   fontSize: "22px",
+  fontWeight: "700",
+  color: "#ffffff",
+  textAlign: "center",
 };
 
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
   marginBottom: "10px",
-  padding: "13px",
-  borderRadius: "14px",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.08)",
+  padding: "14px 16px",
+  borderRadius: "12px",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.05)",
   color: "white",
   outline: "none",
-  fontSize: "16px",
+  fontSize: "15px",
+  transition: "border-color 0.2s ease",
 };
 
 const textareaStyle = {
   ...inputStyle,
   minHeight: "92px",
   resize: "vertical",
+  fontFamily: 'inherit',
 };
 
 const labelStyle = {
   display: "block",
   fontSize: "13px",
-  fontWeight: "800",
-  color: "#f9a8d4",
+  fontWeight: "600",
+  color: "rgba(255,255,255,0.7)",
   margin: "4px 0 6px",
 };
 
 const fileStyle = {
   width: "100%",
   marginBottom: "12px",
-  color: "#cbd5e1",
+  color: "rgba(255,255,255,0.5)",
   fontSize: "14px",
+  padding: "8px 0",
 };
 
 const badgeContainer = {
@@ -365,47 +443,52 @@ const badgeOptions = {
 const badgeButton = {
   flex: 1,
   padding: "10px 14px",
-  borderRadius: "14px",
+  borderRadius: "12px",
   color: "white",
-  fontWeight: "700",
-  fontSize: "15px",
+  fontWeight: "600",
+  fontSize: "14px",
   cursor: "pointer",
   transition: "all 0.2s ease",
+  backgroundColor: "rgba(255,255,255,0.05)",
 };
 
 const buttonRow = {
   display: "flex",
   gap: "10px",
-  marginTop: "10px",
+  marginTop: "14px",
 };
 
 const submitBtn = {
   flex: 1,
   border: "none",
   borderRadius: "999px",
-  padding: "13px",
-  background: "#f8bee0",
+  padding: "14px",
+  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
   color: "white",
-  fontWeight: "900",
+  fontWeight: "700",
   cursor: "pointer",
+  fontSize: "15px",
+  transition: "opacity 0.2s ease",
 };
 
 const cancelBtn = {
   flex: 1,
-  border: "1px solid rgba(255,255,255,0.15)",
+  border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: "999px",
-  padding: "13px",
+  padding: "14px",
   background: "transparent",
-  color: "white",
-  fontWeight: "900",
+  color: "rgba(255,255,255,0.7)",
+  fontWeight: "600",
   cursor: "pointer",
+  fontSize: "15px",
+  transition: "all 0.2s ease",
 };
 
 const emptyCard = {
-  padding: "24px",
-  borderRadius: "22px",
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  padding: "40px 24px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.06)",
   textAlign: "center",
 };
 
