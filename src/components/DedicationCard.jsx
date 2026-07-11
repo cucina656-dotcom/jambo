@@ -297,6 +297,9 @@ const videoBg = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
+  objectPosition: "center 42%",
+  transform: "scale(1.025)",
+  transformOrigin: "center top",
   backgroundColor: "#0a0a0a",
   display: "block",
 };
@@ -305,6 +308,9 @@ const imageBg = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
+  objectPosition: "center 42%",
+  transform: "scale(1.025)",
+  transformOrigin: "center top",
   cursor: "pointer",
   backgroundColor: "#0a0a0a",
 };
@@ -359,10 +365,10 @@ const rightActions = {
 };
 
 const followBtn = {
-  backgroundColor: "rgba(20,20,20,0.6)",
-  backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.2)",
-  borderRadius: "50%",
+  backgroundColor: "transparent",
+  backdropFilter: "none",
+  border: "none",
+  borderRadius: "0",
   width: "48px",
   height: "48px",
   display: "flex",
@@ -374,10 +380,10 @@ const followBtn = {
 };
 
 const sideBtn = {
-  backgroundColor: "rgba(20,20,20,0.5)",
-  backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: "50%",
+  backgroundColor: "transparent",
+  backdropFilter: "none",
+  border: "none",
+  borderRadius: "0",
   width: "48px",
   height: "48px",
   display: "flex",
@@ -879,7 +885,7 @@ export default function DedicationCard({
               if (onDedicateClick) onDedicateClick();
             }}
             style={followBtn}
-            aria-label="Dedicate Song"
+            aria-label="Dedicate"
           >
             <Plus size={23} strokeWidth={2.5} color="white" />
           </button>
@@ -916,7 +922,7 @@ export default function DedicationCard({
             aria-label="Share"
           >
             <Share2 size={24} strokeWidth={2.4} color="white" />
-            <span style={actionLabel}>Share</span>
+            <span style={actionLabel}>Send</span>
           </button>
         </div>
       </div>
@@ -961,21 +967,21 @@ export default function DedicationCard({
           </div>
         </div>
         <p style={messageText}>
-          {message || "I chose this song because it reminds me of you."}
+          {message || "This song made me think of you."}
         </p>
         <div style={statsLine}>
           <span>👁 {views.toLocaleString()} views</span>
           <span>💬 {comments}</span>
         </div>
         <button type="button" onClick={openWriteComment} style={commentMainBtn}>
-          Add a public comment...
+          Say something...
         </button>
       </div>
       {commentsOpen && (
         <div style={commentOverlay}>
           <div style={commentHandleBar}></div>
           <div style={commentHeader}>
-            <h3 style={commentTitle}>Comments ({comments})</h3>
+            <h3 style={commentTitle}>Chat ({comments})</h3>
             <button
               type="button"
               onClick={() => {
@@ -989,7 +995,7 @@ export default function DedicationCard({
           </div>
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
-              <p style={noComments}>Be the first to comment on this dedication.</p>
+              <p style={noComments}>Be first!</p>
             ) : (
               commentsList.map((comment) => (
                 <div key={comment.id} style={commentItem}>
@@ -1006,14 +1012,14 @@ export default function DedicationCard({
               <input
                 value={commenterWhatsapp}
                 onChange={(e) => setCommenterWhatsapp(e.target.value)}
-                placeholder="WhatsApp e.g +250788123456"
+                placeholder="WhatsApp number"
                 style={commentInputTop}
               />
               <div style={sendRow}>
                 <input
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Write comment..."
+                  placeholder="Write here..."
                   style={commentInputBottom}
                 />
                 <button type="button" onClick={sendComment} style={sendBtn}>
