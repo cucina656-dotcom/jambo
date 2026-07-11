@@ -265,6 +265,389 @@ function getFlagFromWhatsapp(number = "") {
   return "🌍";
 }
 
+// Styles
+const card = {
+  backgroundColor: "#141414",
+  borderRadius: "18px",
+  overflow: "hidden",
+  marginBottom: "28px",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.85)",
+  border: "1px solid rgba(255,255,255,0.05)",
+};
+
+const mediaCard = {
+  position: "relative",
+  aspectRatio: "16 / 9",
+  backgroundColor: "#0a0a0a",
+  overflow: "hidden",
+};
+
+const mediaShade = {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  height: "50%",
+  background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+
+const videoBg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  backgroundColor: "#0a0a0a",
+  display: "block",
+};
+
+const imageBg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  cursor: "pointer",
+  backgroundColor: "#0a0a0a",
+};
+
+const fallbackBg = {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#1a1a1a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#555",
+  fontSize: "14px",
+};
+
+const topBadge = {
+  position: "absolute",
+  top: "16px",
+  left: "16px",
+  backgroundColor: "rgba(0,0,0,0.7)",
+  backdropFilter: "blur(8px)",
+  padding: "8px 16px",
+  borderRadius: "100px",
+  color: "white",
+  fontSize: "14px",
+  fontWeight: "500",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  border: "1px solid rgba(255,255,255,0.08)",
+  maxWidth: "70%",
+  zIndex: 3,
+};
+
+const badgeDot = {
+  width: "8px",
+  height: "8px",
+  borderRadius: "50%",
+  backgroundColor: "#00e676",
+  display: "inline-block",
+  flexShrink: 0,
+};
+
+const rightActions = {
+  position: "absolute",
+  bottom: "24px",
+  right: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+  zIndex: 5,
+};
+
+const followBtn = {
+  backgroundColor: "rgba(20,20,20,0.6)",
+  backdropFilter: "blur(6px)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  borderRadius: "50%",
+  width: "48px",
+  height: "48px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  cursor: "pointer",
+  transition: "0.2s",
+};
+
+const sideBtn = {
+  backgroundColor: "rgba(20,20,20,0.5)",
+  backdropFilter: "blur(6px)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: "50%",
+  width: "48px",
+  height: "48px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  cursor: "pointer",
+  transition: "0.2s",
+  gap: "0px",
+};
+
+const actionLabel = {
+  fontSize: "10px",
+  fontWeight: "600",
+  color: "rgba(255,255,255,0.8)",
+  lineHeight: "1",
+  marginTop: "1px",
+};
+
+const dedicationBody = {
+  padding: "18px 16px 20px 16px",
+  backgroundColor: "#141414",
+};
+
+const peopleRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: "14px",
+};
+
+const person = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const smallPhotoCircle = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "50%",
+  objectFit: "cover",
+  backgroundColor: "#2a2a2a",
+  border: "2px solid #3a3a3a",
+  cursor: "pointer",
+};
+
+const smallPhotoSquare = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "12px",
+  objectFit: "cover",
+  backgroundColor: "#2a2a2a",
+  border: "2px solid #3a3a3a",
+  cursor: "pointer",
+};
+
+const smallPlaceholder = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "50%",
+  backgroundColor: "#2a2a2a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#888",
+  fontSize: "18px",
+  fontWeight: "600",
+  border: "2px solid #3a3a3a",
+};
+
+const nameEmphasis = {
+  color: "#fff",
+  fontSize: "15px",
+  fontWeight: "600",
+  lineHeight: "1.3",
+};
+
+const roleText = {
+  color: "#888",
+  fontSize: "11px",
+  fontWeight: "400",
+};
+
+const toPill = {
+  backgroundColor: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: "100px",
+  padding: "6px 14px",
+  color: "white",
+  fontSize: "14px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const messageText = {
+  color: "#ddd",
+  fontSize: "15px",
+  lineHeight: "1.5",
+  marginBottom: "14px",
+  fontWeight: "400",
+};
+
+const statsLine = {
+  display: "flex",
+  gap: "18px",
+  color: "#666",
+  fontSize: "13px",
+  marginBottom: "12px",
+};
+
+const commentMainBtn = {
+  width: "100%",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: "100px",
+  padding: "12px 18px",
+  color: "#888",
+  fontSize: "14px",
+  cursor: "pointer",
+  textAlign: "left",
+  transition: "0.2s",
+};
+
+const commentOverlay = {
+  backgroundColor: "#1a1a1a",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  padding: "16px",
+  marginTop: "4px",
+};
+
+const commentHandleBar = {
+  width: "40px",
+  height: "4px",
+  backgroundColor: "#444",
+  borderRadius: "4px",
+  margin: "0 auto 14px auto",
+};
+
+const commentHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "12px",
+};
+
+const commentTitle = {
+  color: "white",
+  fontSize: "16px",
+  fontWeight: "600",
+  margin: 0,
+};
+
+const closeBtn = {
+  background: "none",
+  border: "none",
+  color: "#888",
+  fontSize: "20px",
+  cursor: "pointer",
+};
+
+const commentsListBox = {
+  maxHeight: "200px",
+  overflowY: "auto",
+  marginBottom: "12px",
+};
+
+const noComments = {
+  color: "#666",
+  fontSize: "14px",
+  textAlign: "center",
+  padding: "16px 0",
+};
+
+const commentItem = {
+  padding: "10px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
+};
+
+const commentFrom = {
+  color: "#888",
+  fontSize: "11px",
+  fontWeight: "500",
+  marginBottom: "4px",
+};
+
+const commentBody = {
+  color: "#ddd",
+  fontSize: "14px",
+};
+
+const writeBox = {
+  paddingTop: "12px",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+};
+
+const commentInputTop = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: "8px",
+  border: "1px solid #333",
+  backgroundColor: "#0a0a0a",
+  color: "white",
+  fontSize: "14px",
+  marginBottom: "8px",
+  boxSizing: "border-box",
+};
+
+const sendRow = {
+  display: "flex",
+  gap: "8px",
+};
+
+const commentInputBottom = {
+  flex: 1,
+  padding: "10px 14px",
+  borderRadius: "8px",
+  border: "1px solid #333",
+  backgroundColor: "#0a0a0a",
+  color: "white",
+  fontSize: "14px",
+};
+
+const sendBtn = {
+  padding: "10px 20px",
+  backgroundColor: "#00e676",
+  color: "black",
+  border: "none",
+  borderRadius: "8px",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+
+const imagePopup = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.92)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999,
+  cursor: "pointer",
+};
+
+const fullImageStyle = {
+  maxWidth: "90%",
+  maxHeight: "90%",
+  objectFit: "contain",
+  borderRadius: "8px",
+};
+
+const closeImageBtn = {
+  position: "absolute",
+  top: "24px",
+  right: "24px",
+  backgroundColor: "rgba(255,255,255,0.1)",
+  border: "none",
+  color: "white",
+  fontSize: "24px",
+  padding: "8px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
 export default function DedicationCard({
   id,
   senderPhoto,
@@ -295,7 +678,6 @@ export default function DedicationCard({
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
   const videoRef = useRef(null);
-  const iframeRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
@@ -306,36 +688,32 @@ export default function DedicationCard({
     "embed"
   ) : "none";
 
-  // Video playback controlled by isActive prop from parent
+  // Enhanced video playback control - pauses all other videos before playing
   useEffect(() => {
-    if (mediaType !== "video") return;
-    if (!videoRef.current) return;
-    
-    if (isActive) {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch((err) => {
-          console.log("Play prevented:", err);
-        });
-      }
-    } else {
-      if (!videoRef.current.paused) {
-        videoRef.current.pause();
-      }
-    }
-  }, [isActive, mediaType]);
+    const video = videoRef.current;
 
-  // For iframe embeds - reload when isActive changes to control autoplay
-  useEffect(() => {
-    if (mediaType !== "embed") return;
-    if (!iframeRef.current) return;
-    
-    // Reload the iframe with new autoplay parameter
-    const currentSrc = iframeRef.current.src;
-    const newSrc = getEmbedUrl(mediaUrl, isActive);
-    if (currentSrc !== newSrc) {
-      iframeRef.current.src = newSrc;
+    if (mediaType !== "video" || !video) return;
+
+    if (isActive) {
+      // Pause all other videos on the page
+      document.querySelectorAll("video").forEach((otherVideo) => {
+        if (otherVideo !== video && !otherVideo.paused) {
+          otherVideo.pause();
+        }
+      });
+
+      // Play this video
+      video.play().catch(() => {});
+    } else {
+      // Pause this video when inactive
+      video.pause();
     }
-  }, [isActive, mediaType, mediaUrl]);
+
+    // Cleanup: pause video when component unmounts
+    return () => {
+      video.pause();
+    };
+  }, [isActive, mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -463,10 +841,15 @@ export default function DedicationCard({
     }
 
     if (mediaType === "embed") {
+      // Only render iframe when the card is active
+      if (!isActive) {
+        return <div style={fallbackBg}></div>;
+      }
+
       return (
         <iframe
-          ref={iframeRef}
-          src={getEmbedUrl(mediaUrl, isActive)}
+          key={`${id}-${isActive ? "active" : "inactive"}`}
+          src={getEmbedUrl(mediaUrl, true)}
           title={dedicationTitle || mediaTitle}
           style={videoBg}
           frameBorder="0"
@@ -647,4 +1030,8 @@ export default function DedicationCard({
           <button type="button" style={closeImageBtn}>
             ✕
           </button>
-        </
+        </div>
+      )}
+    </div>
+  );
+}
