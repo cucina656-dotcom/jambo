@@ -3,6 +3,79 @@ import { Plus, Heart, MessageSquare, Share2 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
+// ==========================================
+// MEDIA TYPE DETECTION HELPERS
+// ==========================================
+function getMediaType(url) {
+  if (!url) return 'none';
+  
+  // Check for common video file extensions
+  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
+  if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    return 'video';
+  }
+  
+  // Check for common audio file extensions
+  const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+  if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    return 'audio';
+  }
+  
+  // Check for image extensions
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+  if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    return 'image';
+  }
+  
+  // Check for YouTube URLs
+  if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+    return 'youtube';
+  }
+  
+  // Check for Vimeo
+  if (url.includes('vimeo.com/')) {
+    return 'vimeo';
+  }
+  
+  // Check for Dailymotion
+  if (url.includes('dailymotion.com/')) {
+    return 'dailymotion';
+  }
+  
+  return 'unknown';
+}
+
+function getYouTubeEmbedUrl(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
+    /youtube\.com\/embed\/([^?]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return `https://www.youtube.com/embed/${match[1]}`;
+    }
+  }
+  return url;
+}
+
+function getVimeoEmbedUrl(url) {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  if (match) {
+    return `https://player.vimeo.com/video/${match[1]}`;
+  }
+  return url;
+}
+
+function getDailymotionEmbedUrl(url) {
+  const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
+  if (match) {
+    return `https://www.dailymotion.com/embed/video/${match[1]}`;
+  }
+  return url;
+}
+
 function getFlagFromWhatsapp(number = "") {
   // Africa
   if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿"; // Algeria
@@ -241,6 +314,8 @@ export default function DedicationCard({
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
+  const mediaType = getMediaType(mediaUrl);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -265,7 +340,7 @@ export default function DedicationCard({
 
   useEffect(() => {
     if (!videoRef.current) return;
-    if (isVisible) {
+    if (isVisible && mediaType === 'video') {
       if (videoRef.current.paused) {
         videoRef.current.play().catch((err) => {
           console.log("Play prevented:", err);
@@ -276,7 +351,7 @@ export default function DedicationCard({
         videoRef.current.pause();
       }
     }
-  }, [isVisible]);
+  }, [isVisible, mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -376,6 +451,109 @@ export default function DedicationCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  // Render the appropriate media content based on type
+  function renderMedia() {
+    if (!mediaUrl) {
+      return (
+        <div style={fallbackBg}>
+          <div style={fallbackContent}>
+            <span style={fallbackIcon}>🎵</span>
+            <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
+          </div>
+        </div>
+      );
+    }
+
+    switch (mediaType) {
+      case 'youtube':
+        return (
+          <iframe
+            src={getYouTubeEmbedUrl(mediaUrl)}
+            style={iframeStyle}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={dedicationTitle || mediaTitle}
+            loading="lazy"
+          />
+        );
+      
+      case 'vimeo':
+        return (
+          <iframe
+            src={getVimeoEmbedUrl(mediaUrl)}
+            style={iframeStyle}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title={dedicationTitle || mediaTitle}
+            loading="lazy"
+          />
+        );
+      
+      case 'dailymotion':
+        return (
+          <iframe
+            src={getDailymotionEmbedUrl(mediaUrl)}
+            style={iframeStyle}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title={dedicationTitle || mediaTitle}
+            loading="lazy"
+          />
+        );
+      
+      case 'video':
+        return (
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls
+            playsInline
+            autoPlay
+            muted
+            loop
+            crossOrigin="anonymous"
+            preload="auto"
+            style={videoBg}
+          />
+        );
+      
+      case 'audio':
+        return (
+          <div style={audioContainerStyle}>
+            <div style={audioCardStyle}>
+              <div style={audioIconStyle}>🎵</div>
+              <audio
+                src={mediaUrl}
+                controls
+                style={audioControlStyle}
+              />
+              <div style={audioTitleStyle}>{dedicationTitle || mediaTitle}</div>
+            </div>
+          </div>
+        );
+      
+      case 'image':
+        return (
+          <img
+            src={mediaUrl}
+            alt={dedicationTitle || mediaTitle}
+            style={imageBgStyle}
+            loading="lazy"
+          />
+        );
+      
+      default:
+        return (
+          <div style={fallbackBg}>
+            <div style={fallbackContent}>
+              <span style={fallbackIcon}>🎵</span>
+              <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
+            </div>
+          </div>
+        );
+    }
+  }
+
   return (
     <div ref={cardRef} style={card}>
       {/* Instagram Header row styling */}
@@ -422,22 +600,7 @@ export default function DedicationCard({
       </div>
 
       <div style={mediaCard}>
-        {mediaUrl ? (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            autoPlay
-            muted
-            loop
-            crossOrigin="anonymous"
-            preload="auto"
-            style={videoBg}
-          />
-        ) : (
-          <div style={fallbackBg}></div>
-        )}
+        {renderMedia()}
         <div style={topBadge}>
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
@@ -602,11 +765,90 @@ const videoBg = {
   zIndex: 0,
 };
 
+const iframeStyle = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  border: "none",
+  background: "#000000",
+  zIndex: 0,
+};
+
+const imageBgStyle = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  background: "#000000",
+  zIndex: 0,
+};
+
+const audioContainerStyle = {
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(145deg, #1a1a1a, #0a0a0a)",
+  zIndex: 0,
+  padding: "20px",
+};
+
+const audioCardStyle = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "16px",
+  width: "100%",
+  maxWidth: "320px",
+};
+
+const audioIconStyle = {
+  fontSize: "48px",
+  marginBottom: "8px",
+};
+
+const audioControlStyle = {
+  width: "100%",
+  height: "48px",
+  background: "transparent",
+};
+
+const audioTitleStyle = {
+  fontSize: "16px",
+  fontWeight: "600",
+  color: "#ffffff",
+  textAlign: "center",
+};
+
 const fallbackBg = {
   position: "absolute",
   inset: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "#262626",
   zIndex: 0,
+};
+
+const fallbackContent = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const fallbackIcon = {
+  fontSize: "48px",
+};
+
+const fallbackText = {
+  fontSize: "16px",
+  fontWeight: "600",
+  color: "#ffffff",
+  textAlign: "center",
 };
 
 const topBadge = {
