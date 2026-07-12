@@ -237,20 +237,26 @@ export default function DedicationCard({
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
   const [isVisible, setIsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
+  // Optimized Intersection Observer with higher threshold
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           setIsVisible(entry.isIntersecting);
+          // Start loading when visible
+          if (entry.isIntersecting && videoRef.current) {
+            videoRef.current.load();
+          }
         });
       },
       {
-        threshold: 0.6,
-        rootMargin: "0px",
+        threshold: 0.3,
+        rootMargin: "100px", // Start loading earlier
       }
     );
     if (cardRef.current) {
@@ -263,20 +269,43 @@ export default function DedicationCard({
     };
   }, []);
 
+  // Video play/pause with better loading
   useEffect(() => {
     if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    
     if (isVisible) {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch((err) => {
+      // If video is loaded, play it
+      if (video.readyState >= 3) {
+        video.play().catch((err) => {
           console.log("Play prevented:", err);
         });
+      } else {
+        // Wait for video to load enough before playing
+        const handleCanPlay = () => {
+          video.play().catch((err) => {
+            console.log("Play prevented:", err);
+          });
+          video.removeEventListener('canplay', handleCanPlay);
+        };
+        video.addEventListener('canplay', handleCanPlay);
+        return () => video.removeEventListener('canplay', handleCanPlay);
       }
     } else {
-      if (!videoRef.current.paused) {
-        videoRef.current.pause();
+      if (!video.paused) {
+        video.pause();
       }
     }
   }, [isVisible]);
+
+  // Reset loading state when mediaUrl changes
+  useEffect(() => {
+    setIsLoading(true);
+    if (videoRef.current) {
+      videoRef.current.load();
+    }
+  }, [mediaUrl]);
 
   async function loadComments() {
     if (!id) return;
@@ -383,6 +412,8 @@ export default function DedicationCard({
             playsInline
             preload="metadata"
             style={videoBg}
+            onLoadedData={() => setIsLoading(false)}
+            onError={() => setIsLoading(false)}
           />
         ) : (
           <div style={fallbackBg}></div>
@@ -559,7 +590,7 @@ export default function DedicationCard({
 }
 
 // ==========================================
-// STYLES OBJECTS
+// INSTAGRAM STYLES ONLY
 // ==========================================
 const card = {
   position: "relative",
@@ -567,13 +598,10 @@ const card = {
   maxWidth: "430px",
   margin: "0 auto 18px auto",
   overflow: "hidden",
-  background:
-    "radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.18), transparent 34%), linear-gradient(180deg, #06142e 0%, #081a3a 48%, #031025 100%)",
-  color: "#eaf2ff",
-  borderRadius: "28px",
-  border: "1px solid rgba(147, 197, 253, 0.22)",
-  boxShadow:
-    "0 24px 60px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(59, 130, 246, 0.08) inset",
+  background: "#000000",
+  color: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #262626",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   WebkitFontSmoothing: "antialiased",
@@ -584,9 +612,7 @@ const mediaCard = {
   width: "100%",
   aspectRatio: "4 / 5",
   overflow: "hidden",
-  background: "#020817",
-  borderRadius: "28px 28px 0 0",
-  borderBottom: "1px solid rgba(147, 197, 253, 0.18)",
+  background: "#000000",
 };
 
 const videoBg = {
@@ -596,15 +622,14 @@ const videoBg = {
   height: "100%",
   objectFit: "cover",
   objectPosition: "center center",
-  background: "#020817",
+  background: "#000000",
   zIndex: 0,
 };
 
 const fallbackBg = {
   position: "absolute",
   inset: 0,
-  background:
-    "radial-gradient(circle at 28% 18%, rgba(56, 189, 248, 0.65), transparent 32%), radial-gradient(circle at 82% 72%, rgba(37, 99, 235, 0.55), transparent 34%), linear-gradient(160deg, #020817, #06142e 48%, #0f2f6f)",
+  background: "#262626",
   zIndex: 0,
 };
 
@@ -612,7 +637,7 @@ const mediaShade = {
   position: "absolute",
   inset: 0,
   background:
-    "linear-gradient(180deg, rgba(2,8,23,0.66) 0%, rgba(2,8,23,0.08) 42%, rgba(2,8,23,0.82) 100%)",
+    "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)",
   zIndex: 1,
   pointerEvents: "none",
 };
@@ -628,50 +653,42 @@ const topBadge = {
   gap: "8px",
   width: "fit-content",
   maxWidth: "calc(100% - 88px)",
-  padding: "8px 12px",
-  borderRadius: "999px",
-  background: "rgba(8, 25, 58, 0.66)",
-  backdropFilter: "blur(18px)",
-  WebkitBackdropFilter: "blur(18px)",
-  border: "1px solid rgba(147, 197, 253, 0.34)",
-  color: "#f8fbff",
+  padding: "6px 12px",
+  borderRadius: "4px",
+  background: "rgba(0, 0, 0, 0.5)",
+  color: "#ffffff",
   fontSize: "12px",
-  fontWeight: "900",
-  letterSpacing: "0.75px",
-  textTransform: "uppercase",
+  fontWeight: "600",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  boxShadow: "0 12px 30px rgba(2, 8, 23, 0.35)",
 };
 
 const badgeDot = {
-  width: "7px",
-  height: "7px",
+  width: "6px",
+  height: "6px",
   borderRadius: "50%",
-  background: "#38bdf8",
-  boxShadow: "0 0 16px rgba(56, 189, 248, 1)",
+  background: "#0095f6",
   flexShrink: 0,
 };
 
-// Snapchat/Instagram-style floating buttons
 const rightActions = {
   position: "absolute",
-  right: "10px",
+  right: "12px",
   bottom: "14px",
   zIndex: 3,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  gap: "10px",
+  gap: "16px",
 };
 
 const followBtn = {
-  width: "36px",
-  height: "36px",
+  width: "40px",
+  height: "40px",
   borderRadius: "50%",
   border: "none",
-  background: "rgba(0, 0, 0, 0.3)",
+  background: "rgba(0, 0, 0, 0.5)",
   color: "#ffffff",
   cursor: "pointer",
   display: "flex",
@@ -679,7 +696,6 @@ const followBtn = {
   justifyContent: "center",
   padding: 0,
   lineHeight: 1,
-  boxShadow: "none",
   backdropFilter: "blur(2px)",
   WebkitBackdropFilter: "blur(2px)",
 };
@@ -688,8 +704,8 @@ const sideBtn = {
   border: "none",
   background: "transparent",
   color: "#ffffff",
-  width: "36px",
-  minHeight: "44px",
+  width: "40px",
+  minHeight: "40px",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -698,44 +714,42 @@ const sideBtn = {
   padding: "0",
   cursor: "pointer",
   outline: "none",
-  boxShadow: "none",
-  backdropFilter: "none",
-  WebkitBackdropFilter: "none",
 };
 
 const actionLabel = {
-  fontSize: "10px",
-  fontWeight: "800",
+  fontSize: "11px",
+  fontWeight: "600",
   lineHeight: 1,
   color: "#ffffff",
-  textShadow: "0 2px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
+  textShadow: "0 2px 4px rgba(0,0,0,0.5)",
 };
 
 const dedicationBody = {
-  padding: "15px 14px 16px 14px",
-  background:
-    "radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.13), transparent 28%), linear-gradient(180deg, rgba(7, 22, 51, 0.98) 0%, rgba(5, 18, 42, 1) 100%)",
+  padding: "12px 16px 16px 16px",
+  background: "#000000",
 };
 
 const peopleRow = {
   display: "flex",
   alignItems: "center",
-  gap: "8px",
+  gap: "12px",
   flexWrap: "wrap",
+  paddingBottom: "12px",
+  borderBottom: "1px solid #262626",
 };
 
 const person = {
   display: "flex",
   alignItems: "center",
-  gap: "8px",
+  gap: "10px",
   minWidth: 0,
 };
 
 const nameEmphasis = {
-  fontWeight: "900",
+  fontWeight: "600",
   fontSize: "14px",
-  color: "#f8fbff",
-  lineHeight: 1.15,
+  color: "#ffffff",
+  lineHeight: 1.2,
   maxWidth: "128px",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -744,78 +758,69 @@ const nameEmphasis = {
 
 const roleText = {
   fontSize: "10px",
-  fontWeight: "800",
-  color: "#8fb8f7",
+  fontWeight: "400",
+  color: "#8e8e8e",
   marginTop: "2px",
 };
 
 const smallPhotoCircle = {
-  width: "36px",
-  height: "36px",
+  width: "32px",
+  height: "32px",
   borderRadius: "50%",
   objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
+  border: "2px solid #ffffff",
   cursor: "pointer",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
   flexShrink: 0,
 };
 
 const smallPhotoSquare = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "12px",
+  width: "32px",
+  height: "32px",
+  borderRadius: "4px",
   objectFit: "cover",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
+  border: "2px solid #ffffff",
   cursor: "pointer",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.36)",
   flexShrink: 0,
 };
 
 const smallPlaceholder = {
-  width: "36px",
-  height: "36px",
+  width: "32px",
+  height: "32px",
   borderRadius: "50%",
-  background: "linear-gradient(135deg, #0f3b82, #38bdf8)",
+  background: "#0095f6",
   color: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "13px",
-  fontWeight: "900",
-  border: "2px solid rgba(226, 242, 255, 0.95)",
-  boxShadow: "0 9px 20px rgba(2, 8, 23, 0.34)",
+  fontSize: "14px",
+  fontWeight: "600",
+  border: "2px solid #ffffff",
   flexShrink: 0,
 };
 
 const toPill = {
-  padding: "7px 11px",
-  borderRadius: "999px",
-  background: "linear-gradient(135deg, rgba(255, 77, 109, 0.22), rgba(37, 99, 235, 0.22))",
-  color: "#f8fbff",
-  fontSize: "11px",
-  fontWeight: "950",
-  border: "1px solid rgba(255, 255, 255, 0.24)",
+  padding: "4px 12px",
+  borderRadius: "4px",
+  background: "transparent",
+  color: "#ffffff",
+  fontSize: "12px",
+  fontWeight: "600",
+  border: "1px solid #262626",
   flexShrink: 0,
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: "5px",
-  textTransform: "uppercase",
-  boxShadow: "0 10px 22px rgba(255, 77, 109, 0.16)",
+  gap: "6px",
 };
 
 const messageText = {
   margin: "12px 0 0 0",
-  padding: "13px 14px",
+  padding: "0",
   fontSize: "14px",
   lineHeight: "1.5",
-  fontWeight: "650",
-  color: "#eaf2ff",
-  background: "rgba(15, 35, 76, 0.74)",
-  borderRadius: "18px",
-  border: "1px solid rgba(147, 197, 253, 0.18)",
-  boxShadow: "0 10px 26px rgba(2, 8, 23, 0.25)",
+  fontWeight: "400",
+  color: "#ffffff",
   wordBreak: "break-word",
 };
 
@@ -823,26 +828,25 @@ const statsLine = {
   display: "flex",
   alignItems: "center",
   flexWrap: "wrap",
-  gap: "8px",
+  gap: "12px",
   fontSize: "12px",
-  fontWeight: "900",
-  color: "#9cc8ff",
-  marginTop: "10px",
+  fontWeight: "400",
+  color: "#8e8e8e",
+  marginTop: "8px",
 };
 
 const commentMainBtn = {
   width: "100%",
-  border: "1px solid rgba(147, 197, 253, 0.20)",
-  borderRadius: "999px",
-  background: "rgba(15, 35, 76, 0.72)",
-  color: "#bfdbfe",
-  padding: "11px 14px",
-  fontSize: "13px",
-  fontWeight: "800",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "transparent",
+  color: "#8e8e8e",
+  padding: "8px 12px",
+  fontSize: "14px",
+  fontWeight: "400",
   textAlign: "left",
   cursor: "pointer",
-  marginTop: "10px",
-  boxShadow: "0 8px 18px rgba(2, 8, 18, 0.18)",
+  marginTop: "8px",
 };
 
 const commentOverlay = {
@@ -855,26 +859,22 @@ const commentOverlay = {
   maxWidth: "430px",
   height: "70svh",
   zIndex: 10,
-  background:
-    "linear-gradient(180deg, rgba(7, 22, 51, 0.98), rgba(3, 12, 29, 0.98))",
-  backdropFilter: "blur(25px)",
-  WebkitBackdropFilter: "blur(25px)",
-  borderTopLeftRadius: "24px",
-  borderTopRightRadius: "24px",
+  background: "#000000",
+  borderTopLeftRadius: "12px",
+  borderTopRightRadius: "12px",
   padding: "0 16px 16px 16px",
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
-  borderTop: "1px solid rgba(147, 197, 253, 0.22)",
-  boxShadow: "0 -20px 55px rgba(2, 8, 23, 0.58)",
+  borderTop: "1px solid #262626",
 };
 
 const commentHandleBar = {
-  width: "38px",
+  width: "36px",
   height: "4px",
-  background: "rgba(147, 197, 253, 0.38)",
-  borderRadius: "999px",
-  margin: "10px auto 14px auto",
+  background: "#262626",
+  borderRadius: "2px",
+  margin: "8px auto 12px auto",
   flexShrink: 0,
 };
 
@@ -883,26 +883,26 @@ const commentHeader = {
   justifyContent: "space-between",
   alignItems: "center",
   paddingBottom: "12px",
-  borderBottom: "1px solid rgba(147, 197, 253, 0.14)",
+  borderBottom: "1px solid #262626",
   flexShrink: 0,
 };
 
 const commentTitle = {
   margin: 0,
-  fontSize: "17px",
-  fontWeight: "900",
-  color: "#f8fbff",
+  fontSize: "16px",
+  fontWeight: "600",
+  color: "#ffffff",
 };
 
 const closeBtn = {
-  border: "1px solid rgba(147, 197, 253, 0.18)",
-  background: "rgba(15, 35, 76, 0.82)",
-  color: "#eaf2ff",
-  fontSize: "16px",
+  border: "none",
+  background: "transparent",
+  color: "#8e8e8e",
+  fontSize: "18px",
   cursor: "pointer",
   padding: "0",
-  width: "34px",
-  height: "34px",
+  width: "32px",
+  height: "32px",
   borderRadius: "50%",
 };
 
@@ -918,36 +918,33 @@ const commentsListBox = {
 const commentItem = {
   display: "flex",
   flexDirection: "column",
-  gap: "5px",
-  padding: "12px",
-  borderRadius: "17px",
-  background: "rgba(15, 35, 76, 0.78)",
-  border: "1px solid rgba(147, 197, 253, 0.16)",
-  boxShadow: "0 10px 24px rgba(2, 8, 23, 0.22)",
+  gap: "4px",
+  padding: "8px 0",
+  borderBottom: "1px solid #262626",
 };
 
 const commentFrom = {
   fontSize: "12px",
-  fontWeight: "900",
-  color: "#7dd3fc",
+  fontWeight: "600",
+  color: "#0095f6",
 };
 
 const commentBody = {
   fontSize: "14px",
   lineHeight: "1.4",
-  color: "#eaf2ff",
+  color: "#ffffff",
   wordBreak: "break-word",
 };
 
 const noComments = {
   textAlign: "center",
-  color: "#9cc8ff",
+  color: "#8e8e8e",
   fontSize: "14px",
   marginTop: "32px",
 };
 
 const writeBox = {
-  borderTop: "1px solid rgba(147, 197, 253, 0.14)",
+  borderTop: "1px solid #262626",
   paddingTop: "12px",
   display: "flex",
   flexDirection: "column",
@@ -958,51 +955,50 @@ const writeBox = {
 const sendRow = {
   display: "grid",
   gridTemplateColumns: "1fr auto",
-  gap: "10px",
+  gap: "8px",
   alignItems: "center",
 };
 
 const commentInputTop = {
   width: "100%",
   boxSizing: "border-box",
-  border: "1px solid rgba(147, 197, 253, 0.22)",
-  borderRadius: "13px",
-  background: "rgba(2, 8, 23, 0.46)",
-  color: "#f8fbff",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "#000000",
+  color: "#ffffff",
   outline: "none",
-  padding: "10px 12px",
-  fontSize: "13px",
+  padding: "8px 12px",
+  fontSize: "14px",
 };
 
 const commentInputBottom = {
   width: "100%",
   boxSizing: "border-box",
-  border: "1px solid rgba(147, 197, 253, 0.22)",
-  borderRadius: "999px",
-  background: "rgba(2, 8, 23, 0.46)",
-  color: "#f8fbff",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "#000000",
+  color: "#ffffff",
   outline: "none",
-  padding: "11px 14px",
+  padding: "8px 12px",
   fontSize: "14px",
 };
 
 const sendBtn = {
   border: "none",
-  background: "linear-gradient(135deg, #38bdf8, #2563eb)",
+  background: "#0095f6",
   color: "#ffffff",
-  fontWeight: "900",
+  fontWeight: "600",
   fontSize: "14px",
   cursor: "pointer",
-  padding: "11px 16px",
-  borderRadius: "999px",
-  boxShadow: "0 10px 22px rgba(37, 99, 235, 0.36)",
+  padding: "8px 16px",
+  borderRadius: "4px",
 };
 
 const imagePopup = {
   position: "fixed",
   inset: 0,
   zIndex: 9999,
-  background: "rgba(0,0,0,0.95)",
+  background: "rgba(0,0,0,0.92)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1013,15 +1009,15 @@ const fullImageStyle = {
   maxWidth: "100%",
   maxHeight: "85vh",
   objectFit: "contain",
-  borderRadius: "14px",
+  borderRadius: "4px",
 };
 
 const closeImageBtn = {
   position: "fixed",
   top: "max(16px, env(safe-area-inset-top))",
   right: "16px",
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(8, 25, 58, 0.72)",
+  border: "none",
+  background: "rgba(0, 0, 0, 0.5)",
   color: "#ffffff",
   fontSize: "20px",
   borderRadius: "50%",
