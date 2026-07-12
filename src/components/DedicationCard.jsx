@@ -237,26 +237,20 @@ export default function DedicationCard({
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
   const [isVisible, setIsVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
-  // Optimized Intersection Observer with higher threshold
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           setIsVisible(entry.isIntersecting);
-          // Start loading when visible
-          if (entry.isIntersecting && videoRef.current) {
-            videoRef.current.load();
-          }
         });
       },
       {
-        threshold: 0.3,
-        rootMargin: "100px", // Start loading earlier
+        threshold: 0.6,
+        rootMargin: "0px",
       }
     );
     if (cardRef.current) {
@@ -269,43 +263,20 @@ export default function DedicationCard({
     };
   }, []);
 
-  // Video play/pause with better loading
   useEffect(() => {
     if (!videoRef.current) return;
-    
-    const video = videoRef.current;
-    
     if (isVisible) {
-      // If video is loaded, play it
-      if (video.readyState >= 3) {
-        video.play().catch((err) => {
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch((err) => {
           console.log("Play prevented:", err);
         });
-      } else {
-        // Wait for video to load enough before playing
-        const handleCanPlay = () => {
-          video.play().catch((err) => {
-            console.log("Play prevented:", err);
-          });
-          video.removeEventListener('canplay', handleCanPlay);
-        };
-        video.addEventListener('canplay', handleCanPlay);
-        return () => video.removeEventListener('canplay', handleCanPlay);
       }
     } else {
-      if (!video.paused) {
-        video.pause();
+      if (!videoRef.current.paused) {
+        videoRef.current.pause();
       }
     }
   }, [isVisible]);
-
-  // Reset loading state when mediaUrl changes
-  useEffect(() => {
-    setIsLoading(true);
-    if (videoRef.current) {
-      videoRef.current.load();
-    }
-  }, [mediaUrl]);
 
   async function loadComments() {
     if (!id) return;
@@ -349,8 +320,10 @@ export default function DedicationCard({
     if (!id) return alert("Missing dedication ID");
     if (!commenterWhatsapp.trim()) return alert("Enter your WhatsApp number first.");
     if (!commentText.trim()) return;
+
     const textToSend = commentText.trim();
     const whatsappToSend = commenterWhatsapp.trim();
+
     const newComment = {
       id: Date.now(),
       dedication_id: id,
@@ -358,9 +331,11 @@ export default function DedicationCard({
       commenter_whatsapp: whatsappToSend,
       created_at: new Date().toISOString(),
     };
+
     setCommentsList((prev) => [newComment, ...prev]);
     setComments((v) => v + 1);
     setCommentText("");
+
     try {
       const res = await fetch(`${API_URL}/api/dedications/comment`, {
         method: "POST",
@@ -403,6 +378,49 @@ export default function DedicationCard({
 
   return (
     <div ref={cardRef} style={card}>
+      {/* Instagram Header row styling */}
+      <div style={instagramHeader}>
+        <div style={person}>
+          {senderPhoto ? (
+            <img
+              src={senderPhoto}
+              alt={senderName}
+              style={smallPhotoCircle}
+              onClick={() => setFullImage(senderPhoto)}
+            />
+          ) : (
+            <div style={smallPlaceholder}>S</div>
+          )}
+          <div>
+            <div style={nameEmphasis}>
+              {senderName || "Sender"} {flag}
+            </div>
+            <div style={roleText}>Sender</div>
+          </div>
+        </div>
+        
+        <button type="button" onClick={react} style={toPill}>
+          <span>to</span>
+        </button>
+
+        <div style={person}>
+          {recipientPhoto ? (
+            <img
+              src={recipientPhoto}
+              alt={recipientName}
+              style={smallPhotoCircle}
+              onClick={() => setFullImage(recipientPhoto)}
+            />
+          ) : (
+            <div style={smallPlaceholder}>R</div>
+          )}
+          <div>
+            <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
+            <div style={roleText}>Recipient</div>
+          </div>
+        </div>
+      </div>
+
       <div style={mediaCard}>
         {mediaUrl ? (
           <video
@@ -410,125 +428,75 @@ export default function DedicationCard({
             src={mediaUrl}
             controls
             playsInline
-            preload="metadata"
+            autoPlay
+            muted
+            loop
+            crossOrigin="anonymous"
+            preload="auto"
             style={videoBg}
-            onLoadedData={() => setIsLoading(false)}
-            onError={() => setIsLoading(false)}
           />
         ) : (
           <div style={fallbackBg}></div>
         )}
-        <div style={mediaShade}></div>
         <div style={topBadge}>
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
-        <div style={rightActions}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onDedicateClick) onDedicateClick();
-            }}
-            style={followBtn}
-            aria-label="Dedicate Song"
-          >
-            <Plus size={23} strokeWidth={2.5} color="white" />
-          </button>
+      </div>
 
-          <button
-            type="button"
-            onClick={react}
-            style={sideBtn}
-            aria-label="Like"
-          >
+      {/* Action Buttons Bar below the Image - True Instagram Style */}
+      <div style={instagramActionBar}>
+        <div style={leftActionsRow}>
+          <button type="button" onClick={react} style={inlineActionBtn} aria-label="Like">
             <Heart
               size={24}
-              strokeWidth={2.4}
-              fill={hasReacted ? "white" : "none"}
-              color="white"
+              strokeWidth={2}
+              fill={hasReacted ? "#ED4956" : "none"}
+              color={hasReacted ? "#ED4956" : "#ffffff"}
             />
-            <span style={actionLabel}>{reactions}</span>
           </button>
-
-          <button
-            type="button"
-            onClick={openViewCommentsOnly}
-            style={sideBtn}
-            aria-label="Comments"
-          >
-            <MessageSquare size={24} strokeWidth={2.4} color="white" />
-            <span style={actionLabel}>{comments}</span>
+          <button type="button" onClick={openViewCommentsOnly} style={inlineActionBtn} aria-label="Comments">
+            <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
           </button>
-
-          <button
-            type="button"
-            onClick={shareToWhatsApp}
-            style={sideBtn}
-            aria-label="Share"
-          >
-            <Share2 size={24} strokeWidth={2.4} color="white" />
-            <span style={actionLabel}>Share</span>
+          <button type="button" onClick={shareToWhatsApp} style={inlineActionBtn} aria-label="Share">
+            <Share2 size={24} strokeWidth={2} color="#ffffff" />
           </button>
         </div>
-      </div>
-      <div style={dedicationBody}>
-        <div style={peopleRow}>
-          <div style={person}>
-            {senderPhoto ? (
-              <img
-                src={senderPhoto}
-                alt={senderName}
-                style={smallPhotoCircle}
-                onClick={() => setFullImage(senderPhoto)}
-              />
-            ) : (
-              <div style={smallPlaceholder}>S</div>
-            )}
-            <div>
-              <div style={nameEmphasis}>
-                {senderName || "Sender"} {flag}
-              </div>
-              <div style={roleText}>Sender</div>
-            </div>
-          </div>
-          <button type="button" onClick={react} style={toPill}>
-            <span>❤️</span>
-            <span>to</span>
-          </button>
-          <div style={person}>
-            {recipientPhoto ? (
-              <img
-                src={recipientPhoto}
-                alt={recipientName}
-                style={smallPhotoSquare}
-                onClick={() => setFullImage(recipientPhoto)}
-              />
-            ) : (
-              <div style={smallPlaceholder}>R</div>
-            )}
-            <div>
-              <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
-              <div style={roleText}>to</div>
-            </div>
-          </div>
-        </div>
-        <p style={messageText}>
-          {message || "I chose this song because it reminds me of you."}
-        </p>
-        <div style={statsLine}>
-          <span>👁 {views.toLocaleString()} views</span>
-          <span>💬 {comments}</span>
-        </div>
-        <button type="button" onClick={openWriteComment} style={commentMainBtn}>
-          Add a public comment...
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onDedicateClick) onDedicateClick();
+          }}
+          style={inlineActionBtn}
+          aria-label="Dedicate Song"
+        >
+          <Plus size={24} strokeWidth={2} color="#ffffff" />
         </button>
       </div>
+
+      <div style={dedicationBody}>
+        <div style={statsLine}>
+          <span>{reactions.toLocaleString()} likes</span>
+          <span>•</span>
+          <span>{views.toLocaleString()} views</span>
+        </div>
+
+        <p style={messageText}>
+          <span style={{ fontWeight: "700", marginRight: "6px" }}>{senderName || "Sender"}:</span>
+          {message || "I chose this song because it reminds me of you."}
+        </p>
+
+        <button type="button" onClick={openWriteComment} style={commentMainBtn}>
+          View all {comments} comments...
+        </button>
+      </div>
+
       {commentsOpen && (
         <div style={commentOverlay}>
           <div style={commentHandleBar}></div>
           <div style={commentHeader}>
-            <h3 style={commentTitle}>Comments ({comments})</h3>
+            <h3 style={commentTitle}>Comments</h3>
             <button
               type="button"
               onClick={() => {
@@ -542,7 +510,7 @@ export default function DedicationCard({
           </div>
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
-              <p style={noComments}>Be the first to comment on this dedication.</p>
+              <p style={noComments}>No comments yet.</p>
             ) : (
               commentsList.map((comment) => (
                 <div key={comment.id} style={commentItem}>
@@ -566,17 +534,18 @@ export default function DedicationCard({
                 <input
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Write comment..."
+                  placeholder="Add a comment..."
                   style={commentInputBottom}
                 />
                 <button type="button" onClick={sendComment} style={sendBtn}>
-                  Send
+                  Post
                 </button>
               </div>
             </div>
           )}
         </div>
       )}
+
       {fullImage && (
         <div style={imagePopup} onClick={() => setFullImage(null)}>
           <img src={fullImage} alt="Full view" style={fullImageStyle} />
@@ -590,7 +559,7 @@ export default function DedicationCard({
 }
 
 // ==========================================
-// INSTAGRAM STYLES ONLY
+// INSTAGRAM DARK MODE STYLES OBJECTS
 // ==========================================
 const card = {
   position: "relative",
@@ -600,17 +569,24 @@ const card = {
   overflow: "hidden",
   background: "#000000",
   color: "#ffffff",
-  borderRadius: "8px",
-  border: "1px solid #262626",
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  borderRadius: "0px",
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   WebkitFontSmoothing: "antialiased",
+};
+
+const instagramHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "12px 14px",
+  background: "#000000",
+  borderBottom: "1px solid #1c1c1e",
 };
 
 const mediaCard = {
   position: "relative",
   width: "100%",
-  aspectRatio: "4 / 5",
+  aspectRatio: "1 / 1", 
   overflow: "hidden",
   background: "#000000",
 };
@@ -633,35 +609,20 @@ const fallbackBg = {
   zIndex: 0,
 };
 
-const mediaShade = {
-  position: "absolute",
-  inset: 0,
-  background:
-    "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)",
-  zIndex: 1,
-  pointerEvents: "none",
-};
-
 const topBadge = {
   position: "absolute",
-  top: "14px",
+  bottom: "14px",
   left: "14px",
-  right: "74px",
   zIndex: 2,
   display: "inline-flex",
   alignItems: "center",
-  gap: "8px",
-  width: "fit-content",
-  maxWidth: "calc(100% - 88px)",
-  padding: "6px 12px",
+  gap: "6px",
+  padding: "4px 8px",
   borderRadius: "4px",
-  background: "rgba(0, 0, 0, 0.5)",
+  background: "rgba(0, 0, 0, 0.75)",
   color: "#ffffff",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: "600",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
 };
 
 const badgeDot = {
@@ -672,70 +633,33 @@ const badgeDot = {
   flexShrink: 0,
 };
 
-const rightActions = {
-  position: "absolute",
-  right: "12px",
-  bottom: "14px",
-  zIndex: 3,
+const instagramActionBar = {
   display: "flex",
-  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "12px 14px 8px 14px",
+  background: "#000000",
+};
+
+const leftActionsRow = {
+  display: "flex",
   alignItems: "center",
   gap: "16px",
 };
 
-const followBtn = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "50%",
-  border: "none",
-  background: "rgba(0, 0, 0, 0.5)",
-  color: "#ffffff",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 0,
-  lineHeight: 1,
-  backdropFilter: "blur(2px)",
-  WebkitBackdropFilter: "blur(2px)",
-};
-
-const sideBtn = {
+const inlineActionBtn = {
   border: "none",
   background: "transparent",
-  color: "#ffffff",
-  width: "40px",
-  minHeight: "40px",
+  padding: 0,
+  cursor: "pointer",
   display: "flex",
-  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: "2px",
-  padding: "0",
-  cursor: "pointer",
-  outline: "none",
-};
-
-const actionLabel = {
-  fontSize: "11px",
-  fontWeight: "600",
-  lineHeight: 1,
-  color: "#ffffff",
-  textShadow: "0 2px 4px rgba(0,0,0,0.5)",
 };
 
 const dedicationBody = {
-  padding: "12px 16px 16px 16px",
+  padding: "0px 14px 16px 14px",
   background: "#000000",
-};
-
-const peopleRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  flexWrap: "wrap",
-  paddingBottom: "12px",
-  borderBottom: "1px solid #262626",
 };
 
 const person = {
@@ -747,20 +671,18 @@ const person = {
 
 const nameEmphasis = {
   fontWeight: "600",
-  fontSize: "14px",
+  fontSize: "13px",
   color: "#ffffff",
   lineHeight: 1.2,
-  maxWidth: "128px",
+  maxWidth: "110px",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
 
 const roleText = {
-  fontSize: "10px",
-  fontWeight: "400",
-  color: "#8e8e8e",
-  marginTop: "2px",
+  fontSize: "11px",
+  color: "#a8a8a8",
 };
 
 const smallPhotoCircle = {
@@ -768,17 +690,7 @@ const smallPhotoCircle = {
   height: "32px",
   borderRadius: "50%",
   objectFit: "cover",
-  border: "2px solid #ffffff",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const smallPhotoSquare = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "4px",
-  objectFit: "cover",
-  border: "2px solid #ffffff",
+  border: "1px solid #262626",
   cursor: "pointer",
   flexShrink: 0,
 };
@@ -787,93 +699,78 @@ const smallPlaceholder = {
   width: "32px",
   height: "32px",
   borderRadius: "50%",
-  background: "#0095f6",
+  background: "#262626",
   color: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "14px",
+  fontSize: "12px",
   fontWeight: "600",
-  border: "2px solid #ffffff",
   flexShrink: 0,
 };
 
 const toPill = {
   padding: "4px 12px",
-  borderRadius: "4px",
-  background: "transparent",
+  borderRadius: "8px",
+  background: "#1c1c1e",
   color: "#ffffff",
   fontSize: "12px",
   fontWeight: "600",
-  border: "1px solid #262626",
+  border: "none",
   flexShrink: 0,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "6px",
 };
 
 const messageText = {
-  margin: "12px 0 0 0",
-  padding: "0",
+  margin: "6px 0 0 0",
   fontSize: "14px",
-  lineHeight: "1.5",
-  fontWeight: "400",
-  color: "#ffffff",
+  lineHeight: "1.4",
+  color: "#f5f5f5",
   wordBreak: "break-word",
 };
 
 const statsLine = {
   display: "flex",
   alignItems: "center",
-  flexWrap: "wrap",
-  gap: "12px",
-  fontSize: "12px",
-  fontWeight: "400",
-  color: "#8e8e8e",
-  marginTop: "8px",
+  gap: "6px",
+  fontSize: "14px",
+  fontWeight: "600",
+  color: "#ffffff",
 };
 
 const commentMainBtn = {
-  width: "100%",
-  border: "1px solid #262626",
-  borderRadius: "4px",
-  background: "transparent",
-  color: "#8e8e8e",
-  padding: "8px 12px",
+  background: "none",
+  border: "none",
+  color: "#a8a8a8",
+  padding: "6px 0 0 0",
   fontSize: "14px",
-  fontWeight: "400",
   textAlign: "left",
   cursor: "pointer",
-  marginTop: "8px",
+  display: "block",
 };
 
 const commentOverlay = {
   position: "fixed",
   left: "50%",
   transform: "translateX(-50%)",
-  right: "auto",
   bottom: 0,
   width: "100%",
   maxWidth: "430px",
   height: "70svh",
   zIndex: 10,
-  background: "#000000",
+  background: "#1c1c1e",
   borderTopLeftRadius: "12px",
   borderTopRightRadius: "12px",
   padding: "0 16px 16px 16px",
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
-  borderTop: "1px solid #262626",
 };
 
 const commentHandleBar = {
   width: "36px",
   height: "4px",
-  background: "#262626",
-  borderRadius: "2px",
+  background: "#3a3a3c",
+  borderRadius: "999px",
   margin: "8px auto 12px auto",
   flexShrink: 0,
 };
@@ -883,7 +780,7 @@ const commentHeader = {
   justifyContent: "space-between",
   alignItems: "center",
   paddingBottom: "12px",
-  borderBottom: "1px solid #262626",
+  borderBottom: "1px solid #2c2c2e",
   flexShrink: 0,
 };
 
@@ -896,14 +793,10 @@ const commentTitle = {
 
 const closeBtn = {
   border: "none",
-  background: "transparent",
-  color: "#8e8e8e",
-  fontSize: "18px",
+  background: "none",
+  color: "#ffffff",
+  fontSize: "16px",
   cursor: "pointer",
-  padding: "0",
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
 };
 
 const commentsListBox = {
@@ -911,40 +804,37 @@ const commentsListBox = {
   overflowY: "auto",
   display: "flex",
   flexDirection: "column",
-  gap: "12px",
-  padding: "16px 0",
+  gap: "14px",
+  padding: "14px 0",
 };
 
 const commentItem = {
   display: "flex",
   flexDirection: "column",
   gap: "4px",
-  padding: "8px 0",
-  borderBottom: "1px solid #262626",
 };
 
 const commentFrom = {
   fontSize: "12px",
   fontWeight: "600",
-  color: "#0095f6",
+  color: "#a8a8a8",
 };
 
 const commentBody = {
   fontSize: "14px",
-  lineHeight: "1.4",
   color: "#ffffff",
   wordBreak: "break-word",
 };
 
 const noComments = {
   textAlign: "center",
-  color: "#8e8e8e",
+  color: "#a8a8a8",
   fontSize: "14px",
   marginTop: "32px",
 };
 
 const writeBox = {
-  borderTop: "1px solid #262626",
+  borderTop: "1px solid #2c2c2e",
   paddingTop: "12px",
   display: "flex",
   flexDirection: "column",
@@ -955,50 +845,47 @@ const writeBox = {
 const sendRow = {
   display: "grid",
   gridTemplateColumns: "1fr auto",
-  gap: "8px",
+  gap: "10px",
   alignItems: "center",
 };
 
 const commentInputTop = {
   width: "100%",
   boxSizing: "border-box",
-  border: "1px solid #262626",
-  borderRadius: "4px",
+  border: "1px solid #2c2c2e",
+  borderRadius: "8px",
   background: "#000000",
   color: "#ffffff",
   outline: "none",
   padding: "8px 12px",
-  fontSize: "14px",
+  fontSize: "13px",
 };
 
 const commentInputBottom = {
   width: "100%",
   boxSizing: "border-box",
-  border: "1px solid #262626",
-  borderRadius: "4px",
-  background: "#000000",
+  border: "none",
+  background: "transparent",
   color: "#ffffff",
   outline: "none",
-  padding: "8px 12px",
+  padding: "8px 0",
   fontSize: "14px",
 };
 
 const sendBtn = {
   border: "none",
-  background: "#0095f6",
-  color: "#ffffff",
+  background: "none",
+  color: "#0095f6",
   fontWeight: "600",
   fontSize: "14px",
   cursor: "pointer",
-  padding: "8px 16px",
-  borderRadius: "4px",
 };
 
 const imagePopup = {
   position: "fixed",
   inset: 0,
   zIndex: 9999,
-  background: "rgba(0,0,0,0.92)",
+  background: "rgba(0,0,0,0.95)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1009,22 +896,15 @@ const fullImageStyle = {
   maxWidth: "100%",
   maxHeight: "85vh",
   objectFit: "contain",
-  borderRadius: "4px",
 };
 
 const closeImageBtn = {
   position: "fixed",
-  top: "max(16px, env(safe-area-inset-top))",
+  top: "16px",
   right: "16px",
   border: "none",
-  background: "rgba(0, 0, 0, 0.5)",
+  background: "none",
   color: "#ffffff",
-  fontSize: "20px",
-  borderRadius: "50%",
-  width: "40px",
-  height: "40px",
+  fontSize: "24px",
   cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
 };
