@@ -309,6 +309,7 @@ export default function DedicationCard({
   const flag = getFlagFromWhatsapp(senderWhatsapp);
   const mediaType = getMediaType(mediaUrl);
 
+  // Track visibility with Intersection Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -328,20 +329,70 @@ export default function DedicationCard({
     };
   }, []);
 
+  // ==========================================
+  // UPDATED: Auto play/pause with scroll
+  // ==========================================
   useEffect(() => {
-    if (!videoRef.current) return;
-    if (isVisible && mediaType === 'video') {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch((err) => {
-          console.log("Play prevented:", err);
-        });
-      }
-    } else {
-      if (!videoRef.current.paused) {
-        videoRef.current.pause();
-      }
+    if (!videoRef.current || mediaType !== 'video') return;
+    
+    const videoElement = videoRef.current;
+    const videoId = `video-${id}`;
+    
+    // Store reference for global management
+    if (!window.__videoRefs) {
+      window.__videoRefs = new Map();
     }
-  }, [isVisible, mediaType]);
+    window.__videoRefs.set(videoId, videoElement);
+    
+    // Function to check visibility and control playback
+    const checkVisibilityAndPlay = () => {
+      const rect = videoElement.getBoundingClientRect();
+      const isInView = (
+        rect.top >= -100 &&
+        rect.bottom <= window.innerHeight + 100 &&
+        rect.left >= 0 &&
+        rect.right <= window.innerWidth
+      );
+      
+      if (isInView) {
+        // Pause all other videos
+        window.__videoRefs.forEach((ref, refId) => {
+          if (refId !== videoId && ref && !ref.paused) {
+            ref.pause();
+          }
+        });
+        // Play this video
+        if (videoElement.paused) {
+          videoElement.play().catch(err => console.log('Play prevented:', err));
+        }
+      } else {
+        // Pause this video
+        if (!videoElement.paused) {
+          videoElement.pause();
+        }
+      }
+    };
+    
+    // Add scroll and resize listeners
+    window.addEventListener('scroll', checkVisibilityAndPlay, { passive: true });
+    window.addEventListener('resize', checkVisibilityAndPlay, { passive: true });
+    
+    // Initial check
+    setTimeout(checkVisibilityAndPlay, 100);
+    
+    return () => {
+      window.removeEventListener('scroll', checkVisibilityAndPlay);
+      window.removeEventListener('resize', checkVisibilityAndPlay);
+      // Only delete if it's still the same reference
+      if (window.__videoRefs.get(videoId) === videoElement) {
+        window.__videoRefs.delete(videoId);
+      }
+      // Clean up if no videos left
+      if (window.__videoRefs && window.__videoRefs.size === 0) {
+        delete window.__videoRefs;
+      }
+    };
+  }, [id, mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -501,11 +552,11 @@ export default function DedicationCard({
             src={mediaUrl}
             controls
             playsInline
-            autoPlay
+            autoPlay={false}
             muted
-            loop
+            loop={false}
             crossOrigin="anonymous"
-            preload="auto"
+            preload="metadata"
             style={videoBg}
           />
         );
@@ -667,7 +718,6 @@ export default function DedicationCard({
             </button>
           </div>
           
-          {/* ===== FIXED: Comments with privacy ===== */}
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
               <p style={noComments}>No comments yet. Be the first! 💬</p>
@@ -1070,7 +1120,6 @@ const commentsListBox = {
   WebkitOverflowScrolling: "touch",
 };
 
-// ===== NEW STYLES FOR COMMENT PRIVACY =====
 const commentHeaderRow = {
   display: "flex",
   alignItems: "flex-start",
