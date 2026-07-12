@@ -38,12 +38,12 @@ function getEmbedUrl(url = "", isActive = false) {
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
   if (youtubeMatch) {
-    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}`;
   }
 
   const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
   if (shortsMatch) {
-    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
+    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}`;
   }
 
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
@@ -280,7 +280,6 @@ const mediaCard = {
   aspectRatio: "16 / 9",
   backgroundColor: "#0a0a0a",
   overflow: "hidden",
-  // Increase only the top edge with padding-top
   paddingTop: "10px",
 };
 
@@ -320,6 +319,15 @@ const fallbackBg = {
   justifyContent: "center",
   color: "#555",
   fontSize: "14px",
+};
+
+const loadingSpinner = {
+  width: "40px",
+  height: "40px",
+  border: "3px solid rgba(255,255,255,0.1)",
+  borderTop: "3px solid #00e676",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite",
 };
 
 const topBadge = {
@@ -679,6 +687,8 @@ export default function DedicationCard({
   const [hasReacted, setHasReacted] = useState(() => {
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
+  const [isMediaLoading, setIsMediaLoading] = useState(true);
+  const [mediaError, setMediaError] = useState(false);
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
@@ -716,6 +726,48 @@ export default function DedicationCard({
       video.pause();
     };
   }, [isActive, mediaType]);
+
+  // Preload media when component mounts
+  useEffect(() => {
+    if (!mediaUrl) {
+      setIsMediaLoading(false);
+      return;
+    }
+
+    // For images, preload using Image object
+    if (mediaType === "image") {
+      const img = new Image();
+      img.src = mediaUrl;
+      img.onload = () => {
+        setIsMediaLoading(false);
+      };
+      img.onerror = () => {
+        setIsMediaLoading(false);
+        setMediaError(true);
+      };
+    } else if (mediaType === "video") {
+      // For videos, use preload attribute
+      const video = videoRef.current;
+      if (video) {
+        video.preload = "metadata";
+        video.addEventListener('loadeddata', () => {
+          setIsMediaLoading(false);
+        });
+        video.addEventListener('error', () => {
+          setIsMediaLoading(false);
+          setMediaError(true);
+        });
+        // Set timeout to hide loading after 5 seconds even if not loaded
+        const timeout = setTimeout(() => {
+          setIsMediaLoading(false);
+        }, 5000);
+        return () => clearTimeout(timeout);
+      }
+    } else if (mediaType === "embed") {
+      // For embeds, set loading to false immediately since iframes load separately
+      setIsMediaLoading(false);
+    }
+  }, [mediaUrl, mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -811,53 +863,108 @@ export default function DedicationCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  // Render loading state
+  const renderLoading = () => {
+    if (!isMediaLoading) return null;
+    return (
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#0a0a0a",
+        zIndex: 1,
+      }}>
+        <div style={loadingSpinner}></div>
+      </div>
+    );
+  };
+
   // Render media based on type
   const renderMedia = () => {
     if (!mediaUrl) {
       return <div style={fallbackBg}></div>;
     }
 
+    if (mediaError) {
+      return <div style={fallbackBg}>Failed to load media</div>;
+    }
+
     if (mediaType === "image") {
       return (
-        <img
-          src={mediaUrl}
-          alt={dedicationTitle || mediaTitle}
-          style={imageBg}
-          onClick={() => setFullImage(mediaUrl)}
-        />
+        <>
+          {renderLoading()}
+          <img
+            src={mediaUrl}
+            alt={dedicationTitle || mediaTitle}
+            style={imageBg}
+            onClick={() => setFullImage(mediaUrl)}
+            loading="lazy"
+            onLoad={() => setIsMediaLoading(false)}
+            onError={() => {
+              setIsMediaLoading(false);
+              setMediaError(true);
+            }}
+          />
+        </>
       );
     }
 
     if (mediaType === "video") {
       return (
-        <video
-          ref={videoRef}
-          src={mediaUrl}
-          controls
-          playsInline
-          preload="metadata"
-          style={videoBg}
-          muted={false}
-        />
+        <>
+          {renderLoading()}
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls
+            playsInline
+            preload="metadata"
+            style={videoBg}
+            muted={false}
+            onLoadedData={() => setIsMediaLoading(false)}
+            onError={() => {
+              setIsMediaLoading(false);
+              setMediaError(true);
+            }}
+          />
+        </>
       );
     }
 
     if (mediaType === "embed") {
       // Only render iframe when the card is active
       if (!isActive) {
-        return <div style={fallbackBg}></div>;
+        return (
+          <div style={fallbackBg}>
+            Tap to load video
+          </div>
+        );
       }
 
+      // Add loading state for embeds
       return (
-        <iframe
-          key={`${id}-${isActive ? "active" : "inactive"}`}
-          src={getEmbedUrl(mediaUrl, true)}
-          title={dedicationTitle || mediaTitle}
-          style={videoBg}
-          frameBorder="0"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-          allowFullScreen
-        />
+        <>
+          {renderLoading()}
+          <iframe
+            key={`${id}-${isActive ? "active" : "inactive"}`}
+            src={getEmbedUrl(mediaUrl, true)}
+            title={dedicationTitle || mediaTitle}
+            style={videoBg}
+            frameBorder="0"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+            allowFullScreen
+            onLoad={() => setIsMediaLoading(false)}
+            onError={() => {
+              setIsMediaLoading(false);
+              setMediaError(true);
+            }}
+          />
+        </>
       );
     }
 
@@ -931,6 +1038,7 @@ export default function DedicationCard({
                 alt={senderName}
                 style={smallPhotoCircle}
                 onClick={() => setFullImage(senderPhoto)}
+                loading="lazy"
               />
             ) : (
               <div style={smallPlaceholder}>S</div>
@@ -952,6 +1060,7 @@ export default function DedicationCard({
                 alt={recipientName}
                 style={smallPhotoSquare}
                 onClick={() => setFullImage(recipientPhoto)}
+                loading="lazy"
               />
             ) : (
               <div style={smallPlaceholder}>R</div>
