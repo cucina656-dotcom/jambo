@@ -89,11 +89,8 @@ function TV() {
   async function loadDedications() {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/dedications`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
-      });
+      // FIXED: Removed the 'Cache-Control' header that was causing the CORS preflight policy block
+      const res = await fetch(`${API_URL}/api/dedications`);
       const data = await res.json();
       if (data.success && Array.isArray(data.dedications)) {
         setFeed(data.dedications);
@@ -114,7 +111,6 @@ function TV() {
     fileSetter(file);
   }
 
-  // FIXED: No longer overwriting mediaUrl text state with a local blob string
   function handleMediaUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -130,7 +126,6 @@ function TV() {
       return;
     }
 
-    // Check against either a link string or an uploaded file
     if (!mediaUrl.trim() && !mediaFile) {
       alert("Please add media (URL or file upload).");
       return;
@@ -162,12 +157,10 @@ function TV() {
         formData.append("recipient_photo", "");
       }
 
-      // FIXED: Handles native file uploads OR safely parses typed URLs
       if (mediaFile) {
         formData.append("media_file", mediaFile);
       } else if (mediaUrl.trim()) {
         let sanitizedUrl = mediaUrl.trim();
-        // If they omitted http:// or https://, prepend it automatically
         if (!/^https?:\/\//i.test(sanitizedUrl)) {
           sanitizedUrl = `https://${sanitizedUrl}`;
         }
@@ -190,7 +183,6 @@ function TV() {
         setFeed((prev) => [data.dedication, ...prev]);
       }
 
-      // Clean Reset
       setSenderName("");
       setSenderWhatsapp("");
       setSenderPhoto("");
@@ -288,7 +280,6 @@ function TV() {
                 </div>
               </div>
 
-              {/* URL Input */}
               <input 
                 style={inputStyle} 
                 placeholder="Media link (e.g. youtube.com/...)" 
@@ -297,7 +288,6 @@ function TV() {
                 disabled={!!mediaFile}
               />
               
-              {/* Native File Upload Input */}
               <label style={labelStyle}>Or upload song media</label>
               <input 
                 style={fileStyle} 
@@ -307,7 +297,6 @@ function TV() {
                 disabled={!!mediaUrl.trim()}
               />
               
-              {/* Optional indicator if they've uploaded a file */}
               {mediaFile && (
                 <p style={{ fontSize: '12px', color: '#00e676', margin: '-4px 0 10px' }}>
                   ✓ Ready to upload: {mediaFile.name}
@@ -389,7 +378,6 @@ function TV() {
   );
 }
 
-// Styles Objects (Preserved exactly)
 const page = { minHeight: "100svh", background: "#0a0a0a", color: "#ffffff", fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', overflowX: "hidden" };
 const main = { width: "100%", maxWidth: "520px", margin: "0 auto", padding: "72px 0 40px", boxSizing: "border-box" };
 const topSection = { textAlign: "center", marginBottom: "10px", padding: "0 16px" };
