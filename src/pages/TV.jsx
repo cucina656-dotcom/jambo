@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
+
 function TV() {
   const [feed, setFeed] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -18,15 +20,46 @@ function TV() {
   const [message, setMessage] = useState("");
   const [dedicationTitle, setDedicationTitle] = useState("");
   const [badgeStyle, setBadgeStyle] = useState("❤️");
+  const [isLoading, setIsLoading] = useState(true);
+  
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
+
+  // Add preconnect for external media services
+  useEffect(() => {
+    // Add preconnect links for faster external media loading
+    const links = [
+      { rel: 'preconnect', href: 'https://www.youtube.com' },
+      { rel: 'preconnect', href: 'https://www.youtube-nocookie.com' },
+      { rel: 'preconnect', href: 'https://player.vimeo.com' },
+      { rel: 'preconnect', href: 'https://www.dailymotion.com' },
+      { rel: 'preconnect', href: 'https://kitchenbrain.cucina656.workers.dev' },
+    ];
+    
+    links.forEach(({ rel, href }) => {
+      const link = document.createElement('link');
+      link.rel = rel;
+      link.href = href;
+      document.head.appendChild(link);
+    });
+    
+    return () => {
+      links.forEach(({ rel, href }) => {
+        const links = document.querySelectorAll(`link[rel="${rel}"][href="${href}"]`);
+        links.forEach(link => link.remove());
+      });
+    };
+  }, []);
+
   useEffect(() => {
     loadDedications();
   }, []);
+
   // Intersection Observer to track which card is most visible
   useEffect(() => {
     if (!feed.length) return;
+    
     const observer = new IntersectionObserver(
       (entries) => {
         const visibleEntries = entries
@@ -45,17 +78,25 @@ function TV() {
         threshold: [0, 0.25, 0.5, 0.75, 1],
       }
     );
+
     Object.values(cardRefs.current).forEach((element) => {
       if (element) observer.observe(element);
     });
+
     return () => {
       observer.disconnect();
       setActiveIndex(null);
     };
   }, [feed]);
+
   async function loadDedications() {
+    setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/dedications`);
+      const res = await fetch(`${API_URL}/api/dedications`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
       const data = await res.json();
       if (data.success && Array.isArray(data.dedications)) {
         setFeed(data.dedications);
@@ -64,20 +105,25 @@ function TV() {
       }
     } catch (err) {
       console.log("Failed to load dedications", err);
+    } finally {
+      setIsLoading(false);
     }
   }
+
   function handlePhotoUpload(e, setter, fileSetter) {
     const file = e.target.files[0];
     if (!file) return;
     setter(URL.createObjectURL(file));
     fileSetter(file);
   }
+
   function handleMediaUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
     setMediaUrl(URL.createObjectURL(file));
     setMediaFile(file);
   }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (isSubmitting) return;
@@ -98,6 +144,7 @@ function TV() {
       formData.append("message", message);
       formData.append("dedication_title", dedicationTitle || "");
       formData.append("dedication_badge", badgeStyle);
+
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
       } else if (senderPhoto && senderPhoto.startsWith("http")) {
@@ -105,6 +152,7 @@ function TV() {
       } else {
         formData.append("sender_photo", "");
       }
+
       if (recipientPhotoFile) {
         formData.append("recipient_photo_file", recipientPhotoFile);
       } else if (recipientPhoto && recipientPhoto.startsWith("http")) {
@@ -112,24 +160,29 @@ function TV() {
       } else {
         formData.append("recipient_photo", "");
       }
+
       if (mediaFile) {
         formData.append("media_file", mediaFile);
       } else if (mediaUrl && mediaUrl.startsWith("http")) {
         formData.append("media_url", mediaUrl);
       }
+
       const res = await fetch(`${API_URL}/api/dedications`, {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
         return;
       }
+
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
       }
+
       setSenderName("");
       setSenderWhatsapp("");
       setSenderPhoto("");
@@ -150,6 +203,7 @@ function TV() {
       setIsSubmitting(false);
     }
   }
+
   return (
     <div style={page}>
       <Header />
@@ -162,6 +216,20 @@ function TV() {
           backdrop-filter: none !important;
           -webkit-backdrop-filter: none !important;
         }
+        /* Add loading animation keyframes */
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        /* Optimize image loading */
+        .tv-card-wrapper img {
+          will-change: transform, opacity;
+          content-visibility: auto;
+        }
+        /* Lazy load iframes */
+        .tv-card-wrapper iframe {
+          loading: lazy;
+        }
       `}</style>
       <main style={main}>
         <section style={topSection}>
@@ -171,6 +239,7 @@ function TV() {
             🎵 Dedicate a song
           </button>
         </section>
+
         {showForm && (
           <section style={formOverlay}>
             <form onSubmit={handleSubmit} style={formCard}>
@@ -225,13 +294,30 @@ function TV() {
             </form>
           </section>
         )}
+
         <section style={feedSection}>
-          {feed.length === 0 && (
+          {isLoading && (
+            <div style={emptyCard}>
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                border: '3px solid rgba(255,255,255,0.1)', 
+                borderTop: '3px solid #00e676', 
+                borderRadius: '50%',
+                margin: '0 auto 16px',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading dedications...</p>
+            </div>
+          )}
+          
+          {!isLoading && feed.length === 0 && (
             <div style={emptyCard}>
               <h2>No songs yet</h2>
               <p>Be first. Make someone smile.</p>
             </div>
           )}
+          
           {feed.map((item, index) => (
             <div
               key={item.id}
@@ -269,6 +355,7 @@ function TV() {
     </div>
   );
 }
+
 // ==========================================
 // DARK INSTAGRAM-STYLED STYLES
 // ==========================================
@@ -279,6 +366,7 @@ const page = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   overflowX: "hidden",
 };
+
 const main = {
   width: "100%",
   maxWidth: "520px",
@@ -286,11 +374,13 @@ const main = {
   padding: "72px 0 40px",
   boxSizing: "border-box",
 };
+
 const topSection = {
   textAlign: "center",
   marginBottom: "10px",
   padding: "0 16px",
 };
+
 const title = {
   fontSize: "clamp(28px, 8vw, 36px)",
   fontWeight: "900",
@@ -301,6 +391,7 @@ const title = {
   backgroundClip: "text",
   letterSpacing: "-0.5px",
 };
+
 const text = {
   color: "rgba(255,255,255,0.6)",
   lineHeight: "1.45",
@@ -308,6 +399,7 @@ const text = {
   fontSize: "14px",
   fontWeight: "400",
 };
+
 const dedicateBtn = {
   border: "none",
   borderRadius: "999px",
@@ -321,18 +413,21 @@ const dedicateBtn = {
   transition: "transform 0.2s ease",
   letterSpacing: "0.3px",
 };
+
 const feedSection = {
   display: "flex",
   flexDirection: "column",
   gap: "18px",
   padding: "0",
 };
+
 const cardWrapper = {
   width: "calc(100% + 8px)",
   marginLeft: "-4px",
   transform: "translateY(-2px)",
   transition: "all 0.2s ease",
 };
+
 // Form Styles (preserved from original with dark theme)
 const formOverlay = {
   position: "fixed",
@@ -348,6 +443,7 @@ const formOverlay = {
   boxSizing: "border-box",
   overflowY: "auto",
 };
+
 const formCard = {
   width: "100%",
   maxWidth: "430px",
@@ -358,6 +454,7 @@ const formCard = {
   boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
   boxSizing: "border-box",
 };
+
 const formTitle = {
   margin: "0 0 16px",
   fontSize: "22px",
@@ -365,6 +462,7 @@ const formTitle = {
   color: "#ffffff",
   textAlign: "center",
 };
+
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
@@ -378,12 +476,14 @@ const inputStyle = {
   fontSize: "15px",
   transition: "border-color 0.2s ease",
 };
+
 const textareaStyle = {
   ...inputStyle,
   minHeight: "92px",
   resize: "vertical",
   fontFamily: 'inherit',
 };
+
 const labelStyle = {
   display: "block",
   fontSize: "13px",
@@ -391,6 +491,7 @@ const labelStyle = {
   color: "rgba(255,255,255,0.7)",
   margin: "4px 0 6px",
 };
+
 const fileStyle = {
   width: "100%",
   marginBottom: "12px",
@@ -398,13 +499,16 @@ const fileStyle = {
   fontSize: "14px",
   padding: "8px 0",
 };
+
 const badgeContainer = {
   marginBottom: "10px",
 };
+
 const badgeOptions = {
   display: "flex",
   gap: "10px",
 };
+
 const badgeButton = {
   flex: 1,
   padding: "10px 14px",
@@ -416,11 +520,13 @@ const badgeButton = {
   transition: "all 0.2s ease",
   backgroundColor: "rgba(255,255,255,0.05)",
 };
+
 const buttonRow = {
   display: "flex",
   gap: "10px",
   marginTop: "14px",
 };
+
 const submitBtn = {
   flex: 1,
   border: "none",
@@ -433,6 +539,7 @@ const submitBtn = {
   fontSize: "15px",
   transition: "opacity 0.2s ease",
 };
+
 const cancelBtn = {
   flex: 1,
   border: "1px solid rgba(255,255,255,0.12)",
@@ -445,6 +552,7 @@ const cancelBtn = {
   fontSize: "15px",
   transition: "all 0.2s ease",
 };
+
 const emptyCard = {
   padding: "40px 24px",
   borderRadius: "20px",
@@ -452,4 +560,5 @@ const emptyCard = {
   border: "1px solid rgba(255,255,255,0.06)",
   textAlign: "center",
 };
+
 export default TV;
