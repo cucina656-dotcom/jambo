@@ -1,84 +1,62 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus, Heart, MessageSquare, Share2, X } from "lucide-react";
+import { Plus, Heart, MessageSquare, Share2 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
-// ==========================================
-// MEDIA TYPE DETECTION HELPERS
-// ==========================================
-function getMediaType(url) {
-  console.log('[Debug getMediaType] Input URL:', url);
-  
-  if (!url) {
-    console.log('[Debug getMediaType] No URL provided');
-    return 'none';
-  }
-  
-  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
-  if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    console.log('[Debug getMediaType] Detected as video file');
-    return 'video';
-  }
-  
-  const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
-  if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    console.log('[Debug getMediaType] Detected as audio file');
-    return 'audio';
-  }
-  
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
-  if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    console.log('[Debug getMediaType] Detected as image file');
-    return 'image';
-  }
-  
-  if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
-    console.log('[Debug getMediaType] Detected as YouTube');
-    return 'youtube';
-  }
-  
-  if (url.includes('vimeo.com/')) {
-    console.log('[Debug getMediaType] Detected as Vimeo');
-    return 'vimeo';
-  }
-  
-  if (url.includes('dailymotion.com/')) {
-    console.log('[Debug getMediaType] Detected as Dailymotion');
-    return 'dailymotion';
-  }
-  
-  console.log('[Debug getMediaType] Unknown type');
-  return 'unknown';
+function isDirectVideoUrl(url = "") {
+  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".ogg") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".m4v") ||
+    clean.endsWith(".mkv") ||
+    clean.endsWith(".avi")
+  );
 }
 
-function getYouTubeEmbedUrl(url) {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
-    /youtube\.com\/embed\/([^?]+)/
-  ];
+function isImageUrl(url = "") {
+  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  return (
+    clean.endsWith(".jpg") ||
+    clean.endsWith(".jpeg") ||
+    clean.endsWith(".png") ||
+    clean.endsWith(".gif") ||
+    clean.endsWith(".webp") ||
+    clean.endsWith(".bmp") ||
+    clean.endsWith(".svg")
+  );
+}
+
+function getEmbedUrl(url = "", isActive = false) {
+  if (!url) return "";
   
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) {
-      return `https://www.youtube.com/embed/${match[1]}`;
-    }
-  }
-  return url;
-}
+  const autoplay = isActive ? 1 : 0;
 
-function getVimeoEmbedUrl(url) {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  if (match) {
-    return `https://player.vimeo.com/video/${match[1]}`;
+  const youtubeMatch = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  );
+  if (youtubeMatch) {
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
   }
-  return url;
-}
 
-function getDailymotionEmbedUrl(url) {
-  const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
-  if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}`;
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (shortsMatch) {
+    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
   }
+
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${autoplay}&muted=0&controls=1`;
+  }
+
+  const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
+  if (dailymotionMatch) {
+    return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=${autoplay}&mute=0`;
+  }
+
+  if (url.includes("/embed/") || url.includes("player.")) return url;
   return url;
 }
 
@@ -287,6 +265,389 @@ function getFlagFromWhatsapp(number = "") {
   return "🌍";
 }
 
+// Styles
+const card = {
+  backgroundColor: "#141414",
+  borderRadius: "18px",
+  overflow: "hidden",
+  marginBottom: "28px",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.85)",
+  border: "1px solid rgba(255,255,255,0.05)",
+};
+
+const mediaCard = {
+  position: "relative",
+  aspectRatio: "16 / 9",
+  backgroundColor: "#0a0a0a",
+  overflow: "hidden",
+};
+
+const mediaShade = {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  height: "50%",
+  background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+
+const videoBg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  backgroundColor: "#0a0a0a",
+  display: "block",
+};
+
+const imageBg = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  cursor: "pointer",
+  backgroundColor: "#0a0a0a",
+};
+
+const fallbackBg = {
+  width: "100%",
+  height: "100%",
+  backgroundColor: "#1a1a1a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#555",
+  fontSize: "14px",
+};
+
+const topBadge = {
+  position: "absolute",
+  top: "16px",
+  left: "16px",
+  backgroundColor: "rgba(0,0,0,0.7)",
+  backdropFilter: "blur(8px)",
+  padding: "8px 16px",
+  borderRadius: "100px",
+  color: "white",
+  fontSize: "14px",
+  fontWeight: "500",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  border: "1px solid rgba(255,255,255,0.08)",
+  maxWidth: "70%",
+  zIndex: 3,
+};
+
+const badgeDot = {
+  width: "8px",
+  height: "8px",
+  borderRadius: "50%",
+  backgroundColor: "#00e676",
+  display: "inline-block",
+  flexShrink: 0,
+};
+
+const rightActions = {
+  position: "absolute",
+  bottom: "24px",
+  right: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+  zIndex: 5,
+};
+
+const followBtn = {
+  backgroundColor: "rgba(20,20,20,0.6)",
+  backdropFilter: "blur(6px)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  borderRadius: "50%",
+  width: "48px",
+  height: "48px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  cursor: "pointer",
+  transition: "0.2s",
+};
+
+const sideBtn = {
+  backgroundColor: "rgba(20,20,20,0.5)",
+  backdropFilter: "blur(6px)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: "50%",
+  width: "48px",
+  height: "48px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  cursor: "pointer",
+  transition: "0.2s",
+  gap: "0px",
+};
+
+const actionLabel = {
+  fontSize: "10px",
+  fontWeight: "600",
+  color: "rgba(255,255,255,0.8)",
+  lineHeight: "1",
+  marginTop: "1px",
+};
+
+const dedicationBody = {
+  padding: "18px 16px 20px 16px",
+  backgroundColor: "#141414",
+};
+
+const peopleRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: "14px",
+};
+
+const person = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const smallPhotoCircle = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "50%",
+  objectFit: "cover",
+  backgroundColor: "#2a2a2a",
+  border: "2px solid #3a3a3a",
+  cursor: "pointer",
+};
+
+const smallPhotoSquare = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "12px",
+  objectFit: "cover",
+  backgroundColor: "#2a2a2a",
+  border: "2px solid #3a3a3a",
+  cursor: "pointer",
+};
+
+const smallPlaceholder = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "50%",
+  backgroundColor: "#2a2a2a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#888",
+  fontSize: "18px",
+  fontWeight: "600",
+  border: "2px solid #3a3a3a",
+};
+
+const nameEmphasis = {
+  color: "#fff",
+  fontSize: "15px",
+  fontWeight: "600",
+  lineHeight: "1.3",
+};
+
+const roleText = {
+  color: "#888",
+  fontSize: "11px",
+  fontWeight: "400",
+};
+
+const toPill = {
+  backgroundColor: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: "100px",
+  padding: "6px 14px",
+  color: "white",
+  fontSize: "14px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const messageText = {
+  color: "#ddd",
+  fontSize: "15px",
+  lineHeight: "1.5",
+  marginBottom: "14px",
+  fontWeight: "400",
+};
+
+const statsLine = {
+  display: "flex",
+  gap: "18px",
+  color: "#666",
+  fontSize: "13px",
+  marginBottom: "12px",
+};
+
+const commentMainBtn = {
+  width: "100%",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: "100px",
+  padding: "12px 18px",
+  color: "#888",
+  fontSize: "14px",
+  cursor: "pointer",
+  textAlign: "left",
+  transition: "0.2s",
+};
+
+const commentOverlay = {
+  backgroundColor: "#1a1a1a",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+  padding: "16px",
+  marginTop: "4px",
+};
+
+const commentHandleBar = {
+  width: "40px",
+  height: "4px",
+  backgroundColor: "#444",
+  borderRadius: "4px",
+  margin: "0 auto 14px auto",
+};
+
+const commentHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "12px",
+};
+
+const commentTitle = {
+  color: "white",
+  fontSize: "16px",
+  fontWeight: "600",
+  margin: 0,
+};
+
+const closeBtn = {
+  background: "none",
+  border: "none",
+  color: "#888",
+  fontSize: "20px",
+  cursor: "pointer",
+};
+
+const commentsListBox = {
+  maxHeight: "200px",
+  overflowY: "auto",
+  marginBottom: "12px",
+};
+
+const noComments = {
+  color: "#666",
+  fontSize: "14px",
+  textAlign: "center",
+  padding: "16px 0",
+};
+
+const commentItem = {
+  padding: "10px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
+};
+
+const commentFrom = {
+  color: "#888",
+  fontSize: "11px",
+  fontWeight: "500",
+  marginBottom: "4px",
+};
+
+const commentBody = {
+  color: "#ddd",
+  fontSize: "14px",
+};
+
+const writeBox = {
+  paddingTop: "12px",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+};
+
+const commentInputTop = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: "8px",
+  border: "1px solid #333",
+  backgroundColor: "#0a0a0a",
+  color: "white",
+  fontSize: "14px",
+  marginBottom: "8px",
+  boxSizing: "border-box",
+};
+
+const sendRow = {
+  display: "flex",
+  gap: "8px",
+};
+
+const commentInputBottom = {
+  flex: 1,
+  padding: "10px 14px",
+  borderRadius: "8px",
+  border: "1px solid #333",
+  backgroundColor: "#0a0a0a",
+  color: "white",
+  fontSize: "14px",
+};
+
+const sendBtn = {
+  padding: "10px 20px",
+  backgroundColor: "#00e676",
+  color: "black",
+  border: "none",
+  borderRadius: "8px",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+
+const imagePopup = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.92)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999,
+  cursor: "pointer",
+};
+
+const fullImageStyle = {
+  maxWidth: "90%",
+  maxHeight: "90%",
+  objectFit: "contain",
+  borderRadius: "8px",
+};
+
+const closeImageBtn = {
+  position: "absolute",
+  top: "24px",
+  right: "24px",
+  backgroundColor: "rgba(255,255,255,0.1)",
+  border: "none",
+  color: "white",
+  fontSize: "24px",
+  padding: "8px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
 export default function DedicationCard({
   id,
   senderPhoto,
@@ -303,13 +664,12 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
+  isActive = false,
 }) {
-  console.log(`[DedicationCard] Rendering card with ID: ${id}`);
-  console.log(`[DedicationCard] Media URL:`, mediaUrl);
-  
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [writeCommentOpen, setWriteCommentOpen] = useState(false);
   const [commentsList, setCommentsList] = useState([]);
   const [commenterWhatsapp, setCommenterWhatsapp] = useState("");
   const [commentText, setCommentText] = useState("");
@@ -317,135 +677,52 @@ export default function DedicationCard({
   const [hasReacted, setHasReacted] = useState(() => {
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
-  const [isVisible, setIsVisible] = useState(false);
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
-  const mediaType = getMediaType(mediaUrl);
-  
-  console.log(`[DedicationCard] Detected media type for ${id}:`, mediaType);
 
-  // Track visibility with Intersection Observer
-  useEffect(() => {
-    console.log(`[DedicationCard] Setting up visibility observer for ${id}`);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          console.log(`[DedicationCard] ${id} isIntersecting:`, entry.isIntersecting);
-          setIsVisible(entry.isIntersecting);
-        });
-      },
-      { threshold: 0.6, rootMargin: "0px" }
-    );
-    if (cardRef.current) {
-      console.log(`[DedicationCard] Observing card for ${id}`);
-      observer.observe(cardRef.current);
-    } else {
-      console.log(`[DedicationCard] cardRef.current is null for ${id}`);
-    }
-    return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
-      }
-    };
-  }, [id]);
+  // Determine media type
+  const mediaType = mediaUrl ? (
+    isImageUrl(mediaUrl) ? "image" :
+    isDirectVideoUrl(mediaUrl) ? "video" :
+    "embed"
+  ) : "none";
 
-  // ==========================================
-  // VIDEO PLAYBACK CONTROL
-  // ==========================================
+  // ENHANCED: Video playback control - pauses all other videos before playing
   useEffect(() => {
-    console.log(`[Video Debug] Component mounted for ID: ${id}`);
-    console.log(`[Video Debug] mediaType: ${mediaType}`);
-    console.log(`[Video Debug] videoRef.current exists?`, !!videoRef.current);
-    
-    if (!videoRef.current || mediaType !== 'video') {
-      console.log(`[Video Debug] Skipping - no video ref or not video type`);
-      return;
-    }
-    
-    const videoElement = videoRef.current;
-    const videoId = `video-${id}`;
-    
-    console.log(`[Video Debug] Setting up video: ${videoId}`);
-    console.log(`[Video Debug] Video element:`, videoElement);
-    console.log(`[Video Debug] Video src:`, videoElement.src);
-    
-    // Store reference for global management
-    if (!window.__videoRefs) {
-      console.log(`[Video Debug] Creating new videoRefs map`);
-      window.__videoRefs = new Map();
-    }
-    window.__videoRefs.set(videoId, videoElement);
-    console.log(`[Video Debug] Total videos registered:`, window.__videoRefs.size);
-    
-    // Function to check visibility and control playback
-    const checkVisibilityAndPlay = () => {
-      const rect = videoElement.getBoundingClientRect();
-      const isInView = (
-        rect.top >= -100 &&
-        rect.bottom <= window.innerHeight + 100 &&
-        rect.left >= 0 &&
-        rect.right <= window.innerWidth
-      );
-      
-      console.log(`[Video Debug] Video ${videoId}:`, {
-        isInView,
-        rect: { top: rect.top, bottom: rect.bottom, height: rect.height },
-        windowHeight: window.innerHeight,
-        isPaused: videoElement.paused
+    const video = videoRef.current;
+
+    if (mediaType !== "video" || !video) return;
+
+    if (isActive) {
+      // Pause ALL other videos on the page
+      const allVideos = document.querySelectorAll("video");
+      let pausedCount = 0;
+      allVideos.forEach((otherVideo) => {
+        if (otherVideo !== video && !otherVideo.paused) {
+          otherVideo.pause();
+          pausedCount++;
+        }
       });
       
-      if (isInView) {
-        console.log(`[Video Debug] ${videoId} IS in view - playing`);
-        // Pause all other videos
-        window.__videoRefs.forEach((ref, refId) => {
-          if (refId !== videoId && ref && !ref.paused) {
-            console.log(`[Video Debug] Pausing other video: ${refId}`);
-            ref.pause();
-          }
-        });
-        // Play this video
-        if (videoElement.paused) {
-          videoElement.play()
-            .then(() => console.log(`[Video Debug] ${videoId} started playing`))
-            .catch(err => console.log(`[Video Debug] Play prevented for ${videoId}:`, err));
-        }
-      } else {
-        console.log(`[Video Debug] ${videoId} NOT in view - pausing`);
-        if (!videoElement.paused) {
-          videoElement.pause();
-          console.log(`[Video Debug] ${videoId} paused`);
-        }
+      // Play this video
+      video.play().catch((err) => {
+        console.log(`Video ${id} play prevented:`, err);
+      });
+    } else {
+      // Pause this video when inactive
+      if (!video.paused) {
+        video.pause();
       }
-    };
-    
-    // Add scroll and resize listeners
-    window.addEventListener('scroll', checkVisibilityAndPlay, { passive: true });
-    window.addEventListener('resize', checkVisibilityAndPlay, { passive: true });
-    
-    // Initial check after a short delay
-    setTimeout(() => {
-      console.log(`[Video Debug] Running initial check for ${videoId}`);
-      checkVisibilityAndPlay();
-    }, 500);
-    
+    }
+
+    // Cleanup: pause video when component unmounts
     return () => {
-      console.log(`[Video Debug] Cleaning up ${videoId}`);
-      window.removeEventListener('scroll', checkVisibilityAndPlay);
-      window.removeEventListener('resize', checkVisibilityAndPlay);
-      // Only delete if it's still the same reference
-      if (window.__videoRefs?.get(videoId) === videoElement) {
-        window.__videoRefs.delete(videoId);
-        console.log(`[Video Debug] Removed ${videoId} from registry`);
-      }
-      // Clean up if no videos left
-      if (window.__videoRefs && window.__videoRefs.size === 0) {
-        delete window.__videoRefs;
-        console.log(`[Video Debug] Cleaned up empty videoRefs`);
+      if (video && !video.paused) {
+        video.pause();
       }
     };
-  }, [id, mediaType]);
+  }, [isActive, mediaType, id]);
 
   async function loadComments() {
     if (!id) return;
@@ -489,11 +766,8 @@ export default function DedicationCard({
     if (!id) return alert("Missing dedication ID");
     if (!commenterWhatsapp.trim()) return alert("Enter your WhatsApp number first.");
     if (!commentText.trim()) return;
-
-    setIsSubmittingComment(true);
     const textToSend = commentText.trim();
     const whatsappToSend = commenterWhatsapp.trim();
-
     const newComment = {
       id: Date.now(),
       dedication_id: id,
@@ -501,11 +775,9 @@ export default function DedicationCard({
       commenter_whatsapp: whatsappToSend,
       created_at: new Date().toISOString(),
     };
-
     setCommentsList((prev) => [newComment, ...prev]);
     setComments((v) => v + 1);
     setCommentText("");
-
     try {
       const res = await fetch(`${API_URL}/api/dedications/comment`, {
         method: "POST",
@@ -520,26 +792,23 @@ export default function DedicationCard({
       if (!data.success) {
         setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
         setComments((v) => v - 1);
-        alert(data.message || "Failed to post comment");
       }
-    } catch (error) {
-      console.error("Comment error:", error);
+    } catch {
       setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
       setComments((v) => v - 1);
-      alert("Network error. Please try again.");
-    } finally {
-      setIsSubmittingComment(false);
     }
   }
 
-  function openComments() {
+  function openViewCommentsOnly() {
     setCommentsOpen(true);
+    setWriteCommentOpen(false);
     loadComments();
   }
 
-  function closeComments() {
-    setCommentsOpen(false);
-    setCommentText("");
+  function openWriteComment() {
+    setCommentsOpen(true);
+    setWriteCommentOpen(true);
+    loadComments();
   }
 
   function shareToWhatsApp() {
@@ -549,763 +818,229 @@ export default function DedicationCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
-  function renderMedia() {
-    console.log(`[renderMedia] Rendering for ${id}, mediaType: ${mediaType}`);
-    
+  // Render media based on type
+  const renderMedia = () => {
     if (!mediaUrl) {
+      return <div style={fallbackBg}></div>;
+    }
+
+    if (mediaType === "image") {
       return (
-        <div style={fallbackBg}>
-          <div style={fallbackContent}>
-            <span style={fallbackIcon}>🎵</span>
-            <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
-          </div>
-        </div>
+        <img
+          src={mediaUrl}
+          alt={dedicationTitle || mediaTitle}
+          style={imageBg}
+          onClick={() => setFullImage(mediaUrl)}
+        />
       );
     }
 
-    switch (mediaType) {
-      case 'youtube':
-        return (
-          <iframe
-            src={getYouTubeEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'vimeo':
-        return (
-          <iframe
-            src={getVimeoEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'dailymotion':
-        return (
-          <iframe
-            src={getDailymotionEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'video':
-        console.log(`[Video Debug] Rendering video element for ${id}`);
-        console.log(`[Video Debug] Media URL:`, mediaUrl);
-        return (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            autoPlay={false}
-            muted
-            loop={false}
-            crossOrigin="anonymous"
-            preload="metadata"
-            style={videoBg}
-            onLoadedMetadata={() => console.log(`[Video Debug] ${id} metadata loaded`)}
-            onError={(e) => console.error(`[Video Debug] ${id} video error:`, e)}
-          />
-        );
-      
-      case 'audio':
-        return (
-          <div style={audioContainerStyle}>
-            <div style={audioCardStyle}>
-              <div style={audioIconStyle}>🎵</div>
-              <audio
-                src={mediaUrl}
-                controls
-                style={audioControlStyle}
-              />
-              <div style={audioTitleStyle}>{dedicationTitle || mediaTitle}</div>
-            </div>
-          </div>
-        );
-      
-      case 'image':
-        return (
-          <img
-            src={mediaUrl}
-            alt={dedicationTitle || mediaTitle}
-            style={imageBgStyle}
-            loading="lazy"
-          />
-        );
-      
-      default:
-        return (
-          <div style={fallbackBg}>
-            <div style={fallbackContent}>
-              <span style={fallbackIcon}>🎵</span>
-              <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
-            </div>
-          </div>
-        );
+    if (mediaType === "video") {
+      return (
+        <video
+          ref={videoRef}
+          src={mediaUrl}
+          controls
+          playsInline
+          preload="metadata"
+          style={videoBg}
+          muted={false}
+        />
+      );
     }
-  }
+
+    if (mediaType === "embed") {
+      // Only render iframe when the card is active to save resources
+      if (!isActive) {
+        return <div style={fallbackBg}></div>;
+      }
+
+      return (
+        <iframe
+          key={`${id}-${isActive ? "active" : "inactive"}`}
+          src={getEmbedUrl(mediaUrl, true)}
+          title={dedicationTitle || mediaTitle}
+          style={videoBg}
+          frameBorder="0"
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+          allowFullScreen
+        />
+      );
+    }
+
+    return <div style={fallbackBg}></div>;
+  };
 
   return (
     <div ref={cardRef} style={card}>
-      {/* Instagram Header */}
-      <div style={instagramHeader}>
-        <div style={person}>
-          {senderPhoto ? (
-            <img
-              src={senderPhoto}
-              alt={senderName}
-              style={smallPhotoCircle}
-              onClick={() => setFullImage(senderPhoto)}
-            />
-          ) : (
-            <div style={smallPlaceholder}>S</div>
-          )}
-          <div>
-            <div style={nameEmphasis}>
-              {senderName || "Sender"} {flag}
-            </div>
-            <div style={roleText}>Sender</div>
-          </div>
-        </div>
-        
-        <button type="button" onClick={react} style={toPill}>
-          <span>to</span>
-        </button>
-
-        <div style={person}>
-          {recipientPhoto ? (
-            <img
-              src={recipientPhoto}
-              alt={recipientName}
-              style={smallPhotoCircle}
-              onClick={() => setFullImage(recipientPhoto)}
-            />
-          ) : (
-            <div style={smallPlaceholder}>R</div>
-          )}
-          <div>
-            <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
-            <div style={roleText}>Recipient</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Media */}
       <div style={mediaCard}>
         {renderMedia()}
+        <div style={mediaShade}></div>
         <div style={topBadge}>
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
-      </div>
+        <div style={rightActions}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDedicateClick) onDedicateClick();
+            }}
+            style={followBtn}
+            aria-label="Dedicate Song"
+          >
+            <Plus size={23} strokeWidth={2.5} color="white" />
+          </button>
 
-      {/* Action Buttons */}
-      <div style={instagramActionBar}>
-        <div style={leftActionsRow}>
-          <button type="button" onClick={react} style={inlineActionBtn} aria-label="Like">
+          <button
+            type="button"
+            onClick={react}
+            style={sideBtn}
+            aria-label="Like"
+          >
             <Heart
               size={24}
-              strokeWidth={2}
-              fill={hasReacted ? "#ED4956" : "none"}
-              color={hasReacted ? "#ED4956" : "#ffffff"}
+              strokeWidth={2.4}
+              fill={hasReacted ? "white" : "none"}
+              color="white"
             />
+            <span style={actionLabel}>{reactions}</span>
           </button>
-          <button type="button" onClick={openComments} style={inlineActionBtn} aria-label="Comments">
-            <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
+
+          <button
+            type="button"
+            onClick={openViewCommentsOnly}
+            style={sideBtn}
+            aria-label="Comments"
+          >
+            <MessageSquare size={24} strokeWidth={2.4} color="white" />
+            <span style={actionLabel}>{comments}</span>
           </button>
-          <button type="button" onClick={shareToWhatsApp} style={inlineActionBtn} aria-label="Share">
-            <Share2 size={24} strokeWidth={2} color="#ffffff" />
+
+          <button
+            type="button"
+            onClick={shareToWhatsApp}
+            style={sideBtn}
+            aria-label="Share"
+          >
+            <Share2 size={24} strokeWidth={2.4} color="white" />
+            <span style={actionLabel}>Share</span>
           </button>
         </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onDedicateClick) onDedicateClick();
-          }}
-          style={inlineActionBtn}
-          aria-label="Dedicate Song"
-        >
-          <Plus size={24} strokeWidth={2} color="#ffffff" />
-        </button>
       </div>
-
-      {/* Stats and Message */}
       <div style={dedicationBody}>
-        <div style={statsLine}>
-          <span>{reactions.toLocaleString()} likes</span>
-          <span>•</span>
-          <span>{views.toLocaleString()} views</span>
+        <div style={peopleRow}>
+          <div style={person}>
+            {senderPhoto ? (
+              <img
+                src={senderPhoto}
+                alt={senderName}
+                style={smallPhotoCircle}
+                onClick={() => setFullImage(senderPhoto)}
+              />
+            ) : (
+              <div style={smallPlaceholder}>S</div>
+            )}
+            <div>
+              <div style={nameEmphasis}>
+                {senderName || "Sender"} {flag}
+              </div>
+              <div style={roleText}>Sender</div>
+            </div>
+          </div>
+          <button type="button" onClick={react} style={toPill}>
+            <span>❤️</span>
+          </button>
+          <div style={person}>
+            {recipientPhoto ? (
+              <img
+                src={recipientPhoto}
+                alt={recipientName}
+                style={smallPhotoSquare}
+                onClick={() => setFullImage(recipientPhoto)}
+              />
+            ) : (
+              <div style={smallPlaceholder}>R</div>
+            )}
+            <div>
+              <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
+              <div style={roleText}>to</div>
+            </div>
+          </div>
         </div>
-
         <p style={messageText}>
-          <span style={{ fontWeight: "700", marginRight: "6px" }}>{senderName || "Sender"}:</span>
           {message || "I chose this song because it reminds me of you."}
         </p>
-
-        <button type="button" onClick={openComments} style={commentMainBtn}>
-          View all {comments} comments...
+        <div style={statsLine}>
+          <span>👁 {views.toLocaleString()} views</span>
+          <span>💬 {comments}</span>
+        </div>
+        <button type="button" onClick={openWriteComment} style={commentMainBtn}>
+          Add a public comment...
         </button>
       </div>
-
-      {/* Comments Overlay */}
       {commentsOpen && (
-        <div style={commentOverlay} onClick={(e) => {
-          if (e.target === e.currentTarget) closeComments();
-        }}>
+        <div style={commentOverlay}>
           <div style={commentHandleBar}></div>
           <div style={commentHeader}>
-            <h3 style={commentTitle}>Comments</h3>
+            <h3 style={commentTitle}>Comments ({comments})</h3>
             <button
               type="button"
-              onClick={closeComments}
+              onClick={() => {
+                setCommentsOpen(false);
+                setWriteCommentOpen(false);
+              }}
               style={closeBtn}
             >
-              <X size={20} color="#ffffff" />
+              ✕
             </button>
           </div>
-          
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
-              <p style={noComments}>No comments yet. Be the first! 💬</p>
+              <p style={noComments}>Be the first to comment on this dedication.</p>
             ) : (
               commentsList.map((comment) => (
                 <div key={comment.id} style={commentItem}>
-                  <div style={commentHeaderRow}>
-                    <div style={commentAvatar}>
-                      {getFlagFromWhatsapp(comment.commenter_whatsapp || "")}
-                    </div>
-                    <div style={commentContent}>
-                      <div style={commentFrom}>Anonymous Fan</div>
-                      <div style={commentBody}>{comment.comment}</div>
-                    </div>
+                  <div style={commentFrom}>
+                    From {getFlagFromWhatsapp(comment.commenter_whatsapp || "")}
                   </div>
+                  <div style={commentBody}>{comment.comment}</div>
                 </div>
               ))
             )}
           </div>
-
-          {/* Comment Input */}
-          <div style={writeBox}>
-            <input
-              value={commenterWhatsapp}
-              onChange={(e) => setCommenterWhatsapp(e.target.value)}
-              placeholder="📱 WhatsApp number (e.g +250788123456)"
-              style={commentInputTop}
-            />
-            <div style={sendRow}>
+          {writeCommentOpen && (
+            <div style={writeBox}>
               <input
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Write a comment..."
-                style={commentInputBottom}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendComment();
-                  }
-                }}
+                value={commenterWhatsapp}
+                onChange={(e) => setCommenterWhatsapp(e.target.value)}
+                placeholder="WhatsApp e.g +250788123456"
+                style={commentInputTop}
               />
-              <button 
-                type="button" 
-                onClick={sendComment} 
-                style={sendBtn}
-                disabled={isSubmittingComment || !commentText.trim()}
-              >
-                {isSubmittingComment ? "Sending..." : "Post"}
-              </button>
+              <div style={sendRow}>
+                <input
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Write comment..."
+                  style={commentInputBottom}
+                />
+                <button type="button" onClick={sendComment} style={sendBtn}>
+                  Send
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
-
-      {/* Full Image Popup */}
       {fullImage && (
         <div style={imagePopup} onClick={() => setFullImage(null)}>
           <img src={fullImage} alt="Full view" style={fullImageStyle} />
-          <button type="button" style={closeImageBtn} onClick={() => setFullImage(null)}>
-            <X size={24} color="#ffffff" />
+          <button type="button" style={closeImageBtn}>
+            ✕
           </button>
         </div>
       )}
     </div>
   );
 }
-
-// ==========================================
-// STYLES
-// ==========================================
-const card = {
-  position: "relative",
-  width: "100%",
-  maxWidth: "430px",
-  margin: "0 auto 18px auto",
-  overflow: "hidden",
-  background: "#000000",
-  color: "#ffffff",
-  borderRadius: "0px",
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  WebkitFontSmoothing: "antialiased",
-};
-
-const instagramHeader = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px",
-  background: "#000000",
-  borderBottom: "1px solid #1c1c1e",
-};
-
-const mediaCard = {
-  position: "relative",
-  width: "100%",
-  aspectRatio: "1 / 1", 
-  overflow: "hidden",
-  background: "#000000",
-};
-
-const videoBg = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  objectPosition: "center center",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const iframeStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const imageBgStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const audioContainerStyle = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(145deg, #1a1a1a, #0a0a0a)",
-  zIndex: 0,
-  padding: "20px",
-};
-
-const audioCardStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "16px",
-  width: "100%",
-  maxWidth: "320px",
-};
-
-const audioIconStyle = {
-  fontSize: "48px",
-  marginBottom: "8px",
-};
-
-const audioControlStyle = {
-  width: "100%",
-  height: "48px",
-  background: "transparent",
-};
-
-const audioTitleStyle = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const fallbackBg = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#262626",
-  zIndex: 0,
-};
-
-const fallbackContent = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const fallbackIcon = {
-  fontSize: "48px",
-};
-
-const fallbackText = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const topBadge = {
-  position: "absolute",
-  bottom: "14px",
-  left: "14px",
-  zIndex: 2,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  padding: "4px 8px",
-  borderRadius: "4px",
-  background: "rgba(0, 0, 0, 0.75)",
-  color: "#ffffff",
-  fontSize: "11px",
-  fontWeight: "600",
-};
-
-const badgeDot = {
-  width: "6px",
-  height: "6px",
-  borderRadius: "50%",
-  background: "#0095f6",
-  flexShrink: 0,
-};
-
-const instagramActionBar = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px 8px 14px",
-  background: "#000000",
-};
-
-const leftActionsRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const inlineActionBtn = {
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const dedicationBody = {
-  padding: "0px 14px 16px 14px",
-  background: "#000000",
-};
-
-const person = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  minWidth: 0,
-};
-
-const nameEmphasis = {
-  fontWeight: "600",
-  fontSize: "13px",
-  color: "#ffffff",
-  lineHeight: 1.2,
-  maxWidth: "110px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const roleText = {
-  fontSize: "11px",
-  color: "#a8a8a8",
-};
-
-const smallPhotoCircle = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  border: "1px solid #262626",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const smallPlaceholder = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  background: "#262626",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "12px",
-  fontWeight: "600",
-  flexShrink: 0,
-};
-
-const toPill = {
-  padding: "4px 12px",
-  borderRadius: "8px",
-  background: "#1c1c1e",
-  color: "#ffffff",
-  fontSize: "12px",
-  fontWeight: "600",
-  border: "none",
-  flexShrink: 0,
-};
-
-const messageText = {
-  margin: "6px 0 0 0",
-  fontSize: "14px",
-  lineHeight: "1.4",
-  color: "#f5f5f5",
-  wordBreak: "break-word",
-};
-
-const statsLine = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  fontSize: "14px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const commentMainBtn = {
-  background: "none",
-  border: "none",
-  color: "#a8a8a8",
-  padding: "6px 0 0 0",
-  fontSize: "14px",
-  textAlign: "left",
-  cursor: "pointer",
-  display: "block",
-  transition: "color 0.2s ease",
-};
-
-const commentOverlay = {
-  position: "fixed",
-  left: "50%",
-  transform: "translateX(-50%)",
-  bottom: 0,
-  width: "100%",
-  maxWidth: "430px",
-  height: "70svh",
-  zIndex: 1000,
-  background: "#1c1c1e",
-  borderTopLeftRadius: "16px",
-  borderTopRightRadius: "16px",
-  padding: "0 16px 16px 16px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  animation: "slideUp 0.3s ease",
-};
-
-const commentHandleBar = {
-  width: "36px",
-  height: "4px",
-  background: "#3a3a3c",
-  borderRadius: "999px",
-  margin: "8px auto 12px auto",
-  flexShrink: 0,
-};
-
-const commentHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingBottom: "12px",
-  borderBottom: "1px solid #2c2c2e",
-  flexShrink: 0,
-};
-
-const commentTitle = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const closeBtn = {
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "4px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const commentsListBox = {
-  flex: 1,
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "14px",
-  padding: "14px 0",
-  WebkitOverflowScrolling: "touch",
-};
-
-const commentHeaderRow = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "12px",
-};
-
-const commentAvatar = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "50%",
-  background: "#2c2c2e",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "20px",
-  flexShrink: 0,
-  border: "2px solid #3a3a3c",
-};
-
-const commentContent = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-};
-
-const commentItem = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-};
-
-const commentFrom = {
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#a8a8a8",
-};
-
-const commentBody = {
-  fontSize: "14px",
-  color: "#ffffff",
-  wordBreak: "break-word",
-};
-
-const noComments = {
-  textAlign: "center",
-  color: "#a8a8a8",
-  fontSize: "14px",
-  marginTop: "32px",
-};
-
-const writeBox = {
-  borderTop: "1px solid #2c2c2e",
-  paddingTop: "12px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  flexShrink: 0,
-  background: "#1c1c1e",
-};
-
-const sendRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "10px",
-  alignItems: "center",
-};
-
-const commentInputTop = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #2c2c2e",
-  borderRadius: "8px",
-  background: "#000000",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 12px",
-  fontSize: "13px",
-};
-
-const commentInputBottom = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "none",
-  background: "transparent",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 0",
-  fontSize: "14px",
-};
-
-const sendBtn = {
-  border: "none",
-  background: "none",
-  color: "#0095f6",
-  fontWeight: "600",
-  fontSize: "14px",
-  cursor: "pointer",
-  padding: "8px 12px",
-  opacity: 1,
-  transition: "opacity 0.2s ease",
-};
-
-const imagePopup = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  background: "rgba(0,0,0,0.95)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "16px",
-};
-
-const fullImageStyle = {
-  maxWidth: "100%",
-  maxHeight: "85vh",
-  objectFit: "contain",
-};
-
-const closeImageBtn = {
-  position: "fixed",
-  top: "16px",
-  right: "16px",
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "8px",
-};
