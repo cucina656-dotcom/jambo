@@ -25,6 +25,9 @@ function TV() {
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
+  
+  // Ref to track which video is currently playing
+  const currentlyPlayingRef = useRef(null);
 
   // Add preconnect for external media services
   useEffect(() => {
@@ -86,10 +89,80 @@ function TV() {
     };
   }, [feed]);
 
+  // Auto-pause videos when scrolling away
+  useEffect(() => {
+    // Function to pause all videos except the active one
+    const handleScroll = () => {
+      const videoElements = document.querySelectorAll('video');
+      const audioElements = document.querySelectorAll('audio');
+      const iframeElements = document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"]');
+      
+      // Get the active card element
+      const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
+      
+      // Pause all videos/audios that are not in the active card
+      [...videoElements, ...audioElements].forEach(mediaElement => {
+        const card = mediaElement.closest('.tv-card-wrapper');
+        if (card && card.dataset.index !== String(activeIndex)) {
+          if (!mediaElement.paused) {
+            mediaElement.pause();
+            // Reset the currently playing ref
+            if (currentlyPlayingRef.current === mediaElement) {
+              currentlyPlayingRef.current = null;
+            }
+          }
+        }
+      });
+
+      // Handle iframes (YouTube, Vimeo, etc.)
+      iframeElements.forEach(iframe => {
+        const card = iframe.closest('.tv-card-wrapper');
+        if (card && card.dataset.index !== String(activeIndex)) {
+          // For iframes, we need to use postMessage to pause
+          try {
+            iframe.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+            iframe.contentWindow?.postMessage('{"method":"pause"}', '*');
+          } catch (e) {
+            // Silent fail for cross-origin
+          }
+        }
+      });
+    };
+
+    // Debounce the scroll handler for performance
+    let timeoutId;
+    const debouncedScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 100);
+    };
+
+    window.addEventListener('scroll', debouncedScroll, { passive: true });
+    window.addEventListener('touchmove', debouncedScroll, { passive: true });
+    
+    // Also handle when activeIndex changes
+    handleScroll();
+
+    return () => {
+      window.removeEventListener('scroll', debouncedScroll);
+      window.removeEventListener('touchmove', debouncedScroll);
+      clearTimeout(timeoutId);
+    };
+  }, [activeIndex]);
+
+  // Function to register a playing media element
+  const registerPlayingMedia = (mediaElement) => {
+    // Pause any currently playing media
+    if (currentlyPlayingRef.current && currentlyPlayingRef.current !== mediaElement) {
+      if (!currentlyPlayingRef.current.paused) {
+        currentlyPlayingRef.current.pause();
+      }
+    }
+    currentlyPlayingRef.current = mediaElement;
+  };
+
   async function loadDedications() {
     setIsLoading(true);
     try {
-      // FIXED: Removed the 'Cache-Control' header that was causing the CORS preflight policy block
       const res = await fetch(`${API_URL}/api/dedications`);
       const data = await res.json();
       if (data.success && Array.isArray(data.dedications)) {
@@ -369,6 +442,7 @@ function TV() {
                 onDedicateClick={() => {
                   setShowForm(true);
                 }}
+                onMediaPlay={registerPlayingMedia}
               />
             </div>
           ))}
