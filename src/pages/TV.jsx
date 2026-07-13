@@ -1,1203 +1,404 @@
-import { useState, useRef, useEffect } from "react";
-import { Plus, Heart, MessageSquare, Share2, X } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import Header from "../components/Header";
+import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
-// ==========================================
-// MEDIA TYPE DETECTION HELPERS
-// ==========================================
-function getMediaType(url) {
-  if (!url) return 'none';
+function TV() {
+  const [feed, setFeed] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [senderName, setSenderName] = useState("");
+  const [senderWhatsapp, setSenderWhatsapp] = useState("");
+  const [senderPhoto, setSenderPhoto] = useState("");
+  const [senderPhotoFile, setSenderPhotoFile] = useState(null);
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhoto, setRecipientPhoto] = useState("");
+  const [recipientPhotoFile, setRecipientPhotoFile] = useState(null);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaFile, setMediaFile] = useState(null);
+  const [message, setMessage] = useState("");
+  const [dedicationTitle, setDedicationTitle] = useState("");
+  const [badgeStyle, setBadgeStyle] = useState("❤️");
+  const [isLoading, setIsLoading] = useState(true);
   
-  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
-  if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    return 'video';
-  }
-  
-  const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
-  if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    return 'audio';
-  }
-  
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
-  if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
-    return 'image';
-  }
-  
-  if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
-    return 'youtube';
-  }
-  
-  if (url.includes('vimeo.com/')) {
-    return 'vimeo';
-  }
-  
-  if (url.includes('dailymotion.com/')) {
-    return 'dailymotion';
-  }
-  
-  return 'unknown';
-}
+  // Refs for Intersection Observer
+  const cardRefs = useRef({});
+  const [activeIndex, setActiveIndex] = useState(null);
 
-function getYouTubeEmbedUrl(url) {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
-    /youtube\.com\/embed\/([^?]+)/
-  ];
-  
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) {
-      return `https://www.youtube.com/embed/${match[1]}`;
-    }
-  }
-  return url;
-}
-
-function getVimeoEmbedUrl(url) {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  if (match) {
-    return `https://player.vimeo.com/video/${match[1]}`;
-  }
-  return url;
-}
-
-function getDailymotionEmbedUrl(url) {
-  const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
-  if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}`;
-  }
-  return url;
-}
-
-function getFlagFromWhatsapp(number = "") {
-  // Africa
-  if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿";
-  if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴";
-  if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯";
-  if (number.startsWith("+267") || number.startsWith("267")) return "🇧🇼";
-  if (number.startsWith("+226") || number.startsWith("226")) return "🇧🇫";
-  if (number.startsWith("+257") || number.startsWith("257")) return "🇧🇮";
-  if (number.startsWith("+237") || number.startsWith("237")) return "🇨🇲";
-  if (number.startsWith("+238") || number.startsWith("238")) return "🇨🇻";
-  if (number.startsWith("+236") || number.startsWith("236")) return "🇨🇫";
-  if (number.startsWith("+235") || number.startsWith("235")) return "🇹🇩";
-  if (number.startsWith("+269") || number.startsWith("269")) return "🇰🇲";
-  if (number.startsWith("+242") || number.startsWith("242")) return "🇨🇬";
-  if (number.startsWith("+243") || number.startsWith("243")) return "🇨🇩";
-  if (number.startsWith("+225") || number.startsWith("225")) return "🇨🇮";
-  if (number.startsWith("+253") || number.startsWith("253")) return "🇩🇯";
-  if (number.startsWith("+20") || number.startsWith("20")) return "🇪🇬";
-  if (number.startsWith("+240") || number.startsWith("240")) return "🇬🇶";
-  if (number.startsWith("+291") || number.startsWith("291")) return "🇪🇷";
-  if (number.startsWith("+268") || number.startsWith("268")) return "🇸🇿";
-  if (number.startsWith("+251") || number.startsWith("251")) return "🇪🇹";
-  if (number.startsWith("+241") || number.startsWith("241")) return "🇬🇦";
-  if (number.startsWith("+220") || number.startsWith("220")) return "🇬🇲";
-  if (number.startsWith("+233") || number.startsWith("233")) return "🇬🇭";
-  if (number.startsWith("+224") || number.startsWith("224")) return "🇬🇳";
-  if (number.startsWith("+245") || number.startsWith("245")) return "🇬🇼";
-  if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪";
-  if (number.startsWith("+266") || number.startsWith("266")) return "🇱🇸";
-  if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷";
-  if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾";
-  if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬";
-  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼";
-  if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱";
-  if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷";
-  if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺";
-  if (number.startsWith("+212") || number.startsWith("212")) return "🇲🇦";
-  if (number.startsWith("+258") || number.startsWith("258")) return "🇲🇿";
-  if (number.startsWith("+264") || number.startsWith("264")) return "🇳🇦";
-  if (number.startsWith("+227") || number.startsWith("227")) return "🇳🇪";
-  if (number.startsWith("+234") || number.startsWith("234")) return "🇳🇬";
-  if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼";
-  if (number.startsWith("+239") || number.startsWith("239")) return "🇸🇹";
-  if (number.startsWith("+221") || number.startsWith("221")) return "🇸🇳";
-  if (number.startsWith("+248") || number.startsWith("248")) return "🇸🇨";
-  if (number.startsWith("+232") || number.startsWith("232")) return "🇸🇱";
-  if (number.startsWith("+252") || number.startsWith("252")) return "🇸🇴";
-  if (number.startsWith("+27") || number.startsWith("27")) return "🇿🇦";
-  if (number.startsWith("+211") || number.startsWith("211")) return "🇸🇸";
-  if (number.startsWith("+249") || number.startsWith("249")) return "🇸🇩";
-  if (number.startsWith("+255") || number.startsWith("255")) return "🇹🇿";
-  if (number.startsWith("+228") || number.startsWith("228")) return "🇹🇬";
-  if (number.startsWith("+216") || number.startsWith("216")) return "🇹🇳";
-  if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬";
-  if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲";
-  if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼";
-  // Asia
-  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫";
-  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲";
-  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿";
-  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭";
-  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩";
-  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹";
-  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳";
-  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭";
-  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳";
-  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾";
-  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳";
-  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩";
-  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷";
-  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶";
-  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱";
-  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵";
-  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿";
-  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼";
-  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬";
-  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦";
-  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧";
-  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾";
-  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻";
-  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳";
-  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲";
-  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵";
-  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵";
-  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲";
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰";
-  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸";
-  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭";
-  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦";
-  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦";
-  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬";
-  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷";
-  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰";
-  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾";
-  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼";
-  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯";
-  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭";
-  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱";
-  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷";
-  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲";
-  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪";
-  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿";
-  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳";
-  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪";
-  // Europe
-  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱";
-  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩";
-  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹";
-  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾";
-  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪";
-  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦";
-  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬";
-  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷";
-  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿";
-  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰";
-  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪";
-  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮";
-  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷";
-  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪";
-  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷";
-  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺";
-  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸";
-  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪";
-  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹";
-  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰";
-  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻";
-  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮";
-  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹";
-  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺";
-  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹";
-  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩";
-  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨";
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪";
-  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱";
-  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰";
-  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴";
-  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱";
-  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹";
-  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺";
-  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲";
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸";
-  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰";
-  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮";
-  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸";
-  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪";
-  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭";
-  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦";
-  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧";
-  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦";
-  // North America
-  if (number.startsWith("+1") || number.startsWith("1")) {
-    if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸";
-    if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧";
-    if (number.startsWith("+1441") || number.startsWith("1441")) return "🇧🇲";
-    if (number.startsWith("+1284") || number.startsWith("1284")) return "🇻🇬";
-    if (number.startsWith("+1345") || number.startsWith("1345")) return "🇰🇾";
-    if (number.startsWith("+1767") || number.startsWith("1767")) return "🇩🇲";
-    if (number.startsWith("+1809") || number.startsWith("1809")) return "🇩🇴";
-    if (number.startsWith("+1876") || number.startsWith("1876")) return "🇯🇲";
-    if (number.startsWith("+1664") || number.startsWith("1664")) return "🇲🇸";
-    if (number.startsWith("+1787") || number.startsWith("1787")) return "🇵🇷";
-    if (number.startsWith("+1868") || number.startsWith("1868")) return "🇹🇹";
-    if (number.startsWith("+1649") || number.startsWith("1649")) return "🇹🇨";
-    if (number.startsWith("+1340") || number.startsWith("1340")) return "🇻🇮";
-    return "🇺🇸";
-  }
-  if (number.startsWith("+52") || number.startsWith("52")) return "🇲🇽";
-  if (number.startsWith("+501") || number.startsWith("501")) return "🇧🇿";
-  if (number.startsWith("+506") || number.startsWith("506")) return "🇨🇷";
-  if (number.startsWith("+53") || number.startsWith("53")) return "🇨🇺";
-  if (number.startsWith("+503") || number.startsWith("503")) return "🇸🇻";
-  if (number.startsWith("+502") || number.startsWith("502")) return "🇬🇹";
-  if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳";
-  if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮";
-  if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦";
-  // South America
-  if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷";
-  if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴";
-  if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷";
-  if (number.startsWith("+56") || number.startsWith("56")) return "🇨🇱";
-  if (number.startsWith("+57") || number.startsWith("57")) return "🇨🇴";
-  if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨";
-  if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾";
-  if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾";
-  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪";
-  if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷";
-  if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾";
-  if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪";
-  // Oceania
-  if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺";
-  if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯";
-  if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲";
-  if (number.startsWith("+674") || number.startsWith("674")) return "🇳🇷";
-  if (number.startsWith("+64") || number.startsWith("64")) return "🇳🇿";
-  if (number.startsWith("+675") || number.startsWith("675")) return "🇵🇬";
-  if (number.startsWith("+685") || number.startsWith("685")) return "🇼🇸";
-  if (number.startsWith("+677") || number.startsWith("677")) return "🇸🇧";
-  if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴";
-  if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻";
-  if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺";
-  return "🌍";
-}
-
-export default function DedicationCard({
-  id,
-  senderPhoto,
-  senderName,
-  senderWhatsapp,
-  recipientName,
-  recipientPhoto,
-  dedicationTitle = "",
-  message,
-  mediaTitle = "Dedicated Song",
-  mediaUrl = "",
-  views = 0,
-  reactionCount = 0,
-  commentCount = 0,
-  badgeStyle = "❤️",
-  onDedicateClick,
-}) {
-  const [reactions, setReactions] = useState(reactionCount);
-  const [comments, setComments] = useState(commentCount);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [commentsList, setCommentsList] = useState([]);
-  const [commenterWhatsapp, setCommenterWhatsapp] = useState("");
-  const [commentText, setCommentText] = useState("");
-  const [fullImage, setFullImage] = useState(null);
-  const [hasReacted, setHasReacted] = useState(() => {
-    return localStorage.getItem(`chillax_reacted_${id}`) === "true";
-  });
-  const [isVisible, setIsVisible] = useState(false);
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const videoRef = useRef(null);
-  const cardRef = useRef(null);
-  const flag = getFlagFromWhatsapp(senderWhatsapp);
-  const mediaType = getMediaType(mediaUrl);
-
+  // Add preconnect for external media services
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          setIsVisible(entry.isIntersecting);
-        });
-      },
-      { threshold: 0.6, rootMargin: "0px" }
-    );
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
-    }
+    const links = [
+      { rel: 'preconnect', href: 'https://www.youtube.com' },
+      { rel: 'preconnect', href: 'https://www.youtube-nocookie.com' },
+      { rel: 'preconnect', href: 'https://player.vimeo.com' },
+      { rel: 'preconnect', href: 'https://www.dailymotion.com' },
+      { rel: 'preconnect', href: 'https://kitchenbrain.cucina656.workers.dev' },
+    ];
+    
+    links.forEach(({ rel, href }) => {
+      const link = document.createElement('link');
+      link.rel = rel;
+      link.href = href;
+      document.head.appendChild(link);
+    });
+    
     return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
-      }
+      links.forEach(({ rel, href }) => {
+        const links = document.querySelectorAll(`link[rel="${rel}"][href="${href}"]`);
+        links.forEach(link => link.remove());
+      });
     };
   }, []);
 
   useEffect(() => {
-    if (!videoRef.current) return;
-    if (isVisible && mediaType === 'video') {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch((err) => {
-          console.log("Play prevented:", err);
-        });
+    loadDedications();
+  }, []);
+
+  // Intersection Observer to track which card is most visible
+  useEffect(() => {
+    if (!feed.length) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visibleEntries.length > 0) {
+          const mostVisibleIndex = Number(
+            visibleEntries[0].target.dataset.index
+          );
+          setActiveIndex(mostVisibleIndex);
+        } else {
+          setActiveIndex(null);
+        }
+      },
+      {
+        threshold: [0, 0.25, 0.5, 0.75, 1],
       }
-    } else {
-      if (!videoRef.current.paused) {
-        videoRef.current.pause();
-      }
-    }
-  }, [isVisible, mediaType]);
-
-  async function loadComments() {
-    if (!id) return;
-    try {
-      const res = await fetch(`${API_URL}/api/dedications/comments?id=${id}`);
-      const data = await res.json();
-      if (data.success) {
-        setCommentsList(data.comments || []);
-      }
-    } catch (error) {
-      console.error("Failed to load comments", error);
-    }
-  }
-
-  async function react() {
-    if (hasReacted) return;
-    if (!id) return alert("Missing dedication ID");
-    setHasReacted(true);
-    setReactions((v) => v + 1);
-    localStorage.setItem(`chillax_reacted_${id}`, "true");
-    try {
-      const res = await fetch(`${API_URL}/api/dedications/react`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setHasReacted(false);
-        setReactions((v) => v - 1);
-        localStorage.removeItem(`chillax_reacted_${id}`);
-      }
-    } catch {
-      setHasReacted(false);
-      setReactions((v) => v - 1);
-      localStorage.removeItem(`chillax_reacted_${id}`);
-    }
-  }
-
-  async function sendComment() {
-    if (!id) return alert("Missing dedication ID");
-    if (!commenterWhatsapp.trim()) return alert("Enter your WhatsApp number first.");
-    if (!commentText.trim()) return;
-
-    setIsSubmittingComment(true);
-    const textToSend = commentText.trim();
-    const whatsappToSend = commenterWhatsapp.trim();
-
-    const newComment = {
-      id: Date.now(),
-      dedication_id: id,
-      comment: textToSend,
-      commenter_whatsapp: whatsappToSend,
-      created_at: new Date().toISOString(),
+    );
+    Object.values(cardRefs.current).forEach((element) => {
+      if (element) observer.observe(element);
+    });
+    return () => {
+      observer.disconnect();
+      setActiveIndex(null);
     };
+  }, [feed]);
 
-    setCommentsList((prev) => [newComment, ...prev]);
-    setComments((v) => v + 1);
-    setCommentText("");
-
+  async function loadDedications() {
+    setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/dedications/comment`, {
+      // FIXED: Removed the 'Cache-Control' header that was causing the CORS preflight policy block
+      const res = await fetch(`${API_URL}/api/dedications`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.dedications)) {
+        setFeed(data.dedications);
+      } else if (Array.isArray(data)) {
+        setFeed(data);
+      }
+    } catch (err) {
+      console.log("Failed to load dedications", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handlePhotoUpload(e, setter, fileSetter) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setter(URL.createObjectURL(file));
+    fileSetter(file);
+  }
+
+  function handleMediaUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setMediaFile(file);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    if (!senderName || !senderWhatsapp || !recipientName || !message) {
+      alert("Please fill all important fields.");
+      return;
+    }
+
+    if (!mediaUrl.trim() && !mediaFile) {
+      alert("Please add media (URL or file upload).");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("sender_name", senderName);
+      formData.append("sender_whatsapp", senderWhatsapp);
+      formData.append("recipient_name", recipientName);
+      formData.append("message", message);
+      formData.append("dedication_title", dedicationTitle || "");
+      formData.append("dedication_badge", badgeStyle);
+
+      if (senderPhotoFile) {
+        formData.append("sender_photo_file", senderPhotoFile);
+      } else if (senderPhoto && /^https?:\/\//i.test(senderPhoto.trim())) {
+        formData.append("sender_photo", senderPhoto.trim());
+      } else {
+        formData.append("sender_photo", "");
+      }
+
+      if (recipientPhotoFile) {
+        formData.append("recipient_photo_file", recipientPhotoFile);
+      } else if (recipientPhoto && /^https?:\/\//i.test(recipientPhoto.trim())) {
+        formData.append("recipient_photo", recipientPhoto.trim());
+      } else {
+        formData.append("recipient_photo", "");
+      }
+
+      if (mediaFile) {
+        formData.append("media_file", mediaFile);
+      } else if (mediaUrl.trim()) {
+        let sanitizedUrl = mediaUrl.trim();
+        if (!/^https?:\/\//i.test(sanitizedUrl)) {
+          sanitizedUrl = `https://${sanitizedUrl}`;
+        }
+        formData.append("media_url", sanitizedUrl);
+      }
+
+      const res = await fetch(`${API_URL}/api/dedications`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          comment: textToSend,
-          commenter_whatsapp: whatsappToSend,
-        }),
+        body: formData,
       });
       const data = await res.json();
+      
       if (!data.success) {
-        setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
-        setComments((v) => v - 1);
-        alert(data.message || "Failed to post comment");
+        alert(data.message || "Failed to save dedication");
+        setIsSubmitting(false);
+        return;
       }
-    } catch (error) {
-      console.error("Comment error:", error);
-      setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
-      setComments((v) => v - 1);
+
+      if (data.dedication) {
+        setFeed((prev) => [data.dedication, ...prev]);
+      }
+
+      setSenderName("");
+      setSenderWhatsapp("");
+      setSenderPhoto("");
+      setSenderPhotoFile(null);
+      setRecipientName("");
+      setRecipientPhoto("");
+      setRecipientPhotoFile(null);
+      setMediaUrl("");
+      setMediaFile(null);
+      setMessage("");
+      setDedicationTitle("");
+      setBadgeStyle("❤️");
+      setShowForm(false);
+    } catch (err) {
+      console.error("Submission error:", err);
       alert("Network error. Please try again.");
     } finally {
-      setIsSubmittingComment(false);
-    }
-  }
-
-  function openComments() {
-    setCommentsOpen(true);
-    loadComments();
-  }
-
-  function closeComments() {
-    setCommentsOpen(false);
-    setCommentText("");
-  }
-
-  function shareToWhatsApp() {
-    const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${
-      recipientName || "someone"
-    }`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-  }
-
-  function renderMedia() {
-    if (!mediaUrl) {
-      return (
-        <div style={fallbackBg}>
-          <div style={fallbackContent}>
-            <span style={fallbackIcon}>🎵</span>
-            <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
-          </div>
-        </div>
-      );
-    }
-
-    switch (mediaType) {
-      case 'youtube':
-        return (
-          <iframe
-            src={getYouTubeEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'vimeo':
-        return (
-          <iframe
-            src={getVimeoEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'dailymotion':
-        return (
-          <iframe
-            src={getDailymotionEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'video':
-        return (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            autoPlay
-            muted
-            loop
-            crossOrigin="anonymous"
-            preload="auto"
-            style={videoBg}
-          />
-        );
-      
-      case 'audio':
-        return (
-          <div style={audioContainerStyle}>
-            <div style={audioCardStyle}>
-              <div style={audioIconStyle}>🎵</div>
-              <audio
-                src={mediaUrl}
-                controls
-                style={audioControlStyle}
-              />
-              <div style={audioTitleStyle}>{dedicationTitle || mediaTitle}</div>
-            </div>
-          </div>
-        );
-      
-      case 'image':
-        return (
-          <img
-            src={mediaUrl}
-            alt={dedicationTitle || mediaTitle}
-            style={imageBgStyle}
-            loading="lazy"
-          />
-        );
-      
-      default:
-        return (
-          <div style={fallbackBg}>
-            <div style={fallbackContent}>
-              <span style={fallbackIcon}>🎵</span>
-              <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
-            </div>
-          </div>
-        );
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <div ref={cardRef} style={card}>
-      {/* Instagram Header */}
-      <div style={instagramHeader}>
-        <div style={person}>
-          {senderPhoto ? (
-            <img
-              src={senderPhoto}
-              alt={senderName}
-              style={smallPhotoCircle}
-              onClick={() => setFullImage(senderPhoto)}
-            />
-          ) : (
-            <div style={smallPlaceholder}>S</div>
-          )}
-          <div>
-            <div style={nameEmphasis}>
-              {senderName || "Sender"} {flag}
-            </div>
-            <div style={roleText}>Sender</div>
-          </div>
-        </div>
-        
-        <button type="button" onClick={react} style={toPill}>
-          <span>to</span>
-        </button>
-
-        <div style={person}>
-          {recipientPhoto ? (
-            <img
-              src={recipientPhoto}
-              alt={recipientName}
-              style={smallPhotoCircle}
-              onClick={() => setFullImage(recipientPhoto)}
-            />
-          ) : (
-            <div style={smallPlaceholder}>R</div>
-          )}
-          <div>
-            <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
-            <div style={roleText}>Recipient</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Media */}
-      <div style={mediaCard}>
-        {renderMedia()}
-        <div style={topBadge}>
-          <span style={badgeDot}></span>
-          {dedicationTitle || mediaTitle}
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div style={instagramActionBar}>
-        <div style={leftActionsRow}>
-          <button type="button" onClick={react} style={inlineActionBtn} aria-label="Like">
-            <Heart
-              size={24}
-              strokeWidth={2}
-              fill={hasReacted ? "#ED4956" : "none"}
-              color={hasReacted ? "#ED4956" : "#ffffff"}
-            />
+    <div style={page}>
+      <Header />
+      <style>{`
+        .tv-card-wrapper button[aria-label],
+        .tv-card-wrapper button[title] {
+          background: transparent !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .tv-card-wrapper img {
+          will-change: transform, opacity;
+          content-visibility: auto;
+        }
+        .tv-card-wrapper iframe {
+          loading: lazy;
+        }
+      `}</style>
+      <main style={main}>
+        <section style={topSection}>
+          <h1 style={title}>TV</h1>
+          <p style={text}>Songs for special people ⭐</p>
+          <button onClick={() => setShowForm(true)} style={dedicateBtn}>
+            🎵 Dedicate a song
           </button>
-          <button type="button" onClick={openComments} style={inlineActionBtn} aria-label="Comments">
-            <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
-          </button>
-          <button type="button" onClick={shareToWhatsApp} style={inlineActionBtn} aria-label="Share">
-            <Share2 size={24} strokeWidth={2} color="#ffffff" />
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onDedicateClick) onDedicateClick();
-          }}
-          style={inlineActionBtn}
-          aria-label="Dedicate Song"
-        >
-          <Plus size={24} strokeWidth={2} color="#ffffff" />
-        </button>
-      </div>
+        </section>
 
-      {/* Stats and Message */}
-      <div style={dedicationBody}>
-        <div style={statsLine}>
-          <span>{reactions.toLocaleString()} likes</span>
-          <span>•</span>
-          <span>{views.toLocaleString()} views</span>
-        </div>
-
-        <p style={messageText}>
-          <span style={{ fontWeight: "700", marginRight: "6px" }}>{senderName || "Sender"}:</span>
-          {message || "I chose this song because it reminds me of you."}
-        </p>
-
-        <button type="button" onClick={openComments} style={commentMainBtn}>
-          View all {comments} comments...
-        </button>
-      </div>
-
-      {/* Comments Overlay */}
-      {commentsOpen && (
-        <div style={commentOverlay} onClick={(e) => {
-          if (e.target === e.currentTarget) closeComments();
-        }}>
-          <div style={commentHandleBar}></div>
-          <div style={commentHeader}>
-            <h3 style={commentTitle}>Comments</h3>
-            <button
-              type="button"
-              onClick={closeComments}
-              style={closeBtn}
-            >
-              <X size={20} color="#ffffff" />
-            </button>
-          </div>
-          
-          {/* ===== FIXED: Comments with privacy ===== */}
-          <div style={commentsListBox}>
-            {commentsList.length === 0 ? (
-              <p style={noComments}>No comments yet. Be the first! 💬</p>
-            ) : (
-              commentsList.map((comment) => (
-                <div key={comment.id} style={commentItem}>
-                  <div style={commentHeaderRow}>
-                    <div style={commentAvatar}>
-                      {getFlagFromWhatsapp(comment.commenter_whatsapp || "")}
-                    </div>
-                    <div style={commentContent}>
-                      <div style={commentFrom}>Anonymous Fan</div>
-                      <div style={commentBody}>{comment.comment}</div>
-                    </div>
-                  </div>
+        {showForm && (
+          <section style={formOverlay}>
+            <form onSubmit={handleSubmit} style={formCard}>
+              <h2 style={formTitle}>Create Dedication</h2>
+              <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+              <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
+              
+              <label style={labelStyle}>Your photo</label>
+              <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setSenderPhoto, setSenderPhotoFile)} />
+              
+              <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+              
+              <label style={labelStyle}>Their photo</label>
+              <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
+              
+              <div style={badgeContainer}>
+                <label style={labelStyle}>Badge Style</label>
+                <div style={badgeOptions}>
+                  <button
+                    type="button"
+                    onClick={() => setBadgeStyle("❤️")}
+                    style={{
+                      ...badgeButton,
+                      background: badgeStyle === "❤️" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "❤️" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    ❤️ Heart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBadgeStyle("👉")}
+                    style={{
+                      ...badgeButton,
+                      background: badgeStyle === "👉" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "👉" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    👉 Pointer
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
+              </div>
 
-          {/* Comment Input */}
-          <div style={writeBox}>
-            <input
-              value={commenterWhatsapp}
-              onChange={(e) => setCommenterWhatsapp(e.target.value)}
-              placeholder="📱 WhatsApp number (e.g +250788123456)"
-              style={commentInputTop}
-            />
-            <div style={sendRow}>
-              <input
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Write a comment..."
-                style={commentInputBottom}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendComment();
-                  }
+              <input 
+                style={inputStyle} 
+                placeholder="Media link (e.g. youtube.com/...)" 
+                value={mediaUrl} 
+                onChange={(e) => setMediaUrl(e.target.value)} 
+                disabled={!!mediaFile}
+              />
+              
+              <label style={labelStyle}>Or upload song media</label>
+              <input 
+                style={fileStyle} 
+                type="file" 
+                accept="video/*,audio/*,image/*" 
+                onChange={handleMediaUpload} 
+                disabled={!!mediaUrl.trim()}
+              />
+              
+              {mediaFile && (
+                <p style={{ fontSize: '12px', color: '#00e676', margin: '-4px 0 10px' }}>
+                  ✓ Ready to upload: {mediaFile.name}
+                </p>
+              )}
+
+              <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
+              
+              <div style={buttonRow}>
+                <button type="submit" style={submitBtn} disabled={isSubmitting}>
+                  {isSubmitting ? "Submitting..." : "Submit"}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} style={cancelBtn}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        <section style={feedSection}>
+          {isLoading && (
+            <div style={emptyCard}>
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                border: '3px solid rgba(255,255,255,0.1)', 
+                borderTop: '3px solid #00e676', 
+                borderRadius: '50%',
+                margin: '0 auto 16px',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading dedications...</p>
+            </div>
+          )}
+          
+          {!isLoading && feed.length === 0 && (
+            <div style={emptyCard}>
+              <h2>No songs yet</h2>
+              <p>Be first. Make someone smile.</p>
+            </div>
+          )}
+          
+          {feed.map((item, index) => (
+            <div
+              key={item.id}
+              ref={(ref) => {
+                if (ref) cardRefs.current[index] = ref;
+              }}
+              data-index={index}
+              style={cardWrapper}
+              className="tv-card-wrapper"
+            >
+              <DedicationCard
+                id={item.id}
+                senderPhoto={item.sender_photo}
+                senderName={item.sender_name}
+                senderWhatsapp={item.sender_whatsapp}
+                recipientPhoto={item.recipient_photo}
+                recipientName={item.recipient_name}
+                dedicationTitle={item.dedication_title}
+                message={item.message}
+                mediaTitle={item.title}
+                mediaUrl={item.media_url}
+                views={item.views || 0}
+                reactionCount={item.reaction_count || 0}
+                commentCount={item.comment_count || 0}
+                badgeStyle={item.dedication_badge || "❤️"}
+                isActive={activeIndex === index}
+                onDedicateClick={() => {
+                  setShowForm(true);
                 }}
               />
-              <button 
-                type="button" 
-                onClick={sendComment} 
-                style={sendBtn}
-                disabled={isSubmittingComment || !commentText.trim()}
-              >
-                {isSubmittingComment ? "Sending..." : "Post"}
-              </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Full Image Popup */}
-      {fullImage && (
-        <div style={imagePopup} onClick={() => setFullImage(null)}>
-          <img src={fullImage} alt="Full view" style={fullImageStyle} />
-          <button type="button" style={closeImageBtn} onClick={() => setFullImage(null)}>
-            <X size={24} color="#ffffff" />
-          </button>
-        </div>
-      )}
+          ))}
+        </section>
+      </main>
     </div>
   );
 }
 
-// ==========================================
-// STYLES
-// ==========================================
-const card = {
-  position: "relative",
-  width: "100%",
-  maxWidth: "430px",
-  margin: "0 auto 18px auto",
-  overflow: "hidden",
-  background: "#000000",
-  color: "#ffffff",
-  borderRadius: "0px",
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  WebkitFontSmoothing: "antialiased",
-};
+const page = { minHeight: "100svh", background: "#0a0a0a", color: "#ffffff", fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', overflowX: "hidden" };
+const main = { width: "100%", maxWidth: "520px", margin: "0 auto", padding: "72px 0 40px", boxSizing: "border-box" };
+const topSection = { textAlign: "center", marginBottom: "10px", padding: "0 16px" };
+const title = { fontSize: "clamp(28px, 8vw, 36px)", fontWeight: "900", margin: "0 0 6px", background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", letterSpacing: "-0.5px" };
+const text = { color: "rgba(255,255,255,0.6)", lineHeight: "1.45", margin: "0 0 14px", fontSize: "14px", fontWeight: "400" };
+const dedicateBtn = { border: "none", borderRadius: "999px", padding: "14px 28px", background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", fontWeight: "700", fontSize: "15px", cursor: "pointer", boxShadow: "0 8px 28px rgba(220, 39, 67, 0.35)", transition: "transform 0.2s ease", letterSpacing: "0.3px" };
+const feedSection = { display: "flex", flexDirection: "column", gap: "18px", padding: "0" };
+const cardWrapper = { width: "calc(100% + 8px)", marginLeft: "-4px", transform: "translateY(-2px)", transition: "all 0.2s ease" };
+const formOverlay = { position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "76px 10px 18px", boxSizing: "border-box", overflowY: "auto" };
+const formCard = { width: "100%", maxWidth: "430px", padding: "20px", borderRadius: "20px", background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 20px 60px rgba(0,0,0,0.8)", boxSizing: "border-box" };
+const formTitle = { margin: "0 0 16px", fontSize: "22px", fontWeight: "700", color: "#ffffff", textAlign: "center" };
+const inputStyle = { width: "100%", boxSizing: "border-box", marginBottom: "10px", padding: "14px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.05)", color: "white", outline: "none", fontSize: "15px", transition: "border-color 0.2s ease" };
+const textareaStyle = { ...inputStyle, minHeight: "92px", resize: "vertical", fontFamily: 'inherit' };
+const labelStyle = { display: "block", fontSize: "13px", fontWeight: "600", color: "rgba(255,255,255,0.7)", margin: "4px 0 6px" };
+const fileStyle = { width: "100%", marginBottom: "12px", color: "rgba(255,255,255,0.5)", fontSize: "14px", padding: "8px 0" };
+const badgeContainer = { marginBottom: "10px" };
+const badgeOptions = { display: "flex", gap: "10px" };
+const badgeButton = { flex: 1, padding: "10px 14px", borderRadius: "12px", color: "white", fontWeight: "600", fontSize: "14px", cursor: "pointer", transition: "all 0.2s ease", backgroundColor: "rgba(255,255,255,0.05)" };
+const buttonRow = { display: "flex", gap: "10px", marginTop: "14px" };
+const submitBtn = { flex: 1, border: "none", borderRadius: "999px", padding: "14px", background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", fontWeight: "700", cursor: "pointer", fontSize: "15px", transition: "opacity 0.2s ease" };
+const cancelBtn = { flex: 1, border: "1px solid rgba(255,255,255,0.12)", borderRadius: "999px", padding: "14px", background: "transparent", color: "rgba(255,255,255,0.7)", fontWeight: "600", cursor: "pointer", fontSize: "15px", transition: "all 0.2s ease" };
+const emptyCard = { padding: "40px 24px", borderRadius: "20px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", textAlign: "center" };
 
-const instagramHeader = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px",
-  background: "#000000",
-  borderBottom: "1px solid #1c1c1e",
-};
-
-const mediaCard = {
-  position: "relative",
-  width: "100%",
-  aspectRatio: "1 / 1", 
-  overflow: "hidden",
-  background: "#000000",
-};
-
-const videoBg = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  objectPosition: "center center",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const iframeStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const imageBgStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const audioContainerStyle = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(145deg, #1a1a1a, #0a0a0a)",
-  zIndex: 0,
-  padding: "20px",
-};
-
-const audioCardStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "16px",
-  width: "100%",
-  maxWidth: "320px",
-};
-
-const audioIconStyle = {
-  fontSize: "48px",
-  marginBottom: "8px",
-};
-
-const audioControlStyle = {
-  width: "100%",
-  height: "48px",
-  background: "transparent",
-};
-
-const audioTitleStyle = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const fallbackBg = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#262626",
-  zIndex: 0,
-};
-
-const fallbackContent = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const fallbackIcon = {
-  fontSize: "48px",
-};
-
-const fallbackText = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const topBadge = {
-  position: "absolute",
-  bottom: "14px",
-  left: "14px",
-  zIndex: 2,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  padding: "4px 8px",
-  borderRadius: "4px",
-  background: "rgba(0, 0, 0, 0.75)",
-  color: "#ffffff",
-  fontSize: "11px",
-  fontWeight: "600",
-};
-
-const badgeDot = {
-  width: "6px",
-  height: "6px",
-  borderRadius: "50%",
-  background: "#0095f6",
-  flexShrink: 0,
-};
-
-const instagramActionBar = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px 8px 14px",
-  background: "#000000",
-};
-
-const leftActionsRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const inlineActionBtn = {
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const dedicationBody = {
-  padding: "0px 14px 16px 14px",
-  background: "#000000",
-};
-
-const person = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  minWidth: 0,
-};
-
-const nameEmphasis = {
-  fontWeight: "600",
-  fontSize: "13px",
-  color: "#ffffff",
-  lineHeight: 1.2,
-  maxWidth: "110px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const roleText = {
-  fontSize: "11px",
-  color: "#a8a8a8",
-};
-
-const smallPhotoCircle = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  border: "1px solid #262626",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const smallPlaceholder = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  background: "#262626",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "12px",
-  fontWeight: "600",
-  flexShrink: 0,
-};
-
-const toPill = {
-  padding: "4px 12px",
-  borderRadius: "8px",
-  background: "#1c1c1e",
-  color: "#ffffff",
-  fontSize: "12px",
-  fontWeight: "600",
-  border: "none",
-  flexShrink: 0,
-};
-
-const messageText = {
-  margin: "6px 0 0 0",
-  fontSize: "14px",
-  lineHeight: "1.4",
-  color: "#f5f5f5",
-  wordBreak: "break-word",
-};
-
-const statsLine = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  fontSize: "14px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const commentMainBtn = {
-  background: "none",
-  border: "none",
-  color: "#a8a8a8",
-  padding: "6px 0 0 0",
-  fontSize: "14px",
-  textAlign: "left",
-  cursor: "pointer",
-  display: "block",
-  transition: "color 0.2s ease",
-};
-
-const commentOverlay = {
-  position: "fixed",
-  left: "50%",
-  transform: "translateX(-50%)",
-  bottom: 0,
-  width: "100%",
-  maxWidth: "430px",
-  height: "70svh",
-  zIndex: 1000,
-  background: "#1c1c1e",
-  borderTopLeftRadius: "16px",
-  borderTopRightRadius: "16px",
-  padding: "0 16px 16px 16px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  animation: "slideUp 0.3s ease",
-};
-
-const commentHandleBar = {
-  width: "36px",
-  height: "4px",
-  background: "#3a3a3c",
-  borderRadius: "999px",
-  margin: "8px auto 12px auto",
-  flexShrink: 0,
-};
-
-const commentHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingBottom: "12px",
-  borderBottom: "1px solid #2c2c2e",
-  flexShrink: 0,
-};
-
-const commentTitle = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const closeBtn = {
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "4px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const commentsListBox = {
-  flex: 1,
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "14px",
-  padding: "14px 0",
-  WebkitOverflowScrolling: "touch",
-};
-
-// ===== NEW STYLES FOR COMMENT PRIVACY =====
-const commentHeaderRow = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "12px",
-};
-
-const commentAvatar = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "50%",
-  background: "#2c2c2e",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "20px",
-  flexShrink: 0,
-  border: "2px solid #3a3a3c",
-};
-
-const commentContent = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-};
-
-const commentItem = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-};
-
-const commentFrom = {
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#a8a8a8",
-};
-
-const commentBody = {
-  fontSize: "14px",
-  color: "#ffffff",
-  wordBreak: "break-word",
-};
-
-const noComments = {
-  textAlign: "center",
-  color: "#a8a8a8",
-  fontSize: "14px",
-  marginTop: "32px",
-};
-
-const writeBox = {
-  borderTop: "1px solid #2c2c2e",
-  paddingTop: "12px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  flexShrink: 0,
-  background: "#1c1c1e",
-};
-
-const sendRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "10px",
-  alignItems: "center",
-};
-
-const commentInputTop = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #2c2c2e",
-  borderRadius: "8px",
-  background: "#000000",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 12px",
-  fontSize: "13px",
-};
-
-const commentInputBottom = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "none",
-  background: "transparent",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 0",
-  fontSize: "14px",
-};
-
-const sendBtn = {
-  border: "none",
-  background: "none",
-  color: "#0095f6",
-  fontWeight: "600",
-  fontSize: "14px",
-  cursor: "pointer",
-  padding: "8px 12px",
-  opacity: 1,
-  transition: "opacity 0.2s ease",
-};
-
-const imagePopup = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  background: "rgba(0,0,0,0.95)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "16px",
-};
-
-const fullImageStyle = {
-  maxWidth: "100%",
-  maxHeight: "85vh",
-  objectFit: "contain",
-};
-
-const closeImageBtn = {
-  position: "fixed",
-  top: "16px",
-  right: "16px",
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "8px",
-};
+export default TV;
