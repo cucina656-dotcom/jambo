@@ -688,29 +688,28 @@ export default function DedicationCard({
     "embed"
   ) : "none";
 
-  // Play only the active direct video and pause every other direct video.
+  // Enhanced video playback control - pauses all other videos before playing
   useEffect(() => {
     const video = videoRef.current;
 
-    if (mediaType !== "video" || !video) return undefined;
+    if (mediaType !== "video" || !video) return;
 
     if (isActive) {
+      // Pause all other videos on the page
       document.querySelectorAll("video").forEach((otherVideo) => {
-        if (otherVideo !== video) {
+        if (otherVideo !== video && !otherVideo.paused) {
           otherVideo.pause();
         }
       });
 
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Some browsers block autoplay with sound until the viewer interacts.
-        });
-      }
+      // Play this video
+      video.play().catch(() => {});
     } else {
+      // Pause this video when inactive
       video.pause();
     }
 
+    // Cleanup: pause video when component unmounts
     return () => {
       video.pause();
     };
