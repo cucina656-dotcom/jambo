@@ -7,35 +7,47 @@ const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 // MEDIA TYPE DETECTION HELPERS
 // ==========================================
 function getMediaType(url) {
-  if (!url) return 'none';
+  console.log('[Debug getMediaType] Input URL:', url);
+  
+  if (!url) {
+    console.log('[Debug getMediaType] No URL provided');
+    return 'none';
+  }
   
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
   if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    console.log('[Debug getMediaType] Detected as video file');
     return 'video';
   }
   
   const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
   if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    console.log('[Debug getMediaType] Detected as audio file');
     return 'audio';
   }
   
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
   if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
+    console.log('[Debug getMediaType] Detected as image file');
     return 'image';
   }
   
   if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+    console.log('[Debug getMediaType] Detected as YouTube');
     return 'youtube';
   }
   
   if (url.includes('vimeo.com/')) {
+    console.log('[Debug getMediaType] Detected as Vimeo');
     return 'vimeo';
   }
   
   if (url.includes('dailymotion.com/')) {
+    console.log('[Debug getMediaType] Detected as Dailymotion');
     return 'dailymotion';
   }
   
+  console.log('[Debug getMediaType] Unknown type');
   return 'unknown';
 }
 
@@ -292,6 +304,9 @@ export default function DedicationCard({
   badgeStyle = "❤️",
   onDedicateClick,
 }) {
+  console.log(`[DedicationCard] Rendering card with ID: ${id}`);
+  console.log(`[DedicationCard] Media URL:`, mediaUrl);
+  
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -308,41 +323,61 @@ export default function DedicationCard({
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
   const mediaType = getMediaType(mediaUrl);
+  
+  console.log(`[DedicationCard] Detected media type for ${id}:`, mediaType);
 
   // Track visibility with Intersection Observer
   useEffect(() => {
+    console.log(`[DedicationCard] Setting up visibility observer for ${id}`);
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          console.log(`[DedicationCard] ${id} isIntersecting:`, entry.isIntersecting);
           setIsVisible(entry.isIntersecting);
         });
       },
       { threshold: 0.6, rootMargin: "0px" }
     );
     if (cardRef.current) {
+      console.log(`[DedicationCard] Observing card for ${id}`);
       observer.observe(cardRef.current);
+    } else {
+      console.log(`[DedicationCard] cardRef.current is null for ${id}`);
     }
     return () => {
       if (cardRef.current) {
         observer.unobserve(cardRef.current);
       }
     };
-  }, []);
+  }, [id]);
 
   // ==========================================
-  // UPDATED: Auto play/pause with scroll
+  // VIDEO PLAYBACK CONTROL
   // ==========================================
   useEffect(() => {
-    if (!videoRef.current || mediaType !== 'video') return;
+    console.log(`[Video Debug] Component mounted for ID: ${id}`);
+    console.log(`[Video Debug] mediaType: ${mediaType}`);
+    console.log(`[Video Debug] videoRef.current exists?`, !!videoRef.current);
+    
+    if (!videoRef.current || mediaType !== 'video') {
+      console.log(`[Video Debug] Skipping - no video ref or not video type`);
+      return;
+    }
     
     const videoElement = videoRef.current;
     const videoId = `video-${id}`;
     
+    console.log(`[Video Debug] Setting up video: ${videoId}`);
+    console.log(`[Video Debug] Video element:`, videoElement);
+    console.log(`[Video Debug] Video src:`, videoElement.src);
+    
     // Store reference for global management
     if (!window.__videoRefs) {
+      console.log(`[Video Debug] Creating new videoRefs map`);
       window.__videoRefs = new Map();
     }
     window.__videoRefs.set(videoId, videoElement);
+    console.log(`[Video Debug] Total videos registered:`, window.__videoRefs.size);
     
     // Function to check visibility and control playback
     const checkVisibilityAndPlay = () => {
@@ -354,21 +389,33 @@ export default function DedicationCard({
         rect.right <= window.innerWidth
       );
       
+      console.log(`[Video Debug] Video ${videoId}:`, {
+        isInView,
+        rect: { top: rect.top, bottom: rect.bottom, height: rect.height },
+        windowHeight: window.innerHeight,
+        isPaused: videoElement.paused
+      });
+      
       if (isInView) {
+        console.log(`[Video Debug] ${videoId} IS in view - playing`);
         // Pause all other videos
         window.__videoRefs.forEach((ref, refId) => {
           if (refId !== videoId && ref && !ref.paused) {
+            console.log(`[Video Debug] Pausing other video: ${refId}`);
             ref.pause();
           }
         });
         // Play this video
         if (videoElement.paused) {
-          videoElement.play().catch(err => console.log('Play prevented:', err));
+          videoElement.play()
+            .then(() => console.log(`[Video Debug] ${videoId} started playing`))
+            .catch(err => console.log(`[Video Debug] Play prevented for ${videoId}:`, err));
         }
       } else {
-        // Pause this video
+        console.log(`[Video Debug] ${videoId} NOT in view - pausing`);
         if (!videoElement.paused) {
           videoElement.pause();
+          console.log(`[Video Debug] ${videoId} paused`);
         }
       }
     };
@@ -377,19 +424,25 @@ export default function DedicationCard({
     window.addEventListener('scroll', checkVisibilityAndPlay, { passive: true });
     window.addEventListener('resize', checkVisibilityAndPlay, { passive: true });
     
-    // Initial check
-    setTimeout(checkVisibilityAndPlay, 100);
+    // Initial check after a short delay
+    setTimeout(() => {
+      console.log(`[Video Debug] Running initial check for ${videoId}`);
+      checkVisibilityAndPlay();
+    }, 500);
     
     return () => {
+      console.log(`[Video Debug] Cleaning up ${videoId}`);
       window.removeEventListener('scroll', checkVisibilityAndPlay);
       window.removeEventListener('resize', checkVisibilityAndPlay);
       // Only delete if it's still the same reference
-      if (window.__videoRefs.get(videoId) === videoElement) {
+      if (window.__videoRefs?.get(videoId) === videoElement) {
         window.__videoRefs.delete(videoId);
+        console.log(`[Video Debug] Removed ${videoId} from registry`);
       }
       // Clean up if no videos left
       if (window.__videoRefs && window.__videoRefs.size === 0) {
         delete window.__videoRefs;
+        console.log(`[Video Debug] Cleaned up empty videoRefs`);
       }
     };
   }, [id, mediaType]);
@@ -497,6 +550,8 @@ export default function DedicationCard({
   }
 
   function renderMedia() {
+    console.log(`[renderMedia] Rendering for ${id}, mediaType: ${mediaType}`);
+    
     if (!mediaUrl) {
       return (
         <div style={fallbackBg}>
@@ -546,6 +601,8 @@ export default function DedicationCard({
         );
       
       case 'video':
+        console.log(`[Video Debug] Rendering video element for ${id}`);
+        console.log(`[Video Debug] Media URL:`, mediaUrl);
         return (
           <video
             ref={videoRef}
@@ -558,6 +615,8 @@ export default function DedicationCard({
             crossOrigin="anonymous"
             preload="metadata"
             style={videoBg}
+            onLoadedMetadata={() => console.log(`[Video Debug] ${id} metadata loaded`)}
+            onError={(e) => console.error(`[Video Debug] ${id} video error:`, e)}
           />
         );
       
