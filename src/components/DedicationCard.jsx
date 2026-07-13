@@ -688,41 +688,32 @@ export default function DedicationCard({
     "embed"
   ) : "none";
 
-  // ENHANCED: Video playback control - pauses all other videos before playing
+  // Enhanced video playback control - pauses all other videos before playing
   useEffect(() => {
     const video = videoRef.current;
 
     if (mediaType !== "video" || !video) return;
 
     if (isActive) {
-      // Pause ALL other videos on the page
-      const allVideos = document.querySelectorAll("video");
-      let pausedCount = 0;
-      allVideos.forEach((otherVideo) => {
+      // Pause all other videos on the page
+      document.querySelectorAll("video").forEach((otherVideo) => {
         if (otherVideo !== video && !otherVideo.paused) {
           otherVideo.pause();
-          pausedCount++;
         }
       });
-      
+
       // Play this video
-      video.play().catch((err) => {
-        console.log(`Video ${id} play prevented:`, err);
-      });
+      video.play().catch(() => {});
     } else {
       // Pause this video when inactive
-      if (!video.paused) {
-        video.pause();
-      }
+      video.pause();
     }
 
     // Cleanup: pause video when component unmounts
     return () => {
-      if (video && !video.paused) {
-        video.pause();
-      }
+      video.pause();
     };
-  }, [isActive, mediaType, id]);
+  }, [isActive, mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -850,7 +841,7 @@ export default function DedicationCard({
     }
 
     if (mediaType === "embed") {
-      // Only render iframe when the card is active to save resources
+      // Only render iframe when the card is active
       if (!isActive) {
         return <div style={fallbackBg}></div>;
       }
