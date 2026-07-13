@@ -71,8 +71,207 @@ function getDailymotionEmbedUrl(url) {
 }
 
 function getFlagFromWhatsapp(number = "") {
-  // ... (keep your existing getFlagFromWhatsapp function)
-  // I'm omitting it here for brevity, but keep the full function
+  // Africa
+  if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿";
+  if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴";
+  if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯";
+  if (number.startsWith("+267") || number.startsWith("267")) return "🇧🇼";
+  if (number.startsWith("+226") || number.startsWith("226")) return "🇧🇫";
+  if (number.startsWith("+257") || number.startsWith("257")) return "🇧🇮";
+  if (number.startsWith("+237") || number.startsWith("237")) return "🇨🇲";
+  if (number.startsWith("+238") || number.startsWith("238")) return "🇨🇻";
+  if (number.startsWith("+236") || number.startsWith("236")) return "🇨🇫";
+  if (number.startsWith("+235") || number.startsWith("235")) return "🇹🇩";
+  if (number.startsWith("+269") || number.startsWith("269")) return "🇰🇲";
+  if (number.startsWith("+242") || number.startsWith("242")) return "🇨🇬";
+  if (number.startsWith("+243") || number.startsWith("243")) return "🇨🇩";
+  if (number.startsWith("+225") || number.startsWith("225")) return "🇨🇮";
+  if (number.startsWith("+253") || number.startsWith("253")) return "🇩🇯";
+  if (number.startsWith("+20") || number.startsWith("20")) return "🇪🇬";
+  if (number.startsWith("+240") || number.startsWith("240")) return "🇬🇶";
+  if (number.startsWith("+291") || number.startsWith("291")) return "🇪🇷";
+  if (number.startsWith("+268") || number.startsWith("268")) return "🇸🇿";
+  if (number.startsWith("+251") || number.startsWith("251")) return "🇪🇹";
+  if (number.startsWith("+241") || number.startsWith("241")) return "🇬🇦";
+  if (number.startsWith("+220") || number.startsWith("220")) return "🇬🇲";
+  if (number.startsWith("+233") || number.startsWith("233")) return "🇬🇭";
+  if (number.startsWith("+224") || number.startsWith("224")) return "🇬🇳";
+  if (number.startsWith("+245") || number.startsWith("245")) return "🇬🇼";
+  if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪";
+  if (number.startsWith("+266") || number.startsWith("266")) return "🇱🇸";
+  if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷";
+  if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾";
+  if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬";
+  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼";
+  if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱";
+  if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷";
+  if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺";
+  if (number.startsWith("+212") || number.startsWith("212")) return "🇲🇦";
+  if (number.startsWith("+258") || number.startsWith("258")) return "🇲🇿";
+  if (number.startsWith("+264") || number.startsWith("264")) return "🇳🇦";
+  if (number.startsWith("+227") || number.startsWith("227")) return "🇳🇪";
+  if (number.startsWith("+234") || number.startsWith("234")) return "🇳🇬";
+  if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼";
+  if (number.startsWith("+239") || number.startsWith("239")) return "🇸🇹";
+  if (number.startsWith("+221") || number.startsWith("221")) return "🇸🇳";
+  if (number.startsWith("+248") || number.startsWith("248")) return "🇸🇨";
+  if (number.startsWith("+232") || number.startsWith("232")) return "🇸🇱";
+  if (number.startsWith("+252") || number.startsWith("252")) return "🇸🇴";
+  if (number.startsWith("+27") || number.startsWith("27")) return "🇿🇦";
+  if (number.startsWith("+211") || number.startsWith("211")) return "🇸🇸";
+  if (number.startsWith("+249") || number.startsWith("249")) return "🇸🇩";
+  if (number.startsWith("+255") || number.startsWith("255")) return "🇹🇿";
+  if (number.startsWith("+228") || number.startsWith("228")) return "🇹🇬";
+  if (number.startsWith("+216") || number.startsWith("216")) return "🇹🇳";
+  if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬";
+  if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲";
+  if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼";
+  // Asia
+  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫";
+  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲";
+  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿";
+  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭";
+  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩";
+  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹";
+  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳";
+  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭";
+  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳";
+  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾";
+  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳";
+  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩";
+  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷";
+  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶";
+  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱";
+  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵";
+  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴";
+  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿";
+  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼";
+  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬";
+  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦";
+  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧";
+  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾";
+  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻";
+  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳";
+  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲";
+  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵";
+  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵";
+  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲";
+  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰";
+  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸";
+  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭";
+  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦";
+  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦";
+  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬";
+  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷";
+  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰";
+  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾";
+  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼";
+  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯";
+  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭";
+  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱";
+  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷";
+  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲";
+  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪";
+  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿";
+  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳";
+  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪";
+  // Europe
+  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱";
+  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩";
+  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹";
+  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾";
+  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪";
+  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦";
+  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬";
+  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷";
+  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿";
+  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰";
+  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪";
+  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮";
+  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷";
+  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪";
+  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷";
+  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺";
+  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸";
+  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪";
+  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹";
+  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰";
+  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻";
+  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮";
+  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹";
+  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺";
+  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹";
+  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩";
+  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨";
+  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪";
+  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱";
+  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰";
+  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴";
+  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱";
+  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹";
+  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴";
+  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺";
+  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲";
+  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸";
+  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰";
+  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮";
+  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸";
+  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪";
+  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭";
+  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦";
+  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧";
+  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦";
+  // North America
+  if (number.startsWith("+1") || number.startsWith("1")) {
+    if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸";
+    if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧";
+    if (number.startsWith("+1441") || number.startsWith("1441")) return "🇧🇲";
+    if (number.startsWith("+1284") || number.startsWith("1284")) return "🇻🇬";
+    if (number.startsWith("+1345") || number.startsWith("1345")) return "🇰🇾";
+    if (number.startsWith("+1767") || number.startsWith("1767")) return "🇩🇲";
+    if (number.startsWith("+1809") || number.startsWith("1809")) return "🇩🇴";
+    if (number.startsWith("+1876") || number.startsWith("1876")) return "🇯🇲";
+    if (number.startsWith("+1664") || number.startsWith("1664")) return "🇲🇸";
+    if (number.startsWith("+1787") || number.startsWith("1787")) return "🇵🇷";
+    if (number.startsWith("+1868") || number.startsWith("1868")) return "🇹🇹";
+    if (number.startsWith("+1649") || number.startsWith("1649")) return "🇹🇨";
+    if (number.startsWith("+1340") || number.startsWith("1340")) return "🇻🇮";
+    return "🇺🇸";
+  }
+  if (number.startsWith("+52") || number.startsWith("52")) return "🇲🇽";
+  if (number.startsWith("+501") || number.startsWith("501")) return "🇧🇿";
+  if (number.startsWith("+506") || number.startsWith("506")) return "🇨🇷";
+  if (number.startsWith("+53") || number.startsWith("53")) return "🇨🇺";
+  if (number.startsWith("+503") || number.startsWith("503")) return "🇸🇻";
+  if (number.startsWith("+502") || number.startsWith("502")) return "🇬🇹";
+  if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳";
+  if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮";
+  if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦";
+  // South America
+  if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷";
+  if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴";
+  if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷";
+  if (number.startsWith("+56") || number.startsWith("56")) return "🇨🇱";
+  if (number.startsWith("+57") || number.startsWith("57")) return "🇨🇴";
+  if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨";
+  if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾";
+  if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾";
+  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪";
+  if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷";
+  if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾";
+  if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪";
+  // Oceania
+  if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺";
+  if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯";
+  if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲";
+  if (number.startsWith("+674") || number.startsWith("674")) return "🇳🇷";
+  if (number.startsWith("+64") || number.startsWith("64")) return "🇳🇿";
+  if (number.startsWith("+675") || number.startsWith("675")) return "🇵🇬";
+  if (number.startsWith("+685") || number.startsWith("685")) return "🇼🇸";
+  if (number.startsWith("+677") || number.startsWith("677")) return "🇸🇧";
+  if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴";
+  if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻";
+  if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺";
   return "🌍";
 }
 
@@ -92,6 +291,7 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
+  isActive = false, // NEW: prop to track if this card is the active one in viewport
 }) {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -103,46 +303,86 @@ export default function DedicationCard({
   const [hasReacted, setHasReacted] = useState(() => {
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
-  const [isVisible, setIsVisible] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const videoRef = useRef(null);
+  const iframeRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
   const mediaType = getMediaType(mediaUrl);
 
+  // ==========================================
+  // NEW: Auto-pause when card becomes inactive
+  // ==========================================
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          setIsVisible(entry.isIntersecting);
-        });
-      },
-      { threshold: 0.6, rootMargin: "0px" }
-    );
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
-    }
-    return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
-      }
-    };
-  }, []);
+    if (!videoRef.current && !iframeRef.current) return;
 
-  useEffect(() => {
-    if (!videoRef.current) return;
-    if (isVisible && mediaType === 'video') {
-      if (videoRef.current.paused) {
+    const mediaElement = videoRef.current || iframeRef.current;
+    
+    if (isActive) {
+      // Card is active - play the media
+      if (videoRef.current && mediaType === 'video') {
         videoRef.current.play().catch((err) => {
           console.log("Play prevented:", err);
         });
       }
+      // For iframes (YouTube, Vimeo, Dailymotion) - we need to use postMessage
+      if (iframeRef.current && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
+        // Send play command to iframe
+        try {
+          const iframe = iframeRef.current;
+          // YouTube API
+          if (mediaType === 'youtube') {
+            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+          }
+          // Vimeo API
+          if (mediaType === 'vimeo') {
+            iframe.contentWindow.postMessage('{"method":"play"}', '*');
+          }
+          // Dailymotion API
+          if (mediaType === 'dailymotion') {
+            iframe.contentWindow.postMessage('{"command":"play"}', '*');
+          }
+        } catch (e) {
+          console.log("Could not control iframe playback:", e);
+        }
+      }
     } else {
-      if (!videoRef.current.paused) {
-        videoRef.current.pause();
+      // Card is inactive - pause the media
+      if (videoRef.current && mediaType === 'video') {
+        if (!videoRef.current.paused) {
+          videoRef.current.pause();
+        }
+      }
+      // Pause iframes
+      if (iframeRef.current && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
+        try {
+          const iframe = iframeRef.current;
+          if (mediaType === 'youtube') {
+            iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          }
+          if (mediaType === 'vimeo') {
+            iframe.contentWindow.postMessage('{"method":"pause"}', '*');
+          }
+          if (mediaType === 'dailymotion') {
+            iframe.contentWindow.postMessage('{"command":"pause"}', '*');
+          }
+        } catch (e) {
+          console.log("Could not pause iframe:", e);
+        }
       }
     }
-  }, [isVisible, mediaType]);
+  }, [isActive, mediaType]);
+
+  // ==========================================
+  // Cleanup on unmount
+  // ==========================================
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && mediaType === 'video') {
+        videoRef.current.pause();
+      }
+    };
+  }, [mediaType]);
 
   async function loadComments() {
     if (!id) return;
@@ -262,6 +502,7 @@ export default function DedicationCard({
       case 'youtube':
         return (
           <iframe
+            ref={iframeRef}
             src={getYouTubeEmbedUrl(mediaUrl)}
             style={iframeStyle}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -274,6 +515,7 @@ export default function DedicationCard({
       case 'vimeo':
         return (
           <iframe
+            ref={iframeRef}
             src={getVimeoEmbedUrl(mediaUrl)}
             style={iframeStyle}
             allow="autoplay; fullscreen; picture-in-picture"
@@ -286,6 +528,7 @@ export default function DedicationCard({
       case 'dailymotion':
         return (
           <iframe
+            ref={iframeRef}
             src={getDailymotionEmbedUrl(mediaUrl)}
             style={iframeStyle}
             allow="autoplay; fullscreen; picture-in-picture"
@@ -317,6 +560,7 @@ export default function DedicationCard({
             <div style={audioCardStyle}>
               <div style={audioIconStyle}>🎵</div>
               <audio
+                ref={videoRef}
                 src={mediaUrl}
                 controls
                 style={audioControlStyle}
@@ -400,6 +644,12 @@ export default function DedicationCard({
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
+        {/* NEW: Active indicator overlay (optional) */}
+        {isActive && (
+          <div style={activeIndicator}>
+            <span>▶ Playing</span>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
@@ -474,10 +724,15 @@ export default function DedicationCard({
             ) : (
               commentsList.map((comment) => (
                 <div key={comment.id} style={commentItem}>
-                  <div style={commentFrom}>
-                    {getFlagFromWhatsapp(comment.commenter_whatsapp || "")} {comment.commenter_whatsapp || "Anonymous"}
+                  <div style={commentHeaderRow}>
+                    <div style={commentAvatar}>
+                      {getFlagFromWhatsapp(comment.commenter_whatsapp || "")}
+                    </div>
+                    <div style={commentContent}>
+                      <div style={commentFrom}>Anonymous Fan</div>
+                      <div style={commentBody}>{comment.comment}</div>
+                    </div>
                   </div>
-                  <div style={commentBody}>{comment.comment}</div>
                 </div>
               ))
             )}
@@ -531,7 +786,7 @@ export default function DedicationCard({
 }
 
 // ==========================================
-// STYLES (unchanged - keep your existing styles)
+// STYLES
 // ==========================================
 const card = {
   position: "relative",
@@ -865,6 +1120,32 @@ const commentsListBox = {
   WebkitOverflowScrolling: "touch",
 };
 
+const commentHeaderRow = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+};
+
+const commentAvatar = {
+  width: "36px",
+  height: "36px",
+  borderRadius: "50%",
+  background: "#2c2c2e",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "20px",
+  flexShrink: 0,
+  border: "2px solid #3a3a3c",
+};
+
+const commentContent = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+};
+
 const commentItem = {
   display: "flex",
   flexDirection: "column",
@@ -970,5 +1251,20 @@ const closeImageBtn = {
   padding: "8px",
 };
 
-// Add animation keyframes to your global CSS or in a style tag
-// @keyframes slideUp { from { transform: translateX(-50%) translateY(100%); } to { transform: translateX(-50%) translateY(0); } }
+// NEW: Active indicator style
+const activeIndicator = {
+  position: "absolute",
+  top: "14px",
+  right: "14px",
+  zIndex: 2,
+  padding: "4px 10px",
+  borderRadius: "12px",
+  background: "rgba(0, 230, 118, 0.9)",
+  color: "#000000",
+  fontSize: "11px",
+  fontWeight: "700",
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  animation: "pulse 1.5s ease-in-out infinite",
+};
