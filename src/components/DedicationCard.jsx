@@ -3,650 +3,210 @@ import { Plus, Heart, MessageSquare, Share2 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
-function isDirectVideoUrl(url = "") {
-  const clean = url.toLowerCase().split("?")[0].split("#")[0];
-  return (
-    clean.endsWith(".mp4") ||
-    clean.endsWith(".webm") ||
-    clean.endsWith(".ogg") ||
-    clean.endsWith(".mov") ||
-    clean.endsWith(".m4v") ||
-    clean.endsWith(".mkv") ||
-    clean.endsWith(".avi")
-  );
-}
-
-function isImageUrl(url = "") {
-  const clean = url.toLowerCase().split("?")[0].split("#")[0];
-  return (
-    clean.endsWith(".jpg") ||
-    clean.endsWith(".jpeg") ||
-    clean.endsWith(".png") ||
-    clean.endsWith(".gif") ||
-    clean.endsWith(".webp") ||
-    clean.endsWith(".bmp") ||
-    clean.endsWith(".svg")
-  );
-}
-
-function getEmbedUrl(url = "", isActive = false) {
-  if (!url) return "";
-  
-  const autoplay = isActive ? 1 : 0;
-
-  const youtubeMatch = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-  );
-  if (youtubeMatch) {
-    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
-  }
-
-  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-  if (shortsMatch) {
-    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=${autoplay}&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
-  }
-
-  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
-  if (vimeoMatch) {
-    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${autoplay}&muted=0&controls=1`;
-  }
-
-  const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
-  if (dailymotionMatch) {
-    return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=${autoplay}&mute=0`;
-  }
-
-  if (url.includes("/embed/") || url.includes("player.")) return url;
-  return url;
-}
-
 function getFlagFromWhatsapp(number = "") {
   // Africa
-  if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿";
-  if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴";
-  if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯";
-  if (number.startsWith("+267") || number.startsWith("267")) return "🇧🇼";
-  if (number.startsWith("+226") || number.startsWith("226")) return "🇧🇫";
-  if (number.startsWith("+257") || number.startsWith("257")) return "🇧🇮";
-  if (number.startsWith("+237") || number.startsWith("237")) return "🇨🇲";
-  if (number.startsWith("+238") || number.startsWith("238")) return "🇨🇻";
-  if (number.startsWith("+236") || number.startsWith("236")) return "🇨🇫";
-  if (number.startsWith("+235") || number.startsWith("235")) return "🇹🇩";
-  if (number.startsWith("+269") || number.startsWith("269")) return "🇰🇲";
-  if (number.startsWith("+242") || number.startsWith("242")) return "🇨🇬";
-  if (number.startsWith("+243") || number.startsWith("243")) return "🇨🇩";
-  if (number.startsWith("+225") || number.startsWith("225")) return "🇨🇮";
-  if (number.startsWith("+253") || number.startsWith("253")) return "🇩🇯";
-  if (number.startsWith("+20") || number.startsWith("20")) return "🇪🇬";
-  if (number.startsWith("+240") || number.startsWith("240")) return "🇬🇶";
-  if (number.startsWith("+291") || number.startsWith("291")) return "🇪🇷";
-  if (number.startsWith("+268") || number.startsWith("268")) return "🇸🇿";
-  if (number.startsWith("+251") || number.startsWith("251")) return "🇪🇹";
-  if (number.startsWith("+241") || number.startsWith("241")) return "🇬🇦";
-  if (number.startsWith("+220") || number.startsWith("220")) return "🇬🇲";
-  if (number.startsWith("+233") || number.startsWith("233")) return "🇬🇭";
-  if (number.startsWith("+224") || number.startsWith("224")) return "🇬🇳";
-  if (number.startsWith("+245") || number.startsWith("245")) return "🇬🇼";
-  if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪";
-  if (number.startsWith("+266") || number.startsWith("266")) return "🇱🇸";
-  if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷";
-  if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾";
-  if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬";
-  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼";
-  if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱";
-  if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷";
-  if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺";
-  if (number.startsWith("+212") || number.startsWith("212")) return "🇲🇦";
-  if (number.startsWith("+258") || number.startsWith("258")) return "🇲🇿";
-  if (number.startsWith("+264") || number.startsWith("264")) return "🇳🇦";
-  if (number.startsWith("+227") || number.startsWith("227")) return "🇳🇪";
-  if (number.startsWith("+234") || number.startsWith("234")) return "🇳🇬";
-  if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼";
-  if (number.startsWith("+239") || number.startsWith("239")) return "🇸🇹";
-  if (number.startsWith("+221") || number.startsWith("221")) return "🇸🇳";
-  if (number.startsWith("+248") || number.startsWith("248")) return "🇸🇨";
-  if (number.startsWith("+232") || number.startsWith("232")) return "🇸🇱";
-  if (number.startsWith("+252") || number.startsWith("252")) return "🇸🇴";
-  if (number.startsWith("+27") || number.startsWith("27")) return "🇿🇦";
-  if (number.startsWith("+211") || number.startsWith("211")) return "🇸🇸";
-  if (number.startsWith("+249") || number.startsWith("249")) return "🇸🇩";
-  if (number.startsWith("+255") || number.startsWith("255")) return "🇹🇿";
-  if (number.startsWith("+228") || number.startsWith("228")) return "🇹🇬";
-  if (number.startsWith("+216") || number.startsWith("216")) return "🇹🇳";
-  if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬";
-  if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲";
-  if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼";
+  if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿"; // Algeria
+  if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴"; // Angola
+  if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯"; // Benin
+  if (number.startsWith("+267") || number.startsWith("267")) return "🇧🇼"; // Botswana
+  if (number.startsWith("+226") || number.startsWith("226")) return "🇧🇫"; // Burkina Faso
+  if (number.startsWith("+257") || number.startsWith("257")) return "🇧🇮"; // Burundi
+  if (number.startsWith("+237") || number.startsWith("237")) return "🇨🇲"; // Cameroon
+  if (number.startsWith("+238") || number.startsWith("238")) return "🇨🇻"; // Cape Verde
+  if (number.startsWith("+236") || number.startsWith("236")) return "🇨🇫"; // Central African Republic
+  if (number.startsWith("+235") || number.startsWith("235")) return "🇹🇩"; // Chad
+  if (number.startsWith("+269") || number.startsWith("269")) return "🇰🇲"; // Comoros
+  if (number.startsWith("+242") || number.startsWith("242")) return "🇨🇬"; // Congo (Republic)
+  if (number.startsWith("+243") || number.startsWith("243")) return "🇨🇩"; // Congo (DRC)
+  if (number.startsWith("+225") || number.startsWith("225")) return "🇨🇮"; // Côte d'Ivoire
+  if (number.startsWith("+253") || number.startsWith("253")) return "🇩🇯"; // Djibouti
+  if (number.startsWith("+20") || number.startsWith("20")) return "🇪🇬"; // Egypt
+  if (number.startsWith("+240") || number.startsWith("240")) return "🇬🇶"; // Equatorial Guinea
+  if (number.startsWith("+291") || number.startsWith("291")) return "🇪🇷"; // Eritrea
+  if (number.startsWith("+268") || number.startsWith("268")) return "🇸🇿"; // Eswatini
+  if (number.startsWith("+251") || number.startsWith("251")) return "🇪🇹"; // Ethiopia
+  if (number.startsWith("+241") || number.startsWith("241")) return "🇬🇦"; // Gabon
+  if (number.startsWith("+220") || number.startsWith("220")) return "🇬🇲"; // Gambia
+  if (number.startsWith("+233") || number.startsWith("233")) return "🇬🇭"; // Ghana
+  if (number.startsWith("+224") || number.startsWith("224")) return "🇬🇳"; // Guinea
+  if (number.startsWith("+245") || number.startsWith("245")) return "🇬🇼"; // Guinea-Bissau
+  if (number.startsWith("+254") || number.startsWith("254")) return "🇰🇪"; // Kenya
+  if (number.startsWith("+266") || number.startsWith("266")) return "🇱🇸"; // Lesotho
+  if (number.startsWith("+231") || number.startsWith("231")) return "🇱🇷"; // Liberia
+  if (number.startsWith("+218") || number.startsWith("218")) return "🇱🇾"; // Libya
+  if (number.startsWith("+261") || number.startsWith("261")) return "🇲🇬"; // Madagascar
+  if (number.startsWith("+265") || number.startsWith("265")) return "🇲🇼"; // Malawi
+  if (number.startsWith("+223") || number.startsWith("223")) return "🇲🇱"; // Mali
+  if (number.startsWith("+222") || number.startsWith("222")) return "🇲🇷"; // Mauritania
+  if (number.startsWith("+230") || number.startsWith("230")) return "🇲🇺"; // Mauritius
+  if (number.startsWith("+212") || number.startsWith("212")) return "🇲🇦"; // Morocco
+  if (number.startsWith("+258") || number.startsWith("258")) return "🇲🇿"; // Mozambique
+  if (number.startsWith("+264") || number.startsWith("264")) return "🇳🇦"; // Namibia
+  if (number.startsWith("+227") || number.startsWith("227")) return "🇳🇪"; // Niger
+  if (number.startsWith("+234") || number.startsWith("234")) return "🇳🇬"; // Nigeria
+  if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼"; // Rwanda
+  if (number.startsWith("+239") || number.startsWith("239")) return "🇸🇹"; // São Tomé and Príncipe
+  if (number.startsWith("+221") || number.startsWith("221")) return "🇸🇳"; // Senegal
+  if (number.startsWith("+248") || number.startsWith("248")) return "🇸🇨"; // Seychelles
+  if (number.startsWith("+232") || number.startsWith("232")) return "🇸🇱"; // Sierra Leone
+  if (number.startsWith("+252") || number.startsWith("252")) return "🇸🇴"; // Somalia
+  if (number.startsWith("+27") || number.startsWith("27")) return "🇿🇦"; // South Africa
+  if (number.startsWith("+211") || number.startsWith("211")) return "🇸🇸"; // South Sudan
+  if (number.startsWith("+249") || number.startsWith("249")) return "🇸🇩"; // Sudan
+  if (number.startsWith("+255") || number.startsWith("255")) return "🇹🇿"; // Tanzania
+  if (number.startsWith("+228") || number.startsWith("228")) return "🇹🇬"; // Togo
+  if (number.startsWith("+216") || number.startsWith("216")) return "🇹🇳"; // Tunisia
+  if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬"; // Uganda
+  if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲"; // Zambia
+  if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼"; // Zimbabwe
   // Asia
-  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫";
-  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲";
-  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿";
-  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭";
-  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩";
-  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹";
-  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳";
-  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭";
-  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳";
-  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾";
-  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳";
-  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩";
-  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷";
-  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶";
-  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱";
-  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵";
-  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿";
-  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼";
-  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬";
-  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦";
-  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧";
-  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾";
-  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻";
-  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳";
-  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲";
-  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵";
-  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵";
-  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲";
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰";
-  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸";
-  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭";
-  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦";
-  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦";
-  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬";
-  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷";
-  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰";
-  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾";
-  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼";
-  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯";
-  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭";
-  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱";
-  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷";
-  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲";
-  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪";
-  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿";
-  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳";
-  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪";
+  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫"; // Afghanistan
+  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲"; // Armenia
+  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿"; // Azerbaijan
+  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭"; // Bahrain
+  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩"; // Bangladesh
+  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹"; // Bhutan
+  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳"; // Brunei
+  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭"; // Cambodia
+  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳"; // China
+  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾"; // Cyprus
+  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳"; // India
+  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩"; // Indonesia
+  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷"; // Iran
+  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶"; // Iraq
+  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱"; // Israel
+  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵"; // Japan
+  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴"; // Jordan
+  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿"; // Kazakhstan
+  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼"; // Kuwait
+  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬"; // Kyrgyzstan
+  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦"; // Laos
+  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧"; // Lebanon
+  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾"; // Malaysia
+  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻"; // Maldives
+  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳"; // Mongolia
+  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲"; // Myanmar
+  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵"; // Nepal
+  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵"; // North Korea
+  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲"; // Oman
+  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰"; // Pakistan
+  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸"; // Palestine
+  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭"; // Philippines
+  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦"; // Qatar
+  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦"; // Saudi Arabia
+  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬"; // Singapore
+  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷"; // South Korea
+  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰"; // Sri Lanka
+  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾"; // Syria
+  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼"; // Taiwan
+  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯"; // Tajikistan
+  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭"; // Thailand
+  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱"; // Timor-Leste
+  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷"; // Turkey
+  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲"; // Turkmenistan
+  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪"; // UAE
+  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿"; // Uzbekistan
+  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳"; // Vietnam
+  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪"; // Yemen
   // Europe
-  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱";
-  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩";
-  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹";
-  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾";
-  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪";
-  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦";
-  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬";
-  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷";
-  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿";
-  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰";
-  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪";
-  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮";
-  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷";
-  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪";
-  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷";
-  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺";
-  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸";
-  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪";
-  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹";
-  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰";
-  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻";
-  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮";
-  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹";
-  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺";
-  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹";
-  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩";
-  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨";
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪";
-  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱";
-  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰";
-  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴";
-  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱";
-  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹";
-  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺";
-  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲";
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸";
-  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰";
-  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮";
-  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸";
-  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪";
-  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭";
-  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦";
-  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧";
-  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦";
+  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱"; // Albania
+  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩"; // Andorra
+  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹"; // Austria
+  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾"; // Belarus
+  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪"; // Belgium
+  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦"; // Bosnia and Herzegovina
+  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬"; // Bulgaria
+  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷"; // Croatia
+  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿"; // Czech Republic
+  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰"; // Denmark
+  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪"; // Estonia
+  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮"; // Finland
+  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷"; // France
+  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪"; // Germany
+  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷"; // Greece
+  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺"; // Hungary
+  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸"; // Iceland
+  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪"; // Ireland
+  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹"; // Italy
+  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰"; // Kosovo
+  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻"; // Latvia
+  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮"; // Liechtenstein
+  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹"; // Lithuania
+  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺"; // Luxembourg
+  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹"; // Malta
+  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩"; // Moldova
+  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨"; // Monaco
+  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪"; // Montenegro
+  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱"; // Netherlands
+  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰"; // North Macedonia
+  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴"; // Norway
+  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱"; // Poland
+  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹"; // Portugal
+  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴"; // Romania
+  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺"; // Russia
+  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲"; // San Marino
+  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸"; // Serbia
+  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰"; // Slovakia
+  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮"; // Slovenia
+  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸"; // Spain
+  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪"; // Sweden
+  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭"; // Switzerland
+  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦"; // Ukraine
+  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧"; // United Kingdom
+  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦"; // Vatican City
   // North America
   if (number.startsWith("+1") || number.startsWith("1")) {
-    if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸";
-    if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧";
-    if (number.startsWith("+1441") || number.startsWith("1441")) return "🇧🇲";
-    if (number.startsWith("+1284") || number.startsWith("1284")) return "🇻🇬";
-    if (number.startsWith("+1345") || number.startsWith("1345")) return "🇰🇾";
-    if (number.startsWith("+1767") || number.startsWith("1767")) return "🇩🇲";
-    if (number.startsWith("+1809") || number.startsWith("1809")) return "🇩🇴";
-    if (number.startsWith("+1876") || number.startsWith("1876")) return "🇯🇲";
-    if (number.startsWith("+1664") || number.startsWith("1664")) return "🇲🇸";
-    if (number.startsWith("+1787") || number.startsWith("1787")) return "🇵🇷";
-    if (number.startsWith("+1868") || number.startsWith("1868")) return "🇹🇹";
-    if (number.startsWith("+1649") || number.startsWith("1649")) return "🇹🇨";
-    if (number.startsWith("+1340") || number.startsWith("1340")) return "🇻🇮";
-    return "🇺🇸";
+    if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸"; // Bahamas
+    if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧"; // Barbados
+    if (number.startsWith("+1441") || number.startsWith("1441")) return "🇧🇲"; // Bermuda
+    if (number.startsWith("+1284") || number.startsWith("1284")) return "🇻🇬"; // British Virgin Islands
+    if (number.startsWith("+1345") || number.startsWith("1345")) return "🇰🇾"; // Cayman Islands
+    if (number.startsWith("+1767") || number.startsWith("1767")) return "🇩🇲"; // Dominica
+    if (number.startsWith("+1809") || number.startsWith("1809")) return "🇩🇴"; // Dominican Republic
+    if (number.startsWith("+1876") || number.startsWith("1876")) return "🇯🇲"; // Jamaica
+    if (number.startsWith("+1664") || number.startsWith("1664")) return "🇲🇸"; // Montserrat
+    if (number.startsWith("+1787") || number.startsWith("1787")) return "🇵🇷"; // Puerto Rico
+    if (number.startsWith("+1868") || number.startsWith("1868")) return "🇹🇹"; // Trinidad and Tobago
+    if (number.startsWith("+1649") || number.startsWith("1649")) return "🇹🇨"; // Turks and Caicos
+    if (number.startsWith("+1340") || number.startsWith("1340")) return "🇻🇮"; // US Virgin Islands
+    return "🇺🇸"; // USA/Canada default
   }
-  if (number.startsWith("+52") || number.startsWith("52")) return "🇲🇽";
-  if (number.startsWith("+501") || number.startsWith("501")) return "🇧🇿";
-  if (number.startsWith("+506") || number.startsWith("506")) return "🇨🇷";
-  if (number.startsWith("+53") || number.startsWith("53")) return "🇨🇺";
-  if (number.startsWith("+503") || number.startsWith("503")) return "🇸🇻";
-  if (number.startsWith("+502") || number.startsWith("502")) return "🇬🇹";
-  if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳";
-  if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮";
-  if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦";
+  if (number.startsWith("+52") || number.startsWith("52")) return "🇲🇽"; // Mexico
+  if (number.startsWith("+501") || number.startsWith("501")) return "🇧🇿"; // Belize
+  if (number.startsWith("+506") || number.startsWith("506")) return "🇨🇷"; // Costa Rica
+  if (number.startsWith("+53") || number.startsWith("53")) return "🇨🇺"; // Cuba
+  if (number.startsWith("+503") || number.startsWith("503")) return "🇸🇻"; // El Salvador
+  if (number.startsWith("+502") || number.startsWith("502")) return "🇬🇹"; // Guatemala
+  if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳"; // Honduras
+  if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮"; // Nicaragua
+  if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦"; // Panama
   // South America
-  if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷";
-  if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴";
-  if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷";
-  if (number.startsWith("+56") || number.startsWith("56")) return "🇨🇱";
-  if (number.startsWith("+57") || number.startsWith("57")) return "🇨🇴";
-  if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨";
-  if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾";
-  if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾";
-  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪";
-  if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷";
-  if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾";
-  if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪";
+  if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷"; // Argentina
+  if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴"; // Bolivia
+  if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷"; // Brazil
+  if (number.startsWith("+56") || number.startsWith("56")) return "🇨🇱"; // Chile
+  if (number.startsWith("+57") || number.startsWith("57")) return "🇨🇴"; // Colombia
+  if (number.startsWith("+593") || number.startsWith("593")) return "🇪🇨"; // Ecuador
+  if (number.startsWith("+592") || number.startsWith("592")) return "🇬🇾"; // Guyana
+  if (number.startsWith("+595") || number.startsWith("595")) return "🇵🇾"; // Paraguay
+  if (number.startsWith("+51") || number.startsWith("51")) return "🇵🇪"; // Peru
+  if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷"; // Suriname
+  if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾"; // Uruguay
+  if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪"; // Venezuela
   // Oceania
-  if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺";
-  if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯";
-  if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲";
-  if (number.startsWith("+674") || number.startsWith("674")) return "🇳🇷";
-  if (number.startsWith("+64") || number.startsWith("64")) return "🇳🇿";
-  if (number.startsWith("+675") || number.startsWith("675")) return "🇵🇬";
-  if (number.startsWith("+685") || number.startsWith("685")) return "🇼🇸";
-  if (number.startsWith("+677") || number.startsWith("677")) return "🇸🇧";
-  if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴";
-  if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻";
-  if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺";
+  if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺"; // Australia
+  if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯"; // Fiji
+  if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲"; // Micronesia
+  if (number.startsWith("+674") || number.startsWith("674")) return "🇳🇷"; // Nauru
+  if (number.startsWith("+64") || number.startsWith("64")) return "🇳🇿"; // New Zealand
+  if (number.startsWith("+675") || number.startsWith("675")) return "🇵🇬"; // Papua New Guinea
+  if (number.startsWith("+685") || number.startsWith("685")) return "🇼🇸"; // Samoa
+  if (number.startsWith("+677") || number.startsWith("677")) return "🇸🇧"; // Solomon Islands
+  if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴"; // Tonga
+  if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻"; // Tuvalu
+  if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺"; // Vanuatu
   return "🌍";
 }
-
-// Styles
-const card = {
-  backgroundColor: "#141414",
-  borderRadius: "18px",
-  overflow: "hidden",
-  marginBottom: "28px",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.85)",
-  border: "1px solid rgba(255,255,255,0.05)",
-};
-
-const mediaCard = {
-  position: "relative",
-  aspectRatio: "16 / 9",
-  backgroundColor: "#0a0a0a",
-  overflow: "hidden",
-};
-
-const mediaShade = {
-  position: "absolute",
-  bottom: 0,
-  left: 0,
-  right: 0,
-  height: "50%",
-  background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
-  pointerEvents: "none",
-  zIndex: 2,
-};
-
-const videoBg = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  backgroundColor: "#0a0a0a",
-  display: "block",
-};
-
-const imageBg = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  cursor: "pointer",
-  backgroundColor: "#0a0a0a",
-};
-
-const fallbackBg = {
-  width: "100%",
-  height: "100%",
-  backgroundColor: "#1a1a1a",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#555",
-  fontSize: "14px",
-};
-
-const topBadge = {
-  position: "absolute",
-  top: "16px",
-  left: "16px",
-  backgroundColor: "rgba(0,0,0,0.7)",
-  backdropFilter: "blur(8px)",
-  padding: "8px 16px",
-  borderRadius: "100px",
-  color: "white",
-  fontSize: "14px",
-  fontWeight: "500",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  border: "1px solid rgba(255,255,255,0.08)",
-  maxWidth: "70%",
-  zIndex: 3,
-};
-
-const badgeDot = {
-  width: "8px",
-  height: "8px",
-  borderRadius: "50%",
-  backgroundColor: "#00e676",
-  display: "inline-block",
-  flexShrink: 0,
-};
-
-const rightActions = {
-  position: "absolute",
-  bottom: "24px",
-  right: "16px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "14px",
-  zIndex: 5,
-};
-
-const followBtn = {
-  backgroundColor: "rgba(20,20,20,0.6)",
-  backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.2)",
-  borderRadius: "50%",
-  width: "48px",
-  height: "48px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  cursor: "pointer",
-  transition: "0.2s",
-};
-
-const sideBtn = {
-  backgroundColor: "rgba(20,20,20,0.5)",
-  backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: "50%",
-  width: "48px",
-  height: "48px",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  cursor: "pointer",
-  transition: "0.2s",
-  gap: "0px",
-};
-
-const actionLabel = {
-  fontSize: "10px",
-  fontWeight: "600",
-  color: "rgba(255,255,255,0.8)",
-  lineHeight: "1",
-  marginTop: "1px",
-};
-
-const dedicationBody = {
-  padding: "18px 16px 20px 16px",
-  backgroundColor: "#141414",
-};
-
-const peopleRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: "14px",
-};
-
-const person = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-};
-
-const smallPhotoCircle = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  backgroundColor: "#2a2a2a",
-  border: "2px solid #3a3a3a",
-  cursor: "pointer",
-};
-
-const smallPhotoSquare = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "12px",
-  objectFit: "cover",
-  backgroundColor: "#2a2a2a",
-  border: "2px solid #3a3a3a",
-  cursor: "pointer",
-};
-
-const smallPlaceholder = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "50%",
-  backgroundColor: "#2a2a2a",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#888",
-  fontSize: "18px",
-  fontWeight: "600",
-  border: "2px solid #3a3a3a",
-};
-
-const nameEmphasis = {
-  color: "#fff",
-  fontSize: "15px",
-  fontWeight: "600",
-  lineHeight: "1.3",
-};
-
-const roleText = {
-  color: "#888",
-  fontSize: "11px",
-  fontWeight: "400",
-};
-
-const toPill = {
-  backgroundColor: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: "100px",
-  padding: "6px 14px",
-  color: "white",
-  fontSize: "14px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
-const messageText = {
-  color: "#ddd",
-  fontSize: "15px",
-  lineHeight: "1.5",
-  marginBottom: "14px",
-  fontWeight: "400",
-};
-
-const statsLine = {
-  display: "flex",
-  gap: "18px",
-  color: "#666",
-  fontSize: "13px",
-  marginBottom: "12px",
-};
-
-const commentMainBtn = {
-  width: "100%",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.06)",
-  borderRadius: "100px",
-  padding: "12px 18px",
-  color: "#888",
-  fontSize: "14px",
-  cursor: "pointer",
-  textAlign: "left",
-  transition: "0.2s",
-};
-
-const commentOverlay = {
-  backgroundColor: "#1a1a1a",
-  borderTop: "1px solid rgba(255,255,255,0.06)",
-  padding: "16px",
-  marginTop: "4px",
-};
-
-const commentHandleBar = {
-  width: "40px",
-  height: "4px",
-  backgroundColor: "#444",
-  borderRadius: "4px",
-  margin: "0 auto 14px auto",
-};
-
-const commentHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "12px",
-};
-
-const commentTitle = {
-  color: "white",
-  fontSize: "16px",
-  fontWeight: "600",
-  margin: 0,
-};
-
-const closeBtn = {
-  background: "none",
-  border: "none",
-  color: "#888",
-  fontSize: "20px",
-  cursor: "pointer",
-};
-
-const commentsListBox = {
-  maxHeight: "200px",
-  overflowY: "auto",
-  marginBottom: "12px",
-};
-
-const noComments = {
-  color: "#666",
-  fontSize: "14px",
-  textAlign: "center",
-  padding: "16px 0",
-};
-
-const commentItem = {
-  padding: "10px 0",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
-};
-
-const commentFrom = {
-  color: "#888",
-  fontSize: "11px",
-  fontWeight: "500",
-  marginBottom: "4px",
-};
-
-const commentBody = {
-  color: "#ddd",
-  fontSize: "14px",
-};
-
-const writeBox = {
-  paddingTop: "12px",
-  borderTop: "1px solid rgba(255,255,255,0.06)",
-};
-
-const commentInputTop = {
-  width: "100%",
-  padding: "10px 14px",
-  borderRadius: "8px",
-  border: "1px solid #333",
-  backgroundColor: "#0a0a0a",
-  color: "white",
-  fontSize: "14px",
-  marginBottom: "8px",
-  boxSizing: "border-box",
-};
-
-const sendRow = {
-  display: "flex",
-  gap: "8px",
-};
-
-const commentInputBottom = {
-  flex: 1,
-  padding: "10px 14px",
-  borderRadius: "8px",
-  border: "1px solid #333",
-  backgroundColor: "#0a0a0a",
-  color: "white",
-  fontSize: "14px",
-};
-
-const sendBtn = {
-  padding: "10px 20px",
-  backgroundColor: "#00e676",
-  color: "black",
-  border: "none",
-  borderRadius: "8px",
-  fontWeight: "600",
-  cursor: "pointer",
-};
-
-const imagePopup = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.92)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-  cursor: "pointer",
-};
-
-const fullImageStyle = {
-  maxWidth: "90%",
-  maxHeight: "90%",
-  objectFit: "contain",
-  borderRadius: "8px",
-};
-
-const closeImageBtn = {
-  position: "absolute",
-  top: "24px",
-  right: "24px",
-  backgroundColor: "rgba(255,255,255,0.1)",
-  border: "none",
-  color: "white",
-  fontSize: "24px",
-  padding: "8px 16px",
-  borderRadius: "8px",
-  cursor: "pointer",
-};
 
 export default function DedicationCard({
   id,
@@ -664,7 +224,6 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
-  isActive = false,
 }) {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -677,43 +236,76 @@ export default function DedicationCard({
   const [hasReacted, setHasReacted] = useState(() => {
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
+  const [isVisible, setIsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const videoRef = useRef(null);
   const cardRef = useRef(null);
   const flag = getFlagFromWhatsapp(senderWhatsapp);
 
-  // Determine media type
-  const mediaType = mediaUrl ? (
-    isImageUrl(mediaUrl) ? "image" :
-    isDirectVideoUrl(mediaUrl) ? "video" :
-    "embed"
-  ) : "none";
-
-  // Enhanced video playback control - pauses all other videos before playing
+  // Optimized Intersection Observer with higher threshold
   useEffect(() => {
-    const video = videoRef.current;
-
-    if (mediaType !== "video" || !video) return;
-
-    if (isActive) {
-      // Pause all other videos on the page
-      document.querySelectorAll("video").forEach((otherVideo) => {
-        if (otherVideo !== video && !otherVideo.paused) {
-          otherVideo.pause();
-        }
-      });
-
-      // Play this video
-      video.play().catch(() => {});
-    } else {
-      // Pause this video when inactive
-      video.pause();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          setIsVisible(entry.isIntersecting);
+          // Start loading when visible
+          if (entry.isIntersecting && videoRef.current) {
+            videoRef.current.load();
+          }
+        });
+      },
+      {
+        threshold: 0.3,
+        rootMargin: "100px", // Start loading earlier
+      }
+    );
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
     }
-
-    // Cleanup: pause video when component unmounts
     return () => {
-      video.pause();
+      if (cardRef.current) {
+        observer.unobserve(cardRef.current);
+      }
     };
-  }, [isActive, mediaType]);
+  }, []);
+
+  // Video play/pause with better loading
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    
+    if (isVisible) {
+      // If video is loaded, play it
+      if (video.readyState >= 3) {
+        video.play().catch((err) => {
+          console.log("Play prevented:", err);
+        });
+      } else {
+        // Wait for video to load enough before playing
+        const handleCanPlay = () => {
+          video.play().catch((err) => {
+            console.log("Play prevented:", err);
+          });
+          video.removeEventListener('canplay', handleCanPlay);
+        };
+        video.addEventListener('canplay', handleCanPlay);
+        return () => video.removeEventListener('canplay', handleCanPlay);
+      }
+    } else {
+      if (!video.paused) {
+        video.pause();
+      }
+    }
+  }, [isVisible]);
+
+  // Reset loading state when mediaUrl changes
+  useEffect(() => {
+    setIsLoading(true);
+    if (videoRef.current) {
+      videoRef.current.load();
+    }
+  }, [mediaUrl]);
 
   async function loadComments() {
     if (!id) return;
@@ -809,63 +401,23 @@ export default function DedicationCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
-  // Render media based on type
-  const renderMedia = () => {
-    if (!mediaUrl) {
-      return <div style={fallbackBg}></div>;
-    }
-
-    if (mediaType === "image") {
-      return (
-        <img
-          src={mediaUrl}
-          alt={dedicationTitle || mediaTitle}
-          style={imageBg}
-          onClick={() => setFullImage(mediaUrl)}
-        />
-      );
-    }
-
-    if (mediaType === "video") {
-      return (
-        <video
-          ref={videoRef}
-          src={mediaUrl}
-          controls
-          playsInline
-          preload="metadata"
-          style={videoBg}
-          muted={false}
-        />
-      );
-    }
-
-    if (mediaType === "embed") {
-      // Only render iframe when the card is active
-      if (!isActive) {
-        return <div style={fallbackBg}></div>;
-      }
-
-      return (
-        <iframe
-          key={`${id}-${isActive ? "active" : "inactive"}`}
-          src={getEmbedUrl(mediaUrl, true)}
-          title={dedicationTitle || mediaTitle}
-          style={videoBg}
-          frameBorder="0"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-          allowFullScreen
-        />
-      );
-    }
-
-    return <div style={fallbackBg}></div>;
-  };
-
   return (
     <div ref={cardRef} style={card}>
       <div style={mediaCard}>
-        {renderMedia()}
+        {mediaUrl ? (
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls
+            playsInline
+            preload="metadata"
+            style={videoBg}
+            onLoadedData={() => setIsLoading(false)}
+            onError={() => setIsLoading(false)}
+          />
+        ) : (
+          <div style={fallbackBg}></div>
+        )}
         <div style={mediaShade}></div>
         <div style={topBadge}>
           <span style={badgeDot}></span>
@@ -942,6 +494,7 @@ export default function DedicationCard({
           </div>
           <button type="button" onClick={react} style={toPill}>
             <span>❤️</span>
+            <span>to</span>
           </button>
           <div style={person}>
             {recipientPhoto ? (
@@ -1035,3 +588,443 @@ export default function DedicationCard({
     </div>
   );
 }
+
+// ==========================================
+// INSTAGRAM STYLES ONLY
+// ==========================================
+const card = {
+  position: "relative",
+  width: "100%",
+  maxWidth: "430px",
+  margin: "0 auto 18px auto",
+  overflow: "hidden",
+  background: "#000000",
+  color: "#ffffff",
+  borderRadius: "8px",
+  border: "1px solid #262626",
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  WebkitFontSmoothing: "antialiased",
+};
+
+const mediaCard = {
+  position: "relative",
+  width: "100%",
+  aspectRatio: "4 / 5",
+  overflow: "hidden",
+  background: "#000000",
+};
+
+const videoBg = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "center center",
+  background: "#000000",
+  zIndex: 0,
+};
+
+const fallbackBg = {
+  position: "absolute",
+  inset: 0,
+  background: "#262626",
+  zIndex: 0,
+};
+
+const mediaShade = {
+  position: "absolute",
+  inset: 0,
+  background:
+    "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)",
+  zIndex: 1,
+  pointerEvents: "none",
+};
+
+const topBadge = {
+  position: "absolute",
+  top: "14px",
+  left: "14px",
+  right: "74px",
+  zIndex: 2,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  width: "fit-content",
+  maxWidth: "calc(100% - 88px)",
+  padding: "6px 12px",
+  borderRadius: "4px",
+  background: "rgba(0, 0, 0, 0.5)",
+  color: "#ffffff",
+  fontSize: "12px",
+  fontWeight: "600",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const badgeDot = {
+  width: "6px",
+  height: "6px",
+  borderRadius: "50%",
+  background: "#0095f6",
+  flexShrink: 0,
+};
+
+const rightActions = {
+  position: "absolute",
+  right: "12px",
+  bottom: "14px",
+  zIndex: 3,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "16px",
+};
+
+const followBtn = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(0, 0, 0, 0.5)",
+  color: "#ffffff",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  lineHeight: 1,
+  backdropFilter: "blur(2px)",
+  WebkitBackdropFilter: "blur(2px)",
+};
+
+const sideBtn = {
+  border: "none",
+  background: "transparent",
+  color: "#ffffff",
+  width: "40px",
+  minHeight: "40px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "2px",
+  padding: "0",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const actionLabel = {
+  fontSize: "11px",
+  fontWeight: "600",
+  lineHeight: 1,
+  color: "#ffffff",
+  textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+};
+
+const dedicationBody = {
+  padding: "12px 16px 16px 16px",
+  background: "#000000",
+};
+
+const peopleRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  flexWrap: "wrap",
+  paddingBottom: "12px",
+  borderBottom: "1px solid #262626",
+};
+
+const person = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  minWidth: 0,
+};
+
+const nameEmphasis = {
+  fontWeight: "600",
+  fontSize: "14px",
+  color: "#ffffff",
+  lineHeight: 1.2,
+  maxWidth: "128px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const roleText = {
+  fontSize: "10px",
+  fontWeight: "400",
+  color: "#8e8e8e",
+  marginTop: "2px",
+};
+
+const smallPhotoCircle = {
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+  objectFit: "cover",
+  border: "2px solid #ffffff",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const smallPhotoSquare = {
+  width: "32px",
+  height: "32px",
+  borderRadius: "4px",
+  objectFit: "cover",
+  border: "2px solid #ffffff",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const smallPlaceholder = {
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+  background: "#0095f6",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "14px",
+  fontWeight: "600",
+  border: "2px solid #ffffff",
+  flexShrink: 0,
+};
+
+const toPill = {
+  padding: "4px 12px",
+  borderRadius: "4px",
+  background: "transparent",
+  color: "#ffffff",
+  fontSize: "12px",
+  fontWeight: "600",
+  border: "1px solid #262626",
+  flexShrink: 0,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
+};
+
+const messageText = {
+  margin: "12px 0 0 0",
+  padding: "0",
+  fontSize: "14px",
+  lineHeight: "1.5",
+  fontWeight: "400",
+  color: "#ffffff",
+  wordBreak: "break-word",
+};
+
+const statsLine = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "12px",
+  fontSize: "12px",
+  fontWeight: "400",
+  color: "#8e8e8e",
+  marginTop: "8px",
+};
+
+const commentMainBtn = {
+  width: "100%",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "transparent",
+  color: "#8e8e8e",
+  padding: "8px 12px",
+  fontSize: "14px",
+  fontWeight: "400",
+  textAlign: "left",
+  cursor: "pointer",
+  marginTop: "8px",
+};
+
+const commentOverlay = {
+  position: "fixed",
+  left: "50%",
+  transform: "translateX(-50%)",
+  right: "auto",
+  bottom: 0,
+  width: "100%",
+  maxWidth: "430px",
+  height: "70svh",
+  zIndex: 10,
+  background: "#000000",
+  borderTopLeftRadius: "12px",
+  borderTopRightRadius: "12px",
+  padding: "0 16px 16px 16px",
+  boxSizing: "border-box",
+  display: "flex",
+  flexDirection: "column",
+  borderTop: "1px solid #262626",
+};
+
+const commentHandleBar = {
+  width: "36px",
+  height: "4px",
+  background: "#262626",
+  borderRadius: "2px",
+  margin: "8px auto 12px auto",
+  flexShrink: 0,
+};
+
+const commentHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingBottom: "12px",
+  borderBottom: "1px solid #262626",
+  flexShrink: 0,
+};
+
+const commentTitle = {
+  margin: 0,
+  fontSize: "16px",
+  fontWeight: "600",
+  color: "#ffffff",
+};
+
+const closeBtn = {
+  border: "none",
+  background: "transparent",
+  color: "#8e8e8e",
+  fontSize: "18px",
+  cursor: "pointer",
+  padding: "0",
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+};
+
+const commentsListBox = {
+  flex: 1,
+  overflowY: "auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+  padding: "16px 0",
+};
+
+const commentItem = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  padding: "8px 0",
+  borderBottom: "1px solid #262626",
+};
+
+const commentFrom = {
+  fontSize: "12px",
+  fontWeight: "600",
+  color: "#0095f6",
+};
+
+const commentBody = {
+  fontSize: "14px",
+  lineHeight: "1.4",
+  color: "#ffffff",
+  wordBreak: "break-word",
+};
+
+const noComments = {
+  textAlign: "center",
+  color: "#8e8e8e",
+  fontSize: "14px",
+  marginTop: "32px",
+};
+
+const writeBox = {
+  borderTop: "1px solid #262626",
+  paddingTop: "12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  flexShrink: 0,
+};
+
+const sendRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: "8px",
+  alignItems: "center",
+};
+
+const commentInputTop = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "#000000",
+  color: "#ffffff",
+  outline: "none",
+  padding: "8px 12px",
+  fontSize: "14px",
+};
+
+const commentInputBottom = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid #262626",
+  borderRadius: "4px",
+  background: "#000000",
+  color: "#ffffff",
+  outline: "none",
+  padding: "8px 12px",
+  fontSize: "14px",
+};
+
+const sendBtn = {
+  border: "none",
+  background: "#0095f6",
+  color: "#ffffff",
+  fontWeight: "600",
+  fontSize: "14px",
+  cursor: "pointer",
+  padding: "8px 16px",
+  borderRadius: "4px",
+};
+
+const imagePopup = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  background: "rgba(0,0,0,0.92)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "16px",
+};
+
+const fullImageStyle = {
+  maxWidth: "100%",
+  maxHeight: "85vh",
+  objectFit: "contain",
+  borderRadius: "4px",
+};
+
+const closeImageBtn = {
+  position: "fixed",
+  top: "max(16px, env(safe-area-inset-top))",
+  right: "16px",
+  border: "none",
+  background: "rgba(0, 0, 0, 0.5)",
+  color: "#ffffff",
+  fontSize: "20px",
+  borderRadius: "50%",
+  width: "40px",
+  height: "40px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
