@@ -313,65 +313,46 @@ export default function DedicationCard({
   // ==========================================
   // NEW: Auto-pause when card becomes inactive
   // ==========================================
-  useEffect(() => {
-    if (!videoRef.current && !iframeRef.current) return;
+useEffect(() => {
+  const video = videoRef.current;
+  const iframe = iframeRef.current;
 
-    const mediaElement = videoRef.current || iframeRef.current;
-    
-    if (isActive) {
-      // Card is active - play the media
-      if (videoRef.current && mediaType === 'video') {
-        videoRef.current.play().catch((err) => {
-          console.log("Play prevented:", err);
-        });
+  if (!video && !iframe) return;
+
+  if (isActive) {
+    // Pause ALL other videos on the page
+    document.querySelectorAll("video").forEach((otherVideo) => {
+      if (otherVideo !== video && !otherVideo.paused) {
+        otherVideo.pause();
       }
-      // For iframes (YouTube, Vimeo, Dailymotion) - we need to use postMessage
-      if (iframeRef.current && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
-        // Send play command to iframe
+    });
+
+    // Pause all other iframes (YouTube, Vimeo, etc.)
+    document.querySelectorAll("iframe").forEach((otherIframe) => {
+      if (otherIframe !== iframe) {
         try {
-          const iframe = iframeRef.current;
-          // YouTube API
-          if (mediaType === 'youtube') {
-            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-          }
-          // Vimeo API
-          if (mediaType === 'vimeo') {
-            iframe.contentWindow.postMessage('{"method":"play"}', '*');
-          }
-          // Dailymotion API
-          if (mediaType === 'dailymotion') {
-            iframe.contentWindow.postMessage('{"command":"play"}', '*');
-          }
-        } catch (e) {
-          console.log("Could not control iframe playback:", e);
-        }
+          otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        } catch (e) {}
       }
-    } else {
-      // Card is inactive - pause the media
-      if (videoRef.current && mediaType === 'video') {
-        if (!videoRef.current.paused) {
-          videoRef.current.pause();
-        }
-      }
-      // Pause iframes
-      if (iframeRef.current && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
-        try {
-          const iframe = iframeRef.current;
-          if (mediaType === 'youtube') {
-            iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-          }
-          if (mediaType === 'vimeo') {
-            iframe.contentWindow.postMessage('{"method":"pause"}', '*');
-          }
-          if (mediaType === 'dailymotion') {
-            iframe.contentWindow.postMessage('{"command":"pause"}', '*');
-          }
-        } catch (e) {
-          console.log("Could not pause iframe:", e);
-        }
-      }
+    });
+
+    // Play this video
+    if (video && mediaType === 'video') {
+      video.play().catch(() => {});
     }
-  }, [isActive, mediaType]);
+  } else {
+    // Pause this video when inactive
+    if (video && mediaType === 'video') {
+      video.pause();
+    }
+  }
+
+  return () => {
+    if (video && mediaType === 'video') {
+      video.pause();
+    }
+  };
+}, [isActive, mediaType]);
 
   // ==========================================
   // Cleanup on unmount
