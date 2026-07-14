@@ -292,7 +292,7 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
-  isActive = false, // NEW: prop to track if this card is the active one in viewport
+  isActive = false,
 }) {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -593,22 +593,20 @@ export default function DedicationCard({
         );
       
       case 'video':
-  return (
-    <video
-      ref={videoRef}
-      src={mediaUrl}
-      controls
-      playsInline
-      autoPlay
-      muted
-      loop
-      crossOrigin="anonymous"
-      preload="auto"
-      style={videoBg}
-    />
-  );
-  
-      
+        return (
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls
+            playsInline
+            autoPlay
+            muted
+            loop
+            crossOrigin="anonymous"
+            preload="auto"
+            style={videoBg}
+          />
+        );
       
       case 'audio':
         return (
@@ -700,12 +698,6 @@ export default function DedicationCard({
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
-        {/* NEW: Active indicator overlay (optional) */}
-        {isActive && (
-          <div style={activeIndicator}>
-            <span>▶ Playing</span>
-          </div>
-        )}
       </div>
 
       {/* Action Buttons */}
@@ -1202,7 +1194,7 @@ const commentsListBox = {
 const commentHeaderRow = {
   display: "flex",
   alignItems: "flex-start",
-  gap: "2px",  // Reduced from 6px to 2px
+  gap: "2px",
 };
 
 const commentAvatar = {
@@ -1222,7 +1214,7 @@ const commentContent = {
   flex: 1,
   display: "flex",
   flexDirection: "column",
-  gap: "2px",
+  gap: "1px",
 };
 
 const commentItem = {
@@ -1328,22 +1320,4 @@ const closeImageBtn = {
   color: "#ffffff",
   cursor: "pointer",
   padding: "8px",
-};
-
-// NEW: Active indicator style
-const activeIndicator = {
-  position: "absolute",
-  top: "14px",
-  right: "14px",
-  zIndex: 2,
-  padding: "4px 10px",
-  borderRadius: "12px",
-  background: "rgba(0, 230, 118, 0.9)",
-  color: "#000000",
-  fontSize: "11px",
-  fontWeight: "700",
-  display: "flex",
-  alignItems: "center",
-  gap: "4px",
-  animation: "pulse 1.5s ease-in-out infinite",
 };
