@@ -1209,13 +1209,13 @@ const commentAvatar = {
   width: "36px",
   height: "36px",
   borderRadius: "50%",
-  background: "#2c2c2e",
+  background: "#f5f2ef",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "20px",
   flexShrink: 0,
-  border: "2px solid #3a3a3c",
+  border: "2px solid #4f52ed",
 };
 
 const commentContent = {
