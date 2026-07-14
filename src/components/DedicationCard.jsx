@@ -1200,9 +1200,9 @@ const commentsListBox = {
 };
 
 const commentHeaderRow = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "12px",
+ display: "flex",
+ alignItems: "flex-start",
+ gap: "6px",
 };
 
 const commentAvatar = {
