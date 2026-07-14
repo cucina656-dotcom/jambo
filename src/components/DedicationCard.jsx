@@ -35,10 +35,6 @@ function getMediaType(url) {
   if (url.includes('dailymotion.com/')) {
     return 'dailymotion';
   }
-
-  if (url.includes('facebook.com/watch') || url.includes('fb.watch/')) {
-    return 'facebook';
-  }
   
   return 'unknown';
 }
@@ -52,7 +48,7 @@ function getYouTubeEmbedUrl(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return `https://www.youtube.com/embed/${match[1]}?enablejsapi=1`;
+      return `https://www.youtube.com/embed/${match[1]}`;
     }
   }
   return url;
@@ -61,7 +57,7 @@ function getYouTubeEmbedUrl(url) {
 function getVimeoEmbedUrl(url) {
   const match = url.match(/vimeo\.com\/(\d+)/);
   if (match) {
-    return `https://player.vimeo.com/video/${match[1]}?api=1`;
+    return `https://player.vimeo.com/video/${match[1]}`;
   }
   return url;
 }
@@ -69,13 +65,9 @@ function getVimeoEmbedUrl(url) {
 function getDailymotionEmbedUrl(url) {
   const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
   if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}?api=1`;
+    return `https://www.dailymotion.com/embed/video/${match[1]}`;
   }
   return url;
-}
-
-function getFacebookEmbedUrl(url) {
-  return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&autoplay=0`;
 }
 
 function getFlagFromWhatsapp(number = "") {
@@ -299,7 +291,7 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
-  isActive = false,
+  isActive = false, // NEW: prop to track if this card is the active one in viewport
 }) {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -319,80 +311,75 @@ export default function DedicationCard({
   const mediaType = getMediaType(mediaUrl);
 
   // ==========================================
-  // Auto-pause when card becomes inactive
+  // NEW: Auto-pause when card becomes inactive
   // ==========================================
-  useEffect(() => {
-    const video = videoRef.current;
-    const iframe = iframeRef.current;
+ useEffect(() => {
+  const video = videoRef.current;
+  const iframe = iframeRef.current;
 
-    if (!video && !iframe) return;
+  // Skip if no media elements
+  if (!video && !iframe) return;
 
-    const isIframeMedia = mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion' || mediaType === 'facebook';
+  const isIframeMedia = ['youtube', 'vimeo', 'dailymotion', 'facebook'].includes(mediaType);
 
-    if (isActive) {
-      // Pause ALL other videos on the page
-      document.querySelectorAll("video").forEach((otherVideo) => {
-        if (otherVideo !== video && !otherVideo.paused) {
-          otherVideo.pause();
-        }
-      });
-
-      // Pause ALL other iframes on the page
-      document.querySelectorAll("iframe").forEach((otherIframe) => {
-        if (otherIframe !== iframe) {
-          try {
-            otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-          } catch (e) {}
-        }
-      });
-
-      // Play this video
-      if (video && mediaType === 'video') {
-        video.play().catch(() => {});
+  if (isActive) {
+    // Pause ALL other videos on the page
+    document.querySelectorAll("video").forEach((otherVideo) => {
+      if (otherVideo !== video && !otherVideo.paused) {
+        otherVideo.pause();
       }
+    });
 
-      // Play this iframe
-      if (iframe && isIframeMedia) {
+    // Pause ALL other iframes on the page
+    document.querySelectorAll("iframe").forEach((otherIframe) => {
+      if (otherIframe !== iframe) {
         try {
-          if (mediaType === 'youtube') {
-            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-          } else if (mediaType === 'vimeo') {
-            iframe.contentWindow.postMessage('{"method":"play"}', '*');
-          } else if (mediaType === 'dailymotion') {
-            iframe.contentWindow.postMessage('{"command":"play"}', '*');
-          }
-        } catch (e) {
-          console.log("Could not play iframe:", e);
-        }
+          otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        } catch (e) {}
       }
-    } else {
-      // Pause this video when inactive
-      if (video && mediaType === 'video') {
-        video.pause();
-      }
+    });
 
-      // Pause this iframe when inactive
-      if (iframe && isIframeMedia) {
-        try {
-          if (mediaType === 'youtube') {
-            iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-          } else if (mediaType === 'vimeo') {
-            iframe.contentWindow.postMessage('{"method":"pause"}', '*');
-          } else if (mediaType === 'dailymotion') {
-            iframe.contentWindow.postMessage('{"command":"pause"}', '*');
-          }
-        } catch (e) {
-          console.log("Could not pause iframe:", e);
+    // Play current media
+    if (video && mediaType === 'video') {
+      video.play().catch(() => console.log('Video play error'));
+    } else if (iframe && isIframeMedia) {
+      try {
+        if (mediaType === 'youtube') {
+          iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        } else if (mediaType === 'vimeo') {
+          iframe.contentWindow.postMessage('{"method":"play"}', '*');
+        } else if (mediaType === 'dailymotion') {
+          iframe.contentWindow.postMessage('{"command":"play"}', '*');
         }
+      } catch (e) {
+        console.log("Could not play iframe:", e);
       }
     }
-
-    return () => {
-      if (video && mediaType === 'video') {
-        video.pause();
+  } else {
+    // Pause current media when inactive
+    if (video && mediaType === 'video') {
+      video.pause();
+    } else if (iframe && isIframeMedia) {
+      try {
+        if (mediaType === 'youtube') {
+          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        } else if (mediaType === 'vimeo') {
+          iframe.contentWindow.postMessage('{"method":"pause"}', '*');
+        } else if (mediaType === 'dailymotion') {
+          iframe.contentWindow.postMessage('{"command":"pause"}', '*');
+        }
+      } catch (e) {
+        console.log("Could not pause iframe:", e);
       }
-    };
-  }, [isActive, mediaType]);
+    }
+  }
+
+  return () => {
+    if (video && mediaType === 'video') {
+      video.pause();
+    }
+  };
+}, [isActive, mediaType]);
 
   // ==========================================
   // Cleanup on unmount
@@ -559,31 +546,19 @@ export default function DedicationCard({
           />
         );
       
-      case 'facebook':
-        return (
-          <iframe
-            ref={iframeRef}
-            src={getFacebookEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; encrypted-media; fullscreen"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
-      case 'video':
-        return (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            loop
-            crossOrigin="anonymous"
-            preload="auto"
-            style={videoBg}
-          />
+     case 'video':
+  return (
+    <video
+      ref={videoRef}
+      src={mediaUrl}
+      controls
+      playsInline
+      loop
+      crossOrigin="anonymous"
+      preload="auto"
+      style={videoBg}
+    />
+  
         );
       
       case 'audio':
@@ -676,6 +651,7 @@ export default function DedicationCard({
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
+        {/* NEW: Active indicator overlay (optional) */}
         {isActive && (
           <div style={activeIndicator}>
             <span>▶ Playing</span>
@@ -1282,6 +1258,7 @@ const closeImageBtn = {
   padding: "8px",
 };
 
+// NEW: Active indicator style
 const activeIndicator = {
   position: "absolute",
   top: "14px",
