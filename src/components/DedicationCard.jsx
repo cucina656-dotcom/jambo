@@ -546,20 +546,23 @@ export default function DedicationCard({
           />
         );
       
-     case 'video':
+      case 'video':
   return (
     <video
       ref={videoRef}
       src={mediaUrl}
       controls
       playsInline
+      autoPlay
+      muted
       loop
       crossOrigin="anonymous"
       preload="auto"
       style={videoBg}
     />
+  );
   
-        );
+      
       
       case 'audio':
         return (
