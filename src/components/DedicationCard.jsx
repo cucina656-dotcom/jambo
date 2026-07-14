@@ -313,7 +313,7 @@ export default function DedicationCard({
   // ==========================================
   // NEW: Auto-pause when card becomes inactive
   // ==========================================
-useEffect(() => {
+ useEffect(() => {
   const video = videoRef.current;
   const iframe = iframeRef.current;
 
@@ -327,7 +327,7 @@ useEffect(() => {
       }
     });
 
-    // Pause all other iframes (YouTube, Vimeo, etc.)
+    // Pause ALL other iframes on the page
     document.querySelectorAll("iframe").forEach((otherIframe) => {
       if (otherIframe !== iframe) {
         try {
@@ -340,10 +340,40 @@ useEffect(() => {
     if (video && mediaType === 'video') {
       video.play().catch(() => {});
     }
+
+    // Play this iframe (YouTube, Vimeo, Dailymotion)
+    if (iframe && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
+      try {
+        if (mediaType === 'youtube') {
+          iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        } else if (mediaType === 'vimeo') {
+          iframe.contentWindow.postMessage('{"method":"play"}', '*');
+        } else if (mediaType === 'dailymotion') {
+          iframe.contentWindow.postMessage('{"command":"play"}', '*');
+        }
+      } catch (e) {
+        console.log("Could not play iframe:", e);
+      }
+    }
   } else {
     // Pause this video when inactive
     if (video && mediaType === 'video') {
       video.pause();
+    }
+
+    // Pause this iframe when inactive
+    if (iframe && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
+      try {
+        if (mediaType === 'youtube') {
+          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        } else if (mediaType === 'vimeo') {
+          iframe.contentWindow.postMessage('{"method":"pause"}', '*');
+        } else if (mediaType === 'dailymotion') {
+          iframe.contentWindow.postMessage('{"command":"pause"}', '*');
+        }
+      } catch (e) {
+        console.log("Could not pause iframe:", e);
+      }
     }
   }
 
