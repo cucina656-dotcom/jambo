@@ -219,7 +219,6 @@ function Home() {
       return;
     }
     
-    // Detect media type
     let detectedMediaType = "";
     if (newMediaFile) {
       detectedMediaType = newMediaFile.type.startsWith("image/")
@@ -241,8 +240,7 @@ function Home() {
       formData.append("title", newTitle.trim() || DEFAULT_TITLE);
       formData.append("subtitle", subtitle.trim());
       formData.append("media_type", detectedMediaType);
-      // Add this line before formData.append calls
-formData.append("is_new_post", "true");
+      formData.append("is_new_post", "true");
       if (mediaToSave) {
         formData.append("video_url", mediaToSave);
       }
@@ -261,7 +259,12 @@ formData.append("is_new_post", "true");
         alert(data.message || "Failed to create post");
         return;
       }
-      await fetchHomeData();
+      // Directly update posts from response
+      if (data.posts && Array.isArray(data.posts)) {
+        setPosts(data.posts);
+      } else {
+        await fetchHomeData();
+      }
       closeEditor();
       alert("Post created successfully!");
     } catch (error) {
@@ -390,7 +393,6 @@ formData.append("is_new_post", "true");
               data-index={index}
               style={feedPost}
             >
-              {/* Story UI Top Info Panel */}
               <div style={profileCard}>
                 <img
                   src={post.logo_url || DEFAULT_LOGO}
@@ -408,13 +410,11 @@ formData.append("is_new_post", "true");
                 </div>
               </div>
 
-              {/* Extended Video Card Layout - Adjusted heights & top alignments for Android viewports */}
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
 
-              {/* Action row at the bottom - Shifted upward to prevent overlapping or screen cutoffs */}
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
@@ -562,7 +562,6 @@ function EditorModal({
   );
 }
 
-/* Structural CSS Layout Sheet Styles matching Screenshot UI */
 const page = {
   height: "100vh",
   minHeight: "100svh",
@@ -644,7 +643,6 @@ const profileTitle = {
   whiteSpace: "nowrap",
 };
 
-/* Video Card adjusted down to 52% and scaled to fit neatly within the mobile boundaries */
 const videoCardViewport = {
   width: "100%",
   height: "52%",
@@ -664,7 +662,6 @@ const mediaLayer = {
   justifyContent: "center",
 };
 
-/* Using 'contain' ensures the whole video/image fits perfectly without over-zooming on phone ratios */
 const mediaStyle = {
   width: "100%",
   height: "100%",
@@ -680,7 +677,6 @@ const darkOverlay = {
   pointerEvents: "none",
 };
 
-/* Action row lifted perfectly above system navigation cuts to keep it fully operational */
 const bottomHorizontalActionsRow = {
   position: "absolute",
   bottom: "135px",
