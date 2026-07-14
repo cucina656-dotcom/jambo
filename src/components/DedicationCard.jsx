@@ -711,7 +711,7 @@ export default function DedicationCard({
       {/* Action Buttons */}
       <div style={instagramActionBar}>
         <div style={leftActionsRow}>
-          <button type="button" onClick={react} style={inlineActionBtn} aria-label="Like">
+          <button type="button" onClick={react} style={neonActionBtn} aria-label="Like">
             <Heart
               size={24}
               strokeWidth={2}
@@ -719,10 +719,10 @@ export default function DedicationCard({
               color={hasReacted ? "#ED4956" : "#ffffff"}
             />
           </button>
-          <button type="button" onClick={openComments} style={inlineActionBtn} aria-label="Comments">
+          <button type="button" onClick={openComments} style={neonActionBtn} aria-label="Comments">
             <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
           </button>
-          <button type="button" onClick={shareToWhatsApp} style={inlineActionBtn} aria-label="Share">
+          <button type="button" onClick={shareToWhatsApp} style={neonActionBtn} aria-label="Share">
             <Share2 size={24} strokeWidth={2} color="#ffffff" />
           </button>
         </div>
@@ -732,7 +732,7 @@ export default function DedicationCard({
             e.stopPropagation();
             if (onDedicateClick) onDedicateClick();
           }}
-          style={inlineActionBtn}
+          style={neonActionBtn}
           aria-label="Dedicate Song"
         >
           <Plus size={24} strokeWidth={2} color="#ffffff" />
@@ -1019,6 +1019,23 @@ const inlineActionBtn = {
   justifyContent: "center",
 };
 
+const neonActionBtn = {
+  width: "42px",
+  height: "42px",
+  border: "1px solid rgba(255,255,255,0.2)",
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+  padding: 0,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow: "0 0 8px rgba(240,148,51,0.8), 0 0 16px rgba(220,39,67,0.75), 0 0 26px rgba(188,24,136,0.55)",
+  filter: "drop-shadow(0 0 4px rgba(255,255,255,0.35))",
+  transition: "transform 0.2s ease, box-shadow 0.2s ease",
+  flexShrink: 0,
+};
+
 const dedicationBody = {
   padding: "0px 14px 16px 14px",
   background: "#000000",
@@ -1100,15 +1117,21 @@ const statsLine = {
 };
 
 const commentMainBtn = {
-  background: "none",
-  border: "none",
-  color: "#a8a8a8",
-  padding: "6px 0 0 0",
-  fontSize: "14px",
-  textAlign: "left",
+  marginTop: "10px",
+  padding: "9px 14px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "700",
+  textAlign: "center",
   cursor: "pointer",
-  display: "block",
-  transition: "color 0.2s ease",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow: "0 0 8px rgba(240,148,51,0.75), 0 0 16px rgba(220,39,67,0.65), 0 0 24px rgba(188,24,136,0.45)",
+  transition: "transform 0.2s ease, box-shadow 0.2s ease",
 };
 
 const commentOverlay = {
