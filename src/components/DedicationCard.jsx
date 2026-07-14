@@ -318,6 +318,11 @@ export default function DedicationCard({
   const iframe = iframeRef.current;
 
   if (!video && !iframe) return;
+  // Skip if no media
+if (!video && !iframe) return;
+
+// Get current media type
+const currentMediaType = mediaType;
 
   if (isActive) {
     // Pause ALL other videos on the page
