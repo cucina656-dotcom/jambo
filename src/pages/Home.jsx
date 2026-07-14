@@ -241,6 +241,8 @@ function Home() {
       formData.append("title", newTitle.trim() || DEFAULT_TITLE);
       formData.append("subtitle", subtitle.trim());
       formData.append("media_type", detectedMediaType);
+      // Add this line before formData.append calls
+formData.append("is_new_post", "true");
       if (mediaToSave) {
         formData.append("video_url", mediaToSave);
       }
