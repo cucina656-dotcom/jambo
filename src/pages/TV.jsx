@@ -77,7 +77,7 @@ function TV() {
         }
       },
       {
-        threshold: [0, 0.25, 0.5, 0.75, 1],
+        threshold: 0.1,
       }
     );
     Object.values(cardRefs.current).forEach((element) => {
@@ -88,6 +88,16 @@ function TV() {
       setActiveIndex(null);
     };
   }, [feed]);
+
+ // Auto-play first card on initial load
+useEffect(() => {
+  if (feed.length > 0 && activeIndex === null) {
+    const timer = setTimeout(() => {
+      setActiveIndex(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }
+}, [feed]);  
 
   // Auto-pause videos when scrolling away
   useEffect(() => {
