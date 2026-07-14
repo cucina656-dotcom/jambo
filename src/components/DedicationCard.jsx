@@ -519,20 +519,19 @@ useEffect(() => {
           />
         );
       
-      case 'video':
-        return (
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            autoPlay
-            muted
-            loop
-            crossOrigin="anonymous"
-            preload="auto"
-            style={videoBg}
-          />
+     case 'video':
+  return (
+    <video
+      ref={videoRef}
+      src={mediaUrl}
+      controls
+      playsInline
+      loop
+      crossOrigin="anonymous"
+      preload="auto"
+      style={videoBg}
+    />
+  
         );
       
       case 'audio':
