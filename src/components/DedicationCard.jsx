@@ -35,7 +35,7 @@ function getMediaType(url) {
   if (url.includes('dailymotion.com/')) {
     return 'dailymotion';
   }
-  
+
   if (url.includes('facebook.com/watch') || url.includes('fb.watch/')) {
     return 'facebook';
   }
@@ -75,7 +75,6 @@ function getDailymotionEmbedUrl(url) {
 }
 
 function getFacebookEmbedUrl(url) {
-  // Facebook embed
   return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&autoplay=0`;
 }
 
