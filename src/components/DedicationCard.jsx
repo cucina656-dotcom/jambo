@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Plus, Heart, MessageSquare, Share2, X } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
+const MEDIA_PLAY_EVENT = "dedication-media-play";
 
 // ==========================================
 // MEDIA TYPE DETECTION HELPERS
@@ -48,7 +49,7 @@ function getYouTubeEmbedUrl(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return `https://www.youtube.com/embed/${match[1]}`;
+      return `https://www.youtube.com/embed/${match[1]}?enablejsapi=1&playsinline=1`;
     }
   }
   return url;
@@ -57,7 +58,7 @@ function getYouTubeEmbedUrl(url) {
 function getVimeoEmbedUrl(url) {
   const match = url.match(/vimeo\.com\/(\d+)/);
   if (match) {
-    return `https://player.vimeo.com/video/${match[1]}`;
+    return `https://player.vimeo.com/video/${match[1]}?api=1`;
   }
   return url;
 }
@@ -65,7 +66,7 @@ function getVimeoEmbedUrl(url) {
 function getDailymotionEmbedUrl(url) {
   const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
   if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}`;
+    return `https://www.dailymotion.com/embed/video/${match[1]}?api=postMessage`;
   }
   return url;
 }
@@ -307,90 +308,135 @@ export default function DedicationCard({
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
   const cardRef = useRef(null);
+  const mediaInstanceRef = useRef(Symbol("dedication-media"));
   const flag = getFlagFromWhatsapp(senderWhatsapp);
   const mediaType = getMediaType(mediaUrl);
 
   // ==========================================
-  // NEW: Auto-pause when card becomes inactive
-  // ==========================================
- useEffect(() => {
-  const video = videoRef.current;
-  const iframe = iframeRef.current;
-
-  // Skip if no media elements
-  if (!video && !iframe) return;
-
-  const isIframeMedia = ['youtube', 'vimeo', 'dailymotion', 'facebook'].includes(mediaType);
-
-  if (isActive) {
-    // Pause ALL other videos on the page
-    document.querySelectorAll("video").forEach((otherVideo) => {
-      if (otherVideo !== video && !otherVideo.paused) {
-        otherVideo.pause();
-      }
-    });
-
-    // Pause ALL other iframes on the page
-    document.querySelectorAll("iframe").forEach((otherIframe) => {
-      if (otherIframe !== iframe) {
-        try {
-          otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-        } catch (e) {}
-      }
-    });
-
-    // Play current media
-    if (video && mediaType === 'video') {
-      video.play().catch(() => console.log('Video play error'));
-    } else if (iframe && isIframeMedia) {
-      try {
-        if (mediaType === 'youtube') {
-          iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-        } else if (mediaType === 'vimeo') {
-          iframe.contentWindow.postMessage('{"method":"play"}', '*');
-        } else if (mediaType === 'dailymotion') {
-          iframe.contentWindow.postMessage('{"command":"play"}', '*');
-        }
-      } catch (e) {
-        console.log("Could not play iframe:", e);
-      }
-    }
-  } else {
-    // Pause current media when inactive
-    if (video && mediaType === 'video') {
-      video.pause();
-    } else if (iframe && isIframeMedia) {
-      try {
-        if (mediaType === 'youtube') {
-          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-        } else if (mediaType === 'vimeo') {
-          iframe.contentWindow.postMessage('{"method":"pause"}', '*');
-        } else if (mediaType === 'dailymotion') {
-          iframe.contentWindow.postMessage('{"command":"pause"}', '*');
-        }
-      } catch (e) {
-        console.log("Could not pause iframe:", e);
-      }
-    }
-  }
-
-  return () => {
-    if (video && mediaType === 'video') {
-      video.pause();
-    }
-  };
-}, [isActive, mediaType]);
-
-  // ==========================================
-  // Cleanup on unmount
+  // Keep only one dedication media playing at a time
   // ==========================================
   useEffect(() => {
-    return () => {
-      if (videoRef.current && mediaType === 'video') {
-        videoRef.current.pause();
+    const nativeMedia = videoRef.current;
+    const iframe = iframeRef.current;
+    const instanceId = mediaInstanceRef.current;
+    const isIframeMedia = ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
+
+    const pauseIframe = () => {
+      if (!iframe || !isIframeMedia) return;
+
+      try {
+        if (mediaType === 'youtube') {
+          iframe.contentWindow?.postMessage(
+            '{"event":"command","func":"pauseVideo","args":""}',
+            '*'
+          );
+        } else if (mediaType === 'vimeo') {
+          iframe.contentWindow?.postMessage('{"method":"pause"}', '*');
+        } else if (mediaType === 'dailymotion') {
+          iframe.contentWindow?.postMessage('{"command":"pause"}', '*');
+        }
+      } catch (error) {
+        console.log("Could not pause iframe:", error);
       }
     };
-  }, [mediaType]);
+
+    const pauseCurrentMedia = () => {
+      if (nativeMedia && !nativeMedia.paused) {
+        nativeMedia.pause();
+      }
+      pauseIframe();
+    };
+
+    const pauseOtherNativeMedia = () => {
+      document.querySelectorAll("video, audio").forEach((otherMedia) => {
+        if (otherMedia !== nativeMedia && !otherMedia.paused) {
+          otherMedia.pause();
+        }
+      });
+    };
+
+    const announceCurrentMedia = () => {
+      pauseOtherNativeMedia();
+      window.dispatchEvent(
+        new CustomEvent(MEDIA_PLAY_EVENT, {
+          detail: { instanceId },
+        })
+      );
+    };
+
+    const handleAnotherMediaPlayed = (event) => {
+      if (event.detail?.instanceId !== instanceId) {
+        pauseCurrentMedia();
+      }
+    };
+
+    const handleNativePlay = () => {
+      announceCurrentMedia();
+    };
+
+    const handleIframeMessage = (event) => {
+      if (!iframe || event.source !== iframe.contentWindow) return;
+
+      let data = event.data;
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+
+      const youtubeStarted =
+        data?.event === "infoDelivery" && data?.info?.playerState === 1;
+      const vimeoStarted = data?.event === "play";
+      const dailymotionStarted =
+        data?.event === "video_start" ||
+        data?.event === "play" ||
+        data?.status === "playing";
+
+      if (youtubeStarted || vimeoStarted || dailymotionStarted) {
+        announceCurrentMedia();
+      }
+    };
+
+    window.addEventListener(MEDIA_PLAY_EVENT, handleAnotherMediaPlayed);
+    window.addEventListener("message", handleIframeMessage);
+    nativeMedia?.addEventListener("play", handleNativePlay);
+
+    if (isActive) {
+      announceCurrentMedia();
+
+      if (nativeMedia && ['video', 'audio'].includes(mediaType)) {
+        nativeMedia.play().catch(() => {
+          // Browser autoplay rules may require the viewer to press Play.
+        });
+      } else if (iframe && isIframeMedia) {
+        try {
+          if (mediaType === 'youtube') {
+            iframe.contentWindow?.postMessage(
+              '{"event":"command","func":"playVideo","args":""}',
+              '*'
+            );
+          } else if (mediaType === 'vimeo') {
+            iframe.contentWindow?.postMessage('{"method":"play"}', '*');
+          } else if (mediaType === 'dailymotion') {
+            iframe.contentWindow?.postMessage('{"command":"play"}', '*');
+          }
+        } catch (error) {
+          console.log("Could not play iframe:", error);
+        }
+      }
+    } else {
+      pauseCurrentMedia();
+    }
+
+    return () => {
+      nativeMedia?.removeEventListener("play", handleNativePlay);
+      window.removeEventListener(MEDIA_PLAY_EVENT, handleAnotherMediaPlayed);
+      window.removeEventListener("message", handleIframeMessage);
+      pauseCurrentMedia();
+    };
+  }, [isActive, mediaType, mediaUrl]);
 
   async function loadComments() {
     if (!id) return;
