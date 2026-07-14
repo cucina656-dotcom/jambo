@@ -36,6 +36,10 @@ function getMediaType(url) {
     return 'dailymotion';
   }
   
+  if (url.includes('facebook.com/watch') || url.includes('fb.watch/')) {
+    return 'facebook';
+  }
+  
   return 'unknown';
 }
 
@@ -48,7 +52,7 @@ function getYouTubeEmbedUrl(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return `https://www.youtube.com/embed/${match[1]}`;
+      return `https://www.youtube.com/embed/${match[1]}?enablejsapi=1`;
     }
   }
   return url;
@@ -57,7 +61,7 @@ function getYouTubeEmbedUrl(url) {
 function getVimeoEmbedUrl(url) {
   const match = url.match(/vimeo\.com\/(\d+)/);
   if (match) {
-    return `https://player.vimeo.com/video/${match[1]}`;
+    return `https://player.vimeo.com/video/${match[1]}?api=1`;
   }
   return url;
 }
@@ -65,9 +69,14 @@ function getVimeoEmbedUrl(url) {
 function getDailymotionEmbedUrl(url) {
   const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
   if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}`;
+    return `https://www.dailymotion.com/embed/video/${match[1]}?api=1`;
   }
   return url;
+}
+
+function getFacebookEmbedUrl(url) {
+  // Facebook embed
+  return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&autoplay=0`;
 }
 
 function getFlagFromWhatsapp(number = "") {
@@ -291,7 +300,7 @@ export default function DedicationCard({
   commentCount = 0,
   badgeStyle = "❤️",
   onDedicateClick,
-  isActive = false, // NEW: prop to track if this card is the active one in viewport
+  isActive = false,
 }) {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -311,83 +320,80 @@ export default function DedicationCard({
   const mediaType = getMediaType(mediaUrl);
 
   // ==========================================
-  // NEW: Auto-pause when card becomes inactive
+  // Auto-pause when card becomes inactive
   // ==========================================
- useEffect(() => {
-  const video = videoRef.current;
-  const iframe = iframeRef.current;
+  useEffect(() => {
+    const video = videoRef.current;
+    const iframe = iframeRef.current;
 
-  if (!video && !iframe) return;
-  // Skip if no media
-if (!video && !iframe) return;
+    if (!video && !iframe) return;
 
-// Get current media type
-const currentMediaType = mediaType;
+    const isIframeMedia = mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion' || mediaType === 'facebook';
 
-  if (isActive) {
-    // Pause ALL other videos on the page
-    document.querySelectorAll("video").forEach((otherVideo) => {
-      if (otherVideo !== video && !otherVideo.paused) {
-        otherVideo.pause();
+    if (isActive) {
+      // Pause ALL other videos on the page
+      document.querySelectorAll("video").forEach((otherVideo) => {
+        if (otherVideo !== video && !otherVideo.paused) {
+          otherVideo.pause();
+        }
+      });
+
+      // Pause ALL other iframes on the page
+      document.querySelectorAll("iframe").forEach((otherIframe) => {
+        if (otherIframe !== iframe) {
+          try {
+            otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          } catch (e) {}
+        }
+      });
+
+      // Play this video
+      if (video && mediaType === 'video') {
+        video.play().catch(() => {});
       }
-    });
 
-    // Pause ALL other iframes on the page
-    document.querySelectorAll("iframe").forEach((otherIframe) => {
-      if (otherIframe !== iframe) {
+      // Play this iframe
+      if (iframe && isIframeMedia) {
         try {
-          otherIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-        } catch (e) {}
-      }
-    });
-
-    // Play this video
-    if (video && mediaType === 'video') {
-      video.play().catch(() => {});
-    }
-
-    // Play this iframe (YouTube, Vimeo, Dailymotion)
-    if (iframe && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
-      try {
-        if (mediaType === 'youtube') {
-          iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-        } else if (mediaType === 'vimeo') {
-          iframe.contentWindow.postMessage('{"method":"play"}', '*');
-        } else if (mediaType === 'dailymotion') {
-          iframe.contentWindow.postMessage('{"command":"play"}', '*');
+          if (mediaType === 'youtube') {
+            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+          } else if (mediaType === 'vimeo') {
+            iframe.contentWindow.postMessage('{"method":"play"}', '*');
+          } else if (mediaType === 'dailymotion') {
+            iframe.contentWindow.postMessage('{"command":"play"}', '*');
+          }
+        } catch (e) {
+          console.log("Could not play iframe:", e);
         }
-      } catch (e) {
-        console.log("Could not play iframe:", e);
       }
-    }
-  } else {
-    // Pause this video when inactive
-    if (video && mediaType === 'video') {
-      video.pause();
-    }
+    } else {
+      // Pause this video when inactive
+      if (video && mediaType === 'video') {
+        video.pause();
+      }
 
-    // Pause this iframe when inactive
-    if (iframe && (mediaType === 'youtube' || mediaType === 'vimeo' || mediaType === 'dailymotion')) {
-      try {
-        if (mediaType === 'youtube') {
-          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-        } else if (mediaType === 'vimeo') {
-          iframe.contentWindow.postMessage('{"method":"pause"}', '*');
-        } else if (mediaType === 'dailymotion') {
-          iframe.contentWindow.postMessage('{"command":"pause"}', '*');
+      // Pause this iframe when inactive
+      if (iframe && isIframeMedia) {
+        try {
+          if (mediaType === 'youtube') {
+            iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          } else if (mediaType === 'vimeo') {
+            iframe.contentWindow.postMessage('{"method":"pause"}', '*');
+          } else if (mediaType === 'dailymotion') {
+            iframe.contentWindow.postMessage('{"command":"pause"}', '*');
+          }
+        } catch (e) {
+          console.log("Could not pause iframe:", e);
         }
-      } catch (e) {
-        console.log("Could not pause iframe:", e);
       }
     }
-  }
 
-  return () => {
-    if (video && mediaType === 'video') {
-      video.pause();
-    }
-  };
-}, [isActive, mediaType]);
+    return () => {
+      if (video && mediaType === 'video') {
+        video.pause();
+      }
+    };
+  }, [isActive, mediaType]);
 
   // ==========================================
   // Cleanup on unmount
@@ -554,19 +560,31 @@ const currentMediaType = mediaType;
           />
         );
       
-     case 'video':
-  return (
-    <video
-      ref={videoRef}
-      src={mediaUrl}
-      controls
-      playsInline
-      loop
-      crossOrigin="anonymous"
-      preload="auto"
-      style={videoBg}
-    />
-  
+      case 'facebook':
+        return (
+          <iframe
+            ref={iframeRef}
+            src={getFacebookEmbedUrl(mediaUrl)}
+            style={iframeStyle}
+            allow="autoplay; encrypted-media; fullscreen"
+            allowFullScreen
+            title={dedicationTitle || mediaTitle}
+            loading="lazy"
+          />
+        );
+      
+      case 'video':
+        return (
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls
+            playsInline
+            loop
+            crossOrigin="anonymous"
+            preload="auto"
+            style={videoBg}
+          />
         );
       
       case 'audio':
@@ -659,7 +677,6 @@ const currentMediaType = mediaType;
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
-        {/* NEW: Active indicator overlay (optional) */}
         {isActive && (
           <div style={activeIndicator}>
             <span>▶ Playing</span>
@@ -1266,7 +1283,6 @@ const closeImageBtn = {
   padding: "8px",
 };
 
-// NEW: Active indicator style
 const activeIndicator = {
   position: "absolute",
   top: "14px",
