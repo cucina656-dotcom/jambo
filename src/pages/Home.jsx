@@ -500,7 +500,7 @@ function EditorModal({
           style={inputStyle}
         />
         <label style={fileLabel}>
-          <span>Home logo upload from phone/computer optional</span>
+          <span>Poster photo upload from phone/computer optional</span>
           <input
             type="file"
             accept="image/*"
