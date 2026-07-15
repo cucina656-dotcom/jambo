@@ -78,14 +78,11 @@ function Header() {
             }
           `}</style>
 
-          <Link to="/kitchen" style={getTopNavItemStyle("/kitchen")}>
-            <span style={{ fontSize: "16px" }}>🍲</span>
-            <span>Igikoni</span>
-          </Link>
+          
           
           <Link to="/tv" style={getTopNavItemStyle("/tv")}>
             <span style={{ fontSize: "16px" }}>📺</span>
-            <span>Hobe TV</span>
+            <span> ForYou TV</span>
           </Link>
         </div>
       </div>
