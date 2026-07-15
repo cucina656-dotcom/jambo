@@ -6,6 +6,100 @@ import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
+// ==========================================
+// DEVICE / VIEWPORT COMPATIBILITY HELPERS
+// (additive only — mirrors the same cross-device support added
+// to DedicationCard.jsx so the TV feed page and its "Dedicate a
+// song" form behave correctly on Tecno/Infinix/Itel/Samsung
+// budget devices at 360x800, Samsung/Apple mid+flagship tiers at
+// 390x844 / 412x915 / 412x892 / 430x932, and legacy engines like
+// Opera Mini / Samsung Internet / older Safari & Chrome)
+// ==========================================
+const TV_STYLE_TAG_ID = "tv-page-responsive-styles";
+
+function ensureViewportMeta() {
+  if (typeof document === "undefined") return;
+  // Many budget Android stock browsers (Tecno/Infinix/Itel) and
+  // Opera Mini's extreme data-saving mode need an explicit viewport
+  // tag or they render a desktop-width layout and shrink it down.
+  const existing = document.querySelector('meta[name="viewport"]');
+  if (existing) return;
+  const meta = document.createElement("meta");
+  meta.setAttribute("name", "viewport");
+  meta.setAttribute("id", "tv-page-viewport-meta");
+  meta.setAttribute(
+    "content",
+    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  );
+  document.head.appendChild(meta);
+}
+
+function ensureTvResponsiveStylesheet() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(TV_STYLE_TAG_ID)) return;
+
+  const style = document.createElement("style");
+  style.id = TV_STYLE_TAG_ID;
+  style.textContent = `
+    /* --- Cross-device compatibility additions for the TV feed page
+       (does not override existing inline styles/behaviour, only
+       fills gaps for smaller/older/notched devices) --- */
+
+    /* Prevent iOS Safari from auto-zooming the page when a form
+       input/textarea is focused (inputs under 16px trigger this on
+       iPhones like the 17/17 Pro Max, 16/16 Pro Max). */
+    @media (max-width: 600px) {
+      .tv-form-card input,
+      .tv-form-card textarea {
+        font-size: 16px !important;
+      }
+    }
+
+    /* Extra-small budget viewports (360x800 — Tecno Spark/Camon,
+       Infinix Note, Itel P-series, Samsung Galaxy A06/A16) get
+       slightly tighter spacing so nothing clips or wraps oddly. */
+    @media (max-width: 380px) {
+      .tv-title {
+        font-size: clamp(24px, 7.5vw, 30px) !important;
+      }
+      .tv-dedicate-btn {
+        padding: 12px 22px !important;
+        font-size: 14px !important;
+      }
+      .tv-form-card {
+        padding: 16px !important;
+      }
+    }
+
+    /* Respect the device notch / rounded corners / home-indicator
+       area on iPhone 17/16 Pro Max (430x932) and similar Android
+       edge-to-edge displays, without changing existing layout. */
+    .tv-form-overlay {
+      padding-top: calc(76px + env(safe-area-inset-top, 0px)) !important;
+      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+      padding-left: calc(10px + env(safe-area-inset-left, 0px)) !important;
+      padding-right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+    }
+
+    /* Avoid the sticky 300ms tap-delay / grey tap flash seen on
+       Samsung Internet and Chrome for budget Android devices. */
+    .tv-page button {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Keep the page from ever forcing horizontal scroll on narrow
+       (360px) viewports regardless of the edge-to-edge card layout. */
+    .tv-page {
+      max-width: 100vw;
+    }
+    .tv-page * {
+      box-sizing: border-box;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function TV() {
   const [feed, setFeed] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -29,6 +123,16 @@ function TV() {
 
   // Ref to track which video is currently playing
   const currentlyPlayingRef = useRef(null);
+
+  // Cross-device compatibility setup (additive): ensures a proper
+  // viewport meta tag and injects the responsive/legacy-browser
+  // stylesheet once per page, covering the same Sub-Saharan Africa /
+  // Europe / North America / Asia device mix as DedicationCard,
+  // without touching any of the existing logic or styles below.
+  useEffect(() => {
+    ensureViewportMeta();
+    ensureTvResponsiveStylesheet();
+  }, []);
 
   // Add preconnect for external media services
   useEffect(() => {
@@ -292,7 +396,7 @@ function TV() {
   }
 
   return (
-    <div style={page}>
+    <div style={page} className="tv-page">
       <Header />
       <style>{`
         .tv-card-wrapper button[aria-label],
@@ -317,16 +421,16 @@ function TV() {
       `}</style>
       <main style={main}>
         <section style={topSection}>
-          <h1 style={title}>TV</h1>
+          <h1 style={title} className="tv-title">TV</h1>
           <p style={text}>Songs dedicated to different people ⭐</p>
-          <button onClick={() => setShowForm(true)} style={dedicateBtn}>
+          <button onClick={() => setShowForm(true)} style={dedicateBtn} className="tv-dedicate-btn">
             🎵 Dedicate a song
           </button>
         </section>
 
         {showForm && (
-          <section style={formOverlay}>
-            <form onSubmit={handleSubmit} style={formCard}>
+          <section style={formOverlay} className="tv-form-overlay">
+            <form onSubmit={handleSubmit} style={formCard} className="tv-form-card">
               <h2 style={formTitle}>Create Dedication</h2>
               <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
               <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
@@ -357,10 +461,10 @@ function TV() {
               )}
               <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
               <div style={buttonRow}>
-                <button type="submit" style={submitBtn} disabled={isSubmitting}>
+                <button type="submit" style={submitBtn} className="tv-submit-btn" disabled={isSubmitting}>
                   {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} style={cancelBtn}>
+                <button type="button" onClick={() => setShowForm(false)} style={cancelBtn} className="tv-cancel-btn">
                   Cancel
                 </button>
               </div>
