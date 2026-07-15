@@ -318,7 +318,7 @@ function TV() {
       <main style={main}>
         <section style={topSection}>
           <h1 style={title}>TV</h1>
-          <p style={text}>Songs for special people ⭐</p>
+          <p style={text}>Songs dedicated to different people ⭐</p>
           <button onClick={() => setShowForm(true)} style={dedicateBtn}>
             🎵 Dedicate a song
           </button>
