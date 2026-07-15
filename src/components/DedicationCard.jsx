@@ -5,6 +5,121 @@ const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const MEDIA_PLAY_EVENT = "dedication-media-play";
 
 // ==========================================
+// DEVICE / VIEWPORT COMPATIBILITY HELPERS
+// (additive only — supports Tecno/Infinix/Itel/Samsung budget
+// devices at 360x800, Samsung/Apple mid+flagship tiers at
+// 390x844 / 412x915 / 412x892 / 430x932, and legacy engines
+// like Opera Mini / Samsung Internet / older Safari & Chrome)
+// ==========================================
+const VIEWPORT_STYLE_TAG_ID = "dedication-card-responsive-styles";
+const VIEWPORT_META_ID = "dedication-card-viewport-meta";
+
+function ensureViewportMeta() {
+  if (typeof document === "undefined") return;
+  // Many budget Android stock browsers (Tecno/Infinix/Itel) and
+  // Opera Mini's extreme data-saving mode need an explicit viewport
+  // tag or they render a desktop-width layout and shrink it down.
+  const existing = document.querySelector('meta[name="viewport"]');
+  if (existing) return;
+  const meta = document.createElement("meta");
+  meta.setAttribute("name", "viewport");
+  meta.setAttribute("id", VIEWPORT_META_ID);
+  meta.setAttribute(
+    "content",
+    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  );
+  document.head.appendChild(meta);
+}
+
+function ensureResponsiveStylesheet() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(VIEWPORT_STYLE_TAG_ID)) return;
+
+  const style = document.createElement("style");
+  style.id = VIEWPORT_STYLE_TAG_ID;
+  style.textContent = `
+    /* --- Cross-device compatibility additions (does not override
+       existing inline styles/behaviour, only fills gaps) --- */
+
+    /* Prevent iOS Safari from auto-zooming the page when a form
+       input is focused (inputs under 16px trigger this on iPhones
+       like the 17/17 Pro Max, 16/16 Pro Max). */
+    @media (max-width: 600px) {
+      .dedication-card input,
+      .dedication-card textarea {
+        font-size: 16px !important;
+      }
+    }
+
+    /* Extra-small budget viewports (360x800 — Tecno Spark/Camon,
+       Infinix Note, Itel P-series, Samsung Galaxy A06/A16) get
+       slightly tighter spacing so nothing clips or wraps oddly. */
+    @media (max-width: 380px) {
+      .dedication-card .dedication-name {
+        max-width: 88px !important;
+      }
+      .dedication-card .dedication-action-btn {
+        width: 38px !important;
+        height: 38px !important;
+      }
+      .dedication-card .dedication-comment-input-top,
+      .dedication-card .dedication-comment-input-bottom {
+        font-size: 16px !important;
+      }
+    }
+
+    /* Fallback for browsers without aspect-ratio support
+       (older Opera Mini / older Samsung Internet / UC-based
+       engines still used on entry-level Android in East Africa). */
+    @supports not (aspect-ratio: 1 / 1) {
+      .dedication-media-card {
+        height: 0 !important;
+        padding-bottom: 100% !important;
+      }
+    }
+
+    /* Respect the device notch / rounded corners / home-indicator
+       area on iPhone 17/16 Pro Max (430x932) and similar Android
+       edge-to-edge displays, without changing existing layout. */
+    .dedication-comment-overlay {
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .dedication-close-image-btn {
+      top: calc(16px + env(safe-area-inset-top, 0px)) !important;
+      right: calc(16px + env(safe-area-inset-right, 0px)) !important;
+    }
+
+    /* Avoid the sticky 300ms tap-delay / grey tap flash seen on
+       Samsung Internet and Chrome for budget Android devices. */
+    .dedication-card button,
+    .dedication-card a {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Keep the whole card from ever forcing horizontal scroll on
+       narrow (360px) viewports regardless of dynamic content. */
+    .dedication-card {
+      max-width: 100vw;
+      box-sizing: border-box;
+    }
+    .dedication-card * {
+      box-sizing: border-box;
+    }
+
+    /* Large-screen premium devices (iPhone Pro Max 430x932,
+       Galaxy S26/S25 Ultra 412x915) get a touch more breathing
+       room in the media caption without altering smaller layouts. */
+    @media (min-width: 428px) {
+      .dedication-card .dedication-top-badge {
+        font-size: 12px;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ==========================================
 // MEDIA TYPE DETECTION HELPERS
 // ==========================================
 function getMediaType(url) {
@@ -311,6 +426,19 @@ export default function DedicationCard({
   const mediaInstanceRef = useRef(Symbol("dedication-media"));
   const flag = getFlagFromWhatsapp(senderWhatsapp);
   const mediaType = getMediaType(mediaUrl);
+
+  // ==========================================
+  // Cross-device compatibility setup (additive):
+  // ensures a proper viewport meta tag and injects the
+  // responsive/legacy-browser stylesheet once per page,
+  // covering the Sub-Saharan Africa / Europe / North
+  // America / Asia device mix without touching any of
+  // the existing inline styles or logic above.
+  // ==========================================
+  useEffect(() => {
+    ensureViewportMeta();
+    ensureResponsiveStylesheet();
+  }, []);
 
   // ==========================================
   // Keep only one dedication media playing at a time
@@ -647,7 +775,7 @@ export default function DedicationCard({
   }
 
   return (
-    <div ref={cardRef} style={card}>
+    <div ref={cardRef} style={card} className="dedication-card">
       {/* Instagram Header */}
       <div style={instagramHeader}>
         <div style={person}>
@@ -662,7 +790,7 @@ export default function DedicationCard({
             <div style={smallPlaceholder}>S</div>
           )}
           <div>
-            <div style={nameEmphasis}>
+            <div style={nameEmphasis} className="dedication-name">
               {senderName || "Sender"} {flag}
             </div>
             <div style={roleText}>Sender</div>
@@ -685,16 +813,16 @@ export default function DedicationCard({
             <div style={smallPlaceholder}>R</div>
           )}
           <div>
-            <div style={nameEmphasis}>{recipientName || "Recipient"}</div>
+            <div style={nameEmphasis} className="dedication-name">{recipientName || "Recipient"}</div>
             <div style={roleText}>Recipient</div>
           </div>
         </div>
       </div>
 
       {/* Media */}
-      <div style={mediaCard}>
+      <div style={mediaCard} className="dedication-media-card">
         {renderMedia()}
-        <div style={topBadge}>
+        <div style={topBadge} className="dedication-top-badge">
           <span style={badgeDot}></span>
           {dedicationTitle || mediaTitle}
         </div>
@@ -703,7 +831,7 @@ export default function DedicationCard({
       {/* Action Buttons */}
       <div style={instagramActionBar}>
         <div style={leftActionsRow}>
-          <button type="button" onClick={react} style={neonActionBtn} aria-label="Like">
+          <button type="button" onClick={react} style={neonActionBtn} className="dedication-action-btn" aria-label="Like">
             <Heart
               size={24}
               strokeWidth={2}
@@ -711,10 +839,10 @@ export default function DedicationCard({
               color={hasReacted ? "#ED4956" : "#ffffff"}
             />
           </button>
-          <button type="button" onClick={openComments} style={neonActionBtn} aria-label="Comments">
+          <button type="button" onClick={openComments} style={neonActionBtn} className="dedication-action-btn" aria-label="Comments">
             <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
           </button>
-          <button type="button" onClick={shareToWhatsApp} style={neonActionBtn} aria-label="Share">
+          <button type="button" onClick={shareToWhatsApp} style={neonActionBtn} className="dedication-action-btn" aria-label="Share">
             <Share2 size={24} strokeWidth={2} color="#ffffff" />
           </button>
         </div>
@@ -725,6 +853,7 @@ export default function DedicationCard({
             if (onDedicateClick) onDedicateClick();
           }}
           style={neonActionBtn}
+          className="dedication-action-btn"
           aria-label="Dedicate Song"
         >
           <Plus size={24} strokeWidth={2} color="#ffffff" />
@@ -751,7 +880,7 @@ export default function DedicationCard({
 
       {/* Comments Overlay */}
       {commentsOpen && (
-        <div style={commentOverlay} onClick={(e) => {
+        <div style={commentOverlay} className="dedication-comment-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) closeComments();
         }}>
           <div style={commentHandleBar}></div>
@@ -793,6 +922,7 @@ export default function DedicationCard({
               onChange={(e) => setCommenterWhatsapp(e.target.value)}
               placeholder="📱 WhatsApp number (e.g +250788123456)"
               style={commentInputTop}
+              className="dedication-comment-input-top"
             />
             <div style={sendRow}>
               <input
@@ -800,6 +930,7 @@ export default function DedicationCard({
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Write a comment..."
                 style={commentInputBottom}
+                className="dedication-comment-input-bottom"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -824,7 +955,7 @@ export default function DedicationCard({
       {fullImage && (
         <div style={imagePopup} onClick={() => setFullImage(null)}>
           <img src={fullImage} alt="Full view" style={fullImageStyle} />
-          <button type="button" style={closeImageBtn} onClick={() => setFullImage(null)}>
+          <button type="button" style={closeImageBtn} className="dedication-close-image-btn" onClick={() => setFullImage(null)}>
             <X size={24} color="#ffffff" />
           </button>
         </div>
