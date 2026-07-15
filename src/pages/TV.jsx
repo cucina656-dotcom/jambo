@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+
 import Header from "../components/Header";
+
 import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
@@ -19,13 +21,12 @@ function TV() {
   const [mediaFile, setMediaFile] = useState(null);
   const [message, setMessage] = useState("");
   const [dedicationTitle, setDedicationTitle] = useState("");
-  const [badgeStyle, setBadgeStyle] = useState("❤️");
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
-  
+
   // Ref to track which video is currently playing
   const currentlyPlayingRef = useRef(null);
 
@@ -38,14 +39,14 @@ function TV() {
       { rel: 'preconnect', href: 'https://www.dailymotion.com' },
       { rel: 'preconnect', href: 'https://kitchenbrain.cucina656.workers.dev' },
     ];
-    
+
     links.forEach(({ rel, href }) => {
       const link = document.createElement('link');
       link.rel = rel;
       link.href = href;
       document.head.appendChild(link);
     });
-    
+
     return () => {
       links.forEach(({ rel, href }) => {
         const links = document.querySelectorAll(`link[rel="${rel}"][href="${href}"]`);
@@ -61,12 +62,13 @@ function TV() {
   // Intersection Observer to track which card is most visible
   useEffect(() => {
     if (!feed.length) return;
-    
+
     const observer = new IntersectionObserver(
       (entries) => {
         const visibleEntries = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
         if (visibleEntries.length > 0) {
           const mostVisibleIndex = Number(
             visibleEntries[0].target.dataset.index
@@ -80,24 +82,26 @@ function TV() {
         threshold: 0.1,
       }
     );
+
     Object.values(cardRefs.current).forEach((element) => {
       if (element) observer.observe(element);
     });
+
     return () => {
       observer.disconnect();
       setActiveIndex(null);
     };
   }, [feed]);
 
- // Auto-play first card on initial load
-useEffect(() => {
-  if (feed.length > 0 && activeIndex === null) {
-    const timer = setTimeout(() => {
-      setActiveIndex(0);
-    }, 500);
-    return () => clearTimeout(timer);
-  }
-}, [feed]);  
+  // Auto-play first card on initial load
+  useEffect(() => {
+    if (feed.length > 0 && activeIndex === null) {
+      const timer = setTimeout(() => {
+        setActiveIndex(0);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [feed]);
 
   // Auto-pause videos when scrolling away
   useEffect(() => {
@@ -106,10 +110,10 @@ useEffect(() => {
       const videoElements = document.querySelectorAll('video');
       const audioElements = document.querySelectorAll('audio');
       const iframeElements = document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"]');
-      
+
       // Get the active card element
       const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
-      
+
       // Pause all videos/audios that are not in the active card
       [...videoElements, ...audioElements].forEach(mediaElement => {
         const card = mediaElement.closest('.tv-card-wrapper');
@@ -148,7 +152,7 @@ useEffect(() => {
 
     window.addEventListener('scroll', debouncedScroll, { passive: true });
     window.addEventListener('touchmove', debouncedScroll, { passive: true });
-    
+
     // Also handle when activeIndex changes
     handleScroll();
 
@@ -215,6 +219,7 @@ useEffect(() => {
     }
 
     setIsSubmitting(true);
+
     try {
       const formData = new FormData();
       formData.append("sender_name", senderName);
@@ -222,7 +227,6 @@ useEffect(() => {
       formData.append("recipient_name", recipientName);
       formData.append("message", message);
       formData.append("dedication_title", dedicationTitle || "");
-      formData.append("dedication_badge", badgeStyle);
 
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
@@ -254,8 +258,9 @@ useEffect(() => {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
-      
+
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
@@ -277,7 +282,6 @@ useEffect(() => {
       setMediaFile(null);
       setMessage("");
       setDedicationTitle("");
-      setBadgeStyle("❤️");
       setShowForm(false);
     } catch (err) {
       console.error("Submission error:", err);
@@ -326,68 +330,32 @@ useEffect(() => {
               <h2 style={formTitle}>Create Dedication</h2>
               <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
               <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
-              
               <label style={labelStyle}>Your photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setSenderPhoto, setSenderPhotoFile)} />
-              
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-              
               <label style={labelStyle}>Their photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
-              
-              <div style={badgeContainer}>
-                <label style={labelStyle}>Badge Style</label>
-                <div style={badgeOptions}>
-                  <button
-                    type="button"
-                    onClick={() => setBadgeStyle("❤️")}
-                    style={{
-                      ...badgeButton,
-                      background: badgeStyle === "❤️" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
-                      border: badgeStyle === "❤️" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
-                    }}
-                  >
-                    ❤️ Heart
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBadgeStyle("👉")}
-                    style={{
-                      ...badgeButton,
-                      background: badgeStyle === "👉" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
-                      border: badgeStyle === "👉" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
-                    }}
-                  >
-                    👉 Pointer
-                  </button>
-                </div>
-              </div>
-
-              <input 
-                style={inputStyle} 
-                placeholder="Media link (e.g. youtube.com/...)" 
-                value={mediaUrl} 
-                onChange={(e) => setMediaUrl(e.target.value)} 
+              <input
+                style={inputStyle}
+                placeholder="Media link (e.g. youtube.com/...)"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
                 disabled={!!mediaFile}
               />
-              
               <label style={labelStyle}>Or upload song media</label>
-              <input 
-                style={fileStyle} 
-                type="file" 
-                accept="video/*,audio/*,image/*" 
-                onChange={handleMediaUpload} 
+              <input
+                style={fileStyle}
+                type="file"
+                accept="video/*,audio/*,image/*"
+                onChange={handleMediaUpload}
                 disabled={!!mediaUrl.trim()}
               />
-              
               {mediaFile && (
                 <p style={{ fontSize: '12px', color: '#00e676', margin: '-4px 0 10px' }}>
                   ✓ Ready to upload: {mediaFile.name}
                 </p>
               )}
-
               <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
-              
               <div style={buttonRow}>
                 <button type="submit" style={submitBtn} disabled={isSubmitting}>
                   {isSubmitting ? "Submitting..." : "Submit"}
@@ -403,11 +371,11 @@ useEffect(() => {
         <section style={feedSection}>
           {isLoading && (
             <div style={emptyCard}>
-              <div style={{ 
-                width: '40px', 
-                height: '40px', 
-                border: '3px solid rgba(255,255,255,0.1)', 
-                borderTop: '3px solid #00e676', 
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(255,255,255,0.1)',
+                borderTop: '3px solid #00e676',
                 borderRadius: '50%',
                 margin: '0 auto 16px',
                 animation: 'spin 1s linear infinite'
@@ -415,14 +383,14 @@ useEffect(() => {
               <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading dedications...</p>
             </div>
           )}
-          
+
           {!isLoading && feed.length === 0 && (
             <div style={emptyCard}>
               <h2>No songs yet</h2>
               <p>Be first. Make someone smile.</p>
             </div>
           )}
-          
+
           {feed.map((item, index) => (
             <div
               key={item.id}
@@ -477,9 +445,6 @@ const inputStyle = { width: "100%", boxSizing: "border-box", marginBottom: "10px
 const textareaStyle = { ...inputStyle, minHeight: "92px", resize: "vertical", fontFamily: 'inherit' };
 const labelStyle = { display: "block", fontSize: "13px", fontWeight: "600", color: "rgba(255,255,255,0.7)", margin: "4px 0 6px" };
 const fileStyle = { width: "100%", marginBottom: "12px", color: "rgba(255,255,255,0.5)", fontSize: "14px", padding: "8px 0" };
-const badgeContainer = { marginBottom: "10px" };
-const badgeOptions = { display: "flex", gap: "10px" };
-const badgeButton = { flex: 1, padding: "10px 14px", borderRadius: "12px", color: "white", fontWeight: "600", fontSize: "14px", cursor: "pointer", transition: "all 0.2s ease", backgroundColor: "rgba(255,255,255,0.05)" };
 const buttonRow = { display: "flex", gap: "10px", marginTop: "14px" };
 const submitBtn = { flex: 1, border: "none", borderRadius: "999px", padding: "14px", background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", fontWeight: "700", cursor: "pointer", fontSize: "15px", transition: "opacity 0.2s ease" };
 const cancelBtn = { flex: 1, border: "1px solid rgba(255,255,255,0.12)", borderRadius: "999px", padding: "14px", background: "transparent", color: "rgba(255,255,255,0.7)", fontWeight: "600", cursor: "pointer", fontSize: "15px", transition: "all 0.2s ease" };
