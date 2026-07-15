@@ -6,7 +6,6 @@ function Admin() {
   const [media, setMedia] = useState([]);
   const [dedications, setDedications] = useState([]);
   const [comments, setComments] = useState([]);
-  const [homeContent, setHomeContent] = useState([]);
   const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState("feedx");
   const [showAddComment, setShowAddComment] = useState(false);
@@ -63,7 +62,7 @@ function Admin() {
         return;
       }
       setMessage(`Post deleted successfully`);
-      await loadFeedxPosts(); // Refresh the list
+      await loadFeedxPosts();
     } catch (error) {
       setMessage("Failed to connect to Worker API");
       console.error(error);
@@ -142,31 +141,6 @@ function Admin() {
     }
   };
 
-  const loadHomeContent = async () => {
-    if (!isAdmin) return;
-    setMessage("Loading home content...");
-    try {
-      const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/home-content",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin }),
-        }
-      );
-      const data = await response.json();
-      if (!data.success) {
-        setMessage(data.message || "Failed to load home content");
-        return;
-      }
-      setHomeContent(data.content || []);
-      setMessage("Home content loaded successfully");
-    } catch (error) {
-      setMessage("Failed to connect to Worker API");
-      console.error(error);
-    }
-  };
-
   // Auto-load FeedX posts when PIN becomes valid
   useEffect(() => {
     if (isAdmin) {
@@ -175,79 +149,6 @@ function Admin() {
       loadComments();
     }
   }, [pin]);
-
-  const updateHomeVisibility = async (id, isVisible) => {
-    if (!isAdmin) return;
-    try {
-      const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/home-visibility",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin, id, is_visible: isVisible ? 1 : 0 }),
-        }
-      );
-      const data = await response.json();
-      if (!data.success) {
-        setMessage(data.message || "Failed to update visibility");
-        return;
-      }
-      setMessage(data.message || "Visibility updated");
-      await loadHomeContent();
-    } catch (error) {
-      setMessage("Failed to connect to Worker API");
-      console.error(error);
-    }
-  };
-
-  const deleteHomeContent = async (id) => {
-    if (!isAdmin) return;
-    if (!confirm("Are you sure you want to delete this home content permanently?")) return;
-    try {
-      const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/delete-home-content",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin, id }),
-        }
-      );
-      const data = await response.json();
-      if (!data.success) {
-        setMessage(data.message || "Failed to delete content");
-        return;
-      }
-      setMessage(data.message || "Content deleted");
-      await loadHomeContent();
-    } catch (error) {
-      setMessage("Failed to connect to Worker API");
-      console.error(error);
-    }
-  };
-
-  const updateHomeContentField = async (id, field, value) => {
-    if (!isAdmin) return;
-    try {
-      const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/update-home-content",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin, id, [field]: value }),
-        }
-      );
-      const data = await response.json();
-      if (!data.success) {
-        setMessage(data.message || "Failed to update content");
-        return;
-      }
-      setMessage(data.message || "Content updated");
-      await loadHomeContent();
-    } catch (error) {
-      setMessage("Failed to connect to Worker API");
-      console.error(error);
-    }
-  };
 
   const addComment = async () => {
     if (!isAdmin) return;
@@ -438,7 +339,6 @@ function Admin() {
         <button disabled={!isAdmin} onClick={loadMediaRanking}>Load Media Ranking</button>
         <button disabled={!isAdmin} onClick={loadDedications}>Load Dedications</button>
         <button disabled={!isAdmin} onClick={loadComments}>Load Comments</button>
-        <button disabled={!isAdmin} onClick={loadHomeContent}>Load Home Content</button>
       </div>
       {message && <p><strong>{message}</strong></p>}
 
@@ -513,24 +413,9 @@ function Admin() {
         >
           🏆 Media Ranking
         </button>
-        <button
-          disabled={!isAdmin}
-          onClick={() => setActiveTab("home")}
-          style={{
-            padding: "10px 20px",
-            background: activeTab === "home" ? "#007bff" : "transparent",
-            color: activeTab === "home" ? "white" : "#333",
-            border: "none",
-            borderRadius: "4px",
-            cursor: isAdmin ? "pointer" : "not-allowed",
-            opacity: isAdmin ? 1 : 0.5,
-          }}
-        >
-          🏠 Home Content
-        </button>
       </div>
 
-      {/* FeedX Posts Tab - Replaced Order Reports */}
+      {/* FeedX Posts Tab */}
       {activeTab === "feedx" && (
         <>
           <h2>📺 FeedX Post Management</h2>
@@ -1088,155 +973,6 @@ function Admin() {
               <h3>#{index + 1} {item.title || "Untitled Media"}</h3>
               <p>Views: {item.views || 0}</p>
               <p>Watch Time: {Math.round((item.watch_seconds || 0) / 3600)}h</p>
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Home Content Tab */}
-      {activeTab === "home" && (
-        <>
-          <h2>🏠 Home Content Management</h2>
-          {homeContent.length === 0 && (
-            <p>No home content loaded yet. Enter PIN and click Load Home Content.</p>
-          )}
-          {homeContent.map((content) => (
-            <div
-              key={content.id}
-              style={{
-                border: content.is_visible ? "2px solid #28a745" : "1px solid #ddd",
-                borderRadius: "12px",
-                padding: "20px",
-                marginBottom: "20px",
-                background: content.is_visible ? "#f0fff4" : "#fafafa",
-                boxShadow: content.is_visible ? "0 0 20px rgba(40,167,69,0.15)" : "none",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "15px",
-                }}
-              >
-                <div>
-                  <p><strong>ID:</strong> {content.id}</p>
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    <span style={{
-                      color: content.is_visible ? "#28a745" : "#6c757d",
-                      fontWeight: "bold",
-                    }}>
-                      {content.is_visible ? "✅ Visible" : "⚪ Hidden"}
-                    </span>
-                  </p>
-                  <p><strong>Title:</strong> {content.title || "Untitled"}</p>
-                  <p><strong>Creator Identity:</strong> {content.creator_identity || "N/A"}</p>
-                  <p>
-                    <strong>Creator Type:</strong>{" "}
-                    <span style={{
-                      background: content.creator_type === "website" ? "#007bff" : "#25D366",
-                      color: "white",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                    }}>
-                      {content.creator_type || "unknown"}
-                    </span>
-                  </p>
-                  <p><strong>Subtitle:</strong> {content.subtitle || "N/A"}</p>
-                </div>
-                <div>
-                  <p><strong>Created:</strong> {new Date(content.created_at).toLocaleString()}</p>
-                  <p><strong>Media Type:</strong> {content.media_type || "video"}</p>
-                  <p><strong>Status Label:</strong> {content.status_label || "Open"}</p>
-                  <p>
-                    <strong>User Status:</strong>{" "}
-                    <span style={{
-                      color: content.user_status === "Blocked" ? "#dc3545" : "#28a745",
-                      fontWeight: "bold",
-                    }}>
-                      {content.user_status || "Active"}
-                    </span>
-                  </p>
-                  {content.logo_url && (
-                    <div>
-                      <p style={{ fontSize: "12px", marginBottom: "4px" }}>Logo:</p>
-                      <img
-                        src={content.logo_url}
-                        alt="Logo"
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          borderRadius: "50%",
-                          objectFit: "cover",
-                          border: "1px solid #ddd",
-                        }}
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div style={{ marginTop: "10px" }}>
-                <p><strong>Media URL:</strong> <span style={{ wordBreak: "break-all", fontSize: "12px" }}>{content.video_url || "N/A"}</span></p>
-              </div>
-              <div style={{ display: "flex", gap: "10px", marginTop: "15px", flexWrap: "wrap" }}>
-                {!content.is_visible && (
-                  <button
-                    onClick={() => updateHomeVisibility(content.id, true)}
-                    disabled={!isAdmin}
-                    style={{
-                      padding: "10px 20px",
-                      background: "#28a745",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: isAdmin ? "pointer" : "not-allowed",
-                      opacity: isAdmin ? 1 : 0.5,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    📺 Display on Home
-                  </button>
-                )}
-                {content.is_visible && (
-                  <button
-                    onClick={() => updateHomeVisibility(content.id, false)}
-                    disabled={!isAdmin}
-                    style={{
-                      padding: "10px 20px",
-                      background: "#ffc107",
-                      color: "#333",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: isAdmin ? "pointer" : "not-allowed",
-                      opacity: isAdmin ? 1 : 0.5,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    👁️ Hide
-                  </button>
-                )}
-                <button
-                  onClick={() => deleteHomeContent(content.id)}
-                  disabled={!isAdmin}
-                  style={{
-                    padding: "10px 20px",
-                    background: "#dc3545",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: isAdmin ? "pointer" : "not-allowed",
-                    opacity: isAdmin ? 1 : 0.5,
-                    fontWeight: "bold",
-                  }}
-                >
-                  🗑️ Delete
-                </button>
-              </div>
             </div>
           ))}
         </>
