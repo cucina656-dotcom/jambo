@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 
 function Admin() {
   const [pin, setPin] = useState("");
-  const [orders, setOrders] = useState([]);
+  const [feedxPosts, setFeedxPosts] = useState([]);
   const [media, setMedia] = useState([]);
   const [dedications, setDedications] = useState([]);
   const [comments, setComments] = useState([]);
   const [homeContent, setHomeContent] = useState([]);
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("orders");
+  const [activeTab, setActiveTab] = useState("feedx");
   const [showAddComment, setShowAddComment] = useState(false);
   const [newComment, setNewComment] = useState({
     dedication_id: "",
@@ -18,12 +18,12 @@ function Admin() {
 
   const isAdmin = pin === "101";
 
-  const loadOrders = async () => {
+  const loadFeedxPosts = async () => {
     if (!isAdmin) return;
-    setMessage("Loading orders...");
+    setMessage("Loading FeedX posts...");
     try {
       const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/orders",
+        "https://kitchenbrain.cucina656.workers.dev/api/admin/feedx-posts",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -32,38 +32,38 @@ function Admin() {
       );
       const data = await response.json();
       if (!data.success) {
-        setMessage(data.message || "Admin PIN failed");
+        setMessage(data.message || "Failed to load FeedX posts");
         return;
       }
-      setOrders(data.orders || []);
-      setMessage(`Orders loaded successfully (${data.orders?.length || 0} orders)`);
+      setFeedxPosts(data.posts || []);
+      setMessage(`FeedX posts loaded successfully (${data.posts?.length || 0} posts)`);
     } catch (error) {
       setMessage("Failed to connect to Worker API");
       console.error(error);
     }
   };
 
-  const deleteOrder = async (orderId) => {
+  const deleteFeedxPost = async (postId) => {
     if (!isAdmin) return;
-    if (!confirm(`Are you sure you want to delete order #${orderId}?`)) return;
+    if (!confirm(`Are you sure you want to delete this FeedX post?`)) return;
     
-    setMessage("Deleting order...");
+    setMessage("Deleting post...");
     try {
       const response = await fetch(
-        "https://kitchenbrain.cucina656.workers.dev/api/admin/delete-order",
+        "https://kitchenbrain.cucina656.workers.dev/api/admin/delete-feedx-post",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin, order_id: orderId }),
+          body: JSON.stringify({ pin, post_id: postId }),
         }
       );
       const data = await response.json();
       if (!data.success) {
-        setMessage(data.message || "Failed to delete order");
+        setMessage(data.message || "Failed to delete post");
         return;
       }
-      setMessage(`Order #${orderId} deleted successfully`);
-      await loadOrders(); // Refresh the list
+      setMessage(`Post deleted successfully`);
+      await loadFeedxPosts(); // Refresh the list
     } catch (error) {
       setMessage("Failed to connect to Worker API");
       console.error(error);
@@ -167,10 +167,10 @@ function Admin() {
     }
   };
 
-  // Auto-load orders when PIN becomes valid
+  // Auto-load FeedX posts when PIN becomes valid
   useEffect(() => {
     if (isAdmin) {
-      loadOrders();
+      loadFeedxPosts();
       loadDedications();
       loadComments();
     }
@@ -395,13 +395,15 @@ function Admin() {
     }
   };
 
-  const successOrders = orders.filter((o) => o.delivery_status === "Success");
-  const failedOrders = orders.filter((o) => o.delivery_status === "Failed");
-  const pendingOrders = orders.filter((o) => o.delivery_status === "Pending");
-  const totalRevenue = orders.reduce((sum, order) => {
-    const price = Number(order.price || 0);
-    return sum + price;
-  }, 0);
+  const formatTime = (seconds) => {
+    if (!seconds) return "0s";
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  };
 
   function getFlagFromWhatsapp(number = "") {
     if (number.startsWith("+250") || number.startsWith("250")) return "🇷🇼";
@@ -432,7 +434,7 @@ function Admin() {
       <br />
       <br />
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-        <button disabled={!isAdmin} onClick={loadOrders}>Load Orders</button>
+        <button disabled={!isAdmin} onClick={loadFeedxPosts}>Load FeedX Posts</button>
         <button disabled={!isAdmin} onClick={loadMediaRanking}>Load Media Ranking</button>
         <button disabled={!isAdmin} onClick={loadDedications}>Load Dedications</button>
         <button disabled={!isAdmin} onClick={loadComments}>Load Comments</button>
@@ -453,18 +455,18 @@ function Admin() {
       >
         <button
           disabled={!isAdmin}
-          onClick={() => setActiveTab("orders")}
+          onClick={() => setActiveTab("feedx")}
           style={{
             padding: "10px 20px",
-            background: activeTab === "orders" ? "#007bff" : "transparent",
-            color: activeTab === "orders" ? "white" : "#333",
+            background: activeTab === "feedx" ? "#007bff" : "transparent",
+            color: activeTab === "feedx" ? "white" : "#333",
             border: "none",
             borderRadius: "4px",
             cursor: isAdmin ? "pointer" : "not-allowed",
             opacity: isAdmin ? 1 : 0.5,
           }}
         >
-          📊 Orders ({orders.length})
+          📺 FeedX Posts ({feedxPosts.length})
         </button>
         <button
           disabled={!isAdmin}
@@ -528,168 +530,23 @@ function Admin() {
         </button>
       </div>
 
-      {/* Orders Tab */}
-      {activeTab === "orders" && (
+      {/* FeedX Posts Tab - Replaced Order Reports */}
+      {activeTab === "feedx" && (
         <>
-          {/* Investment Message */}
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "20px",
-              background:
-                "linear-gradient(135deg,#0f172a,#1e3a8a,#2563eb)",
-              color: "white",
-              marginBottom: "20px",
-              marginTop: "20px",
-              textAlign: "center",
-              boxShadow: "0 15px 40px rgba(37,99,235,0.35)",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "30px",
-                marginBottom: "15px",
-              }}
-            >
-              🚀 Own Part of ChillaX
-            </h2>
-            <p
-              style={{
-                fontSize: "18px",
-                lineHeight: "1.7",
-              }}
-            >
-              feedX is growing into a platform for food,
-              entertainment, media and community engagement.
-              We are welcoming investors, business partners
-              and strategic shareholders interested in helping
-              scale the platform.
-              Contact us today to discuss investment,
-              partnership opportunities or share purchases.
-            </p>
-            <a
-              href="https://wa.me/25076554329"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "inline-block",
-                marginTop: "18px",
-                padding: "14px 24px",
-                background: "#25D366",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "999px",
-                fontWeight: "900",
-                fontSize: "18px",
-              }}
-            >
-              📱 WhatsApp 250788484366
-            </a>
-          </div>
-
-          {/* Real Orders Summary */}
-          {orders.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: "15px",
-                marginBottom: "25px",
-              }}
-            >
-              <div
-                style={{
-                  background: "#e3f2fd",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  textAlign: "center",
-                  border: "1px solid #90caf9",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "28px", color: "#0d47a1" }}>
-                  {orders.length}
-                </h3>
-                <p style={{ margin: "5px 0 0", color: "#0d47a1", fontWeight: "bold" }}>
-                  Total Orders
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#e8f5e9",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  textAlign: "center",
-                  border: "1px solid #a5d6a7",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "28px", color: "#1b5e20" }}>
-                  {totalRevenue.toLocaleString()} RWF
-                </h3>
-                <p style={{ margin: "5px 0 0", color: "#1b5e20", fontWeight: "bold" }}>
-                  Total Revenue
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#fff3e0",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  textAlign: "center",
-                  border: "1px solid #ffcc80",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "28px", color: "#e65100" }}>
-                  {pendingOrders.length}
-                </h3>
-                <p style={{ margin: "5px 0 0", color: "#e65100", fontWeight: "bold" }}>
-                  Pending
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#e8f5e9",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  textAlign: "center",
-                  border: "1px solid #a5d6a7",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "28px", color: "#1b5e20" }}>
-                  {successOrders.length}
-                </h3>
-                <p style={{ margin: "5px 0 0", color: "#1b5e20", fontWeight: "bold" }}>
-                  Completed
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#ffebee",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  textAlign: "center",
-                  border: "1px solid #ef9a9a",
-                }}
-              >
-                <h3 style={{ margin: 0, fontSize: "28px", color: "#b71c1c" }}>
-                  {failedOrders.length}
-                </h3>
-                <p style={{ margin: "5px 0 0", color: "#b71c1c", fontWeight: "bold" }}>
-                  Failed
-                </p>
-              </div>
-            </div>
+          <h2>📺 FeedX Post Management</h2>
+          
+          {feedxPosts.length === 0 && (
+            <p>No FeedX posts found. Create posts from the Home page.</p>
           )}
-
-          {/* Orders List with Delete Button */}
-          {orders.length === 0 && <p style={{ marginTop: "20px" }}>No orders found. Try placing a test order from the kitchen page.</p>}
-          {orders.map((order) => (
+          
+          {feedxPosts.map((post) => (
             <div
-              key={order.id}
+              key={post.id}
               style={{
                 border: "1px solid #ddd",
                 borderRadius: "12px",
                 padding: "20px",
-                marginBottom: "15px",
+                marginBottom: "20px",
                 background: "#fafafa",
                 position: "relative",
               }}
@@ -697,46 +554,112 @@ function Admin() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: "15px",
                 }}
               >
                 <div>
-                  <p><strong>Order ID:</strong> #{order.id}</p>
-                  <p><strong>Food:</strong> {order.food_name}</p>
-                  <p><strong>Price:</strong> {Number(order.price || 0).toLocaleString()} RWF</p>
-                  <p><strong>WhatsApp:</strong> {order.whatsapp}</p>
-                </div>
-                <div>
-                  <p><strong>Status:</strong> 
+                  <p><strong>Post ID:</strong> {post.id}</p>
+                  <p><strong>Title:</strong> {post.title || "Untitled"}</p>
+                  <p>
+                    <strong>Creator Type:</strong>{" "}
                     <span style={{
-                      display: "inline-block",
-                      padding: "2px 10px",
+                      background: post.creator_type === "website" ? "#007bff" : "#25D366",
+                      color: "white",
+                      padding: "2px 8px",
                       borderRadius: "4px",
-                      background: 
-                        order.delivery_status === "Success" ? "#28a745" :
-                        order.delivery_status === "Failed" ? "#dc3545" : "#ffc107",
-                      color: order.delivery_status === "Pending" ? "#333" : "white",
-                      marginLeft: "5px",
-                      fontWeight: "bold",
                       fontSize: "12px",
+                      display: "inline-block",
                     }}>
-                      {order.delivery_status || "Pending"}
+                      {post.creator_type || "unknown"}
                     </span>
                   </p>
-                  <p><strong>Delivery Method:</strong> {order.delivery_method || "N/A"}</p>
-                  <p><strong>Location:</strong> {order.location || "M Cantine Shop"}</p>
-                  <p><strong>Time Placed:</strong> {order.created_at ? new Date(order.created_at).toLocaleString() : "N/A"}</p>
+                  <p><strong>Created:</strong> {post.created_at ? new Date(post.created_at).toLocaleString() : "N/A"}</p>
+                </div>
+                <div>
+                  <p><strong>Media Type:</strong> {post.media_type || "N/A"}</p>
+                  <p><strong>Watch Time:</strong> {formatTime(post.watch_seconds || 0)}</p>
+                  <p><strong>Ngwino Clicks:</strong> {post.ngwino_clicks || 0}</p>
+                  {post.last_watched_at && (
+                    <p><small>Last watched: {new Date(post.last_watched_at).toLocaleString()}</small></p>
+                  )}
+                  {post.last_clicked_at && (
+                    <p><small>Last click: {new Date(post.last_clicked_at).toLocaleString()}</small></p>
+                  )}
+                </div>
+                <div>
+                  {post.logo_url && (
+                    <div>
+                      <p><strong>Logo:</strong></p>
+                      <img
+                        src={post.logo_url}
+                        alt="Logo"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "1px solid #ddd",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                  {post.media_url && (
+                    <div style={{ marginTop: "8px" }}>
+                      <p><strong>Media:</strong></p>
+                      {post.media_type === "image" ? (
+                        <img
+                          src={post.media_url}
+                          alt="Media"
+                          style={{
+                            maxWidth: "100px",
+                            maxHeight: "60px",
+                            objectFit: "cover",
+                            borderRadius: "4px",
+                            border: "1px solid #ddd",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: "12px", wordBreak: "break-all" }}>
+                          {post.media_url.substring(0, 60)}...
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              {order.delivery_note && (
-                <div style={{ marginTop: "10px", background: "#e9ecef", padding: "10px", borderRadius: "4px" }}>
-                  <strong>Note:</strong> {order.delivery_note}
+              
+              {/* Display creator identity (only in admin panel) */}
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "10px",
+                  background: "#e9ecef",
+                  borderRadius: "4px",
+                  display: "flex",
+                  gap: "20px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <strong>WhatsApp:</strong>{" "}
+                  {post.creator_type === "whatsapp" ? post.creator_identity || "N/A" : "N/A"}
                 </div>
-              )}
+                <div>
+                  <strong>Website:</strong>{" "}
+                  {post.creator_type === "website" ? post.creator_identity || "N/A" : "N/A"}
+                </div>
+              </div>
+
               <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
                 <button
-                  onClick={() => deleteOrder(order.id)}
+                  onClick={() => deleteFeedxPost(post.id)}
                   disabled={!isAdmin}
                   style={{
                     padding: "8px 16px",
@@ -749,7 +672,7 @@ function Admin() {
                     fontWeight: "bold",
                   }}
                 >
-                  🗑 Delete Order
+                  🗑 Delete Post
                 </button>
               </div>
             </div>
