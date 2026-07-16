@@ -1,1 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+    xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
+  <url>
+    <loc>https://gwamo.com/</loc>
+  </url>
+
+  <url>
+    <loc>https://gwamo.com/kitchen</loc>
+  </url>
+
+  <url>
+    <loc>https://gwamo.com/tv</loc>
+  </url>
+
+  <url>
+    <loc>https://gwamo.com/delivery</loc>
+  </url>
+
+</urlset>
