@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Plus, Heart, MessageSquare, Share2, X } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
@@ -6,19 +6,13 @@ const MEDIA_PLAY_EVENT = "dedication-media-play";
 
 // ==========================================
 // DEVICE / VIEWPORT COMPATIBILITY HELPERS
-// (additive only — supports Tecno/Infinix/Itel/Samsung budget
-// devices at 360x800, Samsung/Apple mid+flagship tiers at
-// 390x844 / 412x915 / 412x892 / 430x932, and legacy engines
-// like Opera Mini / Samsung Internet / older Safari & Chrome)
 // ==========================================
+
 const VIEWPORT_STYLE_TAG_ID = "dedication-card-responsive-styles";
 const VIEWPORT_META_ID = "dedication-card-viewport-meta";
 
 function ensureViewportMeta() {
   if (typeof document === "undefined") return;
-  // Many budget Android stock browsers (Tecno/Infinix/Itel) and
-  // Opera Mini's extreme data-saving mode need an explicit viewport
-  // tag or they render a desktop-width layout and shrink it down.
   const existing = document.querySelector('meta[name="viewport"]');
   if (existing) return;
   const meta = document.createElement("meta");
@@ -34,26 +28,15 @@ function ensureViewportMeta() {
 function ensureResponsiveStylesheet() {
   if (typeof document === "undefined") return;
   if (document.getElementById(VIEWPORT_STYLE_TAG_ID)) return;
-
   const style = document.createElement("style");
   style.id = VIEWPORT_STYLE_TAG_ID;
   style.textContent = `
-    /* --- Cross-device compatibility additions (does not override
-       existing inline styles/behaviour, only fills gaps) --- */
-
-    /* Prevent iOS Safari from auto-zooming the page when a form
-       input is focused (inputs under 16px trigger this on iPhones
-       like the 17/17 Pro Max, 16/16 Pro Max). */
     @media (max-width: 600px) {
       .dedication-card input,
       .dedication-card textarea {
         font-size: 16px !important;
       }
     }
-
-    /* Extra-small budget viewports (360x800 — Tecno Spark/Camon,
-       Infinix Note, Itel P-series, Samsung Galaxy A06/A16) get
-       slightly tighter spacing so nothing clips or wraps oddly. */
     @media (max-width: 380px) {
       .dedication-card .dedication-name {
         max-width: 88px !important;
@@ -67,20 +50,12 @@ function ensureResponsiveStylesheet() {
         font-size: 16px !important;
       }
     }
-
-    /* Fallback for browsers without aspect-ratio support
-       (older Opera Mini / older Samsung Internet / UC-based
-       engines still used on entry-level Android in East Africa). */
     @supports not (aspect-ratio: 1 / 1) {
       .dedication-media-card {
         height: 0 !important;
         padding-bottom: 100% !important;
       }
     }
-
-    /* Respect the device notch / rounded corners / home-indicator
-       area on iPhone 17/16 Pro Max (430x932) and similar Android
-       edge-to-edge displays, without changing existing layout. */
     .dedication-comment-overlay {
       padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
     }
@@ -88,17 +63,11 @@ function ensureResponsiveStylesheet() {
       top: calc(16px + env(safe-area-inset-top, 0px)) !important;
       right: calc(16px + env(safe-area-inset-right, 0px)) !important;
     }
-
-    /* Avoid the sticky 300ms tap-delay / grey tap flash seen on
-       Samsung Internet and Chrome for budget Android devices. */
     .dedication-card button,
     .dedication-card a {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-
-    /* Keep the whole card from ever forcing horizontal scroll on
-       narrow (360px) viewports regardless of dynamic content. */
     .dedication-card {
       max-width: 100vw;
       box-sizing: border-box;
@@ -106,10 +75,6 @@ function ensureResponsiveStylesheet() {
     .dedication-card * {
       box-sizing: border-box;
     }
-
-    /* Large-screen premium devices (iPhone Pro Max 430x932,
-       Galaxy S26/S25 Ultra 412x915) get a touch more breathing
-       room in the media caption without altering smaller layouts. */
     @media (min-width: 428px) {
       .dedication-card .dedication-top-badge {
         font-size: 12px;
@@ -122,45 +87,38 @@ function ensureResponsiveStylesheet() {
 // ==========================================
 // MEDIA TYPE DETECTION HELPERS
 // ==========================================
+
 function getMediaType(url) {
   if (!url) return 'none';
-  
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
   if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'video';
   }
-  
   const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
   if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'audio';
   }
-  
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
   if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'image';
   }
-  
   if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
     return 'youtube';
   }
-  
   if (url.includes('vimeo.com/')) {
     return 'vimeo';
   }
-  
   if (url.includes('dailymotion.com/')) {
     return 'dailymotion';
   }
-  
   return 'unknown';
 }
 
 function getYouTubeEmbedUrl(url) {
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
-    /youtube\.com\/embed\/([^?]+)/
+    /(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/)([^&?#]+)/,
+    /youtube\\.com\\/embed\\/([^?]+)/
   ];
-  
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
@@ -171,7 +129,7 @@ function getYouTubeEmbedUrl(url) {
 }
 
 function getVimeoEmbedUrl(url) {
-  const match = url.match(/vimeo\.com\/(\d+)/);
+  const match = url.match(/vimeo\\.com\\/(\\d+)/);
   if (match) {
     return `https://player.vimeo.com/video/${match[1]}?api=1`;
   }
@@ -179,7 +137,7 @@ function getVimeoEmbedUrl(url) {
 }
 
 function getDailymotionEmbedUrl(url) {
-  const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
+  const match = url.match(/dailymotion\\.com\\/video\\/([^?&]+)/);
   if (match) {
     return `https://www.dailymotion.com/embed/video/${match[1]}?api=postMessage`;
   }
@@ -391,7 +349,11 @@ function getFlagFromWhatsapp(number = "") {
   return "🌍";
 }
 
-export default function DedicationCard({
+// ==========================================
+// MEMOIZED DEDICATION CARD
+// ==========================================
+
+const DedicationCard = React.memo(({
   id,
   senderPhoto,
   senderName,
@@ -408,7 +370,7 @@ export default function DedicationCard({
   badgeStyle = "❤️",
   onDedicateClick,
   isActive = false,
-}) {
+}) => {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -420,38 +382,58 @@ export default function DedicationCard({
     return localStorage.getItem(`chillax_reacted_${id}`) === "true";
   });
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
   const cardRef = useRef(null);
   const mediaInstanceRef = useRef(Symbol("dedication-media"));
-  const flag = getFlagFromWhatsapp(senderWhatsapp);
-  const mediaType = getMediaType(mediaUrl);
+  const isMountedRef = useRef(true);
+  const mediaPausedRef = useRef(false);
 
   // ==========================================
-  // Cross-device compatibility setup (additive):
-  // ensures a proper viewport meta tag and injects the
-  // responsive/legacy-browser stylesheet once per page,
-  // covering the Sub-Saharan Africa / Europe / North
-  // America / Asia device mix without touching any of
-  // the existing inline styles or logic above.
+  // MEMOIZED EXPENSIVE CALCULATIONS
   // ==========================================
+
+  const flag = useMemo(() => getFlagFromWhatsapp(senderWhatsapp), [senderWhatsapp]);
+  const mediaType = useMemo(() => getMediaType(mediaUrl), [mediaUrl]);
+  
+  const embedUrl = useMemo(() => {
+    if (mediaType === 'youtube') return getYouTubeEmbedUrl(mediaUrl);
+    if (mediaType === 'vimeo') return getVimeoEmbedUrl(mediaUrl);
+    if (mediaType === 'dailymotion') return getDailymotionEmbedUrl(mediaUrl);
+    return null;
+  }, [mediaType, mediaUrl]);
+
+  const shouldShowEmbed = useMemo(() => {
+    return isActive && ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
+  }, [isActive, mediaType]);
+
+  // ==========================================
+  // CROSS-DEVICE COMPATIBILITY SETUP
+  // ==========================================
+
   useEffect(() => {
     ensureViewportMeta();
     ensureResponsiveStylesheet();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // ==========================================
-  // Keep only one dedication media playing at a time
+  // MEDIA PLAYBACK CONTROL (Optimized)
   // ==========================================
-  useEffect(() => {
+
+  const pauseCurrentMedia = useCallback(() => {
     const nativeMedia = videoRef.current;
     const iframe = iframeRef.current;
-    const instanceId = mediaInstanceRef.current;
-    const isIframeMedia = ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
-
-    const pauseIframe = () => {
-      if (!iframe || !isIframeMedia) return;
-
+    
+    if (nativeMedia && !nativeMedia.paused) {
+      nativeMedia.pause();
+      mediaPausedRef.current = true;
+    }
+    
+    if (iframe && ['youtube', 'vimeo', 'dailymotion'].includes(mediaType)) {
       try {
         if (mediaType === 'youtube') {
           iframe.contentWindow?.postMessage(
@@ -464,27 +446,33 @@ export default function DedicationCard({
           iframe.contentWindow?.postMessage('{"command":"pause"}', '*');
         }
       } catch (error) {
-        console.log("Could not pause iframe:", error);
+        // Silently handle iframe pause errors
       }
-    };
+    }
+  }, [mediaType]);
 
-    const pauseCurrentMedia = () => {
-      if (nativeMedia && !nativeMedia.paused) {
-        nativeMedia.pause();
-      }
-      pauseIframe();
-    };
+  const announceCurrentMedia = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent(MEDIA_PLAY_EVENT, {
+        detail: { instanceId: mediaInstanceRef.current },
+      })
+    );
+  }, []);
 
-    const pauseOtherNativeMedia = () => {
-      document.querySelectorAll("video, audio").forEach((otherMedia) => {
-        if (otherMedia !== nativeMedia && !otherMedia.paused) {
-          otherMedia.pause();
-        }
-      });
-    };
+  const handleAnotherMediaPlayed = useCallback((event) => {
+    if (event.detail?.instanceId !== mediaInstanceRef.current) {
+      pauseCurrentMedia();
+    }
+  }, [pauseCurrentMedia]);
 
-    const announceCurrentMedia = () => {
-      pauseOtherNativeMedia();
+  useEffect(() => {
+    const nativeMedia = videoRef.current;
+    const iframe = iframeRef.current;
+    const instanceId = mediaInstanceRef.current;
+    const isIframeMedia = ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
+    
+    const handleNativePlay = () => {
+      // Pause any other native media by dispatching the event
       window.dispatchEvent(
         new CustomEvent(MEDIA_PLAY_EVENT, {
           detail: { instanceId },
@@ -492,19 +480,9 @@ export default function DedicationCard({
       );
     };
 
-    const handleAnotherMediaPlayed = (event) => {
-      if (event.detail?.instanceId !== instanceId) {
-        pauseCurrentMedia();
-      }
-    };
-
-    const handleNativePlay = () => {
-      announceCurrentMedia();
-    };
-
     const handleIframeMessage = (event) => {
       if (!iframe || event.source !== iframe.contentWindow) return;
-
+      
       let data = event.data;
       if (typeof data === "string") {
         try {
@@ -514,16 +492,16 @@ export default function DedicationCard({
         }
       }
 
-      const youtubeStarted =
-        data?.event === "infoDelivery" && data?.info?.playerState === 1;
+      const youtubeStarted = data?.event === "infoDelivery" && data?.info?.playerState === 1;
       const vimeoStarted = data?.event === "play";
-      const dailymotionStarted =
-        data?.event === "video_start" ||
-        data?.event === "play" ||
-        data?.status === "playing";
+      const dailymotionStarted = data?.event === "video_start" || data?.event === "play" || data?.status === "playing";
 
       if (youtubeStarted || vimeoStarted || dailymotionStarted) {
-        announceCurrentMedia();
+        window.dispatchEvent(
+          new CustomEvent(MEDIA_PLAY_EVENT, {
+            detail: { instanceId },
+          })
+        );
       }
     };
 
@@ -532,13 +510,15 @@ export default function DedicationCard({
     nativeMedia?.addEventListener("play", handleNativePlay);
 
     if (isActive) {
+      // Resume playback when becoming active
+      mediaPausedRef.current = false;
       announceCurrentMedia();
-
+      
       if (nativeMedia && ['video', 'audio'].includes(mediaType)) {
         nativeMedia.play().catch(() => {
-          // Browser autoplay rules may require the viewer to press Play.
+          // Browser autoplay rules may require viewer interaction
         });
-      } else if (iframe && isIframeMedia) {
+      } else if (iframe && isIframeMedia && shouldShowEmbed) {
         try {
           if (mediaType === 'youtube') {
             iframe.contentWindow?.postMessage(
@@ -551,10 +531,11 @@ export default function DedicationCard({
             iframe.contentWindow?.postMessage('{"command":"play"}', '*');
           }
         } catch (error) {
-          console.log("Could not play iframe:", error);
+          // Silently handle iframe play errors
         }
       }
     } else {
+      // Pause when becoming inactive
       pauseCurrentMedia();
     }
 
@@ -564,27 +545,32 @@ export default function DedicationCard({
       window.removeEventListener("message", handleIframeMessage);
       pauseCurrentMedia();
     };
-  }, [isActive, mediaType, mediaUrl]);
+  }, [isActive, mediaType, shouldShowEmbed, pauseCurrentMedia, announceCurrentMedia, handleAnotherMediaPlayed]);
 
-  async function loadComments() {
-    if (!id) return;
+  // ==========================================
+  // COMMENT FUNCTIONS (Lazy-loaded)
+  // ==========================================
+
+  const loadComments = useCallback(async () => {
+    if (!id || commentsList.length > 0) return;
     try {
       const res = await fetch(`${API_URL}/api/dedications/comments?id=${id}`);
       const data = await res.json();
-      if (data.success) {
+      if (data.success && isMountedRef.current) {
         setCommentsList(data.comments || []);
       }
     } catch (error) {
       console.error("Failed to load comments", error);
     }
-  }
+  }, [id, commentsList.length]);
 
-  async function react() {
-    if (hasReacted) return;
-    if (!id) return alert("Missing dedication ID");
+  const react = useCallback(async () => {
+    if (hasReacted || !id) return;
+    
     setHasReacted(true);
     setReactions((v) => v + 1);
     localStorage.setItem(`chillax_reacted_${id}`, "true");
+
     try {
       const res = await fetch(`${API_URL}/api/dedications/react`, {
         method: "POST",
@@ -593,18 +579,22 @@ export default function DedicationCard({
       });
       const data = await res.json();
       if (!data.success) {
-        setHasReacted(false);
-        setReactions((v) => v - 1);
+        if (isMountedRef.current) {
+          setHasReacted(false);
+          setReactions((v) => v - 1);
+        }
         localStorage.removeItem(`chillax_reacted_${id}`);
       }
     } catch {
-      setHasReacted(false);
-      setReactions((v) => v - 1);
+      if (isMountedRef.current) {
+        setHasReacted(false);
+        setReactions((v) => v - 1);
+      }
       localStorage.removeItem(`chillax_reacted_${id}`);
     }
-  }
+  }, [hasReacted, id]);
 
-  async function sendComment() {
+  const sendComment = useCallback(async () => {
     if (!id) return alert("Missing dedication ID");
     if (!commenterWhatsapp.trim()) return alert("Enter your WhatsApp number first.");
     if (!commentText.trim()) return;
@@ -612,7 +602,6 @@ export default function DedicationCard({
     setIsSubmittingComment(true);
     const textToSend = commentText.trim();
     const whatsappToSend = commenterWhatsapp.trim();
-
     const newComment = {
       id: Date.now(),
       dedication_id: id,
@@ -621,9 +610,11 @@ export default function DedicationCard({
       created_at: new Date().toISOString(),
     };
 
-    setCommentsList((prev) => [newComment, ...prev]);
-    setComments((v) => v + 1);
-    setCommentText("");
+    if (isMountedRef.current) {
+      setCommentsList((prev) => [newComment, ...prev]);
+      setComments((v) => v + 1);
+      setCommentText("");
+    }
 
     try {
       const res = await fetch(`${API_URL}/api/dedications/comment`, {
@@ -636,39 +627,45 @@ export default function DedicationCard({
         }),
       });
       const data = await res.json();
-      if (!data.success) {
+      if (!data.success && isMountedRef.current) {
         setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
         setComments((v) => v - 1);
         alert(data.message || "Failed to post comment");
       }
     } catch (error) {
       console.error("Comment error:", error);
-      setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
-      setComments((v) => v - 1);
-      alert("Network error. Please try again.");
+      if (isMountedRef.current) {
+        setCommentsList((prev) => prev.filter((c) => c.id !== newComment.id));
+        setComments((v) => v - 1);
+        alert("Network error. Please try again.");
+      }
     } finally {
-      setIsSubmittingComment(false);
+      if (isMountedRef.current) {
+        setIsSubmittingComment(false);
+      }
     }
-  }
+  }, [id, commenterWhatsapp, commentText]);
 
-  function openComments() {
+  const openComments = useCallback(() => {
     setCommentsOpen(true);
     loadComments();
-  }
+  }, [loadComments]);
 
-  function closeComments() {
+  const closeComments = useCallback(() => {
     setCommentsOpen(false);
     setCommentText("");
-  }
+  }, []);
 
-  function shareToWhatsApp() {
-    const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${
-      recipientName || "someone"
-    }`;
+  const shareToWhatsApp = useCallback(() => {
+    const text = `🎵 ChillaX Dedication\n${senderName || "Someone"} dedicated something special to ${recipientName || "someone"}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-  }
+  }, [senderName, recipientName]);
 
-  function renderMedia() {
+  // ==========================================
+  // RENDER FUNCTIONS
+  // ==========================================
+
+  const renderMedia = useCallback(() => {
     if (!mediaUrl) {
       return (
         <div style={fallbackBg}>
@@ -682,44 +679,31 @@ export default function DedicationCard({
 
     switch (mediaType) {
       case 'youtube':
-        return (
-          <iframe
-            ref={iframeRef}
-            src={getYouTubeEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
       case 'vimeo':
-        return (
-          <iframe
-            ref={iframeRef}
-            src={getVimeoEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
-        );
-      
       case 'dailymotion':
+        // Only render iframe when active (lazy loading)
+        if (shouldShowEmbed && embedUrl) {
+          return (
+            <iframe
+              ref={iframeRef}
+              src={embedUrl}
+              style={iframeStyle}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title={dedicationTitle || mediaTitle}
+              loading="lazy"
+            />
+          );
+        }
+        // Show placeholder with same dimensions
         return (
-          <iframe
-            ref={iframeRef}
-            src={getDailymotionEmbedUrl(mediaUrl)}
-            style={iframeStyle}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title={dedicationTitle || mediaTitle}
-            loading="lazy"
-          />
+          <div style={fallbackBg}>
+            <div style={fallbackContent}>
+              <span style={fallbackIcon}>▶️</span>
+              <span style={fallbackText}>{dedicationTitle || mediaTitle}</span>
+            </div>
+          </div>
         );
-      
       case 'video':
         return (
           <video
@@ -727,15 +711,13 @@ export default function DedicationCard({
             src={mediaUrl}
             controls
             playsInline
-            autoPlay
             muted
             loop
             crossOrigin="anonymous"
-            preload="auto"
+            preload={isActive ? "metadata" : "none"}
             style={videoBg}
           />
         );
-      
       case 'audio':
         return (
           <div style={audioContainerStyle}>
@@ -746,12 +728,12 @@ export default function DedicationCard({
                 src={mediaUrl}
                 controls
                 style={audioControlStyle}
+                preload={isActive ? "metadata" : "none"}
               />
               <div style={audioTitleStyle}>{dedicationTitle || mediaTitle}</div>
             </div>
           </div>
         );
-      
       case 'image':
         return (
           <img
@@ -759,9 +741,9 @@ export default function DedicationCard({
             alt={dedicationTitle || mediaTitle}
             style={imageBgStyle}
             loading="lazy"
+            decoding="async"
           />
         );
-      
       default:
         return (
           <div style={fallbackBg}>
@@ -772,7 +754,487 @@ export default function DedicationCard({
           </div>
         );
     }
-  }
+  }, [mediaUrl, mediaType, dedicationTitle, mediaTitle, isActive, shouldShowEmbed, embedUrl]);
+
+  // ==========================================
+  // STYLES (Unchanged)
+  // ==========================================
+
+  const card = {
+    position: "relative",
+    width: "100%",
+    maxWidth: "430px",
+    margin: "0 auto 18px auto",
+    overflow: "hidden",
+    background: "#000000",
+    color: "#ffffff",
+    borderRadius: "0px",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    WebkitFontSmoothing: "antialiased",
+  };
+
+  const instagramHeader = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 14px",
+    background: "#000000",
+    borderBottom: "1px solid #1c1c1e",
+  };
+
+  const mediaCard = {
+    position: "relative",
+    width: "100%",
+    aspectRatio: "1 / 1",
+    overflow: "hidden",
+    background: "#000000",
+  };
+
+  const videoBg = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: "center center",
+    background: "#000000",
+    zIndex: 0,
+  };
+
+  const iframeStyle = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    border: "none",
+    background: "#000000",
+    zIndex: 0,
+  };
+
+  const imageBgStyle = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    background: "#000000",
+    zIndex: 0,
+  };
+
+  const audioContainerStyle = {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(145deg, #1a1a1a, #0a0a0a)",
+    zIndex: 0,
+    padding: "20px",
+  };
+
+  const audioCardStyle = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "16px",
+    width: "100%",
+    maxWidth: "320px",
+  };
+
+  const audioIconStyle = {
+    fontSize: "48px",
+    marginBottom: "8px",
+  };
+
+  const audioControlStyle = {
+    width: "100%",
+    height: "48px",
+    background: "transparent",
+  };
+
+  const audioTitleStyle = {
+    fontSize: "16px",
+    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center",
+  };
+
+  const fallbackBg = {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#262626",
+    zIndex: 0,
+  };
+
+  const fallbackContent = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+  };
+
+  const fallbackIcon = {
+    fontSize: "48px",
+  };
+
+  const fallbackText = {
+    fontSize: "16px",
+    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center",
+  };
+
+  const topBadge = {
+    position: "absolute",
+    bottom: "14px",
+    left: "14px",
+    zIndex: 2,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    background: "rgba(0, 0, 0, 0.75)",
+    color: "#ffffff",
+    fontSize: "11px",
+    fontWeight: "600",
+  };
+
+  const badgeDot = {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+    background: "#0095f6",
+    flexShrink: 0,
+  };
+
+  const instagramActionBar = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 14px 8px 14px",
+    background: "#000000",
+  };
+
+  const leftActionsRow = {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+  };
+
+  const neonActionBtn = {
+    width: "42px",
+    height: "42px",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+    padding: 0,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 0 8px rgba(240,148,51,0.8), 0 0 16px rgba(220,39,67,0.75), 0 0 26px rgba(188,24,136,0.55)",
+    filter: "drop-shadow(0 0 4px rgba(255,255,255,0.35))",
+    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+    flexShrink: 0,
+  };
+
+  const dedicationBody = {
+    padding: "0px 14px 16px 14px",
+    background: "#000000",
+  };
+
+  const person = {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    minWidth: 0,
+  };
+
+  const nameEmphasis = {
+    fontWeight: "600",
+    fontSize: "13px",
+    color: "#ffffff",
+    lineHeight: 1.2,
+    maxWidth: "110px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
+  const roleText = {
+    fontSize: "11px",
+    color: "#a8a8a8",
+  };
+
+  const smallPhotoCircle = {
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    border: "1px solid #262626",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
+  const smallPlaceholder = {
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    background: "#262626",
+    color: "#ffffff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: "600",
+    flexShrink: 0,
+  };
+
+  const toPill = {
+    padding: "4px 12px",
+    borderRadius: "8px",
+    background: "#1c1c1e",
+    color: "#ffffff",
+    fontSize: "12px",
+    fontWeight: "600",
+    border: "none",
+    flexShrink: 0,
+  };
+
+  const messageText = {
+    margin: "6px 0 0 0",
+    fontSize: "14px",
+    lineHeight: "1.4",
+    color: "#f5f5f5",
+    wordBreak: "break-word",
+  };
+
+  const statsLine = {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#ffffff",
+  };
+
+  const commentMainBtn = {
+    marginTop: "10px",
+    padding: "9px 14px",
+    borderRadius: "999px",
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+    color: "#ffffff",
+    fontSize: "13px",
+    fontWeight: "700",
+    textAlign: "center",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 0 8px rgba(240,148,51,0.75), 0 0 16px rgba(220,39,67,0.65), 0 0 24px rgba(188,24,136,0.45)",
+    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+  };
+
+  const commentOverlay = {
+    position: "fixed",
+    left: "50%",
+    transform: "translateX(-50%)",
+    bottom: 0,
+    width: "100%",
+    maxWidth: "430px",
+    height: "70svh",
+    zIndex: 1000,
+    background: "#1c1c1e",
+    borderTopLeftRadius: "16px",
+    borderTopRightRadius: "16px",
+    padding: "0 16px 16px 16px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    animation: "slideUp 0.3s ease",
+  };
+
+  const commentHandleBar = {
+    width: "36px",
+    height: "4px",
+    background: "#3a3a3c",
+    borderRadius: "999px",
+    margin: "8px auto 12px auto",
+    flexShrink: 0,
+  };
+
+  const commentHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: "12px",
+    borderBottom: "1px solid #2c2c2e",
+    flexShrink: 0,
+  };
+
+  const commentTitle = {
+    margin: 0,
+    fontSize: "16px",
+    fontWeight: "600",
+    color: "#ffffff",
+  };
+
+  const closeBtn = {
+    border: "none",
+    background: "none",
+    color: "#ffffff",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  const commentsListBox = {
+    flex: 1,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
+    padding: "14px 0",
+    WebkitOverflowScrolling: "touch",
+  };
+
+  const commentHeaderRow = {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "2px",
+  };
+
+  const commentAvatar = {
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    background: "#f5f2ef",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "20px",
+    flexShrink: 0,
+    border: "2px solid #4f52ed",
+  };
+
+  const commentContent = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: "1px",
+  };
+
+  const commentItem = {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  };
+
+  const commentFrom = {
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "#a8a8a8",
+  };
+
+  const commentBody = {
+    fontSize: "14px",
+    color: "#ffffff",
+    wordBreak: "break-word",
+  };
+
+  const noComments = {
+    textAlign: "center",
+    color: "#a8a8a8",
+    fontSize: "14px",
+    marginTop: "32px",
+  };
+
+  const writeBox = {
+    borderTop: "1px solid #2c2c2e",
+    paddingTop: "12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    flexShrink: 0,
+    background: "#1c1c1e",
+  };
+
+  const sendRow = {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    gap: "10px",
+    alignItems: "center",
+  };
+
+  const commentInputTop = {
+    width: "100%",
+    boxSizing: "border-box",
+    border: "1px solid #2c2c2e",
+    borderRadius: "8px",
+    background: "#000000",
+    color: "#ffffff",
+    outline: "none",
+    padding: "10px 12px",
+    fontSize: "13px",
+  };
+
+  const commentInputBottom = {
+    width: "100%",
+    boxSizing: "border-box",
+    border: "none",
+    background: "transparent",
+    color: "#ffffff",
+    outline: "none",
+    padding: "10px 0",
+    fontSize: "14px",
+  };
+
+  const sendBtn = {
+    border: "none",
+    background: "none",
+    color: "#0095f6",
+    fontWeight: "600",
+    fontSize: "14px",
+    cursor: "pointer",
+    padding: "8px 12px",
+    opacity: 1,
+    transition: "opacity 0.2s ease",
+  };
+
+  const imagePopup = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(0,0,0,0.95)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "16px",
+  };
+
+  const fullImageStyle = {
+    maxWidth: "100%",
+    maxHeight: "85vh",
+    objectFit: "contain",
+  };
+
+  const closeImageBtn = {
+    position: "fixed",
+    top: "16px",
+    right: "16px",
+    border: "none",
+    background: "none",
+    color: "#ffffff",
+    cursor: "pointer",
+    padding: "8px",
+  };
 
   return (
     <div ref={cardRef} style={card} className="dedication-card">
@@ -785,6 +1247,8 @@ export default function DedicationCard({
               alt={senderName}
               style={smallPhotoCircle}
               onClick={() => setFullImage(senderPhoto)}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div style={smallPlaceholder}>S</div>
@@ -796,11 +1260,9 @@ export default function DedicationCard({
             <div style={roleText}>Sender</div>
           </div>
         </div>
-        
         <button type="button" onClick={react} style={toPill}>
           <span>to</span>
         </button>
-
         <div style={person}>
           {recipientPhoto ? (
             <img
@@ -808,6 +1270,8 @@ export default function DedicationCard({
               alt={recipientName}
               style={smallPhotoCircle}
               onClick={() => setFullImage(recipientPhoto)}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div style={smallPlaceholder}>R</div>
@@ -867,12 +1331,10 @@ export default function DedicationCard({
           <span>•</span>
           <span>{views.toLocaleString()} views</span>
         </div>
-
         <p style={messageText}>
           <span style={{ fontWeight: "700", marginRight: "6px" }}>{senderName || "Sender"}:</span>
           {message || "I chose this song because it reminds me of you."}
         </p>
-
         <button type="button" onClick={openComments} style={commentMainBtn}>
           View all {comments} comments...
         </button>
@@ -894,7 +1356,6 @@ export default function DedicationCard({
               <X size={20} color="#ffffff" />
             </button>
           </div>
-          
           <div style={commentsListBox}>
             {commentsList.length === 0 ? (
               <p style={noComments}>No comments yet. Be the first! 💬</p>
@@ -914,7 +1375,6 @@ export default function DedicationCard({
               ))
             )}
           </div>
-
           {/* Comment Input */}
           <div style={writeBox}>
             <input
@@ -938,9 +1398,9 @@ export default function DedicationCard({
                   }
                 }}
               />
-              <button 
-                type="button" 
-                onClick={sendComment} 
+              <button
+                type="button"
+                onClick={sendComment}
                 style={sendBtn}
                 disabled={isSubmittingComment || !commentText.trim()}
               >
@@ -962,493 +1422,31 @@ export default function DedicationCard({
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render when important props change
+  const importantProps = [
+    'id', 'isActive', 'reactionCount', 'commentCount', 'views',
+    'mediaUrl', 'dedicationTitle', 'mediaTitle', 'message',
+    'senderPhoto', 'senderName', 'senderWhatsapp',
+    'recipientPhoto', 'recipientName'
+  ];
+  
+  for (const prop of importantProps) {
+    if (prevProps[prop] !== nextProps[prop]) {
+      return false; // Re-render needed
+    }
+  }
+  
+  // Check if reaction count changed via localStorage
+  const prevReacted = localStorage.getItem(`chillax_reacted_${prevProps.id}`) === "true";
+  const nextReacted = localStorage.getItem(`chillax_reacted_${nextProps.id}`) === "true";
+  if (prevReacted !== nextReacted) {
+    return false;
+  }
+  
+  return true; // No re-render needed
+});
 
-// ==========================================
-// STYLES
-// ==========================================
-const card = {
-  position: "relative",
-  width: "100%",
-  maxWidth: "430px",
-  margin: "0 auto 18px auto",
-  overflow: "hidden",
-  background: "#000000",
-  color: "#ffffff",
-  borderRadius: "0px",
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  WebkitFontSmoothing: "antialiased",
-};
+DedicationCard.displayName = 'DedicationCard';
 
-const instagramHeader = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px",
-  background: "#000000",
-  borderBottom: "1px solid #1c1c1e",
-};
-
-const mediaCard = {
-  position: "relative",
-  width: "100%",
-  aspectRatio: "1 / 1", 
-  overflow: "hidden",
-  background: "#000000",
-};
-
-const videoBg = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  objectPosition: "center center",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const iframeStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const imageBgStyle = {
-  position: "absolute",
-  inset: 0,
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  background: "#000000",
-  zIndex: 0,
-};
-
-const audioContainerStyle = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(145deg, #1a1a1a, #0a0a0a)",
-  zIndex: 0,
-  padding: "20px",
-};
-
-const audioCardStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "16px",
-  width: "100%",
-  maxWidth: "320px",
-};
-
-const audioIconStyle = {
-  fontSize: "48px",
-  marginBottom: "8px",
-};
-
-const audioControlStyle = {
-  width: "100%",
-  height: "48px",
-  background: "transparent",
-};
-
-const audioTitleStyle = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const fallbackBg = {
-  position: "absolute",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#262626",
-  zIndex: 0,
-};
-
-const fallbackContent = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const fallbackIcon = {
-  fontSize: "48px",
-};
-
-const fallbackText = {
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-  textAlign: "center",
-};
-
-const topBadge = {
-  position: "absolute",
-  bottom: "14px",
-  left: "14px",
-  zIndex: 2,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  padding: "4px 8px",
-  borderRadius: "4px",
-  background: "rgba(0, 0, 0, 0.75)",
-  color: "#ffffff",
-  fontSize: "11px",
-  fontWeight: "600",
-};
-
-const badgeDot = {
-  width: "6px",
-  height: "6px",
-  borderRadius: "50%",
-  background: "#0095f6",
-  flexShrink: 0,
-};
-
-const instagramActionBar = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 14px 8px 14px",
-  background: "#000000",
-};
-
-const leftActionsRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const inlineActionBtn = {
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const neonActionBtn = {
-  width: "42px",
-  height: "42px",
-  border: "1px solid rgba(255,255,255,0.2)",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-  padding: 0,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  boxShadow: "0 0 8px rgba(240,148,51,0.8), 0 0 16px rgba(220,39,67,0.75), 0 0 26px rgba(188,24,136,0.55)",
-  filter: "drop-shadow(0 0 4px rgba(255,255,255,0.35))",
-  transition: "transform 0.2s ease, box-shadow 0.2s ease",
-  flexShrink: 0,
-};
-
-const dedicationBody = {
-  padding: "0px 14px 16px 14px",
-  background: "#000000",
-};
-
-const person = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  minWidth: 0,
-};
-
-const nameEmphasis = {
-  fontWeight: "600",
-  fontSize: "13px",
-  color: "#ffffff",
-  lineHeight: 1.2,
-  maxWidth: "110px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const roleText = {
-  fontSize: "11px",
-  color: "#a8a8a8",
-};
-
-const smallPhotoCircle = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  border: "1px solid #262626",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const smallPlaceholder = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  background: "#262626",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "12px",
-  fontWeight: "600",
-  flexShrink: 0,
-};
-
-const toPill = {
-  padding: "4px 12px",
-  borderRadius: "8px",
-  background: "#1c1c1e",
-  color: "#ffffff",
-  fontSize: "12px",
-  fontWeight: "600",
-  border: "none",
-  flexShrink: 0,
-};
-
-const messageText = {
-  margin: "6px 0 0 0",
-  fontSize: "14px",
-  lineHeight: "1.4",
-  color: "#f5f5f5",
-  wordBreak: "break-word",
-};
-
-const statsLine = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  fontSize: "14px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const commentMainBtn = {
-  marginTop: "10px",
-  padding: "9px 14px",
-  borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-  color: "#ffffff",
-  fontSize: "13px",
-  fontWeight: "700",
-  textAlign: "center",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  boxShadow: "0 0 8px rgba(240,148,51,0.75), 0 0 16px rgba(220,39,67,0.65), 0 0 24px rgba(188,24,136,0.45)",
-  transition: "transform 0.2s ease, box-shadow 0.2s ease",
-};
-
-const commentOverlay = {
-  position: "fixed",
-  left: "50%",
-  transform: "translateX(-50%)",
-  bottom: 0,
-  width: "100%",
-  maxWidth: "430px",
-  height: "70svh",
-  zIndex: 1000,
-  background: "#1c1c1e",
-  borderTopLeftRadius: "16px",
-  borderTopRightRadius: "16px",
-  padding: "0 16px 16px 16px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  animation: "slideUp 0.3s ease",
-};
-
-const commentHandleBar = {
-  width: "36px",
-  height: "4px",
-  background: "#3a3a3c",
-  borderRadius: "999px",
-  margin: "8px auto 12px auto",
-  flexShrink: 0,
-};
-
-const commentHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingBottom: "12px",
-  borderBottom: "1px solid #2c2c2e",
-  flexShrink: 0,
-};
-
-const commentTitle = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: "600",
-  color: "#ffffff",
-};
-
-const closeBtn = {
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "4px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const commentsListBox = {
-  flex: 1,
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "14px",
-  padding: "14px 0",
-  WebkitOverflowScrolling: "touch",
-};
-
-const commentHeaderRow = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "2px",
-};
-
-const commentAvatar = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "50%",
-  background: "#f5f2ef",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "20px",
-  flexShrink: 0,
-  border: "2px solid #4f52ed",
-};
-
-const commentContent = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  gap: "1px",
-};
-
-const commentItem = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-};
-
-const commentFrom = {
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#a8a8a8",
-};
-
-const commentBody = {
-  fontSize: "14px",
-  color: "#ffffff",
-  wordBreak: "break-word",
-};
-
-const noComments = {
-  textAlign: "center",
-  color: "#a8a8a8",
-  fontSize: "14px",
-  marginTop: "32px",
-};
-
-const writeBox = {
-  borderTop: "1px solid #2c2c2e",
-  paddingTop: "12px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  flexShrink: 0,
-  background: "#1c1c1e",
-};
-
-const sendRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: "10px",
-  alignItems: "center",
-};
-
-const commentInputTop = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #2c2c2e",
-  borderRadius: "8px",
-  background: "#000000",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 12px",
-  fontSize: "13px",
-};
-
-const commentInputBottom = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "none",
-  background: "transparent",
-  color: "#ffffff",
-  outline: "none",
-  padding: "10px 0",
-  fontSize: "14px",
-};
-
-const sendBtn = {
-  border: "none",
-  background: "none",
-  color: "#0095f6",
-  fontWeight: "600",
-  fontSize: "14px",
-  cursor: "pointer",
-  padding: "8px 12px",
-  opacity: 1,
-  transition: "opacity 0.2s ease",
-};
-
-const imagePopup = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  background: "rgba(0,0,0,0.95)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "16px",
-};
-
-const fullImageStyle = {
-  maxWidth: "100%",
-  maxHeight: "85vh",
-  objectFit: "contain",
-};
-
-const closeImageBtn = {
-  position: "fixed",
-  top: "16px",
-  right: "16px",
-  border: "none",
-  background: "none",
-  color: "#ffffff",
-  cursor: "pointer",
-  padding: "8px",
-};
+export default DedicationCard;
