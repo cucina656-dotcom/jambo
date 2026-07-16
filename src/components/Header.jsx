@@ -82,7 +82,7 @@ function Header() {
           
           <Link to="/tv" style={getTopNavItemStyle("/tv")}>
             <span style={{ fontSize: "16px" }}>📺</span>
-            <span> ForYou TV</span>
+            <span> toYou TV</span>
           </Link>
         </div>
       </div>
