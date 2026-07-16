@@ -1,27 +1,17 @@
-import { useEffect, useState, useRef } from "react";
-
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Header from "../components/Header";
-
 import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 // ==========================================
 // DEVICE / VIEWPORT COMPATIBILITY HELPERS
-// (additive only — mirrors the same cross-device support added
-// to DedicationCard.jsx so the TV feed page and its "Dedicate a
-// song" form behave correctly on Tecno/Infinix/Itel/Samsung
-// budget devices at 360x800, Samsung/Apple mid+flagship tiers at
-// 390x844 / 412x915 / 412x892 / 430x932, and legacy engines like
-// Opera Mini / Samsung Internet / older Safari & Chrome)
 // ==========================================
+
 const TV_STYLE_TAG_ID = "tv-page-responsive-styles";
 
 function ensureViewportMeta() {
   if (typeof document === "undefined") return;
-  // Many budget Android stock browsers (Tecno/Infinix/Itel) and
-  // Opera Mini's extreme data-saving mode need an explicit viewport
-  // tag or they render a desktop-width layout and shrink it down.
   const existing = document.querySelector('meta[name="viewport"]');
   if (existing) return;
   const meta = document.createElement("meta");
@@ -37,27 +27,15 @@ function ensureViewportMeta() {
 function ensureTvResponsiveStylesheet() {
   if (typeof document === "undefined") return;
   if (document.getElementById(TV_STYLE_TAG_ID)) return;
-
   const style = document.createElement("style");
   style.id = TV_STYLE_TAG_ID;
   style.textContent = `
-    /* --- Cross-device compatibility additions for the TV feed page
-       (does not override existing inline styles/behaviour, only
-       fills gaps for smaller/older/notched devices) --- */
-
-    /* Prevent iOS Safari from auto-zooming the page when a form
-       input/textarea is focused (inputs under 16px trigger this on
-       iPhones like the 17/17 Pro Max, 16/16 Pro Max). */
     @media (max-width: 600px) {
       .tv-form-card input,
       .tv-form-card textarea {
         font-size: 16px !important;
       }
     }
-
-    /* Extra-small budget viewports (360x800 — Tecno Spark/Camon,
-       Infinix Note, Itel P-series, Samsung Galaxy A06/A16) get
-       slightly tighter spacing so nothing clips or wraps oddly. */
     @media (max-width: 380px) {
       .tv-title {
         font-size: clamp(24px, 7.5vw, 30px) !important;
@@ -70,26 +48,16 @@ function ensureTvResponsiveStylesheet() {
         padding: 16px !important;
       }
     }
-
-    /* Respect the device notch / rounded corners / home-indicator
-       area on iPhone 17/16 Pro Max (430x932) and similar Android
-       edge-to-edge displays, without changing existing layout. */
     .tv-form-overlay {
       padding-top: calc(76px + env(safe-area-inset-top, 0px)) !important;
       padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
       padding-left: calc(10px + env(safe-area-inset-left, 0px)) !important;
       padding-right: calc(10px + env(safe-area-inset-right, 0px)) !important;
     }
-
-    /* Avoid the sticky 300ms tap-delay / grey tap flash seen on
-       Samsung Internet and Chrome for budget Android devices. */
     .tv-page button {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-
-    /* Keep the page from ever forcing horizontal scroll on narrow
-       (360px) viewports regardless of the edge-to-edge card layout. */
     .tv-page {
       max-width: 100vw;
     }
@@ -120,18 +88,20 @@ function TV() {
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
-
-  // Ref to track which video is currently playing
   const currentlyPlayingRef = useRef(null);
+  const observerRef = useRef(null);
+  const loadMoreRef = useRef(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 5 });
+  const feedContainerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
-  // Cross-device compatibility setup (additive): ensures a proper
-  // viewport meta tag and injects the responsive/legacy-browser
-  // stylesheet once per page, covering the same Sub-Saharan Africa /
-  // Europe / North America / Asia device mix as DedicationCard,
-  // without touching any of the existing logic or styles below.
+  // Cross-device compatibility setup
   useEffect(() => {
     ensureViewportMeta();
     ensureTvResponsiveStylesheet();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Add preconnect for external media services
@@ -163,9 +133,17 @@ function TV() {
     loadDedications();
   }, []);
 
-  // Intersection Observer to track which card is most visible
+  // ==========================================
+  // OPTIMIZED INTERSECTION OBSERVER
+  // ==========================================
+
   useEffect(() => {
     if (!feed.length) return;
+
+    // Clean up previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -183,19 +161,153 @@ function TV() {
         }
       },
       {
-        threshold: 0.1,
+        threshold: [0.1, 0.3, 0.5],
+        rootMargin: '50px',
       }
     );
 
-    Object.values(cardRefs.current).forEach((element) => {
-      if (element) observer.observe(element);
-    });
+    observerRef.current = observer;
+
+    // Observe visible cards only
+    const observeVisibleCards = () => {
+      const elements = Object.values(cardRefs.current);
+      const start = Math.max(0, visibleRange.start - 1);
+      const end = Math.min(feed.length, visibleRange.end + 1);
+      
+      for (let i = start; i < end; i++) {
+        const element = cardRefs.current[i];
+        if (element) {
+          observer.observe(element);
+        }
+      }
+    };
+
+    // Initial observation
+    observeVisibleCards();
 
     return () => {
-      observer.disconnect();
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
       setActiveIndex(null);
     };
+  }, [feed, visibleRange]);
+
+  // ==========================================
+  // OPTIMIZED SCROLL HANDLER WITH VIRTUALIZATION
+  // ==========================================
+
+  useEffect(() => {
+    if (!feed.length) return;
+
+    const handleScroll = () => {
+      const container = feedContainerRef.current;
+      if (!container) return;
+
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const cardHeight = window.innerWidth <= 430 ? window.innerWidth : 430;
+      const cardTotalHeight = cardHeight + 18 + 72; // card + margin + header approx
+      
+      // Calculate which cards should be visible
+      const startIndex = Math.max(0, Math.floor(scrollTop / cardTotalHeight) - 1);
+      const endIndex = Math.min(feed.length, Math.ceil((scrollTop + windowHeight) / cardTotalHeight) + 1);
+      
+      setVisibleRange({ start: startIndex, end: endIndex });
+    };
+
+    // Debounce scroll handler
+    let timeoutId;
+    const debouncedScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 50);
+    };
+
+    window.addEventListener('scroll', debouncedScroll, { passive: true });
+    window.addEventListener('resize', debouncedScroll, { passive: true });
+    
+    // Initial calculation
+    handleScroll();
+
+    return () => {
+      window.removeEventListener('scroll', debouncedScroll);
+      window.removeEventListener('resize', debouncedScroll);
+      clearTimeout(timeoutId);
+    };
   }, [feed]);
+
+  // ==========================================
+  // OPTIMIZED MEDIA PLAYBACK CONTROL
+  // ==========================================
+
+  const pauseAllMedia = useCallback((exceptElement = null) => {
+    // Only pause native media elements
+    const mediaElements = document.querySelectorAll('video, audio');
+    mediaElements.forEach(element => {
+      if (element !== exceptElement && !element.paused) {
+        element.pause();
+      }
+    });
+  }, []);
+
+  const registerPlayingMedia = useCallback((mediaElement) => {
+    if (currentlyPlayingRef.current && currentlyPlayingRef.current !== mediaElement) {
+      if (!currentlyPlayingRef.current.paused) {
+        currentlyPlayingRef.current.pause();
+      }
+    }
+    currentlyPlayingRef.current = mediaElement;
+  }, []);
+
+  // Auto-pause videos when scrolling away - optimized
+  useEffect(() => {
+    const handleScroll = () => {
+      // Only pause if activeIndex changed significantly
+      if (activeIndex === null) {
+        pauseAllMedia();
+        return;
+      }
+
+      // Get the active card element
+      const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
+      if (!activeCard) {
+        pauseAllMedia();
+        return;
+      }
+
+      // Pause all media not in the active card
+      const mediaElements = document.querySelectorAll('video, audio');
+      mediaElements.forEach(mediaElement => {
+        const card = mediaElement.closest('.tv-card-wrapper');
+        if (card && card.dataset.index !== String(activeIndex)) {
+          if (!mediaElement.paused) {
+            mediaElement.pause();
+            if (currentlyPlayingRef.current === mediaElement) {
+              currentlyPlayingRef.current = null;
+            }
+          }
+        }
+      });
+    };
+
+    let timeoutId;
+    const debouncedScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 150);
+    };
+
+    window.addEventListener('scroll', debouncedScroll, { passive: true });
+    window.addEventListener('touchmove', debouncedScroll, { passive: true });
+
+    // Initial pause check
+    handleScroll();
+
+    return () => {
+      window.removeEventListener('scroll', debouncedScroll);
+      window.removeEventListener('touchmove', debouncedScroll);
+      clearTimeout(timeoutId);
+    };
+  }, [activeIndex, pauseAllMedia]);
 
   // Auto-play first card on initial load
   useEffect(() => {
@@ -207,123 +319,57 @@ function TV() {
     }
   }, [feed]);
 
-  // Auto-pause videos when scrolling away
-  useEffect(() => {
-    // Function to pause all videos except the active one
-    const handleScroll = () => {
-      const videoElements = document.querySelectorAll('video');
-      const audioElements = document.querySelectorAll('audio');
-      const iframeElements = document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="dailymotion"]');
+  // ==========================================
+  // API FUNCTIONS (Memoized)
+  // ==========================================
 
-      // Get the active card element
-      const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
-
-      // Pause all videos/audios that are not in the active card
-      [...videoElements, ...audioElements].forEach(mediaElement => {
-        const card = mediaElement.closest('.tv-card-wrapper');
-        if (card && card.dataset.index !== String(activeIndex)) {
-          if (!mediaElement.paused) {
-            mediaElement.pause();
-            // Reset the currently playing ref
-            if (currentlyPlayingRef.current === mediaElement) {
-              currentlyPlayingRef.current = null;
-            }
-          }
-        }
-      });
-
-      // Handle iframes (YouTube, Vimeo, etc.)
-      iframeElements.forEach(iframe => {
-        const card = iframe.closest('.tv-card-wrapper');
-        if (card && card.dataset.index !== String(activeIndex)) {
-          // For iframes, we need to use postMessage to pause
-          try {
-            iframe.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-            iframe.contentWindow?.postMessage('{"method":"pause"}', '*');
-          } catch (e) {
-            // Silent fail for cross-origin
-          }
-        }
-      });
-    };
-
-    // Debounce the scroll handler for performance
-    let timeoutId;
-    const debouncedScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleScroll, 100);
-    };
-
-    window.addEventListener('scroll', debouncedScroll, { passive: true });
-    window.addEventListener('touchmove', debouncedScroll, { passive: true });
-
-    // Also handle when activeIndex changes
-    handleScroll();
-
-    return () => {
-      window.removeEventListener('scroll', debouncedScroll);
-      window.removeEventListener('touchmove', debouncedScroll);
-      clearTimeout(timeoutId);
-    };
-  }, [activeIndex]);
-
-  // Function to register a playing media element
-  const registerPlayingMedia = (mediaElement) => {
-    // Pause any currently playing media
-    if (currentlyPlayingRef.current && currentlyPlayingRef.current !== mediaElement) {
-      if (!currentlyPlayingRef.current.paused) {
-        currentlyPlayingRef.current.pause();
-      }
-    }
-    currentlyPlayingRef.current = mediaElement;
-  };
-
-  async function loadDedications() {
+  const loadDedications = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/dedications`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.dedications)) {
-        setFeed(data.dedications);
-      } else if (Array.isArray(data)) {
-        setFeed(data);
+      if (isMountedRef.current) {
+        if (data.success && Array.isArray(data.dedications)) {
+          setFeed(data.dedications);
+        } else if (Array.isArray(data)) {
+          setFeed(data);
+        }
       }
     } catch (err) {
       console.log("Failed to load dedications", err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }
+  }, []);
 
-  function handlePhotoUpload(e, setter, fileSetter) {
+  const handlePhotoUpload = useCallback((e, setter, fileSetter) => {
     const file = e.target.files[0];
     if (!file) return;
     setter(URL.createObjectURL(file));
     fileSetter(file);
-  }
+  }, []);
 
-  function handleMediaUpload(e) {
+  const handleMediaUpload = useCallback((e) => {
     const file = e.target.files[0];
     if (!file) return;
     setMediaFile(file);
-  }
+  }, []);
 
-  async function handleSubmit(e) {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
-
     if (!senderName || !senderWhatsapp || !recipientName || !message) {
       alert("Please fill all important fields.");
       return;
     }
-
     if (!mediaUrl.trim() && !mediaFile) {
       alert("Please add media (URL or file upload).");
       return;
     }
 
     setIsSubmitting(true);
-
     try {
       const formData = new FormData();
       formData.append("sender_name", senderName);
@@ -364,7 +410,6 @@ function TV() {
       });
 
       const data = await res.json();
-
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
@@ -373,6 +418,8 @@ function TV() {
 
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
+        // Reset visible range to include new card
+        setVisibleRange({ start: 0, end: 5 });
       }
 
       setSenderName("");
@@ -393,7 +440,33 @@ function TV() {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  }, [isSubmitting, senderName, senderWhatsapp, recipientName, message, mediaUrl, mediaFile, senderPhotoFile, senderPhoto, recipientPhotoFile, recipientPhoto, dedicationTitle]);
+
+  // ==========================================
+  // DETERMINE WHICH CARDS TO RENDER
+  // ==========================================
+
+  const shouldRenderCard = useCallback((index) => {
+    return Math.abs(index - activeIndex) <= 1;
+  }, [activeIndex]);
+
+  // Memoize feed items to prevent unnecessary re-renders
+  const renderedFeed = useMemo(() => {
+    return feed.map((item, index) => {
+      const isNearby = shouldRenderCard(index);
+      
+      return {
+        item,
+        index,
+        isNearby,
+        shouldRender: isNearby,
+      };
+    });
+  }, [feed, shouldRenderCard]);
+
+  // ==========================================
+  // RENDER
+  // ==========================================
 
   return (
     <div style={page} className="tv-page">
@@ -417,6 +490,15 @@ function TV() {
         }
         .tv-card-wrapper iframe {
           loading: lazy;
+        }
+        /* Placeholder for cards far away */
+        .tv-card-placeholder {
+          width: 100%;
+          max-width: 430px;
+          margin: 0 auto 18px auto;
+          aspect-ratio: 1 / 1;
+          background: #000000;
+          border-radius: 0px;
         }
       `}</style>
       <main style={main}>
@@ -472,7 +554,7 @@ function TV() {
           </section>
         )}
 
-        <section style={feedSection}>
+        <section style={feedSection} ref={feedContainerRef}>
           {isLoading && (
             <div style={emptyCard}>
               <div style={{
@@ -495,39 +577,58 @@ function TV() {
             </div>
           )}
 
-          {feed.map((item, index) => (
-            <div
-              key={item.id}
-              ref={(ref) => {
-                if (ref) cardRefs.current[index] = ref;
-              }}
-              data-index={index}
-              style={cardWrapper}
-              className="tv-card-wrapper"
-            >
-              <DedicationCard
-                id={item.id}
-                senderPhoto={item.sender_photo}
-                senderName={item.sender_name}
-                senderWhatsapp={item.sender_whatsapp}
-                recipientPhoto={item.recipient_photo}
-                recipientName={item.recipient_name}
-                dedicationTitle={item.dedication_title}
-                message={item.message}
-                mediaTitle={item.title}
-                mediaUrl={item.media_url}
-                views={item.views || 0}
-                reactionCount={item.reaction_count || 0}
-                commentCount={item.comment_count || 0}
-                badgeStyle={item.dedication_badge || "❤️"}
-                isActive={activeIndex === index}
-                onDedicateClick={() => {
-                  setShowForm(true);
+          {renderedFeed.map(({ item, index, shouldRender }) => {
+            // For cards far from active, render placeholder with same dimensions
+            if (!shouldRender) {
+              return (
+                <div
+                  key={item.id}
+                  className="tv-card-placeholder"
+                  style={{
+                    width: '100%',
+                    maxWidth: '430px',
+                    margin: '0 auto 18px auto',
+                    aspectRatio: '1 / 1',
+                    background: '#000000',
+                    borderRadius: '0px',
+                  }}
+                />
+              );
+            }
+
+            return (
+              <div
+                key={item.id}
+                ref={(ref) => {
+                  if (ref) cardRefs.current[index] = ref;
                 }}
-                onMediaPlay={registerPlayingMedia}
-              />
-            </div>
-          ))}
+                data-index={index}
+                style={cardWrapper}
+                className="tv-card-wrapper"
+              >
+                <DedicationCard
+                  id={item.id}
+                  senderPhoto={item.sender_photo}
+                  senderName={item.sender_name}
+                  senderWhatsapp={item.sender_whatsapp}
+                  recipientPhoto={item.recipient_photo}
+                  recipientName={item.recipient_name}
+                  dedicationTitle={item.dedication_title}
+                  message={item.message}
+                  mediaTitle={item.title}
+                  mediaUrl={item.media_url}
+                  views={item.views || 0}
+                  reactionCount={item.reaction_count || 0}
+                  commentCount={item.comment_count || 0}
+                  badgeStyle={item.dedication_badge || "❤️"}
+                  isActive={activeIndex === index}
+                  onDedicateClick={() => {
+                    setShowForm(true);
+                  }}
+                />
+              </div>
+            );
+          })}
         </section>
       </main>
     </div>
