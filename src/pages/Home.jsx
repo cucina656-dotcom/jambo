@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Header from "../components/Header";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-const DEFAULT_VIDEO =
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+const DEFAULT_VIDEO = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 const DEFAULT_TITLE = "ChillaX";
-const DEFAULT_LOGO =
-  "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
+const DEFAULT_LOGO = "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
 
 function isDirectVideoUrl(url = "") {
   const clean = url.toLowerCase().split("?")[0].split("#")[0];
@@ -99,91 +97,129 @@ function Home() {
   const [newMediaFile, setNewMediaFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
+  const observerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
-  const readJsonSafely = async (response) => {
+  const readJsonSafely = useCallback(async (response) => {
     const text = await response.text();
     try {
       return JSON.parse(text);
     } catch {
       throw new Error(text || "Server did not return JSON");
     }
-  };
+  }, []);
 
-  const fetchHomeData = async () => {
+  const fetchHomeData = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${API_URL}/api/home`);
       const data = await readJsonSafely(response);
       if (!data.success) return;
       if (Array.isArray(data.posts) && data.posts.length > 0) {
-        setPosts(data.posts);
+        if (isMountedRef.current) {
+          setPosts(data.posts);
+        }
         return;
       }
-      setPosts([
-        {
-          id: 0,
-          creator_identity: data.creator_identity || "",
-          creator_type: data.creator_type || "",
-          title: data.title || DEFAULT_TITLE,
-          subtitle: data.subtitle || "",
-          logo_url: data.logo_url || DEFAULT_LOGO,
-          media_url: data.video_url || DEFAULT_VIDEO,
-          media_type: data.media_type || "",
-        },
-      ]);
+      if (isMountedRef.current) {
+        setPosts([
+          {
+            id: 0,
+            creator_identity: data.creator_identity || "",
+            creator_type: data.creator_type || "",
+            title: data.title || DEFAULT_TITLE,
+            subtitle: data.subtitle || "",
+            logo_url: data.logo_url || DEFAULT_LOGO,
+            media_url: data.video_url || DEFAULT_VIDEO,
+            media_type: data.media_type || "",
+          },
+        ]);
+      }
     } catch (error) {
       console.error("Failed to fetch home data:", error);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [readJsonSafely]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchHomeData();
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchHomeData]);
+
+  // ==========================================
+  // OPTIMIZED INTERSECTION OBSERVER
+  // ==========================================
 
   useEffect(() => {
     if (!posts.length) return;
+
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const index = Number(entry.target.dataset.index);
           const video = videoRefs.current[index];
+          
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
             setActivePostIndex(index);
+            
+            // Pause other videos
             Object.entries(videoRefs.current).forEach(([key, item]) => {
-              if (Number(key) !== index && item) {
+              if (Number(key) !== index && item && !item.paused) {
                 item.pause();
               }
             });
-            if (video) {
+            
+            if (video && video.paused) {
               video.play().catch(() => {});
             }
           } else {
-            if (video) {
+            if (video && !video.paused) {
               video.pause();
             }
           }
         });
       },
-      { threshold: [0.6] }
+      { 
+        threshold: [0.6],
+        rootMargin: '0px 0px -10% 0px'
+      }
     );
+
+    observerRef.current = observer;
+
     Object.values(postRefs.current).forEach((post) => {
       if (post) observer.observe(post);
     });
+
     return () => {
-      observer.disconnect();
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
     };
   }, [posts]);
 
-  const openEditor = () => {
+  // ==========================================
+  // OPTIMIZED FUNCTIONS
+  // ==========================================
+
+  const openEditor = useCallback(() => {
     Object.values(videoRefs.current).forEach((video) => {
-      if (video) video.pause();
+      if (video && !video.paused) video.pause();
     });
     setShowEditor(true);
-  };
+  }, []);
 
-  const closeEditor = () => {
+  const closeEditor = useCallback(() => {
     setShowEditor(false);
     setNewCreatorIdentity("");
     setNewMediaUrl("");
@@ -192,24 +228,25 @@ function Home() {
     setNewLogoFile(null);
     setLogoPreview("");
     setNewMediaFile(null);
-  };
+  }, []);
 
-  const handleLogoChange = (file) => {
+  const handleLogoChange = useCallback((file) => {
     setNewLogoFile(file || null);
     if (file) {
       setLogoPreview(URL.createObjectURL(file));
     } else {
       setLogoPreview("");
     }
-  };
+  }, []);
 
-  const handleMediaFileChange = (file) => {
+  const handleMediaFileChange = useCallback((file) => {
     setNewMediaFile(file || null);
-  };
+  }, []);
 
-  const applyChanges = async () => {
+  const applyChanges = useCallback(async () => {
     const identity = newCreatorIdentity.trim();
     const mediaToSave = newMediaUrl.trim();
+    
     if (!identity) {
       alert("Enter your WhatsApp number or website URL");
       return;
@@ -218,12 +255,10 @@ function Home() {
       alert("Please enter a media URL or upload a media file");
       return;
     }
-    
+
     let detectedMediaType = "";
     if (newMediaFile) {
-      detectedMediaType = newMediaFile.type.startsWith("image/")
-        ? "image"
-        : "video";
+      detectedMediaType = newMediaFile.type.startsWith("image/") ? "image" : "video";
     } else if (isImageUrl(mediaToSave)) {
       detectedMediaType = "image";
     } else if (isDirectVideoUrl(mediaToSave)) {
@@ -231,7 +266,7 @@ function Home() {
     } else if (mediaToSave) {
       detectedMediaType = "embed";
     }
-    
+
     try {
       setSaving(true);
       const formData = new FormData();
@@ -241,6 +276,7 @@ function Home() {
       formData.append("subtitle", subtitle.trim());
       formData.append("media_type", detectedMediaType);
       formData.append("is_new_post", "true");
+
       if (mediaToSave) {
         formData.append("video_url", mediaToSave);
       }
@@ -250,60 +286,67 @@ function Home() {
       if (newMediaFile) {
         formData.append("media_file", newMediaFile);
       }
+
       const response = await fetch(`${API_URL}/api/home/update`, {
         method: "POST",
         body: formData,
       });
+
       const data = await readJsonSafely(response);
       if (!data.success) {
         alert(data.message || "Failed to create post");
         return;
       }
-      // Directly update posts from response
+
       if (data.posts && Array.isArray(data.posts)) {
-        setPosts(data.posts);
+        if (isMountedRef.current) {
+          setPosts(data.posts);
+        }
       } else {
         await fetchHomeData();
       }
+
       closeEditor();
       alert("Post created successfully!");
     } catch (error) {
       console.error("Failed to create home post:", error);
       alert("Failed to create post.");
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
-  };
+  }, [newCreatorIdentity, newMediaUrl, newMediaFile, newTitle, subtitle, newLogoFile, readJsonSafely, closeEditor, fetchHomeData]);
 
-  const renderMedia = (post, index) => {
+  // ==========================================
+  // MEMOIZED RENDER FUNCTIONS
+  // ==========================================
+
+  const renderMedia = useCallback((post, index) => {
     const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
     const mediaType = post.media_type || "";
     
-    const isImage =
-      mediaType === "image" ||
-      (!mediaType && isImageUrl(mediaUrl));
-    
-    const isVideo =
-      mediaType === "video" ||
-      (!mediaType && isDirectVideoUrl(mediaUrl));
-    
-    const isEmbed =
-      mediaType === "embed" ||
-      (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
-    
+    const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
+    const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
+    const isEmbed = mediaType === "embed" || (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+
     if (isImage) {
       return (
         <img
           src={mediaUrl}
           alt={post.title || DEFAULT_TITLE}
           style={mediaStyle}
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.currentTarget.src = DEFAULT_LOGO;
           }}
         />
       );
     }
+
     if (isVideo) {
+      const isActive = activePostIndex === index;
       return (
         <video
           ref={(ref) => {
@@ -314,25 +357,50 @@ function Home() {
           playsInline
           muted={false}
           controls
-          preload="metadata"
+          preload={isActive ? "metadata" : "none"}
           style={mediaStyle}
         />
       );
     }
+
     if (isEmbed) {
-      return (
-        <iframe
-          src={getEmbedUrl(mediaUrl)}
-          title={post.title || DEFAULT_TITLE}
-          style={mediaStyle}
-          frameBorder="0"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-          allowFullScreen
-        />
-      );
+      // Only load iframe for active post to save resources
+      if (activePostIndex === index) {
+        return (
+          <iframe
+            src={getEmbedUrl(mediaUrl)}
+            title={post.title || DEFAULT_TITLE}
+            style={mediaStyle}
+            frameBorder="0"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+            allowFullScreen
+            loading="lazy"
+          />
+        );
+      } else {
+        // Show placeholder for inactive embeds
+        return (
+          <div style={{ 
+            width: '100%', 
+            height: '100%', 
+            background: '#1a1a2e',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#888',
+            fontSize: '14px'
+          }}>
+            ▶️ {post.title || DEFAULT_TITLE}
+          </div>
+        );
+      }
     }
+
     return null;
-  };
+  }, [activePostIndex]);
+
+  // Memoize posts to prevent unnecessary re-renders
+  const memoizedPosts = useMemo(() => posts, [posts]);
 
   if (loading) {
     return (
@@ -343,14 +411,14 @@ function Home() {
     );
   }
 
-  if (!posts.length) {
+  if (!memoizedPosts.length) {
     return (
       <div style={page}>
         <Header />
         <div style={emptyStateStyle}>
           <p>No posts yet. Create your first post!</p>
           <button type="button" onClick={openEditor} style={emptyStateButton}>
-            ⚡       Create Post
+            ⚡ Create Post
           </button>
         </div>
         {showEditor && (
@@ -379,11 +447,12 @@ function Home() {
     <div style={page}>
       <Header />
       <main style={feedContainer}>
-        {posts.map((post, index) => {
+        {memoizedPosts.map((post, index) => {
           const tapInUrl = buildTapInUrl(
             post.creator_type,
             post.creator_identity
           );
+          
           return (
             <section
               key={post.id || index}
@@ -399,6 +468,8 @@ function Home() {
                   alt={post.title || DEFAULT_TITLE}
                   style={journalistPhotoStyle}
                   onClick={() => setZoomImage(post.logo_url || DEFAULT_LOGO)}
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     e.currentTarget.src = DEFAULT_LOGO;
                   }}
@@ -409,12 +480,10 @@ function Home() {
                   </div>
                 </div>
               </div>
-
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
               <div style={darkOverlay} />
-
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
@@ -435,7 +504,6 @@ function Home() {
                     </div>
                   </div>
                 )}
-
                 <button type="button" onClick={openEditor} style={plusBtn}>
                   <span style={lightningIcon}>⚡</span>
                   <span style={plusIcon}>+</span>
@@ -445,6 +513,7 @@ function Home() {
           );
         })}
       </main>
+
       {showEditor && (
         <EditorModal
           newCreatorIdentity={newCreatorIdentity}
@@ -463,16 +532,27 @@ function Home() {
           saving={saving}
         />
       )}
+
       {zoomImage && (
         <div style={zoomOverlay} onClick={() => setZoomImage("")}>
-          <img src={zoomImage} alt="Profile zoom" style={zoomImageStyle} />
+          <img 
+            src={zoomImage} 
+            alt="Profile zoom" 
+            style={zoomImageStyle}
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       )}
     </div>
   );
 }
 
-function EditorModal({
+// ==========================================
+// EDITOR MODAL (Memoized)
+// ==========================================
+
+const EditorModal = React.memo(({
   newCreatorIdentity,
   setNewCreatorIdentity,
   newTitle,
@@ -487,11 +567,11 @@ function EditorModal({
   applyChanges,
   closeEditor,
   saving,
-}) {
+}) => {
   return (
     <div style={modalOverlay}>
       <div style={modalCard}>
-        <h2 style={modalTitle}>   ⚡      Create New Post</h2>
+        <h2 style={modalTitle}> ⚡ Create New Post</h2>
         <input
           type="text"
           placeholder="WhatsApp number or website URL *"
@@ -509,7 +589,7 @@ function EditorModal({
           />
         </label>
         {logoPreview && (
-          <img src={logoPreview} alt="Logo preview" style={previewLogo} />
+          <img src={logoPreview} alt="Logo preview" style={previewLogo} loading="lazy" decoding="async" />
         )}
         <input
           type="text"
@@ -535,7 +615,7 @@ function EditorModal({
           />
         </label>
         <div style={helpTextStyle}>
-          💡    Enter a media URL OR upload an image/video from your device.
+          💡 Enter a media URL OR upload an image/video from your device.
         </div>
         <textarea
           placeholder="Subtitle text optional"
@@ -560,7 +640,13 @@ function EditorModal({
       </div>
     </div>
   );
-}
+});
+
+EditorModal.displayName = 'EditorModal';
+
+// ==========================================
+// STYLES (Unchanged)
+// ==========================================
 
 const page = {
   height: "100vh",
