@@ -90,18 +90,22 @@ function ensureResponsiveStylesheet() {
 
 function getMediaType(url) {
   if (!url) return 'none';
+
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
   if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'video';
   }
+
   const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
   if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'audio';
   }
+
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
   if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
     return 'image';
   }
+
   if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
     return 'youtube';
   }
@@ -111,25 +115,28 @@ function getMediaType(url) {
   if (url.includes('dailymotion.com/')) {
     return 'dailymotion';
   }
+
   return 'unknown';
 }
 
 function getYouTubeEmbedUrl(url) {
   const patterns = [
-    /(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/)([^&?#]+)/,
-    /youtube\\.com\\/embed\\/([^?]+)/
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
+    /youtube\.com\/embed\/([^?]+)/
   ];
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
       return `https://www.youtube.com/embed/${match[1]}?enablejsapi=1&playsinline=1`;
     }
   }
+
   return url;
 }
 
 function getVimeoEmbedUrl(url) {
-  const match = url.match(/vimeo\\.com\\/(\\d+)/);
+  const match = url.match(/vimeo\.com\/(\d+)/);
   if (match) {
     return `https://player.vimeo.com/video/${match[1]}?api=1`;
   }
@@ -137,7 +144,7 @@ function getVimeoEmbedUrl(url) {
 }
 
 function getDailymotionEmbedUrl(url) {
-  const match = url.match(/dailymotion\\.com\\/video\\/([^?&]+)/);
+  const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
   if (match) {
     return `https://www.dailymotion.com/embed/video/${match[1]}?api=postMessage`;
   }
@@ -200,6 +207,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬";
   if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲";
   if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼";
+
   // Asia
   if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫";
   if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲";
@@ -249,6 +257,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿";
   if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳";
   if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪";
+
   // Europe
   if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱";
   if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩";
@@ -295,6 +304,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦";
   if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧";
   if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦";
+
   // North America
   if (number.startsWith("+1") || number.startsWith("1")) {
     if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸";
@@ -321,6 +331,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳";
   if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮";
   if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦";
+
   // South America
   if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷";
   if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴";
@@ -334,6 +345,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷";
   if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾";
   if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪";
+
   // Oceania
   if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺";
   if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯";
@@ -346,6 +358,7 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+676") || number.startsWith("676")) return "🇹🇴";
   if (number.startsWith("+688") || number.startsWith("688")) return "🇹🇻";
   if (number.startsWith("+678") || number.startsWith("678")) return "🇻🇺";
+
   return "🌍";
 }
 
@@ -396,7 +409,6 @@ const DedicationCard = React.memo(({
 
   const flag = useMemo(() => getFlagFromWhatsapp(senderWhatsapp), [senderWhatsapp]);
   const mediaType = useMemo(() => getMediaType(mediaUrl), [mediaUrl]);
-  
   const embedUrl = useMemo(() => {
     if (mediaType === 'youtube') return getYouTubeEmbedUrl(mediaUrl);
     if (mediaType === 'vimeo') return getVimeoEmbedUrl(mediaUrl);
@@ -427,12 +439,12 @@ const DedicationCard = React.memo(({
   const pauseCurrentMedia = useCallback(() => {
     const nativeMedia = videoRef.current;
     const iframe = iframeRef.current;
-    
+
     if (nativeMedia && !nativeMedia.paused) {
       nativeMedia.pause();
       mediaPausedRef.current = true;
     }
-    
+
     if (iframe && ['youtube', 'vimeo', 'dailymotion'].includes(mediaType)) {
       try {
         if (mediaType === 'youtube') {
@@ -470,9 +482,8 @@ const DedicationCard = React.memo(({
     const iframe = iframeRef.current;
     const instanceId = mediaInstanceRef.current;
     const isIframeMedia = ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
-    
+
     const handleNativePlay = () => {
-      // Pause any other native media by dispatching the event
       window.dispatchEvent(
         new CustomEvent(MEDIA_PLAY_EVENT, {
           detail: { instanceId },
@@ -482,7 +493,6 @@ const DedicationCard = React.memo(({
 
     const handleIframeMessage = (event) => {
       if (!iframe || event.source !== iframe.contentWindow) return;
-      
       let data = event.data;
       if (typeof data === "string") {
         try {
@@ -510,10 +520,9 @@ const DedicationCard = React.memo(({
     nativeMedia?.addEventListener("play", handleNativePlay);
 
     if (isActive) {
-      // Resume playback when becoming active
       mediaPausedRef.current = false;
       announceCurrentMedia();
-      
+
       if (nativeMedia && ['video', 'audio'].includes(mediaType)) {
         nativeMedia.play().catch(() => {
           // Browser autoplay rules may require viewer interaction
@@ -535,7 +544,6 @@ const DedicationCard = React.memo(({
         }
       }
     } else {
-      // Pause when becoming inactive
       pauseCurrentMedia();
     }
 
@@ -566,7 +574,6 @@ const DedicationCard = React.memo(({
 
   const react = useCallback(async () => {
     if (hasReacted || !id) return;
-    
     setHasReacted(true);
     setReactions((v) => v + 1);
     localStorage.setItem(`chillax_reacted_${id}`, "true");
@@ -602,6 +609,7 @@ const DedicationCard = React.memo(({
     setIsSubmittingComment(true);
     const textToSend = commentText.trim();
     const whatsappToSend = commenterWhatsapp.trim();
+
     const newComment = {
       id: Date.now(),
       dedication_id: id,
@@ -681,7 +689,6 @@ const DedicationCard = React.memo(({
       case 'youtube':
       case 'vimeo':
       case 'dailymotion':
-        // Only render iframe when active (lazy loading)
         if (shouldShowEmbed && embedUrl) {
           return (
             <iframe
@@ -695,7 +702,6 @@ const DedicationCard = React.memo(({
             />
           );
         }
-        // Show placeholder with same dimensions
         return (
           <div style={fallbackBg}>
             <div style={fallbackContent}>
@@ -704,6 +710,7 @@ const DedicationCard = React.memo(({
             </div>
           </div>
         );
+
       case 'video':
         return (
           <video
@@ -718,6 +725,7 @@ const DedicationCard = React.memo(({
             style={videoBg}
           />
         );
+
       case 'audio':
         return (
           <div style={audioContainerStyle}>
@@ -734,6 +742,7 @@ const DedicationCard = React.memo(({
             </div>
           </div>
         );
+
       case 'image':
         return (
           <img
@@ -744,6 +753,7 @@ const DedicationCard = React.memo(({
             decoding="async"
           />
         );
+
       default:
         return (
           <div style={fallbackBg}>
@@ -757,7 +767,7 @@ const DedicationCard = React.memo(({
   }, [mediaUrl, mediaType, dedicationTitle, mediaTitle, isActive, shouldShowEmbed, embedUrl]);
 
   // ==========================================
-  // STYLES (Unchanged)
+  // STYLES
   // ==========================================
 
   const card = {
@@ -1423,28 +1433,27 @@ const DedicationCard = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparison function - only re-render when important props change
   const importantProps = [
     'id', 'isActive', 'reactionCount', 'commentCount', 'views',
     'mediaUrl', 'dedicationTitle', 'mediaTitle', 'message',
     'senderPhoto', 'senderName', 'senderWhatsapp',
     'recipientPhoto', 'recipientName'
   ];
-  
+
   for (const prop of importantProps) {
     if (prevProps[prop] !== nextProps[prop]) {
-      return false; // Re-render needed
+      return false;
     }
   }
-  
-  // Check if reaction count changed via localStorage
+
   const prevReacted = localStorage.getItem(`chillax_reacted_${prevProps.id}`) === "true";
   const nextReacted = localStorage.getItem(`chillax_reacted_${nextProps.id}`) === "true";
+
   if (prevReacted !== nextReacted) {
     return false;
   }
-  
-  return true; // No re-render needed
+
+  return true;
 });
 
 DedicationCard.displayName = 'DedicationCard';
