@@ -1,72 +1,8 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import Header from "../components/Header";
 import DedicationCard from "../components/DedicationCard";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-
-// ==========================================
-// DEVICE / VIEWPORT COMPATIBILITY HELPERS
-// ==========================================
-
-const TV_STYLE_TAG_ID = "tv-page-responsive-styles";
-
-function ensureViewportMeta() {
-  if (typeof document === "undefined") return;
-  const existing = document.querySelector('meta[name="viewport"]');
-  if (existing) return;
-  const meta = document.createElement("meta");
-  meta.setAttribute("name", "viewport");
-  meta.setAttribute("id", "tv-page-viewport-meta");
-  meta.setAttribute(
-    "content",
-    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
-  );
-  document.head.appendChild(meta);
-}
-
-function ensureTvResponsiveStylesheet() {
-  if (typeof document === "undefined") return;
-  if (document.getElementById(TV_STYLE_TAG_ID)) return;
-  const style = document.createElement("style");
-  style.id = TV_STYLE_TAG_ID;
-  style.textContent = `
-    @media (max-width: 600px) {
-      .tv-form-card input,
-      .tv-form-card textarea {
-        font-size: 16px !important;
-      }
-    }
-    @media (max-width: 380px) {
-      .tv-title {
-        font-size: clamp(24px, 7.5vw, 30px) !important;
-      }
-      .tv-dedicate-btn {
-        padding: 12px 22px !important;
-        font-size: 14px !important;
-      }
-      .tv-form-card {
-        padding: 16px !important;
-      }
-    }
-    .tv-form-overlay {
-      padding-top: calc(76px + env(safe-area-inset-top, 0px)) !important;
-      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
-      padding-left: calc(10px + env(safe-area-inset-left, 0px)) !important;
-      padding-right: calc(10px + env(safe-area-inset-right, 0px)) !important;
-    }
-    .tv-page button {
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .tv-page {
-      max-width: 100vw;
-    }
-    .tv-page * {
-      box-sizing: border-box;
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 function TV() {
   const [feed, setFeed] = useState([]);
@@ -83,26 +19,12 @@ function TV() {
   const [mediaFile, setMediaFile] = useState(null);
   const [message, setMessage] = useState("");
   const [dedicationTitle, setDedicationTitle] = useState("");
+  const [badgeStyle, setBadgeStyle] = useState("❤️");
   const [isLoading, setIsLoading] = useState(true);
-
+  
   // Refs for Intersection Observer
   const cardRefs = useRef({});
   const [activeIndex, setActiveIndex] = useState(null);
-  const currentlyPlayingRef = useRef(null);
-  const observerRef = useRef(null);
-  const loadMoreRef = useRef(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 5 });
-  const feedContainerRef = useRef(null);
-  const isMountedRef = useRef(true);
-
-  // Cross-device compatibility setup
-  useEffect(() => {
-    ensureViewportMeta();
-    ensureTvResponsiveStylesheet();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
 
   // Add preconnect for external media services
   useEffect(() => {
@@ -113,14 +35,14 @@ function TV() {
       { rel: 'preconnect', href: 'https://www.dailymotion.com' },
       { rel: 'preconnect', href: 'https://kitchenbrain.cucina656.workers.dev' },
     ];
-
+    
     links.forEach(({ rel, href }) => {
       const link = document.createElement('link');
       link.rel = rel;
       link.href = href;
       document.head.appendChild(link);
     });
-
+    
     return () => {
       links.forEach(({ rel, href }) => {
         const links = document.querySelectorAll(`link[rel="${rel}"][href="${href}"]`);
@@ -133,24 +55,15 @@ function TV() {
     loadDedications();
   }, []);
 
-  // ==========================================
-  // OPTIMIZED INTERSECTION OBSERVER
-  // ==========================================
-
+  // Intersection Observer to track which card is most visible
   useEffect(() => {
     if (!feed.length) return;
-
-    // Clean up previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
+    
     const observer = new IntersectionObserver(
       (entries) => {
         const visibleEntries = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
         if (visibleEntries.length > 0) {
           const mostVisibleIndex = Number(
             visibleEntries[0].target.dataset.index
@@ -161,209 +74,58 @@ function TV() {
         }
       },
       {
-        threshold: [0.1, 0.3, 0.5],
-        rootMargin: '50px',
+        threshold: [0, 0.25, 0.5, 0.75, 1],
       }
     );
-
-    observerRef.current = observer;
-
-    // Observe visible cards only
-    const observeVisibleCards = () => {
-      const elements = Object.values(cardRefs.current);
-      const start = Math.max(0, visibleRange.start - 1);
-      const end = Math.min(feed.length, visibleRange.end + 1);
-      
-      for (let i = start; i < end; i++) {
-        const element = cardRefs.current[i];
-        if (element) {
-          observer.observe(element);
-        }
-      }
-    };
-
-    // Initial observation
-    observeVisibleCards();
-
+    Object.values(cardRefs.current).forEach((element) => {
+      if (element) observer.observe(element);
+    });
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
+      observer.disconnect();
       setActiveIndex(null);
     };
-  }, [feed, visibleRange]);
-
-  // ==========================================
-  // OPTIMIZED SCROLL HANDLER WITH VIRTUALIZATION
-  // ==========================================
-
-  useEffect(() => {
-    if (!feed.length) return;
-
-    const handleScroll = () => {
-      const container = feedContainerRef.current;
-      if (!container) return;
-
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const windowHeight = window.innerHeight;
-      const cardHeight = window.innerWidth <= 430 ? window.innerWidth : 430;
-      const cardTotalHeight = cardHeight + 18 + 72; // card + margin + header approx
-      
-      // Calculate which cards should be visible
-      const startIndex = Math.max(0, Math.floor(scrollTop / cardTotalHeight) - 1);
-      const endIndex = Math.min(feed.length, Math.ceil((scrollTop + windowHeight) / cardTotalHeight) + 1);
-      
-      setVisibleRange({ start: startIndex, end: endIndex });
-    };
-
-    // Debounce scroll handler
-    let timeoutId;
-    const debouncedScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleScroll, 50);
-    };
-
-    window.addEventListener('scroll', debouncedScroll, { passive: true });
-    window.addEventListener('resize', debouncedScroll, { passive: true });
-    
-    // Initial calculation
-    handleScroll();
-
-    return () => {
-      window.removeEventListener('scroll', debouncedScroll);
-      window.removeEventListener('resize', debouncedScroll);
-      clearTimeout(timeoutId);
-    };
   }, [feed]);
 
-  // ==========================================
-  // OPTIMIZED MEDIA PLAYBACK CONTROL
-  // ==========================================
-
-  const pauseAllMedia = useCallback((exceptElement = null) => {
-    // Only pause native media elements
-    const mediaElements = document.querySelectorAll('video, audio');
-    mediaElements.forEach(element => {
-      if (element !== exceptElement && !element.paused) {
-        element.pause();
-      }
-    });
-  }, []);
-
-  const registerPlayingMedia = useCallback((mediaElement) => {
-    if (currentlyPlayingRef.current && currentlyPlayingRef.current !== mediaElement) {
-      if (!currentlyPlayingRef.current.paused) {
-        currentlyPlayingRef.current.pause();
-      }
-    }
-    currentlyPlayingRef.current = mediaElement;
-  }, []);
-
-  // Auto-pause videos when scrolling away - optimized
-  useEffect(() => {
-    const handleScroll = () => {
-      // Only pause if activeIndex changed significantly
-      if (activeIndex === null) {
-        pauseAllMedia();
-        return;
-      }
-
-      // Get the active card element
-      const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
-      if (!activeCard) {
-        pauseAllMedia();
-        return;
-      }
-
-      // Pause all media not in the active card
-      const mediaElements = document.querySelectorAll('video, audio');
-      mediaElements.forEach(mediaElement => {
-        const card = mediaElement.closest('.tv-card-wrapper');
-        if (card && card.dataset.index !== String(activeIndex)) {
-          if (!mediaElement.paused) {
-            mediaElement.pause();
-            if (currentlyPlayingRef.current === mediaElement) {
-              currentlyPlayingRef.current = null;
-            }
-          }
-        }
-      });
-    };
-
-    let timeoutId;
-    const debouncedScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleScroll, 150);
-    };
-
-    window.addEventListener('scroll', debouncedScroll, { passive: true });
-    window.addEventListener('touchmove', debouncedScroll, { passive: true });
-
-    // Initial pause check
-    handleScroll();
-
-    return () => {
-      window.removeEventListener('scroll', debouncedScroll);
-      window.removeEventListener('touchmove', debouncedScroll);
-      clearTimeout(timeoutId);
-    };
-  }, [activeIndex, pauseAllMedia]);
-
-  // Auto-play first card on initial load
-  useEffect(() => {
-    if (feed.length > 0 && activeIndex === null) {
-      const timer = setTimeout(() => {
-        setActiveIndex(0);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [feed]);
-
-  // ==========================================
-  // API FUNCTIONS (Memoized)
-  // ==========================================
-
-  const loadDedications = useCallback(async () => {
+  async function loadDedications() {
     setIsLoading(true);
     try {
+      // FIXED: Removed the 'Cache-Control' header that was causing the CORS preflight policy block
       const res = await fetch(`${API_URL}/api/dedications`);
       const data = await res.json();
-      if (isMountedRef.current) {
-        if (data.success && Array.isArray(data.dedications)) {
-          setFeed(data.dedications);
-        } else if (Array.isArray(data)) {
-          setFeed(data);
-        }
+      if (data.success && Array.isArray(data.dedications)) {
+        setFeed(data.dedications);
+      } else if (Array.isArray(data)) {
+        setFeed(data);
       }
     } catch (err) {
       console.log("Failed to load dedications", err);
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
-  }, []);
+  }
 
-  const handlePhotoUpload = useCallback((e, setter, fileSetter) => {
+  function handlePhotoUpload(e, setter, fileSetter) {
     const file = e.target.files[0];
     if (!file) return;
     setter(URL.createObjectURL(file));
     fileSetter(file);
-  }, []);
+  }
 
-  const handleMediaUpload = useCallback((e) => {
+  function handleMediaUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
     setMediaFile(file);
-  }, []);
+  }
 
-  const handleSubmit = useCallback(async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (isSubmitting) return;
+
     if (!senderName || !senderWhatsapp || !recipientName || !message) {
       alert("Please fill all important fields.");
       return;
     }
+
     if (!mediaUrl.trim() && !mediaFile) {
       alert("Please add media (URL or file upload).");
       return;
@@ -377,6 +139,7 @@ function TV() {
       formData.append("recipient_name", recipientName);
       formData.append("message", message);
       formData.append("dedication_title", dedicationTitle || "");
+      formData.append("dedication_badge", badgeStyle);
 
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
@@ -408,8 +171,8 @@ function TV() {
         method: "POST",
         body: formData,
       });
-
       const data = await res.json();
+      
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
@@ -418,8 +181,6 @@ function TV() {
 
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
-        // Reset visible range to include new card
-        setVisibleRange({ start: 0, end: 5 });
       }
 
       setSenderName("");
@@ -433,6 +194,7 @@ function TV() {
       setMediaFile(null);
       setMessage("");
       setDedicationTitle("");
+      setBadgeStyle("❤️");
       setShowForm(false);
     } catch (err) {
       console.error("Submission error:", err);
@@ -440,36 +202,10 @@ function TV() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, senderName, senderWhatsapp, recipientName, message, mediaUrl, mediaFile, senderPhotoFile, senderPhoto, recipientPhotoFile, recipientPhoto, dedicationTitle]);
-
-  // ==========================================
-  // DETERMINE WHICH CARDS TO RENDER
-  // ==========================================
-
-  const shouldRenderCard = useCallback((index) => {
-    return Math.abs(index - activeIndex) <= 1;
-  }, [activeIndex]);
-
-  // Memoize feed items to prevent unnecessary re-renders
-  const renderedFeed = useMemo(() => {
-    return feed.map((item, index) => {
-      const isNearby = shouldRenderCard(index);
-      
-      return {
-        item,
-        index,
-        isNearby,
-        shouldRender: isNearby,
-      };
-    });
-  }, [feed, shouldRenderCard]);
-
-  // ==========================================
-  // RENDER
-  // ==========================================
+  }
 
   return (
-    <div style={page} className="tv-page">
+    <div style={page}>
       <Header />
       <style>{`
         .tv-card-wrapper button[aria-label],
@@ -491,62 +227,89 @@ function TV() {
         .tv-card-wrapper iframe {
           loading: lazy;
         }
-        /* Placeholder for cards far away */
-        .tv-card-placeholder {
-          width: 100%;
-          max-width: 430px;
-          margin: 0 auto 18px auto;
-          aspect-ratio: 1 / 1;
-          background: #000000;
-          border-radius: 0px;
-        }
       `}</style>
       <main style={main}>
         <section style={topSection}>
-          <h1 style={title} className="tv-title">TV</h1>
-          <p style={text}>Songs dedicated to different people ⭐</p>
-          <button onClick={() => setShowForm(true)} style={dedicateBtn} className="tv-dedicate-btn">
+          <h1 style={title}>TV</h1>
+          <p style={text}>Songs for special people ⭐</p>
+          <button onClick={() => setShowForm(true)} style={dedicateBtn}>
             🎵 Dedicate a song
           </button>
         </section>
 
         {showForm && (
-          <section style={formOverlay} className="tv-form-overlay">
-            <form onSubmit={handleSubmit} style={formCard} className="tv-form-card">
+          <section style={formOverlay}>
+            <form onSubmit={handleSubmit} style={formCard}>
               <h2 style={formTitle}>Create Dedication</h2>
               <input style={inputStyle} placeholder="Your name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
               <input style={inputStyle} placeholder="WhatsApp e.g +250788123456" value={senderWhatsapp} onChange={(e) => setSenderWhatsapp(e.target.value)} />
+              
               <label style={labelStyle}>Your photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setSenderPhoto, setSenderPhotoFile)} />
+              
               <input style={inputStyle} placeholder="Recipient name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+              
               <label style={labelStyle}>Their photo</label>
               <input style={fileStyle} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, setRecipientPhoto, setRecipientPhotoFile)} />
-              <input
-                style={inputStyle}
-                placeholder="Media link (e.g. youtube.com/...)"
-                value={mediaUrl}
-                onChange={(e) => setMediaUrl(e.target.value)}
+              
+              <div style={badgeContainer}>
+                <label style={labelStyle}>Badge Style</label>
+                <div style={badgeOptions}>
+                  <button
+                    type="button"
+                    onClick={() => setBadgeStyle("❤️")}
+                    style={{
+                      ...badgeButton,
+                      background: badgeStyle === "❤️" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "❤️" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    ❤️ Heart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBadgeStyle("👉")}
+                    style={{
+                      ...badgeButton,
+                      background: badgeStyle === "👉" ? "rgba(255,71,120,0.3)" : "rgba(255,255,255,0.08)",
+                      border: badgeStyle === "👉" ? "2px solid #ff4778" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    👉 Pointer
+                  </button>
+                </div>
+              </div>
+
+              <input 
+                style={inputStyle} 
+                placeholder="Media link (e.g. youtube.com/...)" 
+                value={mediaUrl} 
+                onChange={(e) => setMediaUrl(e.target.value)} 
                 disabled={!!mediaFile}
               />
+              
               <label style={labelStyle}>Or upload song media</label>
-              <input
-                style={fileStyle}
-                type="file"
-                accept="video/*,audio/*,image/*"
-                onChange={handleMediaUpload}
+              <input 
+                style={fileStyle} 
+                type="file" 
+                accept="video/*,audio/*,image/*" 
+                onChange={handleMediaUpload} 
                 disabled={!!mediaUrl.trim()}
               />
+              
               {mediaFile && (
                 <p style={{ fontSize: '12px', color: '#00e676', margin: '-4px 0 10px' }}>
                   ✓ Ready to upload: {mediaFile.name}
                 </p>
               )}
+
               <textarea style={textareaStyle} placeholder="Short dedication letter" value={message} onChange={(e) => setMessage(e.target.value)} />
+              
               <div style={buttonRow}>
-                <button type="submit" style={submitBtn} className="tv-submit-btn" disabled={isSubmitting}>
+                <button type="submit" style={submitBtn} disabled={isSubmitting}>
                   {isSubmitting ? "Submitting..." : "Submit"}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} style={cancelBtn} className="tv-cancel-btn">
+                <button type="button" onClick={() => setShowForm(false)} style={cancelBtn}>
                   Cancel
                 </button>
               </div>
@@ -554,14 +317,14 @@ function TV() {
           </section>
         )}
 
-        <section style={feedSection} ref={feedContainerRef}>
+        <section style={feedSection}>
           {isLoading && (
             <div style={emptyCard}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(255,255,255,0.1)',
-                borderTop: '3px solid #00e676',
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                border: '3px solid rgba(255,255,255,0.1)', 
+                borderTop: '3px solid #00e676', 
                 borderRadius: '50%',
                 margin: '0 auto 16px',
                 animation: 'spin 1s linear infinite'
@@ -569,66 +332,46 @@ function TV() {
               <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading dedications...</p>
             </div>
           )}
-
+          
           {!isLoading && feed.length === 0 && (
             <div style={emptyCard}>
               <h2>No songs yet</h2>
               <p>Be first. Make someone smile.</p>
             </div>
           )}
-
-          {renderedFeed.map(({ item, index, shouldRender }) => {
-            // For cards far from active, render placeholder with same dimensions
-            if (!shouldRender) {
-              return (
-                <div
-                  key={item.id}
-                  className="tv-card-placeholder"
-                  style={{
-                    width: '100%',
-                    maxWidth: '430px',
-                    margin: '0 auto 18px auto',
-                    aspectRatio: '1 / 1',
-                    background: '#000000',
-                    borderRadius: '0px',
-                  }}
-                />
-              );
-            }
-
-            return (
-              <div
-                key={item.id}
-                ref={(ref) => {
-                  if (ref) cardRefs.current[index] = ref;
+          
+          {feed.map((item, index) => (
+            <div
+              key={item.id}
+              ref={(ref) => {
+                if (ref) cardRefs.current[index] = ref;
+              }}
+              data-index={index}
+              style={cardWrapper}
+              className="tv-card-wrapper"
+            >
+              <DedicationCard
+                id={item.id}
+                senderPhoto={item.sender_photo}
+                senderName={item.sender_name}
+                senderWhatsapp={item.sender_whatsapp}
+                recipientPhoto={item.recipient_photo}
+                recipientName={item.recipient_name}
+                dedicationTitle={item.dedication_title}
+                message={item.message}
+                mediaTitle={item.title}
+                mediaUrl={item.media_url}
+                views={item.views || 0}
+                reactionCount={item.reaction_count || 0}
+                commentCount={item.comment_count || 0}
+                badgeStyle={item.dedication_badge || "❤️"}
+                isActive={activeIndex === index}
+                onDedicateClick={() => {
+                  setShowForm(true);
                 }}
-                data-index={index}
-                style={cardWrapper}
-                className="tv-card-wrapper"
-              >
-                <DedicationCard
-                  id={item.id}
-                  senderPhoto={item.sender_photo}
-                  senderName={item.sender_name}
-                  senderWhatsapp={item.sender_whatsapp}
-                  recipientPhoto={item.recipient_photo}
-                  recipientName={item.recipient_name}
-                  dedicationTitle={item.dedication_title}
-                  message={item.message}
-                  mediaTitle={item.title}
-                  mediaUrl={item.media_url}
-                  views={item.views || 0}
-                  reactionCount={item.reaction_count || 0}
-                  commentCount={item.comment_count || 0}
-                  badgeStyle={item.dedication_badge || "❤️"}
-                  isActive={activeIndex === index}
-                  onDedicateClick={() => {
-                    setShowForm(true);
-                  }}
-                />
-              </div>
-            );
-          })}
+              />
+            </div>
+          ))}
         </section>
       </main>
     </div>
@@ -650,6 +393,9 @@ const inputStyle = { width: "100%", boxSizing: "border-box", marginBottom: "10px
 const textareaStyle = { ...inputStyle, minHeight: "92px", resize: "vertical", fontFamily: 'inherit' };
 const labelStyle = { display: "block", fontSize: "13px", fontWeight: "600", color: "rgba(255,255,255,0.7)", margin: "4px 0 6px" };
 const fileStyle = { width: "100%", marginBottom: "12px", color: "rgba(255,255,255,0.5)", fontSize: "14px", padding: "8px 0" };
+const badgeContainer = { marginBottom: "10px" };
+const badgeOptions = { display: "flex", gap: "10px" };
+const badgeButton = { flex: 1, padding: "10px 14px", borderRadius: "12px", color: "white", fontWeight: "600", fontSize: "14px", cursor: "pointer", transition: "all 0.2s ease", backgroundColor: "rgba(255,255,255,0.05)" };
 const buttonRow = { display: "flex", gap: "10px", marginTop: "14px" };
 const submitBtn = { flex: 1, border: "none", borderRadius: "999px", padding: "14px", background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", fontWeight: "700", cursor: "pointer", fontSize: "15px", transition: "opacity 0.2s ease" };
 const cancelBtn = { flex: 1, border: "1px solid rgba(255,255,255,0.12)", borderRadius: "999px", padding: "14px", background: "transparent", color: "rgba(255,255,255,0.7)", fontWeight: "600", cursor: "pointer", fontSize: "15px", transition: "all 0.2s ease" };
