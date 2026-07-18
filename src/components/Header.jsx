@@ -59,7 +59,7 @@ function Header() {
             flexShrink: 0,
           }}
         >
-          Gwamo<span style={{ color: "#FFD700" }}>.com</span>
+          Feed<span style={{ color: "#FFD700" }}>X</span>
         </Link>
 
         {/* Main website navigation */}
