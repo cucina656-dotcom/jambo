@@ -80,19 +80,6 @@ function Header() {
               display: none;
             }
           `}</style>
-
-          <Link
-            to="/tv"
-            aria-label="Watch song dedications on Gwamo TV"
-            title="Gwamo TV Song Dedications"
-            style={getTopNavItemStyle("/tv")}
-          >
-            <span aria-hidden="true" style={{ fontSize: "16px" }}>
-              📺
-            </span>
-
-            <span>Gwamo TV</span>
-          </Link>
         </nav>
       </header>
 
