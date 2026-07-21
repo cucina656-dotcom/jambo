@@ -95,10 +95,118 @@ function TV() {
   const feedContainerRef = useRef(null);
   const isMountedRef = useRef(true);
 
+  // ==========================================
+  // AUTOMATIC VIEWS TRACKING
+  // ==========================================
+  const viewedInSession = useRef(new Set()); // Track which dedications have been viewed
+  const activeTimeoutRef = useRef(null); // Timeout for 2-second delay
+  const lastActiveIdRef = useRef(null); // Track last active ID to prevent duplicate tracking
+
+  // Function to increment views for a dedication
+  const incrementViews = useCallback(async (dedicationId) => {
+    // Skip if already viewed in this session
+    if (viewedInSession.current.has(dedicationId)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/dedications/view`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: dedicationId }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Mark as viewed in this session
+        viewedInSession.current.add(dedicationId);
+
+        // Update the feed state with the new view count
+        setFeed((prevFeed) =>
+          prevFeed.map((item) =>
+            item.id === dedicationId
+              ? { ...item, views: data.views }
+              : item
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error incrementing views:", error);
+    }
+  }, []);
+
+  // Handle view tracking when active index changes
+  useEffect(() => {
+    // Clear any pending timeout
+    if (activeTimeoutRef.current) {
+      clearTimeout(activeTimeoutRef.current);
+      activeTimeoutRef.current = null;
+    }
+
+    // Get the active dedication ID
+    if (activeIndex !== null && feed[activeIndex]) {
+      const activeId = feed[activeIndex].id;
+
+      // If the active ID changed, reset tracking
+      if (lastActiveIdRef.current !== activeId) {
+        lastActiveIdRef.current = activeId;
+      }
+
+      // Check if already viewed
+      if (!viewedInSession.current.has(activeId)) {
+        // Wait 2 seconds, then check if still active
+        activeTimeoutRef.current = setTimeout(() => {
+          // Check if the same card is still active
+          if (
+            activeIndex !== null &&
+            feed[activeIndex] &&
+            feed[activeIndex].id === activeId
+          ) {
+            // Still active, increment views
+            incrementViews(activeId);
+          }
+        }, 2000);
+      }
+    } else {
+      // No active card, reset
+      lastActiveIdRef.current = null;
+    }
+
+    // Cleanup timeout on unmount or dependency change
+    return () => {
+      if (activeTimeoutRef.current) {
+        clearTimeout(activeTimeoutRef.current);
+        activeTimeoutRef.current = null;
+      }
+    };
+  }, [activeIndex, feed, incrementViews]);
+
+  // Clear viewed session on page unload (optional - sessionStorage would persist across refreshes)
+  useEffect(() => {
+    // Reset viewed set when component mounts (new page load = new session)
+    viewedInSession.current = new Set();
+    
+    return () => {
+      // Clean up on unmount
+      viewedInSession.current = new Set();
+      if (activeTimeoutRef.current) {
+        clearTimeout(activeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // ==========================================
+  // END AUTOMATIC VIEWS TRACKING
+  // ==========================================
+
   // Cross-device compatibility setup
   useEffect(() => {
     ensureViewportMeta();
     ensureTvResponsiveStylesheet();
+
     return () => {
       isMountedRef.current = false;
     };
@@ -136,7 +244,6 @@ function TV() {
   // ==========================================
   // OPTIMIZED INTERSECTION OBSERVER
   // ==========================================
-
   useEffect(() => {
     if (!feed.length) return;
 
@@ -196,7 +303,6 @@ function TV() {
   // ==========================================
   // OPTIMIZED SCROLL HANDLER WITH VIRTUALIZATION
   // ==========================================
-
   useEffect(() => {
     if (!feed.length) return;
 
@@ -239,7 +345,6 @@ function TV() {
   // ==========================================
   // OPTIMIZED MEDIA PLAYBACK CONTROL
   // ==========================================
-
   const pauseAllMedia = useCallback((exceptElement = null) => {
     // Only pause native media elements
     const mediaElements = document.querySelectorAll('video, audio');
@@ -322,7 +427,6 @@ function TV() {
   // ==========================================
   // API FUNCTIONS (Memoized)
   // ==========================================
-
   const loadDedications = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -360,10 +464,12 @@ function TV() {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
+
     if (!senderName || !senderWhatsapp || !recipientName || !message) {
       alert("Please fill all important fields.");
       return;
     }
+
     if (!mediaUrl.trim() && !mediaFile) {
       alert("Please add media (URL or file upload).");
       return;
@@ -380,7 +486,7 @@ function TV() {
 
       if (senderPhotoFile) {
         formData.append("sender_photo_file", senderPhotoFile);
-      } else if (senderPhoto && /^https?:\/\//i.test(senderPhoto.trim())) {
+      } else if (senderPhoto && /^https?:\/\/[^/]+/i.test(senderPhoto.trim())) {
         formData.append("sender_photo", senderPhoto.trim());
       } else {
         formData.append("sender_photo", "");
@@ -388,7 +494,7 @@ function TV() {
 
       if (recipientPhotoFile) {
         formData.append("recipient_photo_file", recipientPhotoFile);
-      } else if (recipientPhoto && /^https?:\/\//i.test(recipientPhoto.trim())) {
+      } else if (recipientPhoto && /^https?:\/\/[^/]+/i.test(recipientPhoto.trim())) {
         formData.append("recipient_photo", recipientPhoto.trim());
       } else {
         formData.append("recipient_photo", "");
@@ -398,7 +504,7 @@ function TV() {
         formData.append("media_file", mediaFile);
       } else if (mediaUrl.trim()) {
         let sanitizedUrl = mediaUrl.trim();
-        if (!/^https?:\/\//i.test(sanitizedUrl)) {
+        if (!/^https?:\/\/[^/]+/i.test(sanitizedUrl)) {
           sanitizedUrl = `https://${sanitizedUrl}`;
         }
         formData.append("media_url", sanitizedUrl);
@@ -410,6 +516,7 @@ function TV() {
       });
 
       const data = await res.json();
+
       if (!data.success) {
         alert(data.message || "Failed to save dedication");
         setIsSubmitting(false);
@@ -445,7 +552,6 @@ function TV() {
   // ==========================================
   // DETERMINE WHICH CARDS TO RENDER
   // ==========================================
-
   const shouldRenderCard = useCallback((index) => {
     return Math.abs(index - activeIndex) <= 1;
   }, [activeIndex]);
@@ -467,7 +573,6 @@ function TV() {
   // ==========================================
   // RENDER
   // ==========================================
-
   return (
     <div style={page} className="tv-page">
       <Header />
