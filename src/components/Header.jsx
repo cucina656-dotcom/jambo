@@ -42,11 +42,11 @@ function Header() {
           gap: "16px",
         }}
       >
-        {/* Brand and homepage link */}
+        {/* Gwamo brand and homepage link */}
         <Link
           to="/"
-          aria-label="Music Messages home"
-          title="Music Messages Home"
+          aria-label="Gwamo home"
+          title="Gwamo Home"
           style={{
             color: "white",
             textDecoration: "none",
@@ -83,13 +83,14 @@ function Header() {
 
           <Link
             to="/tv"
-            aria-label="Watch song dedications"
-            title="Song Dedications"
+            aria-label="Watch song dedications on Gwamo TV"
+            title="Gwamo TV Song Dedications"
             style={getTopNavItemStyle("/tv")}
           >
             <span aria-hidden="true" style={{ fontSize: "16px" }}>
               🎶
             </span>
+
             <span>Music Messages</span>
           </Link>
         </nav>

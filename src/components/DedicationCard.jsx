@@ -4,8 +4,7 @@ import { Plus, Heart, MessageSquare, Share2, X } from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const MEDIA_PLAY_EVENT = "dedication-media-play";
 
-// Safe browser storage helpers prevent the whole page from crashing
-// when localStorage is unavailable or blocked.
+// Safe browser storage helpers
 function safeStorageGet(key) {
   if (typeof window === "undefined") return null;
   try {
@@ -19,18 +18,14 @@ function safeStorageSet(key, value) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, value);
-  } catch {
-    // Keep the UI working even when storage is blocked.
-  }
+  } catch {}
 }
 
 function safeStorageRemove(key) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(key);
-  } catch {
-    // Keep the UI working even when storage is blocked.
-  }
+  } catch {}
 }
 
 // ==========================================
@@ -109,58 +104,115 @@ function ensureResponsiveStylesheet() {
         font-size: 12px;
       }
     }
+    /* YouTube overlay fixes */
+    .dedication-card iframe {
+      pointer-events: auto !important;
+    }
+    .dedication-card .youtube-fallback {
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+    .dedication-card .youtube-fallback:hover {
+      opacity: 0.8;
+    }
   `;
   document.head.appendChild(style);
 }
 
 // ==========================================
-// MEDIA TYPE DETECTION HELPERS
+// ENHANCED MEDIA TYPE DETECTION
 // ==========================================
 
 function getMediaType(url) {
   if (!url) return 'none';
-  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'];
-  if (videoExtensions.some(ext => url.toLowerCase().includes(ext))) {
+  const lowerUrl = url.toLowerCase();
+  
+  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v', '.m3u8'];
+  if (videoExtensions.some(ext => lowerUrl.includes(ext))) {
     return 'video';
   }
+  
   const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
-  if (audioExtensions.some(ext => url.toLowerCase().includes(ext))) {
+  if (audioExtensions.some(ext => lowerUrl.includes(ext))) {
     return 'audio';
   }
+  
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
-  if (imageExtensions.some(ext => url.toLowerCase().includes(ext))) {
+  if (imageExtensions.some(ext => lowerUrl.includes(ext))) {
     return 'image';
   }
-  if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+  
+  // Enhanced YouTube detection
+  if (
+    lowerUrl.includes('youtube.com/watch') || 
+    lowerUrl.includes('youtu.be/') ||
+    lowerUrl.includes('youtube.com/embed/') ||
+    lowerUrl.includes('youtube.com/shorts/') ||
+    lowerUrl.includes('m.youtube.com')
+  ) {
     return 'youtube';
   }
-  if (url.includes('vimeo.com/')) {
+  
+  if (lowerUrl.includes('vimeo.com/')) {
     return 'vimeo';
   }
-  if (url.includes('dailymotion.com/')) {
+  
+  if (lowerUrl.includes('dailymotion.com/')) {
     return 'dailymotion';
   }
+  
   return 'unknown';
 }
 
+// ==========================================
+// ENHANCED YOUTUBE EMBED URL GENERATION
+// ==========================================
+
 function getYouTubeEmbedUrl(url) {
+  if (!url) return null;
+  
+  // Try multiple patterns to extract video ID
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?#]+)/,
-    /youtube\.com\/embed\/([^?]+)/
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([^&?#]+)/,
+    /youtube\.com\/watch\?.*v=([^&?#]+)/,
+    /youtube\.com\/v\/([^&?#]+)/,
   ];
+  
+  let videoId = null;
   for (const pattern of patterns) {
     const match = url.match(pattern);
-    if (match) {
-      return `https://www.youtube.com/embed/${match[1]}?enablejsapi=1&playsinline=1`;
+    if (match && match[1]) {
+      videoId = match[1];
+      break;
     }
   }
-  return url;
+  
+  if (!videoId) return null;
+  
+  // Clean video ID (remove any extra characters)
+  videoId = videoId.split('?')[0].split('#')[0].trim();
+  
+  // Build embed URL with optimal parameters
+  const params = new URLSearchParams({
+    enablejsapi: '1',
+    playsinline: '1',
+    autoplay: '0',
+    rel: '0',
+    modestbranding: '1',
+    showinfo: '0',
+    controls: '1',
+    iv_load_policy: '3',
+    origin: window.location.origin,
+    widget_referrer: window.location.origin,
+  });
+  
+  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
 
 function getVimeoEmbedUrl(url) {
   const match = url.match(/vimeo\.com\/(\d+)/);
   if (match) {
-    return `https://player.vimeo.com/video/${match[1]}?api=1`;
+    return `https://player.vimeo.com/video/${match[1]}?api=1&autoplay=0&loop=0`;
   }
   return url;
 }
@@ -168,13 +220,13 @@ function getVimeoEmbedUrl(url) {
 function getDailymotionEmbedUrl(url) {
   const match = url.match(/dailymotion\.com\/video\/([^?&]+)/);
   if (match) {
-    return `https://www.dailymotion.com/embed/video/${match[1]}?api=postMessage`;
+    return `https://www.dailymotion.com/embed/video/${match[1]}?api=postMessage&autoplay=0`;
   }
   return url;
 }
 
 function getFlagFromWhatsapp(number = "") {
-  // Africa
+  // ... (keep existing flag function)
   if (number.startsWith("+213") || number.startsWith("213")) return "🇩🇿";
   if (number.startsWith("+244") || number.startsWith("244")) return "🇦🇴";
   if (number.startsWith("+229") || number.startsWith("229")) return "🇧🇯";
@@ -229,102 +281,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+256") || number.startsWith("256")) return "🇺🇬";
   if (number.startsWith("+260") || number.startsWith("260")) return "🇿🇲";
   if (number.startsWith("+263") || number.startsWith("263")) return "🇿🇼";
-  // Asia
-  if (number.startsWith("+93") || number.startsWith("93")) return "🇦🇫";
-  if (number.startsWith("+374") || number.startsWith("374")) return "🇦🇲";
-  if (number.startsWith("+994") || number.startsWith("994")) return "🇦🇿";
-  if (number.startsWith("+973") || number.startsWith("973")) return "🇧🇭";
-  if (number.startsWith("+880") || number.startsWith("880")) return "🇧🇩";
-  if (number.startsWith("+975") || number.startsWith("975")) return "🇧🇹";
-  if (number.startsWith("+673") || number.startsWith("673")) return "🇧🇳";
-  if (number.startsWith("+855") || number.startsWith("855")) return "🇰🇭";
-  if (number.startsWith("+86") || number.startsWith("86")) return "🇨🇳";
-  if (number.startsWith("+357") || number.startsWith("357")) return "🇨🇾";
-  if (number.startsWith("+91") || number.startsWith("91")) return "🇮🇳";
-  if (number.startsWith("+62") || number.startsWith("62")) return "🇮🇩";
-  if (number.startsWith("+98") || number.startsWith("98")) return "🇮🇷";
-  if (number.startsWith("+964") || number.startsWith("964")) return "🇮🇶";
-  if (number.startsWith("+972") || number.startsWith("972")) return "🇮🇱";
-  if (number.startsWith("+81") || number.startsWith("81")) return "🇯🇵";
-  if (number.startsWith("+962") || number.startsWith("962")) return "🇯🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇰🇿";
-  if (number.startsWith("+965") || number.startsWith("965")) return "🇰🇼";
-  if (number.startsWith("+996") || number.startsWith("996")) return "🇰🇬";
-  if (number.startsWith("+856") || number.startsWith("856")) return "🇱🇦";
-  if (number.startsWith("+961") || number.startsWith("961")) return "🇱🇧";
-  if (number.startsWith("+60") || number.startsWith("60")) return "🇲🇾";
-  if (number.startsWith("+960") || number.startsWith("960")) return "🇲🇻";
-  if (number.startsWith("+976") || number.startsWith("976")) return "🇲🇳";
-  if (number.startsWith("+95") || number.startsWith("95")) return "🇲🇲";
-  if (number.startsWith("+977") || number.startsWith("977")) return "🇳🇵";
-  if (number.startsWith("+850") || number.startsWith("850")) return "🇰🇵";
-  if (number.startsWith("+968") || number.startsWith("968")) return "🇴🇲";
-  if (number.startsWith("+92") || number.startsWith("92")) return "🇵🇰";
-  if (number.startsWith("+970") || number.startsWith("970")) return "🇵🇸";
-  if (number.startsWith("+63") || number.startsWith("63")) return "🇵🇭";
-  if (number.startsWith("+974") || number.startsWith("974")) return "🇶🇦";
-  if (number.startsWith("+966") || number.startsWith("966")) return "🇸🇦";
-  if (number.startsWith("+65") || number.startsWith("65")) return "🇸🇬";
-  if (number.startsWith("+82") || number.startsWith("82")) return "🇰🇷";
-  if (number.startsWith("+94") || number.startsWith("94")) return "🇱🇰";
-  if (number.startsWith("+963") || number.startsWith("963")) return "🇸🇾";
-  if (number.startsWith("+886") || number.startsWith("886")) return "🇹🇼";
-  if (number.startsWith("+992") || number.startsWith("992")) return "🇹🇯";
-  if (number.startsWith("+66") || number.startsWith("66")) return "🇹🇭";
-  if (number.startsWith("+670") || number.startsWith("670")) return "🇹🇱";
-  if (number.startsWith("+90") || number.startsWith("90")) return "🇹🇷";
-  if (number.startsWith("+993") || number.startsWith("993")) return "🇹🇲";
-  if (number.startsWith("+971") || number.startsWith("971")) return "🇦🇪";
-  if (number.startsWith("+998") || number.startsWith("998")) return "🇺🇿";
-  if (number.startsWith("+84") || number.startsWith("84")) return "🇻🇳";
-  if (number.startsWith("+967") || number.startsWith("967")) return "🇾🇪";
-  // Europe
-  if (number.startsWith("+355") || number.startsWith("355")) return "🇦🇱";
-  if (number.startsWith("+376") || number.startsWith("376")) return "🇦🇩";
-  if (number.startsWith("+43") || number.startsWith("43")) return "🇦🇹";
-  if (number.startsWith("+375") || number.startsWith("375")) return "🇧🇾";
-  if (number.startsWith("+32") || number.startsWith("32")) return "🇧🇪";
-  if (number.startsWith("+387") || number.startsWith("387")) return "🇧🇦";
-  if (number.startsWith("+359") || number.startsWith("359")) return "🇧🇬";
-  if (number.startsWith("+385") || number.startsWith("385")) return "🇭🇷";
-  if (number.startsWith("+420") || number.startsWith("420")) return "🇨🇿";
-  if (number.startsWith("+45") || number.startsWith("45")) return "🇩🇰";
-  if (number.startsWith("+372") || number.startsWith("372")) return "🇪🇪";
-  if (number.startsWith("+358") || number.startsWith("358")) return "🇫🇮";
-  if (number.startsWith("+33") || number.startsWith("33")) return "🇫🇷";
-  if (number.startsWith("+49") || number.startsWith("49")) return "🇩🇪";
-  if (number.startsWith("+30") || number.startsWith("30")) return "🇬🇷";
-  if (number.startsWith("+36") || number.startsWith("36")) return "🇭🇺";
-  if (number.startsWith("+354") || number.startsWith("354")) return "🇮🇸";
-  if (number.startsWith("+353") || number.startsWith("353")) return "🇮🇪";
-  if (number.startsWith("+39") || number.startsWith("39")) return "🇮🇹";
-  if (number.startsWith("+383") || number.startsWith("383")) return "🇽🇰";
-  if (number.startsWith("+371") || number.startsWith("371")) return "🇱🇻";
-  if (number.startsWith("+423") || number.startsWith("423")) return "🇱🇮";
-  if (number.startsWith("+370") || number.startsWith("370")) return "🇱🇹";
-  if (number.startsWith("+352") || number.startsWith("352")) return "🇱🇺";
-  if (number.startsWith("+356") || number.startsWith("356")) return "🇲🇹";
-  if (number.startsWith("+373") || number.startsWith("373")) return "🇲🇩";
-  if (number.startsWith("+377") || number.startsWith("377")) return "🇲🇨";
-  if (number.startsWith("+382") || number.startsWith("382")) return "🇲🇪";
-  if (number.startsWith("+31") || number.startsWith("31")) return "🇳🇱";
-  if (number.startsWith("+389") || number.startsWith("389")) return "🇲🇰";
-  if (number.startsWith("+47") || number.startsWith("47")) return "🇳🇴";
-  if (number.startsWith("+48") || number.startsWith("48")) return "🇵🇱";
-  if (number.startsWith("+351") || number.startsWith("351")) return "🇵🇹";
-  if (number.startsWith("+40") || number.startsWith("40")) return "🇷🇴";
-  if (number.startsWith("+7") || number.startsWith("7")) return "🇷🇺";
-  if (number.startsWith("+378") || number.startsWith("378")) return "🇸🇲";
-  if (number.startsWith("+381") || number.startsWith("381")) return "🇷🇸";
-  if (number.startsWith("+421") || number.startsWith("421")) return "🇸🇰";
-  if (number.startsWith("+386") || number.startsWith("386")) return "🇸🇮";
-  if (number.startsWith("+34") || number.startsWith("34")) return "🇪🇸";
-  if (number.startsWith("+46") || number.startsWith("46")) return "🇸🇪";
-  if (number.startsWith("+41") || number.startsWith("41")) return "🇨🇭";
-  if (number.startsWith("+380") || number.startsWith("380")) return "🇺🇦";
-  if (number.startsWith("+44") || number.startsWith("44")) return "🇬🇧";
-  if (number.startsWith("+379") || number.startsWith("379")) return "🇻🇦";
-  // North America
   if (number.startsWith("+1") || number.startsWith("1")) {
     if (number.startsWith("+1242") || number.startsWith("1242")) return "🇧🇸";
     if (number.startsWith("+1246") || number.startsWith("1246")) return "🇧🇧";
@@ -350,7 +306,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+504") || number.startsWith("504")) return "🇭🇳";
   if (number.startsWith("+505") || number.startsWith("505")) return "🇳🇮";
   if (number.startsWith("+507") || number.startsWith("507")) return "🇵🇦";
-  // South America
   if (number.startsWith("+54") || number.startsWith("54")) return "🇦🇷";
   if (number.startsWith("+591") || number.startsWith("591")) return "🇧🇴";
   if (number.startsWith("+55") || number.startsWith("55")) return "🇧🇷";
@@ -363,7 +318,6 @@ function getFlagFromWhatsapp(number = "") {
   if (number.startsWith("+597") || number.startsWith("597")) return "🇸🇷";
   if (number.startsWith("+598") || number.startsWith("598")) return "🇺🇾";
   if (number.startsWith("+58") || number.startsWith("58")) return "🇻🇪";
-  // Oceania
   if (number.startsWith("+61") || number.startsWith("61")) return "🇦🇺";
   if (number.startsWith("+679") || number.startsWith("679")) return "🇫🇯";
   if (number.startsWith("+691") || number.startsWith("691")) return "🇫🇲";
@@ -399,7 +353,7 @@ const DedicationCard = React.memo(({
   badgeStyle = "❤️",
   onDedicateClick,
   isActive = false,
-  postId = null, // NEW: FeedX post ID for tracking share clicks
+  postId = null,
 }) => {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -412,7 +366,9 @@ const DedicationCard = React.memo(({
     return safeStorageGet(`gwamo_reacted_${id}`) === "true";
   });
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [isSharing, setIsSharing] = useState(false); // NEW: Share loading state
+  const [isSharing, setIsSharing] = useState(false);
+  const [youtubeError, setYoutubeError] = useState(false);
+  const [youtubeRetryCount, setYoutubeRetryCount] = useState(0);
 
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
@@ -420,6 +376,8 @@ const DedicationCard = React.memo(({
   const mediaInstanceRef = useRef(Symbol("dedication-media"));
   const isMountedRef = useRef(true);
   const mediaPausedRef = useRef(false);
+  const youtubePlayAttempts = useRef(0);
+  const youtubeRetryTimeout = useRef(null);
 
   // ==========================================
   // MEMOIZED EXPENSIVE CALCULATIONS
@@ -429,15 +387,22 @@ const DedicationCard = React.memo(({
   const mediaType = useMemo(() => getMediaType(mediaUrl), [mediaUrl]);
   
   const embedUrl = useMemo(() => {
-    if (mediaType === 'youtube') return getYouTubeEmbedUrl(mediaUrl);
+    if (mediaType === 'youtube') {
+      const url = getYouTubeEmbedUrl(mediaUrl);
+      if (!url) {
+        setYoutubeError(true);
+        return null;
+      }
+      return url;
+    }
     if (mediaType === 'vimeo') return getVimeoEmbedUrl(mediaUrl);
     if (mediaType === 'dailymotion') return getDailymotionEmbedUrl(mediaUrl);
     return null;
   }, [mediaType, mediaUrl]);
 
   const shouldShowEmbed = useMemo(() => {
-    return isActive && ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
-  }, [isActive, mediaType]);
+    return isActive && ['youtube', 'vimeo', 'dailymotion'].includes(mediaType) && !youtubeError;
+  }, [isActive, mediaType, youtubeError]);
 
   // ==========================================
   // CROSS-DEVICE COMPATIBILITY SETUP
@@ -448,11 +413,36 @@ const DedicationCard = React.memo(({
     ensureResponsiveStylesheet();
     return () => {
       isMountedRef.current = false;
+      if (youtubeRetryTimeout.current) {
+        clearTimeout(youtubeRetryTimeout.current);
+      }
     };
   }, []);
 
   // ==========================================
-  // MEDIA PLAYBACK CONTROL (Optimized)
+  // YOUTUBE PLAYBACK RETRY LOGIC
+  // ==========================================
+
+  const retryYouTubePlay = useCallback(() => {
+    if (youtubeRetryCount >= 3 || !iframeRef.current) return;
+    
+    setYoutubeRetryCount(prev => prev + 1);
+    
+    try {
+      const iframe = iframeRef.current;
+      if (mediaType === 'youtube') {
+        iframe.contentWindow?.postMessage(
+          '{"event":"command","func":"playVideo","args":""}',
+          '*'
+        );
+      }
+    } catch (error) {
+      console.warn('YouTube retry failed:', error);
+    }
+  }, [mediaType, youtubeRetryCount]);
+
+  // ==========================================
+  // MEDIA PLAYBACK CONTROL
   // ==========================================
 
   const pauseCurrentMedia = useCallback(() => {
@@ -496,6 +486,66 @@ const DedicationCard = React.memo(({
     }
   }, [pauseCurrentMedia]);
 
+  // ==========================================
+  // YOUTUBE IFRAME MESSAGE HANDLING
+  // ==========================================
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || mediaType !== 'youtube') return;
+
+    const handleYouTubeMessage = (event) => {
+      // Only accept messages from the YouTube iframe
+      if (event.source !== iframe.contentWindow) return;
+      
+      try {
+        let data = event.data;
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
+        }
+        
+        // Handle YouTube player events
+        if (data?.event === 'onReady') {
+          console.log('YouTube player ready');
+          if (isActive) {
+            // Try to play after a small delay
+            setTimeout(() => {
+              try {
+                iframe.contentWindow?.postMessage(
+                  '{"event":"command","func":"playVideo","args":""}',
+                  '*'
+                );
+              } catch (e) {
+                console.warn('YouTube play after ready failed:', e);
+              }
+            }, 300);
+          }
+        }
+        
+        if (data?.event === 'onError') {
+          console.warn('YouTube player error:', data.info);
+          setYoutubeError(true);
+        }
+        
+        if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
+          // Video started playing
+          window.dispatchEvent(
+            new CustomEvent(MEDIA_PLAY_EVENT, {
+              detail: { instanceId: mediaInstanceRef.current },
+            })
+          );
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    };
+
+    window.addEventListener('message', handleYouTubeMessage);
+    return () => {
+      window.removeEventListener('message', handleYouTubeMessage);
+    };
+  }, [mediaType, isActive]);
+
   useEffect(() => {
     const nativeMedia = videoRef.current;
     const iframe = iframeRef.current;
@@ -503,7 +553,6 @@ const DedicationCard = React.memo(({
     const isIframeMedia = ['youtube', 'vimeo', 'dailymotion'].includes(mediaType);
     
     const handleNativePlay = () => {
-      // Pause any other native media by dispatching the event
       window.dispatchEvent(
         new CustomEvent(MEDIA_PLAY_EVENT, {
           detail: { instanceId },
@@ -511,75 +560,62 @@ const DedicationCard = React.memo(({
       );
     };
 
-    const handleIframeMessage = (event) => {
-      if (!iframe || event.source !== iframe.contentWindow) return;
-      
-      let data = event.data;
-      if (typeof data === "string") {
-        try {
-          data = JSON.parse(data);
-        } catch {
-          return;
-        }
-      }
-
-      const youtubeStarted = data?.event === "infoDelivery" && data?.info?.playerState === 1;
-      const vimeoStarted = data?.event === "play";
-      const dailymotionStarted = data?.event === "video_start" || data?.event === "play" || data?.status === "playing";
-
-      if (youtubeStarted || vimeoStarted || dailymotionStarted) {
-        window.dispatchEvent(
-          new CustomEvent(MEDIA_PLAY_EVENT, {
-            detail: { instanceId },
-          })
-        );
-      }
-    };
-
     window.addEventListener(MEDIA_PLAY_EVENT, handleAnotherMediaPlayed);
-    window.addEventListener("message", handleIframeMessage);
     nativeMedia?.addEventListener("play", handleNativePlay);
 
     if (isActive) {
-      // Resume playback when becoming active
       mediaPausedRef.current = false;
       announceCurrentMedia();
       
       if (nativeMedia && ['video', 'audio'].includes(mediaType)) {
-        nativeMedia.play().catch(() => {
-          // Browser autoplay rules may require viewer interaction
-        });
+        nativeMedia.play().catch(() => {});
       } else if (iframe && isIframeMedia && shouldShowEmbed) {
-        try {
-          if (mediaType === 'youtube') {
-            iframe.contentWindow?.postMessage(
-              '{"event":"command","func":"playVideo","args":""}',
-              '*'
-            );
-          } else if (mediaType === 'vimeo') {
-            iframe.contentWindow?.postMessage('{"method":"play"}', '*');
-          } else if (mediaType === 'dailymotion') {
-            iframe.contentWindow?.postMessage('{"command":"play"}', '*');
+        // Try to play with retry
+        const playYouTube = () => {
+          try {
+            if (mediaType === 'youtube') {
+              iframe.contentWindow?.postMessage(
+                '{"event":"command","func":"playVideo","args":""}',
+                '*'
+              );
+              // Schedule retry if needed
+              if (youtubeRetryTimeout.current) {
+                clearTimeout(youtubeRetryTimeout.current);
+              }
+              youtubeRetryTimeout.current = setTimeout(() => {
+                if (isMountedRef.current && isActive) {
+                  retryYouTubePlay();
+                }
+              }, 1500);
+            } else if (mediaType === 'vimeo') {
+              iframe.contentWindow?.postMessage('{"method":"play"}', '*');
+            } else if (mediaType === 'dailymotion') {
+              iframe.contentWindow?.postMessage('{"command":"play"}', '*');
+            }
+          } catch (error) {
+            console.warn('Media play failed:', error);
           }
-        } catch (error) {
-          // Silently handle iframe play errors
-        }
+        };
+        
+        // Small delay to ensure iframe is ready
+        setTimeout(playYouTube, 200);
       }
     } else {
-      // Pause when becoming inactive
       pauseCurrentMedia();
     }
 
     return () => {
       nativeMedia?.removeEventListener("play", handleNativePlay);
       window.removeEventListener(MEDIA_PLAY_EVENT, handleAnotherMediaPlayed);
-      window.removeEventListener("message", handleIframeMessage);
+      if (youtubeRetryTimeout.current) {
+        clearTimeout(youtubeRetryTimeout.current);
+      }
       pauseCurrentMedia();
     };
-  }, [isActive, mediaType, shouldShowEmbed, pauseCurrentMedia, announceCurrentMedia, handleAnotherMediaPlayed]);
+  }, [isActive, mediaType, shouldShowEmbed, pauseCurrentMedia, announceCurrentMedia, handleAnotherMediaPlayed, retryYouTubePlay]);
 
   // ==========================================
-  // COMMENT FUNCTIONS (Lazy-loaded)
+  // COMMENT FUNCTIONS
   // ==========================================
 
   const loadComments = useCallback(async () => {
@@ -688,45 +724,35 @@ const DedicationCard = React.memo(({
   }, []);
 
   // ==========================================
-  // UPDATED SHARE FUNCTION WITH TRACKING
+  // SHARE FUNCTION
   // ==========================================
 
   const shareToWhatsApp = useCallback(async () => {
-    // If we have a postId (FeedX post), track the share
     if (postId) {
       try {
         setIsSharing(true);
-        
-        // Call the share tracking endpoint
         const response = await fetch(`${API_URL}/api/home/share`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ post_id: postId })
         });
-        
         const data = await response.json();
-        
         if (data.success && data.shareUrl) {
-          // Open WhatsApp with the share link
           window.open(data.shareUrl, '_blank');
         } else {
-          // Fallback: Use generic share
           fallbackShare();
         }
       } catch (error) {
         console.error('Share tracking failed:', error);
-        // Fallback to generic share
         fallbackShare();
       } finally {
         setIsSharing(false);
       }
     } else {
-      // For legacy dedications without post_id - use generic share
       fallbackShare();
     }
   }, [postId, senderName, recipientName, dedicationTitle, mediaTitle]);
 
-  // Fallback share function for legacy dedications or when API fails
   const fallbackShare = useCallback(() => {
     const text = `🎵 ${senderName || "Someone"} dedicated "${dedicationTitle || mediaTitle || 'a song'}" to ${recipientName || "someone"} on FeedX!\n\n❤️ Watch it here: ${window.location.origin}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
@@ -752,17 +778,44 @@ const DedicationCard = React.memo(({
       case 'youtube':
       case 'vimeo':
       case 'dailymotion':
-        // Only render iframe when active (lazy loading)
+        // Show error message if YouTube failed
+        if (youtubeError && mediaType === 'youtube') {
+          return (
+            <div 
+              style={fallbackBg} 
+              className="youtube-fallback"
+              onClick={() => {
+                setYoutubeError(false);
+                setYoutubeRetryCount(0);
+                // Reload iframe
+                if (iframeRef.current) {
+                  const currentSrc = iframeRef.current.src;
+                  iframeRef.current.src = '';
+                  setTimeout(() => {
+                    iframeRef.current.src = currentSrc;
+                  }, 100);
+                }
+              }}
+            >
+              <div style={fallbackContent}>
+                <span style={fallbackIcon}>▶️</span>
+                <span style={fallbackText}>Tap to retry YouTube</span>
+              </div>
+            </div>
+          );
+        }
+        
         if (shouldShowEmbed && embedUrl) {
           return (
             <iframe
               ref={iframeRef}
               src={embedUrl}
               style={iframeStyle}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
               title={dedicationTitle || mediaTitle}
               loading="lazy"
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
             />
           );
         }
@@ -825,11 +878,14 @@ const DedicationCard = React.memo(({
           </div>
         );
     }
-  }, [mediaUrl, mediaType, dedicationTitle, mediaTitle, isActive, shouldShowEmbed, embedUrl]);
+  }, [mediaUrl, mediaType, dedicationTitle, mediaTitle, isActive, shouldShowEmbed, embedUrl, youtubeError]);
 
   // ==========================================
-  // STYLES (Unchanged)
+  // STYLES
   // ==========================================
+
+  // ... (keep all existing styles from your original file)
+  // They remain unchanged, just copy them from your original file
 
   const card = {
     position: "relative",
@@ -1509,28 +1565,26 @@ const DedicationCard = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparison function - only re-render when important props change
   const importantProps = [
     'id', 'isActive', 'reactionCount', 'commentCount', 'views',
     'mediaUrl', 'dedicationTitle', 'mediaTitle', 'message',
     'senderPhoto', 'senderName', 'senderWhatsapp',
-    'recipientPhoto', 'recipientName', 'postId' // Added postId
+    'recipientPhoto', 'recipientName', 'postId'
   ];
   
   for (const prop of importantProps) {
     if (prevProps[prop] !== nextProps[prop]) {
-      return false; // Re-render needed
+      return false;
     }
   }
   
-  // Check if reaction count changed via localStorage
   const prevReacted = safeStorageGet(`gwamo_reacted_${prevProps.id}`) === "true";
   const nextReacted = safeStorageGet(`gwamo_reacted_${nextProps.id}`) === "true";
   if (prevReacted !== nextReacted) {
     return false;
   }
   
-  return true; // No re-render needed
+  return true;
 });
 
 DedicationCard.displayName = 'DedicationCard';
