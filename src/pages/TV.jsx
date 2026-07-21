@@ -96,18 +96,33 @@ function TV() {
   const isMountedRef = useRef(true);
 
   // ==========================================
-  // AUTOMATIC VIEWS TRACKING
+  // AUTOMATIC VIEWS TRACKING - FIXED
   // ==========================================
   const viewedInSession = useRef(new Set()); // Track which dedications have been viewed
   const activeTimeoutRef = useRef(null); // Timeout for 2-second delay
-  const lastActiveIdRef = useRef(null); // Track last active ID to prevent duplicate tracking
+  const requestsInProgress = useRef(new Set()); // Track requests in progress
+  const currentActiveIdRef = useRef(null); // Track current active ID
 
   // Function to increment views for a dedication
   const incrementViews = useCallback(async (dedicationId) => {
+    // Convert to number for consistent comparison
+    const id = Number(dedicationId);
+    
     // Skip if already viewed in this session
-    if (viewedInSession.current.has(dedicationId)) {
+    if (viewedInSession.current.has(id)) {
+      console.log(`View already counted for dedication ${id} in this session`);
       return;
     }
+
+    // Skip if request is already in progress
+    if (requestsInProgress.current.has(id)) {
+      console.log(`View request for dedication ${id} is already in progress`);
+      return;
+    }
+
+    // Mark request as in progress
+    requestsInProgress.current.add(id);
+    console.log(`Sending view request for dedication: ${id}`);
 
     try {
       const response = await fetch(`${API_URL}/api/dedications/view`, {
@@ -115,26 +130,34 @@ function TV() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id: dedicationId }),
+        body: JSON.stringify({ id: id }),
       });
 
       const data = await response.json();
+      console.log(`View response for dedication ${id}:`, response.status, data);
 
       if (data.success) {
         // Mark as viewed in this session
-        viewedInSession.current.add(dedicationId);
+        viewedInSession.current.add(id);
+        console.log(`View counted for dedication ${id}. New view count: ${data.views}`);
 
         // Update the feed state with the new view count
         setFeed((prevFeed) =>
-          prevFeed.map((item) =>
-            item.id === dedicationId
+          prevFeed.map((item) => {
+            const itemId = Number(item.id);
+            return itemId === id
               ? { ...item, views: data.views }
-              : item
-          )
+              : item;
+          })
         );
+      } else {
+        console.error(`Failed to increment views for dedication ${id}:`, data.message);
       }
     } catch (error) {
-      console.error("Error incrementing views:", error);
+      console.error(`Error incrementing views for dedication ${id}:`, error);
+    } finally {
+      // Remove from in-progress set
+      requestsInProgress.current.delete(id);
     }
   }, []);
 
@@ -146,33 +169,42 @@ function TV() {
       activeTimeoutRef.current = null;
     }
 
-    // Get the active dedication ID
+    // Get the active dedication ID - convert to number
     if (activeIndex !== null && feed[activeIndex]) {
-      const activeId = feed[activeIndex].id;
+      const activeId = Number(feed[activeIndex].id);
+      currentActiveIdRef.current = activeId;
 
-      // If the active ID changed, reset tracking
-      if (lastActiveIdRef.current !== activeId) {
-        lastActiveIdRef.current = activeId;
-      }
+      console.log(`Card ${activeId} became active`);
 
-      // Check if already viewed
+      // Check if already viewed in this session
       if (!viewedInSession.current.has(activeId)) {
-        // Wait 2 seconds, then check if still active
-        activeTimeoutRef.current = setTimeout(() => {
-          // Check if the same card is still active
-          if (
-            activeIndex !== null &&
-            feed[activeIndex] &&
-            feed[activeIndex].id === activeId
-          ) {
-            // Still active, increment views
-            incrementViews(activeId);
-          }
-        }, 2000);
+        // Check if not already in progress
+        if (!requestsInProgress.current.has(activeId)) {
+          // Wait 2 seconds, then check if still active
+          console.log(`Setting 2-second timer for dedication ${activeId}`);
+          activeTimeoutRef.current = setTimeout(() => {
+            // Check if the same card is still active
+            if (
+              activeIndex !== null &&
+              feed[activeIndex] &&
+              Number(feed[activeIndex].id) === activeId
+            ) {
+              // Still active, increment views
+              console.log(`Still active after 2 seconds, incrementing views for ${activeId}`);
+              incrementViews(activeId);
+            } else {
+              console.log(`Card ${activeId} is no longer active after 2 seconds`);
+            }
+          }, 2000);
+        } else {
+          console.log(`View request for dedication ${activeId} already in progress`);
+        }
+      } else {
+        console.log(`Dedication ${activeId} already viewed in this session`);
       }
     } else {
       // No active card, reset
-      lastActiveIdRef.current = null;
+      currentActiveIdRef.current = null;
     }
 
     // Cleanup timeout on unmount or dependency change
@@ -184,14 +216,17 @@ function TV() {
     };
   }, [activeIndex, feed, incrementViews]);
 
-  // Clear viewed session on page unload (optional - sessionStorage would persist across refreshes)
+  // Clear viewed session on page load (new session)
   useEffect(() => {
     // Reset viewed set when component mounts (new page load = new session)
     viewedInSession.current = new Set();
-    
+    requestsInProgress.current = new Set();
+    console.log("New browser session - view tracking reset");
+
     return () => {
       // Clean up on unmount
       viewedInSession.current = new Set();
+      requestsInProgress.current = new Set();
       if (activeTimeoutRef.current) {
         clearTimeout(activeTimeoutRef.current);
       }
