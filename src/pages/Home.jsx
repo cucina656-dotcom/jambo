@@ -494,10 +494,10 @@ function Home() {
                         rel="noreferrer"
                         style={tickerLabel}
                       >
-                        TapiN
+                        TapIn
                       </a>
                     ) : (
-                      <div style={tickerLabel}>TapiN</div>
+                      <div style={tickerLabel}>TapIn</div>
                     )}
                     <div style={tickerWrapper}>
                       <div style={tickerScrollingContent}>{post.subtitle}</div>
