@@ -399,6 +399,7 @@ const DedicationCard = React.memo(({
   badgeStyle = "❤️",
   onDedicateClick,
   isActive = false,
+  postId = null, // NEW: FeedX post ID for tracking share clicks
 }) => {
   const [reactions, setReactions] = useState(reactionCount);
   const [comments, setComments] = useState(commentCount);
@@ -411,6 +412,7 @@ const DedicationCard = React.memo(({
     return safeStorageGet(`gwamo_reacted_${id}`) === "true";
   });
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isSharing, setIsSharing] = useState(false); // NEW: Share loading state
 
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
@@ -685,10 +687,50 @@ const DedicationCard = React.memo(({
     setCommentText("");
   }, []);
 
-  const shareToWhatsApp = useCallback(() => {
-    const text = `🎵 Gwamo TV Dedication\n${senderName || "Someone"} dedicated something special to ${recipientName || "someone"}`;
+  // ==========================================
+  // UPDATED SHARE FUNCTION WITH TRACKING
+  // ==========================================
+
+  const shareToWhatsApp = useCallback(async () => {
+    // If we have a postId (FeedX post), track the share
+    if (postId) {
+      try {
+        setIsSharing(true);
+        
+        // Call the share tracking endpoint
+        const response = await fetch(`${API_URL}/api/home/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ post_id: postId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.shareUrl) {
+          // Open WhatsApp with the share link
+          window.open(data.shareUrl, '_blank');
+        } else {
+          // Fallback: Use generic share
+          fallbackShare();
+        }
+      } catch (error) {
+        console.error('Share tracking failed:', error);
+        // Fallback to generic share
+        fallbackShare();
+      } finally {
+        setIsSharing(false);
+      }
+    } else {
+      // For legacy dedications without post_id - use generic share
+      fallbackShare();
+    }
+  }, [postId, senderName, recipientName, dedicationTitle, mediaTitle]);
+
+  // Fallback share function for legacy dedications or when API fails
+  const fallbackShare = useCallback(() => {
+    const text = `🎵 ${senderName || "Someone"} dedicated "${dedicationTitle || mediaTitle || 'a song'}" to ${recipientName || "someone"} on FeedX!\n\n❤️ Watch it here: ${window.location.origin}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-  }, [senderName, recipientName]);
+  }, [senderName, recipientName, dedicationTitle, mediaTitle]);
 
   // ==========================================
   // RENDER FUNCTIONS
@@ -1335,8 +1377,23 @@ const DedicationCard = React.memo(({
           <button type="button" onClick={openComments} style={neonActionBtn} className="dedication-action-btn" aria-label="Comments">
             <MessageSquare size={24} strokeWidth={2} color="#ffffff" />
           </button>
-          <button type="button" onClick={shareToWhatsApp} style={neonActionBtn} className="dedication-action-btn" aria-label="Share">
-            <Share2 size={24} strokeWidth={2} color="#ffffff" />
+          <button 
+            type="button" 
+            onClick={shareToWhatsApp} 
+            style={{
+              ...neonActionBtn,
+              opacity: isSharing ? 0.6 : 1,
+              cursor: isSharing ? 'not-allowed' : 'pointer'
+            }} 
+            className="dedication-action-btn" 
+            aria-label="Share"
+            disabled={isSharing}
+          >
+            <Share2 
+              size={24} 
+              strokeWidth={2} 
+              color={isSharing ? "#888" : "#ffffff"} 
+            />
           </button>
         </div>
         <button
@@ -1457,7 +1514,7 @@ const DedicationCard = React.memo(({
     'id', 'isActive', 'reactionCount', 'commentCount', 'views',
     'mediaUrl', 'dedicationTitle', 'mediaTitle', 'message',
     'senderPhoto', 'senderName', 'senderWhatsapp',
-    'recipientPhoto', 'recipientName'
+    'recipientPhoto', 'recipientName', 'postId' // Added postId
   ];
   
   for (const prop of importantProps) {
