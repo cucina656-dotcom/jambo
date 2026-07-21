@@ -96,31 +96,26 @@ function TV() {
   const isMountedRef = useRef(true);
 
   // ==========================================
-  // AUTOMATIC VIEWS TRACKING - FIXED
+  // AUTOMATIC VIEWS TRACKING
   // ==========================================
-  const viewedInSession = useRef(new Set()); // Track which dedications have been viewed
-  const activeTimeoutRef = useRef(null); // Timeout for 2-second delay
-  const requestsInProgress = useRef(new Set()); // Track requests in progress
-  const currentActiveIdRef = useRef(null); // Track current active ID
+  const viewedInSession = useRef(new Set());
+  const activeTimeoutRef = useRef(null);
+  const requestsInProgress = useRef(new Set());
+  const currentActiveIdRef = useRef(null);
 
-  // Function to increment views for a dedication
   const incrementViews = useCallback(async (dedicationId) => {
-    // Convert to number for consistent comparison
     const id = Number(dedicationId);
     
-    // Skip if already viewed in this session
     if (viewedInSession.current.has(id)) {
       console.log(`View already counted for dedication ${id} in this session`);
       return;
     }
 
-    // Skip if request is already in progress
     if (requestsInProgress.current.has(id)) {
       console.log(`View request for dedication ${id} is already in progress`);
       return;
     }
 
-    // Mark request as in progress
     requestsInProgress.current.add(id);
     console.log(`Sending view request for dedication: ${id}`);
 
@@ -137,11 +132,9 @@ function TV() {
       console.log(`View response for dedication ${id}:`, response.status, data);
 
       if (data.success) {
-        // Mark as viewed in this session
         viewedInSession.current.add(id);
         console.log(`View counted for dedication ${id}. New view count: ${data.views}`);
 
-        // Update the feed state with the new view count
         setFeed((prevFeed) =>
           prevFeed.map((item) => {
             const itemId = Number(item.id);
@@ -156,40 +149,31 @@ function TV() {
     } catch (error) {
       console.error(`Error incrementing views for dedication ${id}:`, error);
     } finally {
-      // Remove from in-progress set
       requestsInProgress.current.delete(id);
     }
   }, []);
 
-  // Handle view tracking when active index changes
   useEffect(() => {
-    // Clear any pending timeout
     if (activeTimeoutRef.current) {
       clearTimeout(activeTimeoutRef.current);
       activeTimeoutRef.current = null;
     }
 
-    // Get the active dedication ID - convert to number
     if (activeIndex !== null && feed[activeIndex]) {
       const activeId = Number(feed[activeIndex].id);
       currentActiveIdRef.current = activeId;
 
       console.log(`Card ${activeId} became active`);
 
-      // Check if already viewed in this session
       if (!viewedInSession.current.has(activeId)) {
-        // Check if not already in progress
         if (!requestsInProgress.current.has(activeId)) {
-          // Wait 2 seconds, then check if still active
           console.log(`Setting 2-second timer for dedication ${activeId}`);
           activeTimeoutRef.current = setTimeout(() => {
-            // Check if the same card is still active
             if (
               activeIndex !== null &&
               feed[activeIndex] &&
               Number(feed[activeIndex].id) === activeId
             ) {
-              // Still active, increment views
               console.log(`Still active after 2 seconds, incrementing views for ${activeId}`);
               incrementViews(activeId);
             } else {
@@ -203,11 +187,9 @@ function TV() {
         console.log(`Dedication ${activeId} already viewed in this session`);
       }
     } else {
-      // No active card, reset
       currentActiveIdRef.current = null;
     }
 
-    // Cleanup timeout on unmount or dependency change
     return () => {
       if (activeTimeoutRef.current) {
         clearTimeout(activeTimeoutRef.current);
@@ -216,15 +198,12 @@ function TV() {
     };
   }, [activeIndex, feed, incrementViews]);
 
-  // Clear viewed session on page load (new session)
   useEffect(() => {
-    // Reset viewed set when component mounts (new page load = new session)
     viewedInSession.current = new Set();
     requestsInProgress.current = new Set();
     console.log("New browser session - view tracking reset");
 
     return () => {
-      // Clean up on unmount
       viewedInSession.current = new Set();
       requestsInProgress.current = new Set();
       if (activeTimeoutRef.current) {
@@ -282,7 +261,6 @@ function TV() {
   useEffect(() => {
     if (!feed.length) return;
 
-    // Clean up previous observer
     if (observerRef.current) {
       observerRef.current.disconnect();
     }
@@ -310,7 +288,6 @@ function TV() {
 
     observerRef.current = observer;
 
-    // Observe visible cards only
     const observeVisibleCards = () => {
       const elements = Object.values(cardRefs.current);
       const start = Math.max(0, visibleRange.start - 1);
@@ -324,7 +301,6 @@ function TV() {
       }
     };
 
-    // Initial observation
     observeVisibleCards();
 
     return () => {
@@ -348,16 +324,14 @@ function TV() {
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const windowHeight = window.innerHeight;
       const cardHeight = window.innerWidth <= 430 ? window.innerWidth : 430;
-      const cardTotalHeight = cardHeight + 18 + 72; // card + margin + header approx
+      const cardTotalHeight = cardHeight + 18 + 72;
       
-      // Calculate which cards should be visible
       const startIndex = Math.max(0, Math.floor(scrollTop / cardTotalHeight) - 1);
       const endIndex = Math.min(feed.length, Math.ceil((scrollTop + windowHeight) / cardTotalHeight) + 1);
       
       setVisibleRange({ start: startIndex, end: endIndex });
     };
 
-    // Debounce scroll handler
     let timeoutId;
     const debouncedScroll = () => {
       clearTimeout(timeoutId);
@@ -367,7 +341,6 @@ function TV() {
     window.addEventListener('scroll', debouncedScroll, { passive: true });
     window.addEventListener('resize', debouncedScroll, { passive: true });
     
-    // Initial calculation
     handleScroll();
 
     return () => {
@@ -381,7 +354,6 @@ function TV() {
   // OPTIMIZED MEDIA PLAYBACK CONTROL
   // ==========================================
   const pauseAllMedia = useCallback((exceptElement = null) => {
-    // Only pause native media elements
     const mediaElements = document.querySelectorAll('video, audio');
     mediaElements.forEach(element => {
       if (element !== exceptElement && !element.paused) {
@@ -399,23 +371,19 @@ function TV() {
     currentlyPlayingRef.current = mediaElement;
   }, []);
 
-  // Auto-pause videos when scrolling away - optimized
   useEffect(() => {
     const handleScroll = () => {
-      // Only pause if activeIndex changed significantly
       if (activeIndex === null) {
         pauseAllMedia();
         return;
       }
 
-      // Get the active card element
       const activeCard = document.querySelector(`.tv-card-wrapper[data-index="${activeIndex}"]`);
       if (!activeCard) {
         pauseAllMedia();
         return;
       }
 
-      // Pause all media not in the active card
       const mediaElements = document.querySelectorAll('video, audio');
       mediaElements.forEach(mediaElement => {
         const card = mediaElement.closest('.tv-card-wrapper');
@@ -439,7 +407,6 @@ function TV() {
     window.addEventListener('scroll', debouncedScroll, { passive: true });
     window.addEventListener('touchmove', debouncedScroll, { passive: true });
 
-    // Initial pause check
     handleScroll();
 
     return () => {
@@ -449,7 +416,6 @@ function TV() {
     };
   }, [activeIndex, pauseAllMedia]);
 
-  // Auto-play first card on initial load
   useEffect(() => {
     if (feed.length > 0 && activeIndex === null) {
       const timer = setTimeout(() => {
@@ -560,7 +526,6 @@ function TV() {
 
       if (data.dedication) {
         setFeed((prev) => [data.dedication, ...prev]);
-        // Reset visible range to include new card
         setVisibleRange({ start: 0, end: 5 });
       }
 
@@ -591,7 +556,6 @@ function TV() {
     return Math.abs(index - activeIndex) <= 1;
   }, [activeIndex]);
 
-  // Memoize feed items to prevent unnecessary re-renders
   const renderedFeed = useMemo(() => {
     return feed.map((item, index) => {
       const isNearby = shouldRenderCard(index);
@@ -631,7 +595,6 @@ function TV() {
         .tv-card-wrapper iframe {
           loading: lazy;
         }
-        /* Placeholder for cards far away */
         .tv-card-placeholder {
           width: 100%;
           max-width: 430px;
@@ -718,7 +681,6 @@ function TV() {
           )}
 
           {renderedFeed.map(({ item, index, shouldRender }) => {
-            // For cards far from active, render placeholder with same dimensions
             if (!shouldRender) {
               return (
                 <div
@@ -743,6 +705,7 @@ function TV() {
                   if (ref) cardRefs.current[index] = ref;
                 }}
                 data-index={index}
+                data-id={item.id}  // <-- ADDED THIS LINE
                 style={cardWrapper}
                 className="tv-card-wrapper"
               >
