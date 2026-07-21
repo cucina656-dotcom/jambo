@@ -90,7 +90,6 @@ function Header() {
             <span aria-hidden="true" style={{ fontSize: "16px" }}>
               🎶
             </span>
-
             <span>Music Messages</span>
           </Link>
         </nav>
