@@ -88,10 +88,10 @@ function Header() {
             style={getTopNavItemStyle("/tv")}
           >
             <span aria-hidden="true" style={{ fontSize: "16px" }}>
-              📺
+              🎶
             </span>
 
-            <span>Susuruka</span>
+            <span>Music Messages</span>
           </Link>
         </nav>
       </header>
