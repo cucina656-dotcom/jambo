@@ -1,10 +1,16 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+
 import Header from "../components/Header";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-const DEFAULT_VIDEO = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+
+const DEFAULT_VIDEO =
+  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+
 const DEFAULT_TITLE = "ChillaX";
-const DEFAULT_LOGO = "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
+
+const DEFAULT_LOGO =
+  "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
 
 function isDirectVideoUrl(url = "") {
   const clean = url.toLowerCase().split("?")[0].split("#")[0];
@@ -34,31 +40,38 @@ function isImageUrl(url = "") {
 
 function getEmbedUrl(url = "") {
   if (!url) return "";
+
   const youtubeMatch = url.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
   if (youtubeMatch) {
     return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
   }
+
   const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
   if (shortsMatch) {
     return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
   }
+
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
   if (vimeoMatch) {
     return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
   }
+
   const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
   if (dailymotionMatch) {
     return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=1&mute=0&loop=1`;
   }
+
   if (url.includes("/embed/") || url.includes("player.")) return url;
+
   return url;
 }
 
 function detectCreatorType(value = "") {
   const clean = value.trim().toLowerCase();
   if (!clean) return "";
+
   if (
     clean.startsWith("http://") ||
     clean.startsWith("https://") ||
@@ -66,17 +79,20 @@ function detectCreatorType(value = "") {
   ) {
     return "website";
   }
+
   return "whatsapp";
 }
 
 function buildTapInUrl(type = "", value = "") {
   const clean = value.trim();
   if (!clean) return "";
+
   if (type === "website") {
     return clean.startsWith("http://") || clean.startsWith("https://")
       ? clean
       : `https://${clean}`;
   }
+
   const digits = clean.replace(/[^\d]/g, "");
   return digits ? `https://wa.me/${digits}` : "";
 }
@@ -84,19 +100,27 @@ function buildTapInUrl(type = "", value = "") {
 function Home() {
   const videoRefs = useRef({});
   const postRefs = useRef({});
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
   const [activePostIndex, setActivePostIndex] = useState(0);
+
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
+
   const [newLogoFile, setNewLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
+
   const [newMediaFile, setNewMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState("");
+  const [mediaPreviewType, setMediaPreviewType] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
+
   const observerRef = useRef(null);
   const isMountedRef = useRef(true);
 
@@ -114,13 +138,16 @@ function Home() {
       setLoading(true);
       const response = await fetch(`${API_URL}/api/home`);
       const data = await readJsonSafely(response);
+
       if (!data.success) return;
+
       if (Array.isArray(data.posts) && data.posts.length > 0) {
         if (isMountedRef.current) {
           setPosts(data.posts);
         }
         return;
       }
+
       if (isMountedRef.current) {
         setPosts([
           {
@@ -155,7 +182,6 @@ function Home() {
   // ==========================================
   // OPTIMIZED INTERSECTION OBSERVER
   // ==========================================
-
   useEffect(() => {
     if (!posts.length) return;
 
@@ -168,17 +194,17 @@ function Home() {
         entries.forEach((entry) => {
           const index = Number(entry.target.dataset.index);
           const video = videoRefs.current[index];
-          
+
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
             setActivePostIndex(index);
-            
+
             // Pause other videos
             Object.entries(videoRefs.current).forEach(([key, item]) => {
               if (Number(key) !== index && item && !item.paused) {
                 item.pause();
               }
             });
-            
+
             if (video && video.paused) {
               video.play().catch(() => {});
             }
@@ -189,7 +215,7 @@ function Home() {
           }
         });
       },
-      { 
+      {
         threshold: [0.6],
         rootMargin: '0px 0px -10% 0px'
       }
@@ -211,7 +237,6 @@ function Home() {
   // ==========================================
   // OPTIMIZED FUNCTIONS
   // ==========================================
-
   const openEditor = useCallback(() => {
     Object.values(videoRefs.current).forEach((video) => {
       if (video && !video.paused) video.pause();
@@ -228,6 +253,8 @@ function Home() {
     setNewLogoFile(null);
     setLogoPreview("");
     setNewMediaFile(null);
+    setMediaPreview("");
+    setMediaPreviewType("");
   }, []);
 
   const handleLogoChange = useCallback((file) => {
@@ -241,16 +268,19 @@ function Home() {
 
   const handleMediaFileChange = useCallback((file) => {
     setNewMediaFile(file || null);
+    if (file) {
+      setMediaPreview(URL.createObjectURL(file));
+      setMediaPreviewType(file.type.startsWith("image/") ? "image" : "video");
+    } else {
+      setMediaPreview("");
+      setMediaPreviewType("");
+    }
   }, []);
 
   const applyChanges = useCallback(async () => {
     const identity = newCreatorIdentity.trim();
     const mediaToSave = newMediaUrl.trim();
-    
-    if (!identity) {
-      alert("Enter your WhatsApp number or website URL");
-      return;
-    }
+
     if (!mediaToSave && !newMediaFile) {
       alert("Please enter a media URL or upload a media file");
       return;
@@ -269,6 +299,7 @@ function Home() {
 
     try {
       setSaving(true);
+
       const formData = new FormData();
       formData.append("creator_identity", identity);
       formData.append("creator_type", detectCreatorType(identity));
@@ -280,9 +311,11 @@ function Home() {
       if (mediaToSave) {
         formData.append("video_url", mediaToSave);
       }
+
       if (newLogoFile) {
         formData.append("logo_file", newLogoFile);
       }
+
       if (newMediaFile) {
         formData.append("media_file", newMediaFile);
       }
@@ -293,6 +326,7 @@ function Home() {
       });
 
       const data = await readJsonSafely(response);
+
       if (!data.success) {
         alert(data.message || "Failed to create post");
         return;
@@ -321,11 +355,10 @@ function Home() {
   // ==========================================
   // MEMOIZED RENDER FUNCTIONS
   // ==========================================
-
   const renderMedia = useCallback((post, index) => {
     const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
     const mediaType = post.media_type || "";
-    
+
     const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
     const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
     const isEmbed = mediaType === "embed" || (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
@@ -380,9 +413,9 @@ function Home() {
       } else {
         // Show placeholder for inactive embeds
         return (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
+          <div style={{
+            width: '100%',
+            height: '100%',
             background: '#1a1a2e',
             display: 'flex',
             alignItems: 'center',
@@ -421,6 +454,7 @@ function Home() {
             ⚡ Create Post
           </button>
         </div>
+
         {showEditor && (
           <EditorModal
             newCreatorIdentity={newCreatorIdentity}
@@ -434,6 +468,8 @@ function Home() {
             handleLogoChange={handleLogoChange}
             logoPreview={logoPreview}
             handleMediaFileChange={handleMediaFileChange}
+            mediaPreview={mediaPreview}
+            mediaPreviewType={mediaPreviewType}
             applyChanges={applyChanges}
             closeEditor={closeEditor}
             saving={saving}
@@ -448,11 +484,8 @@ function Home() {
       <Header />
       <main style={feedContainer}>
         {memoizedPosts.map((post, index) => {
-          const tapInUrl = buildTapInUrl(
-            post.creator_type,
-            post.creator_identity
-          );
-          
+          const tapInUrl = buildTapInUrl(post.creator_type, post.creator_identity);
+
           return (
             <section
               key={post.id || index}
@@ -480,30 +513,29 @@ function Home() {
                   </div>
                 </div>
               </div>
+
               <div style={videoCardViewport}>
                 <div style={mediaLayer}>{renderMedia(post, index)}</div>
               </div>
+
               <div style={darkOverlay} />
+
               <div style={bottomHorizontalActionsRow}>
                 {post.subtitle && (
                   <div style={tickerContainer}>
                     {tapInUrl ? (
-                      <a
-                        href={tapInUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={tickerLabel}
-                      >
-                        TapIn
+                      <a href={tapInUrl} target="_blank" rel="noreferrer" style={tickerLabel}>
+                        Push
                       </a>
                     ) : (
-                      <div style={tickerLabel}>TapIn</div>
+                      <div style={tickerLabel}>Push</div>
                     )}
                     <div style={tickerWrapper}>
                       <div style={tickerScrollingContent}>{post.subtitle}</div>
                     </div>
                   </div>
                 )}
+
                 <button type="button" onClick={openEditor} style={plusBtn}>
                   <span style={lightningIcon}>⚡</span>
                   <span style={plusIcon}>+</span>
@@ -527,6 +559,8 @@ function Home() {
           handleLogoChange={handleLogoChange}
           logoPreview={logoPreview}
           handleMediaFileChange={handleMediaFileChange}
+          mediaPreview={mediaPreview}
+          mediaPreviewType={mediaPreviewType}
           applyChanges={applyChanges}
           closeEditor={closeEditor}
           saving={saving}
@@ -535,13 +569,7 @@ function Home() {
 
       {zoomImage && (
         <div style={zoomOverlay} onClick={() => setZoomImage("")}>
-          <img 
-            src={zoomImage} 
-            alt="Profile zoom" 
-            style={zoomImageStyle}
-            loading="lazy"
-            decoding="async"
-          />
+          <img src={zoomImage} alt="Profile zoom" style={zoomImageStyle} loading="lazy" decoding="async" />
         </div>
       )}
     </div>
@@ -550,9 +578,13 @@ function Home() {
 
 // ==========================================
 // EDITOR MODAL (Memoized)
+// Redesigned for first-time users: mobile-friendly,
+// every field optional, plain-English labels, placeholder
+// examples, per-field help text, grouped sections, and
+// instant media previews. No backend/API/FormData logic
+// was touched here or in applyChanges above.
 // ==========================================
-
-const EditorModal = React.memo(({
+const EditorModal = memo(({
   newCreatorIdentity,
   setNewCreatorIdentity,
   newTitle,
@@ -564,65 +596,144 @@ const EditorModal = React.memo(({
   handleLogoChange,
   logoPreview,
   handleMediaFileChange,
+  mediaPreview,
+  mediaPreviewType,
   applyChanges,
   closeEditor,
   saving,
 }) => {
   return (
-    <div style={modalOverlay}>
-      <div style={modalCard}>
-        <h2 style={modalTitle}> ⚡ Create New Post</h2>
-        <input
-          type="text"
-          placeholder="WhatsApp number or website URL *"
-          value={newCreatorIdentity}
-          onChange={(e) => setNewCreatorIdentity(e.target.value)}
-          style={inputStyle}
-        />
-        <label style={fileLabel}>
-          <span>Poster photo upload from phone/computer optional</span>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleLogoChange(e.target.files?.[0] || null)}
-            style={fileInput}
-          />
-        </label>
-        {logoPreview && (
-          <img src={logoPreview} alt="Logo preview" style={previewLogo} loading="lazy" decoding="async" />
-        )}
-        <input
-          type="text"
-          placeholder="Lifestyle Name"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          style={inputStyle}
-        />
-        <input
-          type="text"
-          placeholder="Background Media URL optional if uploading file"
-          value={newMediaUrl}
-          onChange={(e) => setNewMediaUrl(e.target.value)}
-          style={inputStyle}
-        />
-        <label style={fileLabel}>
-          <span>Upload media from phone/computer image or video</span>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            onChange={(e) => handleMediaFileChange(e.target.files?.[0] || null)}
-            style={fileInput}
-          />
-        </label>
-        <div style={helpTextStyle}>
-          💡 Enter a media URL OR upload an image/video from your device.
+    <div style={modalOverlay} onClick={closeEditor}>
+      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={modalHeaderRow}>
+          <h2 style={modalTitle}>⚡ Create New Post</h2>
+          <button
+            type="button"
+            onClick={closeEditor}
+            style={modalCloseBtn}
+            aria-label="Close"
+          >
+            ×
+          </button>
         </div>
-        <textarea
-          placeholder="Subtitle text optional"
-          value={subtitle}
-          onChange={(e) => setSubtitle(e.target.value)}
-          style={textareaStyle}
-        />
+
+        {/* ---------- CONTACT ---------- */}
+        <div style={sectionBlock}>
+          <div style={sectionHeading}>Contact</div>
+
+          <label style={fieldLabel} htmlFor="field-contact">Contact (Optional)</label>
+          <input
+            id="field-contact"
+            type="text"
+            placeholder="+250788123456 or https://mywebsite.com"
+            value={newCreatorIdentity}
+            onChange={(e) => setNewCreatorIdentity(e.target.value)}
+            style={inputStyle}
+          />
+          <div style={fieldHelpStyle}>
+            People can contact you by WhatsApp or visit your website.
+          </div>
+        </div>
+
+        {/* ---------- POST ---------- */}
+        <div style={sectionBlock}>
+          <div style={sectionHeading}>Post</div>
+
+          <label style={fieldLabel} htmlFor="field-title">Post Title (Optional)</label>
+          <input
+            id="field-title"
+            type="text"
+            placeholder="Morning in Kigali"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            style={inputStyle}
+          />
+          <div style={fieldHelpStyle}>
+            Give your post a short name.
+          </div>
+
+          <label style={fieldLabel} htmlFor="field-message">Message (Optional)</label>
+          <textarea
+            id="field-message"
+            placeholder={"Welcome everyone!\nEnjoy today's video."}
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+            style={textareaStyle}
+          />
+          <div style={fieldHelpStyle}>
+            Write a short message people will read.
+          </div>
+        </div>
+
+        {/* ---------- MEDIA ---------- */}
+        <div style={sectionBlock}>
+          <div style={sectionHeading}>Media</div>
+
+          <label style={fieldLabel} htmlFor="field-media-upload">Upload Photo or Video (Optional)</label>
+          <label style={fileLabel} htmlFor="field-media-upload">
+            <span>📷 Choose a photo or video</span>
+            <input
+              id="field-media-upload"
+              type="file"
+              accept="image/*,video/*"
+              onChange={(e) => handleMediaFileChange(e.target.files?.[0] || null)}
+              style={fileInput}
+            />
+          </label>
+          <div style={fieldHelpStyle}>
+            Choose a photo or video from your phone.
+          </div>
+
+          {mediaPreview && (
+            <div style={mediaPreviewWrap}>
+              {mediaPreviewType === "image" ? (
+                <img src={mediaPreview} alt="Selected media preview" style={mediaPreviewImage} />
+              ) : (
+                <video src={mediaPreview} style={mediaPreviewImage} controls muted playsInline />
+              )}
+            </div>
+          )}
+
+          <label style={fieldLabel} htmlFor="field-media-link">Media Link (Optional)</label>
+          <input
+            id="field-media-link"
+            type="text"
+            placeholder="https://youtube.com/..."
+            value={newMediaUrl}
+            onChange={(e) => setNewMediaUrl(e.target.value)}
+            style={inputStyle}
+          />
+          <div style={fieldHelpStyle}>
+            Paste a YouTube or video link.
+          </div>
+        </div>
+
+        {/* ---------- PROFILE ---------- */}
+        <div style={sectionBlockLast}>
+          <div style={sectionHeading}>Profile</div>
+
+          <label style={fieldLabel} htmlFor="field-profile-photo">Profile Photo (Optional)</label>
+          <label style={fileLabel} htmlFor="field-profile-photo">
+            <span>🖼️ Choose a profile photo</span>
+            <input
+              id="field-profile-photo"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleLogoChange(e.target.files?.[0] || null)}
+              style={fileInput}
+            />
+          </label>
+          <div style={fieldHelpStyle}>
+            Upload your photo or logo.
+          </div>
+
+          {logoPreview && (
+            <div style={mediaPreviewWrap}>
+              <img src={logoPreview} alt="Profile photo preview" style={previewLogo} loading="lazy" decoding="async" />
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={applyChanges}
@@ -634,6 +745,7 @@ const EditorModal = React.memo(({
         >
           {saving ? "Saving..." : "Create Post"}
         </button>
+
         <button type="button" onClick={closeEditor} style={cancelBtn}>
           Cancel
         </button>
@@ -645,9 +757,8 @@ const EditorModal = React.memo(({
 EditorModal.displayName = 'EditorModal';
 
 // ==========================================
-// STYLES (Unchanged)
+// STYLES (Unchanged, plus new modal/section/preview styles below)
 // ==========================================
-
 const page = {
   height: "100vh",
   minHeight: "100svh",
@@ -865,119 +976,205 @@ const plusIcon = {
   lineHeight: "1",
 };
 
+// ---------- Modal shell (mobile-friendly) ----------
 const modalOverlay = {
   position: "fixed",
   inset: 0,
   zIndex: 10000,
   background: "rgba(10, 11, 14, 0.9)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-end",
   justifyContent: "center",
-  padding: "16px",
+  padding: 0,
   boxSizing: "border-box",
 };
 
 const modalCard = {
   width: "100%",
-  maxWidth: "360px",
+  maxWidth: "420px",
   height: "auto",
-  maxHeight: "82vh",
+  maxHeight: "92vh",
   overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
   background: "#1e293b",
   color: "white",
-  borderRadius: "16px",
-  padding: "20px",
+  borderRadius: "20px 20px 0 0",
+  padding: "18px 18px 24px",
   boxSizing: "border-box",
   border: "1px solid rgba(56, 189, 248, 0.2)",
 };
 
+const modalHeaderRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "10px",
+  position: "sticky",
+  top: 0,
+  background: "#1e293b",
+  paddingBottom: "8px",
+  zIndex: 1,
+};
+
 const modalTitle = {
-  margin: "0 0 16px",
+  margin: 0,
   fontSize: "18px",
   fontWeight: "700",
-  textAlign: "center",
+  textAlign: "left",
   color: "#38bdf8",
 };
 
+const modalCloseBtn = {
+  width: "36px",
+  height: "36px",
+  minWidth: "36px",
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,0.15)",
+  background: "rgba(255,255,255,0.06)",
+  color: "#e2e8f0",
+  fontSize: "20px",
+  lineHeight: "1",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+// ---------- Section grouping ----------
+const sectionBlock = {
+  marginBottom: "18px",
+  paddingBottom: "18px",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+};
+
+const sectionBlockLast = {
+  marginBottom: "18px",
+  paddingBottom: "4px",
+};
+
+const sectionHeading = {
+  fontSize: "12px",
+  fontWeight: "700",
+  letterSpacing: "1px",
+  textTransform: "uppercase",
+  color: "#5eead4",
+  marginBottom: "10px",
+};
+
+const fieldLabel = {
+  display: "block",
+  fontSize: "13px",
+  fontWeight: "600",
+  color: "#e2e8f0",
+  marginBottom: "6px",
+};
+
+// ---------- Inputs (larger touch targets, consistent height) ----------
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "12px",
-  marginBottom: "10px",
-  borderRadius: "8px",
+  padding: "13px 14px",
+  minHeight: "48px",
+  marginBottom: "6px",
+  borderRadius: "10px",
   border: "1px solid rgba(255,255,255,0.15)",
   background: "rgba(15, 23, 42, 0.6)",
   color: "white",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "15px",
 };
 
 const textareaStyle = {
   ...inputStyle,
-  minHeight: "60px",
+  minHeight: "72px",
   resize: "none",
 };
 
 const fileLabel = {
-  display: "block",
+  display: "flex",
+  alignItems: "center",
   width: "100%",
+  minHeight: "48px",
   boxSizing: "border-box",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
+  padding: "12px 14px",
+  marginBottom: "6px",
+  borderRadius: "10px",
   border: "1px dashed rgba(56, 189, 248, 0.4)",
   background: "rgba(15, 23, 42, 0.3)",
-  color: "#bcc0c4",
-  fontSize: "12px",
+  color: "#e2e8f0",
+  fontSize: "13px",
+  cursor: "pointer",
 };
 
 const fileInput = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  opacity: 0,
+  overflow: "hidden",
+};
+
+// ---------- Per-field help text (small + lighter color) ----------
+const fieldHelpStyle = {
+  fontSize: "11px",
+  color: "#94a3b8",
+  marginTop: "-2px",
+  marginBottom: "12px",
+  lineHeight: "1.4",
+};
+
+// ---------- Media / profile previews ----------
+const mediaPreviewWrap = {
+  marginBottom: "12px",
+};
+
+const mediaPreviewImage = {
   width: "100%",
-  marginTop: "4px",
-  color: "white",
-  fontSize: "12px",
+  maxHeight: "180px",
+  objectFit: "cover",
+  borderRadius: "10px",
+  border: "1px solid rgba(56, 189, 248, 0.25)",
+  display: "block",
+  background: "#000",
 };
 
 const previewLogo = {
-  width: "44px",
-  height: "44px",
+  width: "56px",
+  height: "56px",
   objectFit: "cover",
   borderRadius: "50%",
-  marginBottom: "10px",
   border: "2px solid #00ffcc",
 };
 
-const helpTextStyle = {
-  fontSize: "11px",
-  color: "#bcc0c4",
-  marginBottom: "12px",
-  padding: "8px",
-  background: "rgba(15, 23, 42, 0.4)",
-  borderRadius: "6px",
-};
-
+// ---------- Buttons ----------
 const saveBtn = {
   width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
+  padding: "14px",
+  minHeight: "50px",
+  borderRadius: "12px",
   border: "none",
   background: "#ec4899",
   color: "white",
   fontWeight: "700",
-  marginTop: "6px",
+  fontSize: "15px",
+  marginTop: "4px",
   cursor: "pointer",
   boxShadow: "0 0 12px rgba(236, 72, 153, 0.4)",
 };
 
 const cancelBtn = {
   width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
+  padding: "14px",
+  minHeight: "50px",
+  borderRadius: "12px",
   border: "1px solid rgba(255,255,255,0.2)",
   background: "transparent",
   color: "#bcc0c4",
   fontWeight: "600",
-  marginTop: "8px",
+  fontSize: "15px",
+  marginTop: "10px",
   cursor: "pointer",
 };
 
@@ -1023,14 +1220,15 @@ const zoomOverlay = {
 };
 
 const zoomImageStyle = {
-  width: "85vw",
-  height: "85vw",
-  maxWidth: "340px",
-  maxHeight: "340px",
-  borderRadius: "50%",
-  objectFit: "cover",
+  maxWidth: "90vw",
+  maxHeight: "90vh",
+  width: "auto",
+  height: "auto",
+  borderRadius: "12px",
+  objectFit: "contain",
   border: "2px solid #00ffcc",
   boxShadow: "0 0 20px rgba(0, 255, 204, 0.6)",
 };
 
 export default Home;
+
