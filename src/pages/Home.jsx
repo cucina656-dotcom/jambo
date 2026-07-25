@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
-
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from "react";
 import Header from "../components/Header";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
@@ -13,7 +19,8 @@ const DEFAULT_LOGO =
   "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
 
 function isDirectVideoUrl(url = "") {
-  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
+
   return (
     clean.endsWith(".mp4") ||
     clean.endsWith(".webm") ||
@@ -26,7 +33,8 @@ function isDirectVideoUrl(url = "") {
 }
 
 function isImageUrl(url = "") {
-  const clean = url.toLowerCase().split("?")[0].split("#")[0];
+  const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
+
   return (
     clean.endsWith(".jpg") ||
     clean.endsWith(".jpeg") ||
@@ -44,21 +52,29 @@ function getEmbedUrl(url = "") {
   const youtubeMatch = url.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
+
   if (youtubeMatch) {
-    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&modestbranding=1`;
   }
 
-  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+  const shortsMatch = url.match(
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
+  );
+
   if (shortsMatch) {
-    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&showinfo=0&modestbranding=1`;
+    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&modestbranding=1`;
   }
 
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+
   if (vimeoMatch) {
     return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
   }
 
-  const dailymotionMatch = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
+  const dailymotionMatch = url.match(
+    /dailymotion\.com\/video\/([a-zA-Z0-9]+)/
+  );
+
   if (dailymotionMatch) {
     return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=1&mute=0&loop=1`;
   }
@@ -70,6 +86,7 @@ function getEmbedUrl(url = "") {
 
 function detectCreatorType(value = "") {
   const clean = value.trim().toLowerCase();
+
   if (!clean) return "";
 
   if (
@@ -83,8 +100,9 @@ function detectCreatorType(value = "") {
   return "whatsapp";
 }
 
-function buildTapInUrl(type = "", value = "") {
-  const clean = value.trim();
+function buildContactUrl(type = "", value = "") {
+  const clean = String(value || "").trim();
+
   if (!clean) return "";
 
   if (type === "website") {
@@ -97,35 +115,95 @@ function buildTapInUrl(type = "", value = "") {
   return digits ? `https://wa.me/${digits}` : "";
 }
 
+function formatCount(value = 0) {
+  const number = Number(value) || 0;
+
+  if (number >= 1_000_000) {
+    return `${(number / 1_000_000).toFixed(1).replace(".0", "")}M`;
+  }
+
+  if (number >= 1_000) {
+    return `${(number / 1_000).toFixed(1).replace(".0", "")}K`;
+  }
+
+  return String(number);
+}
+
+function getCountryFlag(phone = "") {
+  const digits = String(phone).replace(/[^\d+]/g, "");
+
+  const countryPrefixes = [
+    ["+250", "🇷🇼"],
+    ["250", "🇷🇼"],
+    ["+257", "🇧🇮"],
+    ["257", "🇧🇮"],
+    ["+256", "🇺🇬"],
+    ["256", "🇺🇬"],
+    ["+254", "🇰🇪"],
+    ["254", "🇰🇪"],
+    ["+255", "🇹🇿"],
+    ["255", "🇹🇿"],
+    ["+243", "🇨🇩"],
+    ["243", "🇨🇩"],
+    ["+251", "🇪🇹"],
+    ["251", "🇪🇹"],
+    ["+27", "🇿🇦"],
+    ["27", "🇿🇦"],
+    ["+44", "🇬🇧"],
+    ["44", "🇬🇧"],
+    ["+33", "🇫🇷"],
+    ["33", "🇫🇷"],
+    ["+32", "🇧🇪"],
+    ["32", "🇧🇪"],
+    ["+91", "🇮🇳"],
+    ["91", "🇮🇳"],
+    ["+86", "🇨🇳"],
+    ["86", "🇨🇳"],
+    ["+1", "🌎"],
+    ["1", "🌎"],
+  ];
+
+  const match = countryPrefixes.find(([prefix]) => digits.startsWith(prefix));
+  return match ? match[1] : "🌍";
+}
+
 function Home() {
   const videoRefs = useRef({});
   const postRefs = useRef({});
+  const observerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
   const [activePostIndex, setActivePostIndex] = useState(0);
+
+  const [showEditor, setShowEditor] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-
   const [newLogoFile, setNewLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
-
   const [newMediaFile, setNewMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState("");
   const [mediaPreviewType, setMediaPreviewType] = useState("");
-
   const [saving, setSaving] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
 
-  const observerRef = useRef(null);
-  const isMountedRef = useRef(true);
+  /*
+   * Temporary comment state.
+   * When Worker.js is changed, replace this with API data.
+   */
+  const [commentsByPost, setCommentsByPost] = useState({});
+  const [commentPhone, setCommentPhone] = useState("");
+  const [commentText, setCommentText] = useState("");
 
   const readJsonSafely = useCallback(async (response) => {
     const text = await response.text();
+
     try {
       return JSON.parse(text);
     } catch {
@@ -136,10 +214,16 @@ function Home() {
   const fetchHomeData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/api/home`);
+
+      const response = await fetch(`${API_URL}/api/home`, {
+        cache: "no-store",
+      });
+
       const data = await readJsonSafely(response);
 
-      if (!data.success) return;
+      if (!data.success) {
+        throw new Error(data.message || "Failed to load posts");
+      }
 
       if (Array.isArray(data.posts) && data.posts.length > 0) {
         if (isMountedRef.current) {
@@ -159,6 +243,10 @@ function Home() {
             logo_url: data.logo_url || DEFAULT_LOGO,
             media_url: data.video_url || DEFAULT_VIDEO,
             media_type: data.media_type || "",
+            watch_seconds: 0,
+            comment_count: 0,
+            share_count: 0,
+            unread_messages: 0,
           },
         ]);
       }
@@ -174,16 +262,14 @@ function Home() {
   useEffect(() => {
     isMountedRef.current = true;
     fetchHomeData();
+
     return () => {
       isMountedRef.current = false;
     };
   }, [fetchHomeData]);
 
-  // ==========================================
-  // OPTIMIZED INTERSECTION OBSERVER
-  // ==========================================
   useEffect(() => {
-    if (!posts.length) return;
+    if (!posts.length) return undefined;
 
     if (observerRef.current) {
       observerRef.current.disconnect();
@@ -198,7 +284,6 @@ function Home() {
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
             setActivePostIndex(index);
 
-            // Pause other videos
             Object.entries(videoRefs.current).forEach(([key, item]) => {
               if (Number(key) !== index && item && !item.paused) {
                 item.pause();
@@ -208,16 +293,14 @@ function Home() {
             if (video && video.paused) {
               video.play().catch(() => {});
             }
-          } else {
-            if (video && !video.paused) {
-              video.pause();
-            }
+          } else if (video && !video.paused) {
+            video.pause();
           }
         });
       },
       {
         threshold: [0.6],
-        rootMargin: '0px 0px -10% 0px'
+        rootMargin: "0px 0px -10% 0px",
       }
     );
 
@@ -228,21 +311,22 @@ function Home() {
     });
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
+      observer.disconnect();
     };
   }, [posts]);
 
-  // ==========================================
-  // OPTIMIZED FUNCTIONS
-  // ==========================================
-  const openEditor = useCallback(() => {
+  const pauseAllVideos = useCallback(() => {
     Object.values(videoRefs.current).forEach((video) => {
-      if (video && !video.paused) video.pause();
+      if (video && !video.paused) {
+        video.pause();
+      }
     });
-    setShowEditor(true);
   }, []);
+
+  const openEditor = useCallback(() => {
+    pauseAllVideos();
+    setShowEditor(true);
+  }, [pauseAllVideos]);
 
   const closeEditor = useCallback(() => {
     setShowEditor(false);
@@ -259,6 +343,7 @@ function Home() {
 
   const handleLogoChange = useCallback((file) => {
     setNewLogoFile(file || null);
+
     if (file) {
       setLogoPreview(URL.createObjectURL(file));
     } else {
@@ -268,6 +353,7 @@ function Home() {
 
   const handleMediaFileChange = useCallback((file) => {
     setNewMediaFile(file || null);
+
     if (file) {
       setMediaPreview(URL.createObjectURL(file));
       setMediaPreviewType(file.type.startsWith("image/") ? "image" : "video");
@@ -281,14 +367,22 @@ function Home() {
     const identity = newCreatorIdentity.trim();
     const mediaToSave = newMediaUrl.trim();
 
+    if (!identity) {
+      alert("Please enter your WhatsApp number or website.");
+      return;
+    }
+
     if (!mediaToSave && !newMediaFile) {
-      alert("Please enter a media URL or upload a media file");
+      alert("Please enter a media link or upload a photo or video.");
       return;
     }
 
     let detectedMediaType = "";
+
     if (newMediaFile) {
-      detectedMediaType = newMediaFile.type.startsWith("image/") ? "image" : "video";
+      detectedMediaType = newMediaFile.type.startsWith("image/")
+        ? "image"
+        : "video";
     } else if (isImageUrl(mediaToSave)) {
       detectedMediaType = "image";
     } else if (isDirectVideoUrl(mediaToSave)) {
@@ -301,6 +395,7 @@ function Home() {
       setSaving(true);
 
       const formData = new FormData();
+
       formData.append("creator_identity", identity);
       formData.append("creator_type", detectCreatorType(identity));
       formData.append("title", newTitle.trim() || DEFAULT_TITLE);
@@ -328,11 +423,11 @@ function Home() {
       const data = await readJsonSafely(response);
 
       if (!data.success) {
-        alert(data.message || "Failed to create post");
+        alert(data.message || "Failed to create post.");
         return;
       }
 
-      if (data.posts && Array.isArray(data.posts)) {
+      if (Array.isArray(data.posts)) {
         if (isMountedRef.current) {
           setPosts(data.posts);
         }
@@ -350,108 +445,234 @@ function Home() {
         setSaving(false);
       }
     }
-  }, [newCreatorIdentity, newMediaUrl, newMediaFile, newTitle, subtitle, newLogoFile, readJsonSafely, closeEditor, fetchHomeData]);
+  }, [
+    closeEditor,
+    fetchHomeData,
+    newCreatorIdentity,
+    newLogoFile,
+    newMediaFile,
+    newMediaUrl,
+    newTitle,
+    readJsonSafely,
+    subtitle,
+  ]);
 
-  // ==========================================
-  // MEMOIZED RENDER FUNCTIONS
-  // ==========================================
-  const renderMedia = useCallback((post, index) => {
-    const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
-    const mediaType = post.media_type || "";
+  const openCreatorInbox = useCallback(async (post) => {
+    const postId = String(post.id ?? "");
+    let destination = buildContactUrl(
+      post.creator_type,
+      post.creator_identity
+    );
 
-    const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
-    const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
-    const isEmbed = mediaType === "embed" || (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+    /*
+     * Your current Worker already has /api/home/ngwino-click.
+     * It records the click and returns the creator destination.
+     */
+    if (postId) {
+      try {
+        const response = await fetch(`${API_URL}/api/home/ngwino-click`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ post_id: postId }),
+        });
 
-    if (isImage) {
-      return (
-        <img
-          src={mediaUrl}
-          alt={post.title || DEFAULT_TITLE}
-          style={mediaStyle}
-          loading="lazy"
-          decoding="async"
-          onError={(e) => {
-            e.currentTarget.src = DEFAULT_LOGO;
-          }}
-        />
-      );
-    }
+        const data = await readJsonSafely(response);
 
-    if (isVideo) {
-      const isActive = activePostIndex === index;
-      return (
-        <video
-          ref={(ref) => {
-            if (ref) videoRefs.current[index] = ref;
-          }}
-          src={mediaUrl}
-          loop
-          playsInline
-          muted={false}
-          controls
-          preload={isActive ? "metadata" : "none"}
-          style={mediaStyle}
-        />
-      );
-    }
-
-    if (isEmbed) {
-      // Only load iframe for active post to save resources
-      if (activePostIndex === index) {
-        return (
-          <iframe
-            src={getEmbedUrl(mediaUrl)}
-            title={post.title || DEFAULT_TITLE}
-            style={mediaStyle}
-            frameBorder="0"
-            allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-            allowFullScreen
-            loading="lazy"
-          />
-        );
-      } else {
-        // Show placeholder for inactive embeds
-        return (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            background: '#1a1a2e',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#888',
-            fontSize: '14px'
-          }}>
-            ▶️ {post.title || DEFAULT_TITLE}
-          </div>
-        );
+        if (data.success && data.destination) {
+          destination = data.destination;
+        }
+      } catch (error) {
+        console.warn("Could not record inbox click:", error);
       }
     }
 
-    return null;
-  }, [activePostIndex]);
+    if (!destination) {
+      alert("This creator did not add contact information.");
+      return;
+    }
 
-  // Memoize posts to prevent unnecessary re-renders
+    window.open(destination, "_blank", "noopener,noreferrer");
+  }, [readJsonSafely]);
+
+  const openComments = useCallback((post) => {
+    pauseAllVideos();
+    setSelectedPost(post);
+    setCommentPhone("");
+    setCommentText("");
+    setShowComments(true);
+  }, [pauseAllVideos]);
+
+  const closeComments = useCallback(() => {
+    setShowComments(false);
+    setSelectedPost(null);
+    setCommentPhone("");
+    setCommentText("");
+  }, []);
+
+  const submitTemporaryComment = useCallback(() => {
+    const phone = commentPhone.trim();
+    const text = commentText.trim();
+
+    if (!phone) {
+      alert("Please enter your phone number.");
+      return;
+    }
+
+    if (!text) {
+      alert("Please write your comment.");
+      return;
+    }
+
+    if (!selectedPost) return;
+
+    const postId = String(selectedPost.id ?? "0");
+    const newComment = {
+      id: `${Date.now()}-${Math.random()}`,
+      phone,
+      flag: getCountryFlag(phone),
+      text,
+      created_at: new Date().toISOString(),
+    };
+
+    setCommentsByPost((current) => ({
+      ...current,
+      [postId]: [newComment, ...(current[postId] || [])],
+    }));
+
+    setCommentText("");
+    alert(
+      "Comment added on this phone only. Worker.js will later save it for everyone."
+    );
+  }, [commentPhone, commentText, selectedPost]);
+
+  const sharePost = useCallback(async (post) => {
+    const shareData = {
+      title: post.title || "Post",
+      text: post.subtitle || "",
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Post link copied!");
+      } else {
+        alert(window.location.href);
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.error("Share failed:", error);
+      }
+    }
+  }, []);
+
+  const renderMedia = useCallback(
+    (post, index) => {
+      const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
+      const mediaType = post.media_type || "";
+
+      const isImage =
+        mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
+
+      const isVideo =
+        mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
+
+      const isEmbed =
+        mediaType === "embed" ||
+        (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+
+      if (isImage) {
+        return (
+          <img
+            src={mediaUrl}
+            alt={post.title || DEFAULT_TITLE}
+            className="home-media"
+            loading="lazy"
+            decoding="async"
+            onError={(event) => {
+              event.currentTarget.src = DEFAULT_LOGO;
+            }}
+          />
+        );
+      }
+
+      if (isVideo) {
+        const isActive = activePostIndex === index;
+
+        return (
+          <video
+            ref={(ref) => {
+              if (ref) {
+                videoRefs.current[index] = ref;
+              } else {
+                delete videoRefs.current[index];
+              }
+            }}
+            src={mediaUrl}
+            loop
+            playsInline
+            muted={false}
+            controls
+            preload={isActive ? "metadata" : "none"}
+            className="home-media"
+          />
+        );
+      }
+
+      if (isEmbed) {
+        if (activePostIndex === index) {
+          return (
+            <iframe
+              src={getEmbedUrl(mediaUrl)}
+              title={post.title || DEFAULT_TITLE}
+              className="home-media"
+              frameBorder="0"
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+              allowFullScreen
+              loading="lazy"
+            />
+          );
+        }
+
+        return (
+          <div className="embed-placeholder">
+            <span className="embed-placeholder-icon">▶</span>
+            <span>{post.title || DEFAULT_TITLE}</span>
+          </div>
+        );
+      }
+
+      return null;
+    },
+    [activePostIndex]
+  );
+
   const memoizedPosts = useMemo(() => posts, [posts]);
 
   if (loading) {
     return (
-      <div style={page}>
+      <div className="home-page">
         <Header />
-        <div style={loadingStyle}>Loading...</div>
+        <div className="loading-state">Loading...</div>
+        <HomeStyles />
       </div>
     );
   }
 
   if (!memoizedPosts.length) {
     return (
-      <div style={page}>
+      <div className="home-page">
         <Header />
-        <div style={emptyStateStyle}>
+
+        <div className="empty-state">
           <p>No posts yet. Create your first post!</p>
-          <button type="button" onClick={openEditor} style={emptyStateButton}>
-            ⚡ Create Post
+
+          <button type="button" onClick={openEditor} className="empty-button">
+            ＋ Create Post
           </button>
         </div>
 
@@ -475,72 +696,163 @@ function Home() {
             saving={saving}
           />
         )}
+
+        <HomeStyles />
       </div>
     );
   }
 
   return (
-    <div style={page}>
+    <div className="home-page">
       <Header />
-      <main style={feedContainer}>
+
+      <main className="home-feed">
         {memoizedPosts.map((post, index) => {
-          const tapInUrl = buildTapInUrl(post.creator_type, post.creator_identity);
+          const postId = String(post.id ?? index);
+          const localComments = commentsByPost[postId] || [];
+
+          /*
+           * Until Worker.js is changed:
+           * - watch_seconds is displayed as the available viewer number.
+           * - comment_count, share_count and unread_messages default to zero.
+           */
+          const viewerCount = post.views ?? post.view_count ?? post.watch_seconds ?? 0;
+          const commentCount =
+            Number(post.comment_count || 0) + localComments.length;
+          const shareCount = post.share_count || 0;
+          const unreadMessages = post.unread_messages || 0;
 
           return (
             <section
               key={post.id || index}
               ref={(ref) => {
-                if (ref) postRefs.current[index] = ref;
+                if (ref) {
+                  postRefs.current[index] = ref;
+                } else {
+                  delete postRefs.current[index];
+                }
               }}
               data-index={index}
-              style={feedPost}
+              className="home-post crt-screen"
             >
-              <div style={profileCard}>
-                <img
-                  src={post.logo_url || DEFAULT_LOGO}
-                  alt={post.title || DEFAULT_TITLE}
-                  style={journalistPhotoStyle}
-                  onClick={() => setZoomImage(post.logo_url || DEFAULT_LOGO)}
-                  loading="lazy"
-                  decoding="async"
-                  onError={(e) => {
-                    e.currentTarget.src = DEFAULT_LOGO;
-                  }}
-                />
-                <div style={profileTextBox}>
-                  <div style={nameRow}>
-                    <h1 style={profileTitle}>{post.title || DEFAULT_TITLE}</h1>
+              <header className="post-header">
+                <button
+                  type="button"
+                  className="profile-picture-button"
+                  onClick={() =>
+                    setZoomImage(post.logo_url || DEFAULT_LOGO)
+                  }
+                  aria-label="Open profile picture"
+                >
+                  <img
+                    src={post.logo_url || DEFAULT_LOGO}
+                    alt=""
+                    className="profile-picture"
+                    loading="lazy"
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.src = DEFAULT_LOGO;
+                    }}
+                  />
+                </button>
+
+                <div className="profile-details">
+                  <div className="creator-name">
+                    {post.creator_name || post.brand_name || "Creator"}
                   </div>
+
+                  <div className="post-time">
+                    {post.created_at
+                      ? new Date(post.created_at).toLocaleString([], {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : "New post"}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="inbox-button"
+                  onClick={() => openCreatorInbox(post)}
+                  aria-label="Contact creator"
+                  title="Contact creator"
+                >
+                  <span className="inbox-envelope" aria-hidden="true">
+                    ✉
+                  </span>
+
+                  {Number(unreadMessages) > 0 && (
+                    <span className="unread-badge">
+                      {Number(unreadMessages) > 99
+                        ? "99+"
+                        : unreadMessages}
+                    </span>
+                  )}
+                </button>
+              </header>
+
+              <div className="post-copy">
+                {post.title && (
+                  <h1 className="post-title">{post.title}</h1>
+                )}
+
+                {post.subtitle && (
+                  <p className="post-message">{post.subtitle}</p>
+                )}
+              </div>
+
+              <div className="media-viewport">
+                <div className="media-layer">
+                  {renderMedia(post, index)}
                 </div>
               </div>
 
-              <div style={videoCardViewport}>
-                <div style={mediaLayer}>{renderMedia(post, index)}</div>
-              </div>
+              <div className="social-action-bar">
+                <div className="metric-group" title="Views">
+                  <span className="action-symbol" aria-hidden="true">
+                    ◉
+                  </span>
+                  <span>{formatCount(viewerCount)}</span>
+                </div>
 
-              <div style={darkOverlay} />
+                <button
+                  type="button"
+                  className="action-button"
+                  onClick={() => openComments(post)}
+                  aria-label="Open comments"
+                >
+                  <span className="action-symbol" aria-hidden="true">
+                    ◯
+                  </span>
+                  <span>{formatCount(commentCount)}</span>
+                </button>
 
-              <div style={bottomHorizontalActionsRow}>
-                {post.subtitle && (
-                  <div style={tickerContainer}>
-                    {tapInUrl ? (
-                      <a href={tapInUrl} target="_blank" rel="noreferrer" style={tickerLabel}>
-                        Push
-                      </a>
-                    ) : (
-                      <div style={tickerLabel}>Push</div>
-                    )}
-                    <div style={tickerWrapper}>
-                      <div style={tickerScrollingContent}>{post.subtitle}</div>
-                    </div>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="action-button"
+                  onClick={() => sharePost(post)}
+                  aria-label="Share post"
+                >
+                  <span className="action-symbol share-symbol" aria-hidden="true">
+                    ↗
+                  </span>
+                  <span>{formatCount(shareCount)}</span>
+                </button>
 
-                <button type="button" onClick={openEditor} style={plusBtn}>
-                  <span style={lightningIcon}>⚡</span>
-                  <span style={plusIcon}>+</span>
+                <button
+                  type="button"
+                  className="create-post-cta"
+                  onClick={openEditor}
+                >
+                  <span className="create-post-plus">＋</span>
+                  <span>Create</span>
                 </button>
               </div>
+
+              <div className="screen-scanlines" aria-hidden="true" />
+              <div className="screen-reflection" aria-hidden="true" />
+              <div className="screen-vignette" aria-hidden="true" />
             </section>
           );
         })}
@@ -567,169 +879,213 @@ function Home() {
         />
       )}
 
+      {showComments && selectedPost && (
+        <CommentsModal
+          post={selectedPost}
+          comments={
+            commentsByPost[String(selectedPost.id ?? "0")] || []
+          }
+          phone={commentPhone}
+          setPhone={setCommentPhone}
+          text={commentText}
+          setText={setCommentText}
+          submitComment={submitTemporaryComment}
+          closeComments={closeComments}
+        />
+      )}
+
       {zoomImage && (
-        <div style={zoomOverlay} onClick={() => setZoomImage("")}>
-          <img src={zoomImage} alt="Profile zoom" style={zoomImageStyle} loading="lazy" decoding="async" />
+        <div
+          className="zoom-overlay"
+          onClick={() => setZoomImage("")}
+          role="presentation"
+        >
+          <img
+            src={zoomImage}
+            alt="Profile"
+            className="zoom-image"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       )}
+
+      <HomeStyles />
     </div>
   );
 }
 
-// ==========================================
-// EDITOR MODAL (Memoized)
-// Redesigned for first-time users: mobile-friendly,
-// every field optional, plain-English labels, placeholder
-// examples, per-field help text, grouped sections, and
-// instant media previews. No backend/API/FormData logic
-// was touched here or in applyChanges above.
-// ==========================================
-const EditorModal = memo(({
-  newCreatorIdentity,
-  setNewCreatorIdentity,
-  newTitle,
-  setNewTitle,
-  newMediaUrl,
-  setNewMediaUrl,
-  subtitle,
-  setSubtitle,
-  handleLogoChange,
-  logoPreview,
-  handleMediaFileChange,
-  mediaPreview,
-  mediaPreviewType,
-  applyChanges,
-  closeEditor,
-  saving,
-}) => {
-  return (
-    <div style={modalOverlay} onClick={closeEditor}>
-      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-        <div style={modalHeaderRow}>
-          <h2 style={modalTitle}>⚡ Create New Post</h2>
+const EditorModal = memo(
+  ({
+    newCreatorIdentity,
+    setNewCreatorIdentity,
+    newTitle,
+    setNewTitle,
+    newMediaUrl,
+    setNewMediaUrl,
+    subtitle,
+    setSubtitle,
+    handleLogoChange,
+    logoPreview,
+    handleMediaFileChange,
+    mediaPreview,
+    mediaPreviewType,
+    applyChanges,
+    closeEditor,
+    saving,
+  }) => (
+    <div className="modal-overlay" onClick={closeEditor}>
+      <div
+        className="modal-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h2>＋ Create New Post</h2>
+
           <button
             type="button"
             onClick={closeEditor}
-            style={modalCloseBtn}
+            className="modal-close"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        {/* ---------- CONTACT ---------- */}
-        <div style={sectionBlock}>
-          <div style={sectionHeading}>Contact</div>
+        <div className="form-section">
+          <div className="section-heading">Contact</div>
 
-          <label style={fieldLabel} htmlFor="field-contact">Contact (Optional)</label>
+          <label htmlFor="field-contact">Contact</label>
           <input
             id="field-contact"
             type="text"
             placeholder="+250788123456 or https://mywebsite.com"
             value={newCreatorIdentity}
-            onChange={(e) => setNewCreatorIdentity(e.target.value)}
-            style={inputStyle}
+            onChange={(event) =>
+              setNewCreatorIdentity(event.target.value)
+            }
           />
-          <div style={fieldHelpStyle}>
-            People can contact you by WhatsApp or visit your website.
-          </div>
+
+          <p className="field-help">
+            This opens when a viewer taps the envelope.
+          </p>
         </div>
 
-        {/* ---------- POST ---------- */}
-        <div style={sectionBlock}>
-          <div style={sectionHeading}>Post</div>
+        <div className="form-section">
+          <div className="section-heading">Post</div>
 
-          <label style={fieldLabel} htmlFor="field-title">Post Title (Optional)</label>
+          <label htmlFor="field-title">Post Title (Optional)</label>
           <input
             id="field-title"
             type="text"
             placeholder="Morning in Kigali"
             value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            style={inputStyle}
+            onChange={(event) => setNewTitle(event.target.value)}
           />
-          <div style={fieldHelpStyle}>
-            Give your post a short name.
-          </div>
 
-          <label style={fieldLabel} htmlFor="field-message">Message (Optional)</label>
+          <p className="field-help">
+            This title will appear in bold.
+          </p>
+
+          <label htmlFor="field-message">Message (Optional)</label>
           <textarea
             id="field-message"
             placeholder={"Welcome everyone!\nEnjoy today's video."}
             value={subtitle}
-            onChange={(e) => setSubtitle(e.target.value)}
-            style={textareaStyle}
+            onChange={(event) => setSubtitle(event.target.value)}
           />
-          <div style={fieldHelpStyle}>
-            Write a short message people will read.
-          </div>
+
+          <p className="field-help">
+            This message will appear below the bold title.
+          </p>
         </div>
 
-        {/* ---------- MEDIA ---------- */}
-        <div style={sectionBlock}>
-          <div style={sectionHeading}>Media</div>
+        <div className="form-section">
+          <div className="section-heading">Media</div>
 
-          <label style={fieldLabel} htmlFor="field-media-upload">Upload Photo or Video (Optional)</label>
-          <label style={fileLabel} htmlFor="field-media-upload">
-            <span>📷 Choose a photo or video</span>
+          <label
+            className="file-picker"
+            htmlFor="field-media-upload"
+          >
+            <span>▣ Choose a photo or video</span>
+
             <input
               id="field-media-upload"
               type="file"
               accept="image/*,video/*"
-              onChange={(e) => handleMediaFileChange(e.target.files?.[0] || null)}
-              style={fileInput}
+              onChange={(event) =>
+                handleMediaFileChange(
+                  event.target.files?.[0] || null
+                )
+              }
             />
           </label>
-          <div style={fieldHelpStyle}>
-            Choose a photo or video from your phone.
-          </div>
 
           {mediaPreview && (
-            <div style={mediaPreviewWrap}>
+            <div className="preview-wrap">
               {mediaPreviewType === "image" ? (
-                <img src={mediaPreview} alt="Selected media preview" style={mediaPreviewImage} />
+                <img
+                  src={mediaPreview}
+                  alt="Selected media"
+                  className="media-preview"
+                />
               ) : (
-                <video src={mediaPreview} style={mediaPreviewImage} controls muted playsInline />
+                <video
+                  src={mediaPreview}
+                  className="media-preview"
+                  controls
+                  muted
+                  playsInline
+                />
               )}
             </div>
           )}
 
-          <label style={fieldLabel} htmlFor="field-media-link">Media Link (Optional)</label>
+          <label htmlFor="field-media-link">
+            Media Link (Optional)
+          </label>
+
           <input
             id="field-media-link"
             type="text"
             placeholder="https://youtube.com/..."
             value={newMediaUrl}
-            onChange={(e) => setNewMediaUrl(e.target.value)}
-            style={inputStyle}
+            onChange={(event) =>
+              setNewMediaUrl(event.target.value)
+            }
           />
-          <div style={fieldHelpStyle}>
-            Paste a YouTube or video link.
-          </div>
+
+          <p className="field-help">
+            Upload media or paste a supported link.
+          </p>
         </div>
 
-        {/* ---------- PROFILE ---------- */}
-        <div style={sectionBlockLast}>
-          <div style={sectionHeading}>Profile</div>
+        <div className="form-section form-section-last">
+          <div className="section-heading">Profile</div>
 
-          <label style={fieldLabel} htmlFor="field-profile-photo">Profile Photo (Optional)</label>
-          <label style={fileLabel} htmlFor="field-profile-photo">
-            <span>🖼️ Choose a profile photo</span>
+          <label
+            className="file-picker"
+            htmlFor="field-profile-photo"
+          >
+            <span>◎ Choose a profile photo</span>
+
             <input
               id="field-profile-photo"
               type="file"
               accept="image/*"
-              onChange={(e) => handleLogoChange(e.target.files?.[0] || null)}
-              style={fileInput}
+              onChange={(event) =>
+                handleLogoChange(event.target.files?.[0] || null)
+              }
             />
           </label>
-          <div style={fieldHelpStyle}>
-            Upload your photo or logo.
-          </div>
 
           {logoPreview && (
-            <div style={mediaPreviewWrap}>
-              <img src={logoPreview} alt="Profile photo preview" style={previewLogo} loading="lazy" decoding="async" />
+            <div className="preview-wrap">
+              <img
+                src={logoPreview}
+                alt="Profile preview"
+                className="logo-preview"
+              />
             </div>
           )}
         </div>
@@ -737,498 +1093,909 @@ const EditorModal = memo(({
         <button
           type="button"
           onClick={applyChanges}
-          style={{
-            ...saveBtn,
-            opacity: saving ? 0.7 : 1,
-          }}
+          className="save-button"
           disabled={saving}
         >
           {saving ? "Saving..." : "Create Post"}
         </button>
 
-        <button type="button" onClick={closeEditor} style={cancelBtn}>
+        <button
+          type="button"
+          onClick={closeEditor}
+          className="cancel-button"
+        >
           Cancel
         </button>
       </div>
     </div>
+  )
+);
+
+EditorModal.displayName = "EditorModal";
+
+const CommentsModal = memo(
+  ({
+    post,
+    comments,
+    phone,
+    setPhone,
+    text,
+    setText,
+    submitComment,
+    closeComments,
+  }) => (
+    <div className="modal-overlay" onClick={closeComments}>
+      <div
+        className="modal-card comments-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Comments</h2>
+            <p className="comments-post-name">
+              {post.title || DEFAULT_TITLE}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={closeComments}
+            className="modal-close"
+            aria-label="Close comments"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="comment-form">
+          <div className="comment-flag-preview">
+            {getCountryFlag(phone)}
+          </div>
+
+          <div className="comment-fields">
+            <label htmlFor="comment-phone">
+              Phone number
+            </label>
+
+            <input
+              id="comment-phone"
+              type="tel"
+              placeholder="+250 788 123 456"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+            />
+
+            <label htmlFor="comment-message">
+              Comment
+            </label>
+
+            <textarea
+              id="comment-message"
+              placeholder="Write your comment..."
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+            />
+
+            <p className="field-help">
+              Your phone number is not shown publicly. Only its
+              country flag is displayed.
+            </p>
+
+            <button
+              type="button"
+              className="save-button"
+              onClick={submitComment}
+            >
+              Send Comment
+            </button>
+          </div>
+        </div>
+
+        <div className="comments-list">
+          {comments.length === 0 ? (
+            <div className="no-comments">
+              No comments yet. Be the first.
+            </div>
+          ) : (
+            comments.map((comment) => (
+              <article className="comment-item" key={comment.id}>
+                <div className="comment-avatar">
+                  {comment.flag}
+                </div>
+
+                <div className="comment-body">
+                  <div className="comment-country">
+                    Viewer
+                  </div>
+
+                  <p>{comment.text}</p>
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+);
+
+CommentsModal.displayName = "CommentsModal";
+
+function HomeStyles() {
+  return (
+    <style>{`
+      * {
+        box-sizing: border-box;
+      }
+
+      .home-page {
+        width: 100%;
+        height: 100vh;
+        min-height: 100svh;
+        overflow: hidden;
+        position: relative;
+        color: #f3fff8;
+        background: #020605;
+      }
+
+      .home-feed {
+        width: 100%;
+        height: 100vh;
+        min-height: 100svh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scroll-snap-type: y mandatory;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        background:
+          radial-gradient(circle at 50% 20%, #12362a 0%, #06140f 46%, #010403 100%);
+      }
+
+      .home-feed::-webkit-scrollbar {
+        display: none;
+      }
+
+      .home-post {
+        width: min(100%, 680px);
+        min-height: 100svh;
+        height: 100svh;
+        margin: 0 auto;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        position: relative;
+        overflow: hidden;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        isolation: isolate;
+        background:
+          radial-gradient(circle at 50% 34%, rgba(26, 82, 60, 0.68) 0%, rgba(7, 29, 21, 0.96) 46%, #010604 100%);
+        border-radius: clamp(0px, 3vw, 26px);
+        border: 1px solid rgba(130, 255, 198, 0.18);
+        box-shadow:
+          inset 0 0 85px rgba(0, 0, 0, 0.94),
+          inset 0 0 22px rgba(88, 255, 184, 0.10),
+          0 0 28px rgba(0, 0, 0, 0.68);
+      }
+
+      .crt-screen {
+        animation: screenFlicker 5.5s infinite;
+      }
+
+      .post-header {
+        position: relative;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 76px;
+        margin: 10px 12px 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(125, 255, 197, 0.18);
+        border-radius: 20px;
+        background: rgba(2, 17, 12, 0.62);
+        backdrop-filter: blur(16px);
+        box-shadow:
+          0 8px 28px rgba(0, 0, 0, 0.25),
+          inset 0 0 14px rgba(117, 255, 192, 0.05);
+      }
+
+      .profile-picture-button {
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        flex: 0 0 52px;
+        overflow: hidden;
+        border-radius: 50%;
+        border: 2px solid rgba(110, 255, 192, 0.82);
+        background: #07130e;
+        cursor: pointer;
+        box-shadow:
+          0 0 15px rgba(61, 255, 174, 0.34),
+          inset 0 0 10px rgba(90, 255, 188, 0.14);
+      }
+
+      .profile-picture {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+
+      .profile-details {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .creator-name {
+        overflow: hidden;
+        color: #f2fff7;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-shadow: 0 0 7px rgba(170, 255, 210, 0.34);
+      }
+
+      .post-time {
+        margin-top: 4px;
+        color: rgba(210, 255, 229, 0.66);
+        font-size: 11px;
+        line-height: 1.2;
+      }
+
+      .inbox-button {
+        width: 46px;
+        height: 46px;
+        flex: 0 0 46px;
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(106, 255, 191, 0.28);
+        border-radius: 50%;
+        color: #eafff3;
+        background: rgba(27, 115, 78, 0.17);
+        cursor: pointer;
+        box-shadow: 0 0 14px rgba(47, 255, 163, 0.13);
+      }
+
+      .inbox-envelope {
+        font-size: 23px;
+        line-height: 1;
+        filter: drop-shadow(0 0 5px rgba(103, 255, 189, 0.56));
+      }
+
+      .unread-badge {
+        min-width: 19px;
+        height: 19px;
+        position: absolute;
+        top: -4px;
+        right: -3px;
+        display: grid;
+        place-items: center;
+        padding: 0 4px;
+        border: 2px solid #031009;
+        border-radius: 10px;
+        color: white;
+        background: #ff365f;
+        font-size: 10px;
+        font-weight: 900;
+        line-height: 1;
+        box-shadow: 0 0 10px rgba(255, 54, 95, 0.66);
+      }
+
+      .post-copy {
+        position: relative;
+        z-index: 18;
+        max-height: 25vh;
+        overflow-y: auto;
+        margin: 10px 14px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: rgba(0, 14, 9, 0.35);
+        scrollbar-width: thin;
+      }
+
+      .post-title {
+        margin: 0 0 7px;
+        color: #ffffff;
+        font-size: clamp(17px, 4.6vw, 22px);
+        font-weight: 900;
+        line-height: 1.26;
+        overflow-wrap: anywhere;
+        text-shadow:
+          0 0 7px rgba(255, 255, 255, 0.27),
+          0 0 15px rgba(93, 255, 177, 0.14);
+      }
+
+      .post-message {
+        margin: 0;
+        color: #d8ffea;
+        font-size: clamp(14px, 4vw, 17px);
+        font-weight: 400;
+        line-height: 1.48;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        text-shadow: 0 0 7px rgba(111, 255, 189, 0.14);
+      }
+
+      .media-viewport {
+        width: calc(100% - 24px);
+        height: min(48vh, 500px);
+        min-height: 250px;
+        position: relative;
+        z-index: 10;
+        overflow: hidden;
+        margin: 0 12px;
+        border: 1px solid rgba(124, 255, 195, 0.18);
+        border-radius: 20px;
+        background: #000;
+        box-shadow:
+          0 15px 35px rgba(0, 0, 0, 0.55),
+          0 0 20px rgba(56, 255, 166, 0.06);
+      }
+
+      .media-layer {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
+
+      .home-media {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border: 0;
+        object-fit: contain;
+        background: #000;
+      }
+
+      .embed-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 20px;
+        color: rgba(220, 255, 234, 0.70);
+        background:
+          radial-gradient(circle, #143b2d 0%, #05120d 65%, #010403 100%);
+        text-align: center;
+      }
+
+      .embed-placeholder-icon {
+        font-size: 38px;
+        text-shadow: 0 0 15px rgba(104, 255, 189, 0.5);
+      }
+
+      .social-action-bar {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        z-index: 30;
+        min-height: 58px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr auto;
+        align-items: center;
+        gap: 5px;
+        padding: 7px;
+        border: 1px solid rgba(111, 255, 190, 0.24);
+        border-radius: 21px;
+        background: rgba(1, 18, 12, 0.80);
+        backdrop-filter: blur(18px);
+        box-shadow:
+          0 0 24px rgba(50, 255, 166, 0.10),
+          inset 0 0 17px rgba(255, 255, 255, 0.025);
+      }
+
+      .metric-group,
+      .action-button {
+        min-width: 0;
+        min-height: 43px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 4px;
+        border: 0;
+        border-radius: 14px;
+        color: #ecfff4;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .action-button {
+        cursor: pointer;
+      }
+
+      .action-button:active,
+      .create-post-cta:active,
+      .inbox-button:active {
+        transform: scale(0.96);
+      }
+
+      .action-symbol {
+        color: #b9ffda;
+        font-size: 21px;
+        line-height: 1;
+        filter: drop-shadow(0 0 5px rgba(90, 255, 181, 0.45));
+      }
+
+      .share-symbol {
+        font-size: 24px;
+      }
+
+      .create-post-cta {
+        min-height: 43px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 0 12px;
+        border: 1px solid rgba(118, 255, 195, 0.44);
+        border-radius: 15px;
+        color: white;
+        background:
+          linear-gradient(145deg, rgba(37, 181, 119, 0.35), rgba(5, 78, 49, 0.38));
+        font-size: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow:
+          0 0 13px rgba(53, 255, 170, 0.15),
+          inset 0 0 9px rgba(255, 255, 255, 0.04);
+      }
+
+      .create-post-plus {
+        font-size: 21px;
+        line-height: 1;
+      }
+
+      .screen-scanlines,
+      .screen-reflection,
+      .screen-vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .screen-scanlines {
+        z-index: 50;
+        opacity: 0.14;
+        background:
+          repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 3px,
+            rgba(0, 0, 0, 0.72) 4px
+          );
+        animation: scanMove 7s linear infinite;
+      }
+
+      .screen-reflection {
+        z-index: 51;
+        border-radius: inherit;
+        opacity: 0.75;
+        background:
+          linear-gradient(
+            118deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0.028) 21%,
+            transparent 42%
+          );
+      }
+
+      .screen-vignette {
+        z-index: 52;
+        border-radius: inherit;
+        box-shadow:
+          inset 0 0 62px rgba(0, 0, 0, 0.84),
+          inset 0 0 7px rgba(105, 255, 190, 0.10);
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0;
+        background: rgba(0, 5, 3, 0.90);
+        backdrop-filter: blur(8px);
+      }
+
+      .modal-card {
+        width: 100%;
+        max-width: 460px;
+        max-height: 93vh;
+        overflow-y: auto;
+        padding: 18px 18px 26px;
+        border: 1px solid rgba(118, 255, 194, 0.24);
+        border-radius: 24px 24px 0 0;
+        color: #effff6;
+        background:
+          radial-gradient(circle at top, #16382b 0%, #07160f 45%, #020806 100%);
+        box-shadow:
+          0 -18px 50px rgba(0, 0, 0, 0.55),
+          inset 0 0 24px rgba(84, 255, 177, 0.05);
+        scrollbar-width: thin;
+      }
+
+      .modal-header {
+        position: sticky;
+        top: -18px;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: -18px -18px 12px;
+        padding: 18px;
+        border-bottom: 1px solid rgba(123, 255, 194, 0.12);
+        background: rgba(4, 19, 13, 0.94);
+        backdrop-filter: blur(16px);
+      }
+
+      .modal-header h2 {
+        margin: 0;
+        color: #baffd8;
+        font-size: 19px;
+        font-weight: 900;
+        text-shadow: 0 0 9px rgba(87, 255, 175, 0.34);
+      }
+
+      .modal-close {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 50%;
+        color: white;
+        background: rgba(255, 255, 255, 0.06);
+        font-size: 23px;
+        cursor: pointer;
+      }
+
+      .form-section {
+        margin-bottom: 18px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .form-section-last {
+        border-bottom: 0;
+      }
+
+      .section-heading {
+        margin-bottom: 10px;
+        color: #78ffc0;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      .modal-card label {
+        display: block;
+        margin: 0 0 6px;
+        color: #e6fff0;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .modal-card input,
+      .modal-card textarea {
+        width: 100%;
+        min-height: 48px;
+        margin: 0 0 6px;
+        padding: 12px 13px;
+        border: 1px solid rgba(136, 255, 200, 0.18);
+        border-radius: 11px;
+        outline: none;
+        color: white;
+        background: rgba(0, 10, 7, 0.60);
+        font: inherit;
+      }
+
+      .modal-card textarea {
+        min-height: 86px;
+        resize: vertical;
+      }
+
+      .modal-card input:focus,
+      .modal-card textarea:focus {
+        border-color: rgba(104, 255, 187, 0.62);
+        box-shadow: 0 0 0 3px rgba(77, 255, 169, 0.08);
+      }
+
+      .field-help {
+        margin: 0 0 12px;
+        color: rgba(207, 255, 226, 0.59);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .file-picker {
+        min-height: 50px;
+        display: flex !important;
+        align-items: center;
+        padding: 12px 13px;
+        border: 1px dashed rgba(123, 255, 196, 0.36);
+        border-radius: 11px;
+        background: rgba(29, 101, 69, 0.11);
+        cursor: pointer;
+      }
+
+      .file-picker input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+      }
+
+      .preview-wrap {
+        margin: 10px 0 14px;
+      }
+
+      .media-preview {
+        width: 100%;
+        max-height: 200px;
+        display: block;
+        object-fit: contain;
+        border: 1px solid rgba(112, 255, 190, 0.24);
+        border-radius: 12px;
+        background: #000;
+      }
+
+      .logo-preview {
+        width: 60px;
+        height: 60px;
+        display: block;
+        object-fit: cover;
+        border: 2px solid #70ffc0;
+        border-radius: 50%;
+      }
+
+      .save-button,
+      .cancel-button {
+        width: 100%;
+        min-height: 50px;
+        padding: 13px;
+        border-radius: 13px;
+        font-size: 15px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .save-button {
+        border: 1px solid rgba(126, 255, 197, 0.42);
+        color: white;
+        background:
+          linear-gradient(145deg, #18885a, #0b5e3b);
+        box-shadow: 0 0 15px rgba(46, 255, 156, 0.18);
+      }
+
+      .save-button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      .cancel-button {
+        margin-top: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #d7eee0;
+        background: transparent;
+      }
+
+      .comments-post-name {
+        margin: 4px 0 0;
+        color: rgba(210, 255, 228, 0.61);
+        font-size: 11px;
+      }
+
+      .comment-form {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 18px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .comment-flag-preview,
+      .comment-avatar {
+        width: 45px;
+        height: 45px;
+        flex: 0 0 45px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border: 2px solid rgba(107, 255, 188, 0.75);
+        border-radius: 50%;
+        background: #f7fff9;
+        font-size: 25px;
+        box-shadow: 0 0 12px rgba(65, 255, 166, 0.20);
+      }
+
+      .comment-fields {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .comments-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .no-comments {
+        padding: 22px 12px;
+        color: rgba(211, 255, 228, 0.58);
+        text-align: center;
+      }
+
+      .comment-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 11px;
+        border: 1px solid rgba(121, 255, 194, 0.13);
+        border-radius: 16px;
+        background: rgba(14, 58, 40, 0.17);
+      }
+
+      .comment-body {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .comment-country {
+        color: #aaffd2;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .comment-body p {
+        margin: 5px 0 0;
+        color: #eafff2;
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .zoom-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10001;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+        background: rgba(0, 0, 0, 0.95);
+        cursor: zoom-out;
+      }
+
+      .zoom-image {
+        max-width: 92vw;
+        max-height: 90vh;
+        display: block;
+        object-fit: contain;
+        border: 2px solid rgba(108, 255, 190, 0.75);
+        border-radius: 16px;
+        box-shadow: 0 0 24px rgba(58, 255, 169, 0.35);
+      }
+
+      .loading-state,
+      .empty-state {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        z-index: 3;
+        transform: translate(-50%, -50%);
+        color: #c5ffe0;
+        text-align: center;
+      }
+
+      .empty-state {
+        width: min(88%, 420px);
+      }
+
+      .empty-button {
+        min-height: 48px;
+        margin-top: 12px;
+        padding: 0 18px;
+        border: 1px solid rgba(112, 255, 192, 0.45);
+        border-radius: 15px;
+        color: white;
+        background: #116d47;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      @keyframes screenFlicker {
+        0%, 18%, 22%, 24%, 55%, 100% {
+          filter: brightness(1);
+        }
+
+        20% {
+          filter: brightness(0.97);
+        }
+
+        23% {
+          filter: brightness(1.025);
+        }
+
+        57% {
+          filter: brightness(0.985);
+        }
+      }
+
+      @keyframes scanMove {
+        from {
+          background-position: 0 0;
+        }
+
+        to {
+          background-position: 0 16px;
+        }
+      }
+
+      @media (min-width: 700px) {
+        .home-feed {
+          padding: 12px 0;
+        }
+
+        .home-post {
+          height: calc(100svh - 24px);
+          min-height: calc(100svh - 24px);
+          border-radius: 28px;
+        }
+      }
+
+      @media (max-height: 720px) {
+        .post-header {
+          min-height: 66px;
+          margin-top: 6px;
+          padding: 7px 10px;
+        }
+
+        .profile-picture-button {
+          width: 46px;
+          height: 46px;
+          flex-basis: 46px;
+        }
+
+        .post-copy {
+          max-height: 21vh;
+          margin-top: 6px;
+          margin-bottom: 6px;
+          padding-top: 7px;
+          padding-bottom: 7px;
+        }
+
+        .media-viewport {
+          height: 44vh;
+          min-height: 220px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .crt-screen,
+        .screen-scanlines {
+          animation: none;
+        }
+      }
+    `}</style>
   );
-});
-
-EditorModal.displayName = 'EditorModal';
-
-// ==========================================
-// STYLES (Unchanged, plus new modal/section/preview styles below)
-// ==========================================
-const page = {
-  height: "100vh",
-  minHeight: "100svh",
-  background: "#0d0e12",
-  color: "white",
-  overflow: "hidden",
-  position: "relative",
-  width: "100%",
-};
-
-const feedContainer = {
-  height: "100vh",
-  minHeight: "100svh",
-  width: "100%",
-  overflowY: "scroll",
-  scrollSnapType: "y mandatory",
-  WebkitOverflowScrolling: "touch",
-  background: "#0d0e12",
-};
-
-const feedPost = {
-  height: "100vh",
-  minHeight: "100svh",
-  width: "100%",
-  scrollSnapAlign: "start",
-  scrollSnapStop: "always",
-  position: "relative",
-  overflow: "hidden",
-  background: "linear-gradient(to bottom, #141722 0%, #0a0b0e 100%)",
-};
-
-const profileCard = {
-  position: "absolute",
-  top: "0px",
-  left: "0px",
-  right: "0px",
-  zIndex: 10,
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  background: "linear-gradient(to bottom, rgba(29, 35, 46, 0.8) 0%, rgba(29, 35, 46, 0.6) 100%)",
-  backdropFilter: "blur(12px)",
-  padding: "16px 20px",
-  borderBottom: "1px solid rgba(0, 255, 204, 0.15)",
-};
-
-const journalistPhotoStyle = {
-  width: "50px",
-  height: "50px",
-  borderRadius: "50%",
-  objectFit: "cover",
-  border: "2px solid #00ffcc",
-  boxShadow: "0 0 14px rgba(0, 255, 204, 0.5), inset 0 0 8px rgba(0, 255, 204, 0.3)",
-  flexShrink: 0,
-  cursor: "pointer",
-};
-
-const profileTextBox = {
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-  flex: 1,
-};
-
-const nameRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
-const profileTitle = {
-  fontSize: "19px",
-  fontWeight: "700",
-  margin: 0,
-  color: "#38bdf8",
-  letterSpacing: "0.4px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const videoCardViewport = {
-  width: "100%",
-  height: "52%",
-  position: "absolute",
-  top: "92px",
-  overflow: "hidden",
-  background: "#000",
-  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.5)",
-};
-
-const mediaLayer = {
-  position: "absolute",
-  inset: 0,
-  zIndex: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const mediaStyle = {
-  width: "100%",
-  height: "100%",
-  objectFit: "contain",
-  display: "block",
-};
-
-const darkOverlay = {
-  position: "absolute",
-  inset: 0,
-  zIndex: 1,
-  background: "linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 75%, rgba(0,0,0,0.6) 100%)",
-  pointerEvents: "none",
-};
-
-const bottomHorizontalActionsRow = {
-  position: "absolute",
-  bottom: "135px",
-  left: "16px",
-  right: "16px",
-  zIndex: 30,
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  width: "calc(100% - 32px)",
-};
-
-const tickerContainer = {
-  flex: 1,
-  height: "54px",
-  display: "flex",
-  alignItems: "center",
-  background: "rgba(30, 41, 59, 0.6)",
-  backdropFilter: "blur(20px)",
-  borderRadius: "30px",
-  border: "1px solid rgba(56, 189, 248, 0.25)",
-  overflow: "hidden",
-  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-};
-
-const tickerLabel = {
-  background: "#000000",
-  color: "#ec4899",
-  fontWeight: "700",
-  fontSize: "14px",
-  padding: "0 26px",
-  height: "100%",
-  display: "flex",
-  alignItems: "center",
-  borderRadius: "30px 0 0 30px",
-  zIndex: 2,
-  flexShrink: 0,
-  textDecoration: "none",
-  borderRight: "1px solid rgba(56, 189, 248, 0.2)",
-};
-
-const tickerWrapper = {
-  flex: 1,
-  overflow: "hidden",
-  display: "flex",
-  alignItems: "center",
-};
-
-const tickerScrollingContent = {
-  display: "inline-block",
-  whiteSpace: "nowrap",
-  paddingLeft: "100%",
-  animation: "tickerMarquee 45s linear infinite",
-  color: "#38bdf8",
-  fontSize: "14px",
-  fontWeight: "600",
-};
-
-if (typeof window !== "undefined" && !document.getElementById("ticker-keyframes")) {
-  const styleEl = document.createElement("style");
-  styleEl.id = "ticker-keyframes";
-  styleEl.innerHTML = `
-    @keyframes tickerMarquee {
-      0% { transform: translate3d(0, 0, 0); }
-      100% { transform: translate3d(-100%, 0, 0); }
-    }
-  `;
-  document.head.appendChild(styleEl);
 }
 
-const plusBtn = {
-  width: "56px",
-  height: "56px",
-  borderRadius: "50%",
-  border: "none",
-  background: "#ffffff",
-  boxShadow: "0 0 16px rgba(236, 72, 153, 0.6), 0 4px 12px rgba(0,0,0,0.4)",
-  cursor: "pointer",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-  padding: 0,
-  position: "relative",
-};
-
-const lightningIcon = {
-  color: "#f59e0b",
-  fontSize: "16px",
-  fontWeight: "700",
-  lineHeight: "1",
-  marginBottom: "1px",
-};
-
-const plusIcon = {
-  color: "#ec4899",
-  fontSize: "16px",
-  fontWeight: "700",
-  lineHeight: "1",
-};
-
-// ---------- Modal shell (mobile-friendly) ----------
-const modalOverlay = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 10000,
-  background: "rgba(10, 11, 14, 0.9)",
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  padding: 0,
-  boxSizing: "border-box",
-};
-
-const modalCard = {
-  width: "100%",
-  maxWidth: "420px",
-  height: "auto",
-  maxHeight: "92vh",
-  overflowY: "auto",
-  WebkitOverflowScrolling: "touch",
-  background: "#1e293b",
-  color: "white",
-  borderRadius: "20px 20px 0 0",
-  padding: "18px 18px 24px",
-  boxSizing: "border-box",
-  border: "1px solid rgba(56, 189, 248, 0.2)",
-};
-
-const modalHeaderRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "12px",
-  marginBottom: "10px",
-  position: "sticky",
-  top: 0,
-  background: "#1e293b",
-  paddingBottom: "8px",
-  zIndex: 1,
-};
-
-const modalTitle = {
-  margin: 0,
-  fontSize: "18px",
-  fontWeight: "700",
-  textAlign: "left",
-  color: "#38bdf8",
-};
-
-const modalCloseBtn = {
-  width: "36px",
-  height: "36px",
-  minWidth: "36px",
-  borderRadius: "50%",
-  border: "1px solid rgba(255,255,255,0.15)",
-  background: "rgba(255,255,255,0.06)",
-  color: "#e2e8f0",
-  fontSize: "20px",
-  lineHeight: "1",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-};
-
-// ---------- Section grouping ----------
-const sectionBlock = {
-  marginBottom: "18px",
-  paddingBottom: "18px",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-
-const sectionBlockLast = {
-  marginBottom: "18px",
-  paddingBottom: "4px",
-};
-
-const sectionHeading = {
-  fontSize: "12px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  textTransform: "uppercase",
-  color: "#5eead4",
-  marginBottom: "10px",
-};
-
-const fieldLabel = {
-  display: "block",
-  fontSize: "13px",
-  fontWeight: "600",
-  color: "#e2e8f0",
-  marginBottom: "6px",
-};
-
-// ---------- Inputs (larger touch targets, consistent height) ----------
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "13px 14px",
-  minHeight: "48px",
-  marginBottom: "6px",
-  borderRadius: "10px",
-  border: "1px solid rgba(255,255,255,0.15)",
-  background: "rgba(15, 23, 42, 0.6)",
-  color: "white",
-  outline: "none",
-  fontSize: "15px",
-};
-
-const textareaStyle = {
-  ...inputStyle,
-  minHeight: "72px",
-  resize: "none",
-};
-
-const fileLabel = {
-  display: "flex",
-  alignItems: "center",
-  width: "100%",
-  minHeight: "48px",
-  boxSizing: "border-box",
-  padding: "12px 14px",
-  marginBottom: "6px",
-  borderRadius: "10px",
-  border: "1px dashed rgba(56, 189, 248, 0.4)",
-  background: "rgba(15, 23, 42, 0.3)",
-  color: "#e2e8f0",
-  fontSize: "13px",
-  cursor: "pointer",
-};
-
-const fileInput = {
-  position: "absolute",
-  width: "1px",
-  height: "1px",
-  opacity: 0,
-  overflow: "hidden",
-};
-
-// ---------- Per-field help text (small + lighter color) ----------
-const fieldHelpStyle = {
-  fontSize: "11px",
-  color: "#94a3b8",
-  marginTop: "-2px",
-  marginBottom: "12px",
-  lineHeight: "1.4",
-};
-
-// ---------- Media / profile previews ----------
-const mediaPreviewWrap = {
-  marginBottom: "12px",
-};
-
-const mediaPreviewImage = {
-  width: "100%",
-  maxHeight: "180px",
-  objectFit: "cover",
-  borderRadius: "10px",
-  border: "1px solid rgba(56, 189, 248, 0.25)",
-  display: "block",
-  background: "#000",
-};
-
-const previewLogo = {
-  width: "56px",
-  height: "56px",
-  objectFit: "cover",
-  borderRadius: "50%",
-  border: "2px solid #00ffcc",
-};
-
-// ---------- Buttons ----------
-const saveBtn = {
-  width: "100%",
-  padding: "14px",
-  minHeight: "50px",
-  borderRadius: "12px",
-  border: "none",
-  background: "#ec4899",
-  color: "white",
-  fontWeight: "700",
-  fontSize: "15px",
-  marginTop: "4px",
-  cursor: "pointer",
-  boxShadow: "0 0 12px rgba(236, 72, 153, 0.4)",
-};
-
-const cancelBtn = {
-  width: "100%",
-  padding: "14px",
-  minHeight: "50px",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "transparent",
-  color: "#bcc0c4",
-  fontWeight: "600",
-  fontSize: "15px",
-  marginTop: "10px",
-  cursor: "pointer",
-};
-
-const loadingStyle = {
-  position: "fixed",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  color: "#38bdf8",
-  fontSize: "16px",
-};
-
-const emptyStateStyle = {
-  position: "fixed",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  color: "white",
-  textAlign: "center",
-  width: "80%",
-};
-
-const emptyStateButton = {
-  marginTop: "16px",
-  padding: "12px 24px",
-  borderRadius: "24px",
-  border: "none",
-  background: "#ffffff",
-  color: "#000000",
-  fontSize: "14px",
-  fontWeight: "700",
-  cursor: "pointer",
-};
-
-const zoomOverlay = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 10001,
-  background: "rgba(0,0,0,0.95)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const zoomImageStyle = {
-  maxWidth: "90vw",
-  maxHeight: "90vh",
-  width: "auto",
-  height: "auto",
-  borderRadius: "12px",
-  objectFit: "contain",
-  border: "2px solid #00ffcc",
-  boxShadow: "0 0 20px rgba(0, 255, 204, 0.6)",
-};
-
 export default Home;
-
