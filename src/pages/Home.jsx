@@ -6,8 +6,6 @@ import {
   useState,
   memo,
 } from "react";
-import Header from "../components/Header";
-
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 const DEFAULT_VIDEO =
@@ -181,6 +179,7 @@ function Home() {
   const [showComments, setShowComments] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
 
+  const [newCreatorName, setNewCreatorName] = useState("");
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newTitle, setNewTitle] = useState("");
@@ -200,6 +199,7 @@ function Home() {
   const [commentsByPost, setCommentsByPost] = useState({});
   const [commentPhone, setCommentPhone] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [localReactions, setLocalReactions] = useState({});
 
   const readJsonSafely = useCallback(async (response) => {
     const text = await response.text();
@@ -236,6 +236,7 @@ function Home() {
         setPosts([
           {
             id: 0,
+            creator_name: data.creator_name || "",
             creator_identity: data.creator_identity || "",
             creator_type: data.creator_type || "",
             title: data.title || DEFAULT_TITLE,
@@ -247,6 +248,7 @@ function Home() {
             comment_count: 0,
             share_count: 0,
             unread_messages: 0,
+            reaction_count: 0,
           },
         ]);
       }
@@ -330,6 +332,7 @@ function Home() {
 
   const closeEditor = useCallback(() => {
     setShowEditor(false);
+    setNewCreatorName("");
     setNewCreatorIdentity("");
     setNewMediaUrl("");
     setNewTitle("");
@@ -364,8 +367,14 @@ function Home() {
   }, []);
 
   const applyChanges = useCallback(async () => {
+    const creatorName = newCreatorName.trim();
     const identity = newCreatorIdentity.trim();
     const mediaToSave = newMediaUrl.trim();
+
+    if (!creatorName) {
+      alert("Please enter a creator name.");
+      return;
+    }
 
     if (!identity) {
       alert("Please enter your WhatsApp number or website.");
@@ -396,6 +405,7 @@ function Home() {
 
       const formData = new FormData();
 
+      formData.append("creator_name", creatorName);
       formData.append("creator_identity", identity);
       formData.append("creator_type", detectCreatorType(identity));
       formData.append("title", newTitle.trim() || DEFAULT_TITLE);
@@ -448,6 +458,7 @@ function Home() {
   }, [
     closeEditor,
     fetchHomeData,
+    newCreatorName,
     newCreatorIdentity,
     newLogoFile,
     newMediaFile,
@@ -570,6 +581,56 @@ function Home() {
     }
   }, []);
 
+  const reactToPost = useCallback(async (post) => {
+    const postId = String(post?.id ?? "");
+    if (!postId) return;
+
+    const storageKey = `home-reacted-${postId}`;
+
+    if (sessionStorage.getItem(storageKey)) {
+      return;
+    }
+
+    sessionStorage.setItem(storageKey, "true");
+
+    setLocalReactions((current) => ({
+      ...current,
+      [postId]: (Number(current[postId]) || 0) + 1,
+    }));
+
+    try {
+      const response = await fetch(`${API_URL}/api/home/react`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ post_id: postId }),
+      });
+
+      const data = await readJsonSafely(response);
+
+      if (data.success && Number.isFinite(Number(data.reaction_count))) {
+        setPosts((currentPosts) =>
+          currentPosts.map((item) =>
+            String(item.id) === postId
+              ? { ...item, reaction_count: Number(data.reaction_count) }
+              : item
+          )
+        );
+
+        setLocalReactions((current) => ({
+          ...current,
+          [postId]: 0,
+        }));
+      }
+    } catch (error) {
+      console.warn(
+        "Reaction was added locally. Worker route /api/home/react is not ready yet:",
+        error
+      );
+    }
+  }, [readJsonSafely]);
+
   const renderMedia = useCallback(
     (post, index) => {
       const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
@@ -656,7 +717,7 @@ function Home() {
   if (loading) {
     return (
       <div className="home-page">
-        <Header />
+        <FeedXTopBar openEditor={openEditor} />
         <div className="loading-state">Loading...</div>
         <HomeStyles />
       </div>
@@ -666,7 +727,7 @@ function Home() {
   if (!memoizedPosts.length) {
     return (
       <div className="home-page">
-        <Header />
+        <FeedXTopBar openEditor={openEditor} />
 
         <div className="empty-state">
           <p>No posts yet. Create your first post!</p>
@@ -678,6 +739,8 @@ function Home() {
 
         {showEditor && (
           <EditorModal
+            newCreatorName={newCreatorName}
+            setNewCreatorName={setNewCreatorName}
             newCreatorIdentity={newCreatorIdentity}
             setNewCreatorIdentity={setNewCreatorIdentity}
             newTitle={newTitle}
@@ -704,7 +767,7 @@ function Home() {
 
   return (
     <div className="home-page">
-      <Header />
+      <FeedXTopBar openEditor={openEditor} />
 
       <main className="home-feed">
         {memoizedPosts.map((post, index) => {
@@ -721,6 +784,13 @@ function Home() {
             Number(post.comment_count || 0) + localComments.length;
           const shareCount = post.share_count || 0;
           const unreadMessages = post.unread_messages || 0;
+          const reactionCount =
+            Number(post.reaction_count || post.like_count || 0) +
+            Number(localReactions[postId] || 0);
+          const creatorDisplayName =
+            post.creator_name?.trim() ||
+            post.brand_name?.trim() ||
+            "Creator";
 
           return (
             <section
@@ -758,7 +828,7 @@ function Home() {
 
                 <div className="profile-details">
                   <div className="creator-name">
-                    {post.creator_name || post.brand_name || "Creator"}
+                    {creatorDisplayName}
                   </div>
 
                   <div className="post-time">
@@ -790,6 +860,15 @@ function Home() {
                     </span>
                   )}
                 </button>
+
+                <button
+                  type="button"
+                  className="post-menu-button"
+                  aria-label="Post options"
+                  title="Post options"
+                >
+                  ⋮
+                </button>
               </header>
 
               <div className="post-copy">
@@ -809,8 +888,8 @@ function Home() {
               </div>
 
               <div className="social-action-bar">
-                <div className="metric-group" title="Views">
-                  <span className="action-symbol" aria-hidden="true">
+                <div className="metric-pill" title="Views">
+                  <span className="action-symbol eye-symbol" aria-hidden="true">
                     ◉
                   </span>
                   <span>{formatCount(viewerCount)}</span>
@@ -818,7 +897,7 @@ function Home() {
 
                 <button
                   type="button"
-                  className="action-button"
+                  className="action-pill"
                   onClick={() => openComments(post)}
                   aria-label="Open comments"
                 >
@@ -830,23 +909,24 @@ function Home() {
 
                 <button
                   type="button"
-                  className="action-button"
+                  className="action-pill"
                   onClick={() => sharePost(post)}
                   aria-label="Share post"
                 >
                   <span className="action-symbol share-symbol" aria-hidden="true">
                     ↗
                   </span>
-                  <span>{formatCount(shareCount)}</span>
+                  <span>Share</span>
                 </button>
 
                 <button
                   type="button"
-                  className="create-post-cta"
-                  onClick={openEditor}
+                  className="action-pill heart-action"
+                  onClick={() => reactToPost(post)}
+                  aria-label="Like post"
                 >
-                  <span className="create-post-plus">＋</span>
-                  <span>Create</span>
+                  <span className="heart-icon" aria-hidden="true">♥</span>
+                  <span>{formatCount(reactionCount)}</span>
                 </button>
               </div>
 
@@ -860,6 +940,8 @@ function Home() {
 
       {showEditor && (
         <EditorModal
+          newCreatorName={newCreatorName}
+          setNewCreatorName={setNewCreatorName}
           newCreatorIdentity={newCreatorIdentity}
           setNewCreatorIdentity={setNewCreatorIdentity}
           newTitle={newTitle}
@@ -915,8 +997,30 @@ function Home() {
   );
 }
 
+const FeedXTopBar = memo(({ openEditor }) => (
+  <header className="feedx-topbar">
+    <h1 className="feedx-logo">
+      Feed<span>X</span>
+    </h1>
+
+    <button
+      type="button"
+      className="top-create-button"
+      onClick={openEditor}
+      aria-label="Create post"
+      title="Create post"
+    >
+      ＋
+    </button>
+  </header>
+));
+
+FeedXTopBar.displayName = "FeedXTopBar";
+
 const EditorModal = memo(
   ({
+    newCreatorName,
+    setNewCreatorName,
     newCreatorIdentity,
     setNewCreatorIdentity,
     newTitle,
@@ -953,7 +1057,24 @@ const EditorModal = memo(
         </div>
 
         <div className="form-section">
-          <div className="section-heading">Contact</div>
+          <div className="section-heading">Public profile</div>
+
+          <label htmlFor="field-creator-name">Creator Name</label>
+          <input
+            id="field-creator-name"
+            type="text"
+            placeholder="Madman Official"
+            value={newCreatorName}
+            onChange={(event) => setNewCreatorName(event.target.value)}
+          />
+
+          <p className="field-help">
+            This is the public name shown on your post.
+          </p>
+        </div>
+
+        <div className="form-section">
+          <div className="section-heading">Private contact</div>
 
           <label htmlFor="field-contact">Contact</label>
           <input
@@ -1224,95 +1345,142 @@ CommentsModal.displayName = "CommentsModal";
 function HomeStyles() {
   return (
     <style>{`
+      :root {
+        --page-bg: #020712;
+        --card-bg: #06101f;
+        --card-bg-soft: #08172a;
+        --blue: #087cff;
+        --blue-bright: #168bff;
+        --blue-border: rgba(22, 139, 255, 0.72);
+        --blue-soft: rgba(22, 139, 255, 0.15);
+        --text: #ffffff;
+        --muted: #9ba8ba;
+        --danger: #ff334f;
+      }
+
       * {
         box-sizing: border-box;
       }
 
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+        background: var(--page-bg);
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
       .home-page {
         width: 100%;
-        height: 100vh;
         min-height: 100svh;
-        overflow: hidden;
-        position: relative;
-        color: #f3fff8;
-        background: #020605;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 50% 0%, rgba(8, 124, 255, 0.10), transparent 34%),
+          var(--page-bg);
+      }
+
+      .feedx-topbar {
+        width: min(calc(100% - 24px), 680px);
+        min-height: 72px;
+        margin: 0 auto;
+        padding: max(12px, env(safe-area-inset-top)) 4px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .feedx-logo {
+        margin: 0;
+        color: #ffffff;
+        font-size: clamp(34px, 9vw, 48px);
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: -1.5px;
+      }
+
+      .feedx-logo span {
+        color: var(--blue);
+      }
+
+      .top-create-button {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: #ffffff;
+        background: linear-gradient(145deg, var(--blue-bright), #0067ee);
+        font-size: 34px;
+        font-weight: 300;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 10px 28px rgba(8, 124, 255, 0.28);
       }
 
       .home-feed {
         width: 100%;
-        height: 100vh;
-        min-height: 100svh;
-        overflow-y: auto;
+        min-height: calc(100svh - 72px);
+        padding: 0 0 max(28px, env(safe-area-inset-bottom));
         overflow-x: hidden;
-        scroll-snap-type: y mandatory;
-        overscroll-behavior-y: contain;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        background:
-          radial-gradient(circle at 50% 20%, #12362a 0%, #06140f 46%, #010403 100%);
-      }
-
-      .home-feed::-webkit-scrollbar {
-        display: none;
       }
 
       .home-post {
-        width: min(100%, 680px);
-        min-height: 100svh;
-        height: 100svh;
-        margin: 0 auto;
-        padding-top: max(8px, env(safe-area-inset-top));
-        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        width: min(calc(100% - 20px), 680px);
+        margin: 10px auto 18px;
+        padding: 0 0 12px;
         position: relative;
         overflow: hidden;
-        scroll-snap-align: start;
-        scroll-snap-stop: always;
         isolation: isolate;
+        border: 1px solid var(--blue-border);
+        border-radius: 24px;
         background:
-          radial-gradient(circle at 50% 34%, rgba(26, 82, 60, 0.68) 0%, rgba(7, 29, 21, 0.96) 46%, #010604 100%);
-        border-radius: clamp(0px, 3vw, 26px);
-        border: 1px solid rgba(130, 255, 198, 0.18);
+          linear-gradient(
+            180deg,
+            rgba(7, 19, 36, 0.98),
+            rgba(2, 10, 22, 0.98)
+          );
         box-shadow:
-          inset 0 0 85px rgba(0, 0, 0, 0.94),
-          inset 0 0 22px rgba(88, 255, 184, 0.10),
-          0 0 28px rgba(0, 0, 0, 0.68);
+          0 16px 38px rgba(0, 0, 0, 0.55),
+          0 0 18px rgba(8, 124, 255, 0.10);
       }
 
       .crt-screen {
-        animation: screenFlicker 5.5s infinite;
+        animation: screenFlicker 7s infinite;
       }
 
       .post-header {
         position: relative;
-        z-index: 20;
+        z-index: 10;
+        min-height: 82px;
         display: flex;
         align-items: center;
-        gap: 12px;
-        min-height: 76px;
-        margin: 10px 12px 0;
-        padding: 10px 12px;
-        border: 1px solid rgba(125, 255, 197, 0.18);
-        border-radius: 20px;
-        background: rgba(2, 17, 12, 0.62);
-        backdrop-filter: blur(16px);
-        box-shadow:
-          0 8px 28px rgba(0, 0, 0, 0.25),
-          inset 0 0 14px rgba(117, 255, 192, 0.05);
+        gap: 10px;
+        padding: 14px 12px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+        background: rgba(4, 14, 29, 0.50);
       }
 
       .profile-picture-button {
-        width: 52px;
-        height: 52px;
+        width: 58px;
+        height: 58px;
+        flex: 0 0 58px;
         padding: 0;
-        flex: 0 0 52px;
         overflow: hidden;
+        border: 2px solid var(--blue);
         border-radius: 50%;
-        border: 2px solid rgba(110, 255, 192, 0.82);
-        background: #07130e;
+        background: #030916;
         cursor: pointer;
-        box-shadow:
-          0 0 15px rgba(61, 255, 174, 0.34),
-          inset 0 0 10px rgba(90, 255, 188, 0.14);
+        box-shadow: 0 0 16px rgba(8, 124, 255, 0.30);
       }
 
       .profile-picture {
@@ -1329,112 +1497,114 @@ function HomeStyles() {
 
       .creator-name {
         overflow: hidden;
-        color: #f2fff7;
-        font-size: 16px;
-        font-weight: 800;
-        letter-spacing: 0.2px;
+        color: #ffffff;
+        font-size: clamp(16px, 4.5vw, 20px);
+        font-weight: 900;
+        line-height: 1.2;
         text-overflow: ellipsis;
         white-space: nowrap;
-        text-shadow: 0 0 7px rgba(170, 255, 210, 0.34);
       }
 
       .post-time {
-        margin-top: 4px;
-        color: rgba(210, 255, 229, 0.66);
-        font-size: 11px;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: clamp(11px, 3.2vw, 13px);
         line-height: 1.2;
       }
 
+      .inbox-button,
+      .post-menu-button {
+        border: 0;
+        color: #ffffff;
+        background: transparent;
+        cursor: pointer;
+      }
+
       .inbox-button {
-        width: 46px;
-        height: 46px;
-        flex: 0 0 46px;
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
         position: relative;
         display: grid;
         place-items: center;
         padding: 0;
-        border: 1px solid rgba(106, 255, 191, 0.28);
+        border: 1px solid rgba(22, 139, 255, 0.58);
         border-radius: 50%;
-        color: #eafff3;
-        background: rgba(27, 115, 78, 0.17);
-        cursor: pointer;
-        box-shadow: 0 0 14px rgba(47, 255, 163, 0.13);
+        background: rgba(8, 124, 255, 0.06);
       }
 
       .inbox-envelope {
-        font-size: 23px;
+        font-size: 24px;
         line-height: 1;
-        filter: drop-shadow(0 0 5px rgba(103, 255, 189, 0.56));
       }
 
       .unread-badge {
-        min-width: 19px;
-        height: 19px;
+        min-width: 20px;
+        height: 20px;
         position: absolute;
-        top: -4px;
+        top: -5px;
         right: -3px;
         display: grid;
         place-items: center;
-        padding: 0 4px;
-        border: 2px solid #031009;
-        border-radius: 10px;
-        color: white;
-        background: #ff365f;
+        padding: 0 5px;
+        border: 2px solid #06101f;
+        border-radius: 11px;
+        color: #ffffff;
+        background: var(--danger);
         font-size: 10px;
         font-weight: 900;
+      }
+
+      .post-menu-button {
+        width: 28px;
+        height: 44px;
+        flex: 0 0 28px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        font-size: 28px;
         line-height: 1;
-        box-shadow: 0 0 10px rgba(255, 54, 95, 0.66);
       }
 
       .post-copy {
         position: relative;
-        z-index: 18;
-        max-height: 25vh;
-        overflow-y: auto;
-        margin: 10px 14px;
-        padding: 10px 12px;
-        border-radius: 16px;
-        background: rgba(0, 14, 9, 0.35);
-        scrollbar-width: thin;
+        z-index: 5;
+        padding: 14px 18px 12px;
+        text-align: center;
       }
 
       .post-title {
-        margin: 0 0 7px;
+        margin: 0 0 8px;
         color: #ffffff;
-        font-size: clamp(17px, 4.6vw, 22px);
+        font-size: clamp(18px, 5vw, 23px);
         font-weight: 900;
         line-height: 1.26;
         overflow-wrap: anywhere;
-        text-shadow:
-          0 0 7px rgba(255, 255, 255, 0.27),
-          0 0 15px rgba(93, 255, 177, 0.14);
       }
 
       .post-message {
         margin: 0;
-        color: #d8ffea;
-        font-size: clamp(14px, 4vw, 17px);
+        color: #f2f5fb;
+        font-size: clamp(15px, 4.2vw, 18px);
         font-weight: 400;
         line-height: 1.48;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        text-shadow: 0 0 7px rgba(111, 255, 189, 0.14);
       }
 
       .media-viewport {
         width: calc(100% - 24px);
-        height: min(48vh, 500px);
-        min-height: 250px;
+        min-height: 220px;
+        max-height: 58svh;
+        aspect-ratio: 9 / 12;
         position: relative;
-        z-index: 10;
+        z-index: 4;
         overflow: hidden;
         margin: 0 12px;
-        border: 1px solid rgba(124, 255, 195, 0.18);
-        border-radius: 20px;
-        background: #000;
-        box-shadow:
-          0 15px 35px rgba(0, 0, 0, 0.55),
-          0 0 20px rgba(56, 255, 166, 0.06);
+        border: 1px solid rgba(22, 139, 255, 0.28);
+        border-radius: 22px;
+        background: #000000;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.50);
       }
 
       .media-layer {
@@ -1450,7 +1620,7 @@ function HomeStyles() {
         display: block;
         border: 0;
         object-fit: contain;
-        background: #000;
+        background: #000000;
       }
 
       .embed-placeholder {
@@ -1460,101 +1630,76 @@ function HomeStyles() {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 10px;
         padding: 20px;
-        color: rgba(220, 255, 234, 0.70);
+        color: #dce7f7;
         background:
-          radial-gradient(circle, #143b2d 0%, #05120d 65%, #010403 100%);
+          radial-gradient(circle, rgba(8, 124, 255, 0.17), transparent 54%),
+          #020712;
         text-align: center;
       }
 
       .embed-placeholder-icon {
-        font-size: 38px;
-        text-shadow: 0 0 15px rgba(104, 255, 189, 0.5);
+        font-size: 40px;
       }
 
       .social-action-bar {
-        position: absolute;
-        left: 12px;
-        right: 12px;
-        bottom: max(18px, env(safe-area-inset-bottom));
-        z-index: 30;
-        min-height: 58px;
+        position: relative;
+        z-index: 8;
+        width: calc(100% - 24px);
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr auto;
-        align-items: center;
-        gap: 5px;
-        padding: 7px;
-        border: 1px solid rgba(111, 255, 190, 0.24);
-        border-radius: 21px;
-        background: rgba(1, 18, 12, 0.80);
-        backdrop-filter: blur(18px);
-        box-shadow:
-          0 0 24px rgba(50, 255, 166, 0.10),
-          inset 0 0 17px rgba(255, 255, 255, 0.025);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin: 12px 12px 0;
       }
 
-      .metric-group,
-      .action-button {
+      .metric-pill,
+      .action-pill {
         min-width: 0;
-        min-height: 43px;
+        min-height: 48px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        padding: 0 4px;
-        border: 0;
-        border-radius: 14px;
-        color: #ecfff4;
-        background: transparent;
-        font-size: 13px;
+        gap: 7px;
+        padding: 0 8px;
+        border: 1px solid rgba(22, 139, 255, 0.17);
+        border-radius: 18px;
+        color: #ffffff;
+        background: rgba(3, 11, 25, 0.72);
+        font-size: clamp(12px, 3.5vw, 15px);
         font-weight: 800;
       }
 
-      .action-button {
+      .action-pill {
         cursor: pointer;
       }
 
-      .action-button:active,
-      .create-post-cta:active,
-      .inbox-button:active {
-        transform: scale(0.96);
+      .action-pill:active,
+      .top-create-button:active,
+      .inbox-button:active,
+      .profile-picture-button:active {
+        transform: scale(0.97);
       }
 
       .action-symbol {
-        color: #b9ffda;
-        font-size: 21px;
+        color: #ffffff;
+        font-size: 22px;
         line-height: 1;
-        filter: drop-shadow(0 0 5px rgba(90, 255, 181, 0.45));
+      }
+
+      .eye-symbol {
+        transform: scaleX(1.2);
       }
 
       .share-symbol {
-        font-size: 24px;
+        font-size: 25px;
       }
 
-      .create-post-cta {
-        min-height: 43px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 3px;
-        padding: 0 12px;
-        border: 1px solid rgba(118, 255, 195, 0.44);
-        border-radius: 15px;
-        color: white;
-        background:
-          linear-gradient(145deg, rgba(37, 181, 119, 0.35), rgba(5, 78, 49, 0.38));
-        font-size: 12px;
-        font-weight: 900;
-        cursor: pointer;
-        box-shadow:
-          0 0 13px rgba(53, 255, 170, 0.15),
-          inset 0 0 9px rgba(255, 255, 255, 0.04);
-      }
-
-      .create-post-plus {
-        font-size: 21px;
+      .heart-icon {
+        color: #ff3156;
+        font-size: 25px;
         line-height: 1;
+        filter: drop-shadow(0 0 7px rgba(255, 49, 86, 0.20));
       }
 
       .screen-scanlines,
@@ -1566,37 +1711,33 @@ function HomeStyles() {
       }
 
       .screen-scanlines {
-        z-index: 50;
-        opacity: 0.14;
+        z-index: 30;
+        opacity: 0.035;
         background:
           repeating-linear-gradient(
             to bottom,
             transparent 0,
-            transparent 3px,
-            rgba(0, 0, 0, 0.72) 4px
+            transparent 4px,
+            rgba(255, 255, 255, 0.16) 5px
           );
-        animation: scanMove 7s linear infinite;
       }
 
       .screen-reflection {
-        z-index: 51;
-        border-radius: inherit;
-        opacity: 0.75;
+        z-index: 31;
+        opacity: 0.12;
         background:
           linear-gradient(
             118deg,
-            rgba(255, 255, 255, 0.12) 0%,
-            rgba(255, 255, 255, 0.028) 21%,
-            transparent 42%
+            rgba(255, 255, 255, 0.13) 0%,
+            rgba(255, 255, 255, 0.025) 22%,
+            transparent 43%
           );
       }
 
       .screen-vignette {
-        z-index: 52;
+        z-index: 32;
         border-radius: inherit;
-        box-shadow:
-          inset 0 0 62px rgba(0, 0, 0, 0.84),
-          inset 0 0 7px rgba(105, 255, 190, 0.10);
+        box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.34);
       }
 
       .modal-overlay {
@@ -1607,25 +1748,23 @@ function HomeStyles() {
         align-items: flex-end;
         justify-content: center;
         padding: 0;
-        background: rgba(0, 5, 3, 0.90);
+        background: rgba(0, 3, 10, 0.91);
         backdrop-filter: blur(8px);
       }
 
       .modal-card {
         width: 100%;
-        max-width: 460px;
-        max-height: 93vh;
+        max-width: 470px;
+        max-height: 93svh;
         overflow-y: auto;
         padding: 18px 18px 26px;
-        border: 1px solid rgba(118, 255, 194, 0.24);
+        border: 1px solid rgba(22, 139, 255, 0.30);
         border-radius: 24px 24px 0 0;
-        color: #effff6;
+        color: #ffffff;
         background:
-          radial-gradient(circle at top, #16382b 0%, #07160f 45%, #020806 100%);
-        box-shadow:
-          0 -18px 50px rgba(0, 0, 0, 0.55),
-          inset 0 0 24px rgba(84, 255, 177, 0.05);
-        scrollbar-width: thin;
+          radial-gradient(circle at top, rgba(8, 124, 255, 0.14), transparent 34%),
+          #06101f;
+        box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
       }
 
       .modal-header {
@@ -1636,19 +1775,18 @@ function HomeStyles() {
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin: -18px -18px 12px;
+        margin: -18px -18px 14px;
         padding: 18px;
-        border-bottom: 1px solid rgba(123, 255, 194, 0.12);
-        background: rgba(4, 19, 13, 0.94);
+        border-bottom: 1px solid rgba(22, 139, 255, 0.16);
+        background: rgba(4, 13, 29, 0.96);
         backdrop-filter: blur(16px);
       }
 
       .modal-header h2 {
         margin: 0;
-        color: #baffd8;
+        color: #ffffff;
         font-size: 19px;
         font-weight: 900;
-        text-shadow: 0 0 9px rgba(87, 255, 175, 0.34);
       }
 
       .modal-close {
@@ -1659,8 +1797,8 @@ function HomeStyles() {
         padding: 0;
         border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 50%;
-        color: white;
-        background: rgba(255, 255, 255, 0.06);
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
         font-size: 23px;
         cursor: pointer;
       }
@@ -1668,7 +1806,7 @@ function HomeStyles() {
       .form-section {
         margin-bottom: 18px;
         padding-bottom: 18px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
       }
 
       .form-section-last {
@@ -1677,7 +1815,7 @@ function HomeStyles() {
 
       .section-heading {
         margin-bottom: 10px;
-        color: #78ffc0;
+        color: #64b3ff;
         font-size: 12px;
         font-weight: 900;
         letter-spacing: 1px;
@@ -1687,7 +1825,7 @@ function HomeStyles() {
       .modal-card label {
         display: block;
         margin: 0 0 6px;
-        color: #e6fff0;
+        color: #e8eef8;
         font-size: 13px;
         font-weight: 700;
       }
@@ -1698,28 +1836,27 @@ function HomeStyles() {
         min-height: 48px;
         margin: 0 0 6px;
         padding: 12px 13px;
-        border: 1px solid rgba(136, 255, 200, 0.18);
+        border: 1px solid rgba(22, 139, 255, 0.22);
         border-radius: 11px;
         outline: none;
-        color: white;
-        background: rgba(0, 10, 7, 0.60);
-        font: inherit;
+        color: #ffffff;
+        background: rgba(1, 7, 18, 0.74);
       }
 
       .modal-card textarea {
-        min-height: 86px;
+        min-height: 88px;
         resize: vertical;
       }
 
       .modal-card input:focus,
       .modal-card textarea:focus {
-        border-color: rgba(104, 255, 187, 0.62);
-        box-shadow: 0 0 0 3px rgba(77, 255, 169, 0.08);
+        border-color: rgba(22, 139, 255, 0.78);
+        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.09);
       }
 
       .field-help {
         margin: 0 0 12px;
-        color: rgba(207, 255, 226, 0.59);
+        color: var(--muted);
         font-size: 11px;
         line-height: 1.45;
       }
@@ -1729,9 +1866,9 @@ function HomeStyles() {
         display: flex !important;
         align-items: center;
         padding: 12px 13px;
-        border: 1px dashed rgba(123, 255, 196, 0.36);
+        border: 1px dashed rgba(22, 139, 255, 0.40);
         border-radius: 11px;
-        background: rgba(29, 101, 69, 0.11);
+        background: rgba(8, 124, 255, 0.06);
         cursor: pointer;
       }
 
@@ -1752,9 +1889,9 @@ function HomeStyles() {
         max-height: 200px;
         display: block;
         object-fit: contain;
-        border: 1px solid rgba(112, 255, 190, 0.24);
+        border: 1px solid rgba(22, 139, 255, 0.28);
         border-radius: 12px;
-        background: #000;
+        background: #000000;
       }
 
       .logo-preview {
@@ -1762,7 +1899,7 @@ function HomeStyles() {
         height: 60px;
         display: block;
         object-fit: cover;
-        border: 2px solid #70ffc0;
+        border: 2px solid var(--blue);
         border-radius: 50%;
       }
 
@@ -1778,11 +1915,10 @@ function HomeStyles() {
       }
 
       .save-button {
-        border: 1px solid rgba(126, 255, 197, 0.42);
-        color: white;
-        background:
-          linear-gradient(145deg, #18885a, #0b5e3b);
-        box-shadow: 0 0 15px rgba(46, 255, 156, 0.18);
+        border: 1px solid rgba(22, 139, 255, 0.48);
+        color: #ffffff;
+        background: linear-gradient(145deg, var(--blue-bright), #0064df);
+        box-shadow: 0 0 15px rgba(8, 124, 255, 0.18);
       }
 
       .save-button:disabled {
@@ -1793,13 +1929,13 @@ function HomeStyles() {
       .cancel-button {
         margin-top: 10px;
         border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #d7eee0;
+        color: #d9e2ef;
         background: transparent;
       }
 
       .comments-post-name {
         margin: 4px 0 0;
-        color: rgba(210, 255, 228, 0.61);
+        color: var(--muted);
         font-size: 11px;
       }
 
@@ -1820,11 +1956,10 @@ function HomeStyles() {
         display: grid;
         place-items: center;
         overflow: hidden;
-        border: 2px solid rgba(107, 255, 188, 0.75);
+        border: 2px solid var(--blue);
         border-radius: 50%;
-        background: #f7fff9;
+        background: #ffffff;
         font-size: 25px;
-        box-shadow: 0 0 12px rgba(65, 255, 166, 0.20);
       }
 
       .comment-fields {
@@ -1840,7 +1975,7 @@ function HomeStyles() {
 
       .no-comments {
         padding: 22px 12px;
-        color: rgba(211, 255, 228, 0.58);
+        color: var(--muted);
         text-align: center;
       }
 
@@ -1849,9 +1984,9 @@ function HomeStyles() {
         align-items: flex-start;
         gap: 10px;
         padding: 11px;
-        border: 1px solid rgba(121, 255, 194, 0.13);
+        border: 1px solid rgba(22, 139, 255, 0.15);
         border-radius: 16px;
-        background: rgba(14, 58, 40, 0.17);
+        background: rgba(8, 124, 255, 0.05);
       }
 
       .comment-body {
@@ -1860,14 +1995,14 @@ function HomeStyles() {
       }
 
       .comment-country {
-        color: #aaffd2;
+        color: #7dbbff;
         font-size: 12px;
         font-weight: 900;
       }
 
       .comment-body p {
         margin: 5px 0 0;
-        color: #eafff2;
+        color: #f4f7fb;
         font-size: 14px;
         line-height: 1.45;
         overflow-wrap: anywhere;
@@ -1889,108 +2024,134 @@ function HomeStyles() {
         max-height: 90vh;
         display: block;
         object-fit: contain;
-        border: 2px solid rgba(108, 255, 190, 0.75);
+        border: 2px solid var(--blue);
         border-radius: 16px;
-        box-shadow: 0 0 24px rgba(58, 255, 169, 0.35);
+        box-shadow: 0 0 24px rgba(8, 124, 255, 0.30);
       }
 
       .loading-state,
       .empty-state {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        z-index: 3;
-        transform: translate(-50%, -50%);
-        color: #c5ffe0;
-        text-align: center;
-      }
-
-      .empty-state {
         width: min(88%, 420px);
+        margin: 110px auto 0;
+        color: #bcd9ff;
+        text-align: center;
       }
 
       .empty-button {
         min-height: 48px;
         margin-top: 12px;
         padding: 0 18px;
-        border: 1px solid rgba(112, 255, 192, 0.45);
+        border: 1px solid rgba(22, 139, 255, 0.50);
         border-radius: 15px;
-        color: white;
-        background: #116d47;
+        color: #ffffff;
+        background: #087cff;
         font-weight: 900;
         cursor: pointer;
       }
 
       @keyframes screenFlicker {
-        0%, 18%, 22%, 24%, 55%, 100% {
+        0%, 19%, 21%, 54%, 100% {
           filter: brightness(1);
         }
 
         20% {
-          filter: brightness(0.97);
+          filter: brightness(0.992);
         }
 
-        23% {
-          filter: brightness(1.025);
-        }
-
-        57% {
-          filter: brightness(0.985);
+        55% {
+          filter: brightness(1.006);
         }
       }
 
-      @keyframes scanMove {
-        from {
-          background-position: 0 0;
+      @media (max-width: 390px) {
+        .feedx-topbar {
+          min-height: 66px;
         }
 
-        to {
-          background-position: 0 16px;
-        }
-      }
-
-      @media (min-width: 700px) {
-        .home-feed {
-          padding: 12px 0;
+        .top-create-button {
+          width: 48px;
+          height: 48px;
+          flex-basis: 48px;
+          font-size: 30px;
         }
 
-        .home-post {
-          height: calc(100svh - 24px);
-          min-height: calc(100svh - 24px);
-          border-radius: 28px;
+        .post-header {
+          gap: 7px;
+          padding-left: 9px;
+          padding-right: 7px;
+        }
+
+        .profile-picture-button {
+          width: 52px;
+          height: 52px;
+          flex-basis: 52px;
+        }
+
+        .inbox-button {
+          width: 43px;
+          height: 43px;
+          flex-basis: 43px;
+        }
+
+        .social-action-bar {
+          gap: 5px;
+        }
+
+        .metric-pill,
+        .action-pill {
+          min-height: 44px;
+          gap: 4px;
+          padding: 0 4px;
+          border-radius: 15px;
+        }
+
+        .action-symbol,
+        .heart-icon {
+          font-size: 20px;
         }
       }
 
       @media (max-height: 720px) {
-        .post-header {
-          min-height: 66px;
-          margin-top: 6px;
-          padding: 7px 10px;
-        }
-
-        .profile-picture-button {
-          width: 46px;
-          height: 46px;
-          flex-basis: 46px;
-        }
-
-        .post-copy {
-          max-height: 21vh;
-          margin-top: 6px;
-          margin-bottom: 6px;
-          padding-top: 7px;
+        .feedx-topbar {
+          min-height: 62px;
+          padding-top: max(8px, env(safe-area-inset-top));
           padding-bottom: 7px;
         }
 
+        .feedx-logo {
+          font-size: 34px;
+        }
+
+        .top-create-button {
+          width: 46px;
+          height: 46px;
+          flex-basis: 46px;
+          font-size: 28px;
+        }
+
+        .home-post {
+          margin-top: 6px;
+        }
+
+        .post-header {
+          min-height: 70px;
+          padding-top: 9px;
+          padding-bottom: 9px;
+        }
+
+        .post-copy {
+          padding-top: 10px;
+          padding-bottom: 9px;
+        }
+
         .media-viewport {
-          height: 44vh;
-          min-height: 220px;
+          max-height: 54svh;
+          min-height: 210px;
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .crt-screen,
-        .screen-scanlines {
+        .crt-screen {
           animation: none;
         }
       }
