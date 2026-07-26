@@ -6,6 +6,16 @@ import {
   useState,
   memo,
 } from "react";
+import {
+  Eye,
+  MessageCircle,
+  Share2,
+  Heart,
+  Mail,
+  MoreVertical,
+  Plus,
+  ChevronDown,
+} from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 const DEFAULT_VIDEO =
@@ -553,9 +563,6 @@ function Home() {
     }));
 
     setCommentText("");
-    alert(
-      "Comment added on this phone only. Worker.js will later save it for everyone."
-    );
   }, [commentPhone, commentText, selectedPost]);
 
   const sharePost = useCallback(async (post) => {
@@ -830,35 +837,16 @@ function Home() {
                   <div className="creator-name">
                     {creatorDisplayName}
                   </div>
-
-                  <div className="post-time">
-                    {post.created_at
-                      ? new Date(post.created_at).toLocaleString([], {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })
-                      : "New post"}
-                  </div>
                 </div>
-
                 <button
                   type="button"
                   className="inbox-button"
                   onClick={() => openCreatorInbox(post)}
-                  aria-label="Contact creator"
-                  title="Contact creator"
+                  aria-label="Open creator message"
+                  title="Open creator message"
                 >
-                  <span className="inbox-envelope" aria-hidden="true">
-                    ✉
-                  </span>
-
-                  {Number(unreadMessages) > 0 && (
-                    <span className="unread-badge">
-                      {Number(unreadMessages) > 99
-                        ? "99+"
-                        : unreadMessages}
-                    </span>
-                  )}
+                  <Mail className="inbox-envelope" size={58} strokeWidth={2} aria-hidden="true" />
+                  <span className="unread-dot" aria-hidden="true" />
                 </button>
 
                 <button
@@ -867,7 +855,7 @@ function Home() {
                   aria-label="Post options"
                   title="Post options"
                 >
-                  ⋮
+                  <MoreVertical size={38} strokeWidth={2.5} aria-hidden="true" />
                 </button>
               </header>
 
@@ -889,9 +877,7 @@ function Home() {
 
               <div className="social-action-bar">
                 <div className="metric-pill" title="Views">
-                  <span className="action-symbol eye-symbol" aria-hidden="true">
-                    ◉
-                  </span>
+                  <Eye className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
                   <span>{formatCount(viewerCount)}</span>
                 </div>
 
@@ -901,9 +887,7 @@ function Home() {
                   onClick={() => openComments(post)}
                   aria-label="Open comments"
                 >
-                  <span className="action-symbol" aria-hidden="true">
-                    ◯
-                  </span>
+                  <MessageCircle className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
                   <span>{formatCount(commentCount)}</span>
                 </button>
 
@@ -913,9 +897,7 @@ function Home() {
                   onClick={() => sharePost(post)}
                   aria-label="Share post"
                 >
-                  <span className="action-symbol share-symbol" aria-hidden="true">
-                    ↗
-                  </span>
+                  <Share2 className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
                   <span>Share</span>
                 </button>
 
@@ -925,7 +907,7 @@ function Home() {
                   onClick={() => reactToPost(post)}
                   aria-label="Like post"
                 >
-                  <span className="heart-icon" aria-hidden="true">♥</span>
+                  <Heart className="heart-icon" size={40} strokeWidth={2} fill="currentColor" aria-hidden="true" />
                   <span>{formatCount(reactionCount)}</span>
                 </button>
               </div>
@@ -1010,7 +992,7 @@ const FeedXTopBar = memo(({ openEditor }) => (
       aria-label="Create post"
       title="Create post"
     >
-      ＋
+      <Plus size={42} strokeWidth={2} aria-hidden="true" />
     </button>
   </header>
 ));
@@ -1245,88 +1227,55 @@ const CommentsModal = memo(
     submitComment,
     closeComments,
   }) => (
-    <div className="modal-overlay" onClick={closeComments}>
-      <div
-        className="modal-card comments-card"
+    <div className="modal-overlay comments-overlay" onClick={closeComments}>
+      <section
+        className="comments-sheet"
         onClick={(event) => event.stopPropagation()}
+        aria-label="Comments"
       >
-        <div className="modal-header">
+        <header className="comments-sheet-header">
           <div>
-            <h2>Comments</h2>
-            <p className="comments-post-name">
-              {post.title || DEFAULT_TITLE}
-            </p>
+            <h2>
+              Comments <span>({comments.length})</span>
+            </h2>
+            <p>{post.title || DEFAULT_TITLE}</p>
           </div>
 
           <button
             type="button"
             onClick={closeComments}
-            className="modal-close"
+            className="comments-collapse-button"
             aria-label="Close comments"
           >
-            ×
+            <ChevronDown size={46} strokeWidth={2.2} aria-hidden="true" />
           </button>
-        </div>
-
-        <div className="comment-form">
-          <div className="comment-flag-preview">
-            {getCountryFlag(phone)}
-          </div>
-
-          <div className="comment-fields">
-            <label htmlFor="comment-phone">
-              Phone number
-            </label>
-
-            <input
-              id="comment-phone"
-              type="tel"
-              placeholder="+250 788 123 456"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-            />
-
-            <label htmlFor="comment-message">
-              Comment
-            </label>
-
-            <textarea
-              id="comment-message"
-              placeholder="Write your comment..."
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-            />
-
-            <p className="field-help">
-              Your phone number is not shown publicly. Only its
-              country flag is displayed.
-            </p>
-
-            <button
-              type="button"
-              className="save-button"
-              onClick={submitComment}
-            >
-              Send Comment
-            </button>
-          </div>
-        </div>
+        </header>
 
         <div className="comments-list">
           {comments.length === 0 ? (
             <div className="no-comments">
-              No comments yet. Be the first.
+              <MessageCircle size={44} strokeWidth={1.8} aria-hidden="true" />
+              <strong>No comments yet</strong>
+              <span>Be the first viewer to comment.</span>
             </div>
           ) : (
             comments.map((comment) => (
               <article className="comment-item" key={comment.id}>
-                <div className="comment-avatar">
-                  {comment.flag}
+                <div className="comment-avatar" aria-hidden="true">
+                  <span>{comment.flag}</span>
                 </div>
 
-                <div className="comment-body">
-                  <div className="comment-country">
-                    Viewer
+                <div className="comment-content">
+                  <div className="comment-topline">
+                    <strong>Viewer from</strong>
+                    <time>
+                      {comment.created_at
+                        ? new Date(comment.created_at).toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </time>
                   </div>
 
                   <p>{comment.text}</p>
@@ -1335,7 +1284,49 @@ const CommentsModal = memo(
             ))
           )}
         </div>
-      </div>
+
+        <div className="comment-composer">
+          <div className="comment-composer-identity">
+            <div className="comment-flag-preview" aria-hidden="true">
+              <span>{getCountryFlag(phone)}</span>
+            </div>
+
+            <div className="comment-phone-field">
+              <label htmlFor="comment-phone">Phone number</label>
+              <input
+                id="comment-phone"
+                type="tel"
+                inputMode="tel"
+                placeholder="+250 788 123 456"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="comment-compose-row">
+            <textarea
+              id="comment-message"
+              placeholder="Write your comment..."
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={2}
+            />
+
+            <button
+              type="button"
+              className="comment-send-button"
+              onClick={submitComment}
+            >
+              Send
+            </button>
+          </div>
+
+          <p className="comment-privacy">
+            Your phone number stays private. Only its country flag is shown.
+          </p>
+        </div>
+      </section>
     </div>
   )
 );
@@ -1347,13 +1338,10 @@ function HomeStyles() {
     <style>{`
       :root {
         --page-bg: #020712;
-        --card-bg: #06101f;
-        --card-bg-soft: #08172a;
+        --panel-bg: #06101f;
         --blue: #087cff;
         --blue-bright: #168bff;
-        --blue-border: rgba(22, 139, 255, 0.72);
-        --blue-soft: rgba(22, 139, 255, 0.15);
-        --text: #ffffff;
+        --blue-border: rgba(22, 139, 255, 0.78);
         --muted: #9ba8ba;
         --danger: #ff334f;
       }
@@ -1370,6 +1358,10 @@ function HomeStyles() {
         background: var(--page-bg);
       }
 
+      body {
+        overflow-x: hidden;
+      }
+
       button,
       input,
       textarea {
@@ -1379,30 +1371,30 @@ function HomeStyles() {
       .home-page {
         width: 100%;
         min-height: 100svh;
-        color: var(--text);
+        color: #ffffff;
         background:
-          radial-gradient(circle at 50% 0%, rgba(8, 124, 255, 0.10), transparent 34%),
+          radial-gradient(circle at 50% -12%, rgba(8, 124, 255, 0.13), transparent 34%),
           var(--page-bg);
       }
 
       .feedx-topbar {
-        width: min(calc(100% - 24px), 680px);
-        min-height: 72px;
+        width: min(calc(100% - 32px), 880px);
+        min-height: 118px;
         margin: 0 auto;
-        padding: max(12px, env(safe-area-inset-top)) 4px 10px;
+        padding: max(24px, env(safe-area-inset-top)) 18px 18px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
       }
 
       .feedx-logo {
         margin: 0;
         color: #ffffff;
-        font-size: clamp(34px, 9vw, 48px);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(44px, 6vw, 70px);
         font-weight: 900;
         line-height: 1;
-        letter-spacing: -1.5px;
+        letter-spacing: -2px;
       }
 
       .feedx-logo span {
@@ -1410,77 +1402,70 @@ function HomeStyles() {
       }
 
       .top-create-button {
-        width: 54px;
-        height: 54px;
-        flex: 0 0 54px;
+        width: 94px;
+        height: 94px;
+        flex: 0 0 94px;
         display: grid;
         place-items: center;
         padding: 0;
         border: 0;
         border-radius: 50%;
         color: #ffffff;
-        background: linear-gradient(145deg, var(--blue-bright), #0067ee);
-        font-size: 34px;
-        font-weight: 300;
-        line-height: 1;
+        background: linear-gradient(145deg, #1d8cff, #0067ee);
         cursor: pointer;
-        box-shadow: 0 10px 28px rgba(8, 124, 255, 0.28);
+        box-shadow:
+          0 0 12px rgba(22, 139, 255, 0.9),
+          0 0 30px rgba(22, 139, 255, 0.45),
+          inset 0 0 16px rgba(255, 255, 255, 0.18);
       }
 
       .home-feed {
         width: 100%;
-        min-height: calc(100svh - 72px);
-        padding: 0 0 max(28px, env(safe-area-inset-bottom));
-        overflow-x: hidden;
+        padding: 0 0 max(40px, env(safe-area-inset-bottom));
       }
 
       .home-post {
-        width: min(calc(100% - 20px), 680px);
-        margin: 10px auto 18px;
-        padding: 0 0 12px;
+        width: min(calc(100% - 32px), 880px);
+        margin: 0 auto 28px;
+        padding: 0 0 24px;
         position: relative;
         overflow: hidden;
         isolation: isolate;
         border: 1px solid var(--blue-border);
-        border-radius: 24px;
+        border-radius: 36px;
         background:
-          linear-gradient(
-            180deg,
-            rgba(7, 19, 36, 0.98),
-            rgba(2, 10, 22, 0.98)
-          );
+          linear-gradient(180deg, rgba(7, 19, 36, 0.995), rgba(2, 10, 22, 0.995));
         box-shadow:
-          0 16px 38px rgba(0, 0, 0, 0.55),
-          0 0 18px rgba(8, 124, 255, 0.10);
+          0 22px 50px rgba(0, 0, 0, 0.58),
+          0 0 24px rgba(8, 124, 255, 0.10);
       }
 
       .crt-screen {
-        animation: screenFlicker 7s infinite;
+        animation: screenFlicker 8s infinite;
       }
 
       .post-header {
         position: relative;
         z-index: 10;
-        min-height: 82px;
+        min-height: 184px;
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 14px 12px 12px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-        background: rgba(4, 14, 29, 0.50);
+        gap: 26px;
+        padding: 28px 34px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(4, 14, 29, 0.42);
       }
 
       .profile-picture-button {
-        width: 58px;
-        height: 58px;
-        flex: 0 0 58px;
+        width: 122px;
+        height: 122px;
+        flex: 0 0 122px;
         padding: 0;
         overflow: hidden;
-        border: 2px solid var(--blue);
+        border: 0;
         border-radius: 50%;
-        background: #030916;
+        background: transparent;
         cursor: pointer;
-        box-shadow: 0 0 16px rgba(8, 124, 255, 0.30);
       }
 
       .profile-picture {
@@ -1488,28 +1473,28 @@ function HomeStyles() {
         height: 100%;
         display: block;
         object-fit: cover;
+        border-radius: 50%;
       }
 
       .profile-details {
         min-width: 0;
         flex: 1;
+        display: flex;
+        align-items: center;
       }
 
       .creator-name {
         overflow: hidden;
         color: #ffffff;
-        font-size: clamp(16px, 4.5vw, 20px);
-        font-weight: 900;
-        line-height: 1.2;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(28px, 4vw, 42px);
+        font-weight: 800;
+        line-height: 1.1;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-
-      .post-time {
-        margin-top: 6px;
-        color: var(--muted);
-        font-size: clamp(11px, 3.2vw, 13px);
-        line-height: 1.2;
+        text-shadow:
+          0 0 6px rgba(22, 139, 255, 1),
+          0 0 20px rgba(22, 139, 255, 0.72);
       }
 
       .inbox-button,
@@ -1521,90 +1506,87 @@ function HomeStyles() {
       }
 
       .inbox-button {
-        width: 48px;
-        height: 48px;
-        flex: 0 0 48px;
+        width: 132px;
+        height: 98px;
+        flex: 0 0 132px;
         position: relative;
         display: grid;
         place-items: center;
         padding: 0;
-        border: 1px solid rgba(22, 139, 255, 0.58);
-        border-radius: 50%;
-        background: rgba(8, 124, 255, 0.06);
       }
 
       .inbox-envelope {
-        font-size: 24px;
-        line-height: 1;
+        color: #ffffff;
+        filter:
+          drop-shadow(0 0 7px rgba(22, 139, 255, 1))
+          drop-shadow(0 0 22px rgba(22, 139, 255, 0.95));
       }
 
-      .unread-badge {
-        min-width: 20px;
-        height: 20px;
+      .unread-dot {
+        width: 32px;
+        height: 32px;
         position: absolute;
-        top: -5px;
-        right: -3px;
-        display: grid;
-        place-items: center;
-        padding: 0 5px;
-        border: 2px solid #06101f;
-        border-radius: 11px;
-        color: #ffffff;
+        top: 2px;
+        right: 16px;
+        border: 3px solid #06101f;
+        border-radius: 50%;
         background: var(--danger);
-        font-size: 10px;
-        font-weight: 900;
+        box-shadow:
+          0 0 8px rgba(255, 51, 79, 1),
+          0 0 18px rgba(255, 51, 79, 0.72);
       }
 
       .post-menu-button {
-        width: 28px;
-        height: 44px;
-        flex: 0 0 28px;
+        width: 48px;
+        height: 70px;
+        flex: 0 0 48px;
         display: grid;
         place-items: center;
         padding: 0;
-        font-size: 28px;
-        line-height: 1;
       }
 
       .post-copy {
         position: relative;
         z-index: 5;
-        padding: 14px 18px 12px;
-        text-align: center;
+        padding: 34px 36px 26px;
+        text-align: left;
       }
 
       .post-title {
-        margin: 0 0 8px;
+        margin: 0 0 20px;
         color: #ffffff;
-        font-size: clamp(18px, 5vw, 23px);
-        font-weight: 900;
-        line-height: 1.26;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(34px, 5vw, 52px);
+        font-weight: 800;
+        line-height: 1.18;
+        letter-spacing: -0.5px;
         overflow-wrap: anywhere;
       }
 
       .post-message {
         margin: 0;
-        color: #f2f5fb;
-        font-size: clamp(15px, 4.2vw, 18px);
+        color: #c5cedb;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(24px, 3vw, 34px);
         font-weight: 400;
-        line-height: 1.48;
+        line-height: 1.45;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
 
       .media-viewport {
-        width: calc(100% - 24px);
-        min-height: 220px;
-        max-height: 58svh;
-        aspect-ratio: 9 / 12;
+        width: calc(100% - 64px);
+        min-height: 360px;
+        max-height: 72svh;
+        aspect-ratio: 16 / 9;
         position: relative;
         z-index: 4;
         overflow: hidden;
-        margin: 0 12px;
-        border: 1px solid rgba(22, 139, 255, 0.28);
-        border-radius: 22px;
+        margin: 0 32px;
+        border: 1px solid rgba(22, 139, 255, 0.22);
+        border-radius: 28px;
         background: #000000;
-        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.50);
+        box-shadow: 0 16px 38px rgba(0, 0, 0, 0.48);
       }
 
       .media-layer {
@@ -1630,8 +1612,8 @@ function HomeStyles() {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 10px;
-        padding: 20px;
+        gap: 12px;
+        padding: 24px;
         color: #dce7f7;
         background:
           radial-gradient(circle, rgba(8, 124, 255, 0.17), transparent 54%),
@@ -1640,66 +1622,63 @@ function HomeStyles() {
       }
 
       .embed-placeholder-icon {
-        font-size: 40px;
+        font-size: 48px;
       }
 
       .social-action-bar {
         position: relative;
         z-index: 8;
-        width: calc(100% - 24px);
+        width: calc(100% - 64px);
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px;
-        margin: 12px 12px 0;
+        gap: 18px;
+        margin: 24px 32px 0;
       }
 
       .metric-pill,
       .action-pill {
         min-width: 0;
-        min-height: 48px;
+        min-height: 94px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        padding: 0 8px;
-        border: 1px solid rgba(22, 139, 255, 0.17);
-        border-radius: 18px;
+        gap: 14px;
+        padding: 0 18px;
+        border: 1px solid rgba(22, 139, 255, 0.38);
+        border-radius: 28px;
         color: #ffffff;
-        background: rgba(3, 11, 25, 0.72);
-        font-size: clamp(12px, 3.5vw, 15px);
+        background:
+          linear-gradient(180deg, rgba(8, 26, 55, 0.96), rgba(2, 10, 23, 0.96));
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(22px, 2.6vw, 32px);
         font-weight: 800;
+        box-shadow:
+          inset 0 0 15px rgba(22, 139, 255, 0.06),
+          0 8px 20px rgba(0, 0, 0, 0.35);
       }
 
       .action-pill {
         cursor: pointer;
       }
 
-      .action-pill:active,
-      .top-create-button:active,
-      .inbox-button:active,
-      .profile-picture-button:active {
-        transform: scale(0.97);
-      }
-
-      .action-symbol {
+      .action-icon {
         color: #ffffff;
-        font-size: 22px;
-        line-height: 1;
-      }
-
-      .eye-symbol {
-        transform: scaleX(1.2);
-      }
-
-      .share-symbol {
-        font-size: 25px;
+        filter:
+          drop-shadow(0 0 6px rgba(22, 139, 255, 1))
+          drop-shadow(0 0 18px rgba(22, 139, 255, 0.82));
       }
 
       .heart-icon {
         color: #ff3156;
-        font-size: 25px;
-        line-height: 1;
-        filter: drop-shadow(0 0 7px rgba(255, 49, 86, 0.20));
+        filter:
+          drop-shadow(0 0 6px rgba(255, 49, 86, 1))
+          drop-shadow(0 0 18px rgba(255, 49, 86, 0.74));
+      }
+
+      .post-menu-button svg,
+      .comments-collapse-button svg,
+      .top-create-button svg {
+        display: block;
       }
 
       .screen-scanlines,
@@ -1712,24 +1691,24 @@ function HomeStyles() {
 
       .screen-scanlines {
         z-index: 30;
-        opacity: 0.035;
+        opacity: 0.025;
         background:
           repeating-linear-gradient(
             to bottom,
             transparent 0,
-            transparent 4px,
-            rgba(255, 255, 255, 0.16) 5px
+            transparent 5px,
+            rgba(255, 255, 255, 0.12) 6px
           );
       }
 
       .screen-reflection {
         z-index: 31;
-        opacity: 0.12;
+        opacity: 0.08;
         background:
           linear-gradient(
             118deg,
-            rgba(255, 255, 255, 0.13) 0%,
-            rgba(255, 255, 255, 0.025) 22%,
+            rgba(255, 255, 255, 0.10) 0%,
+            rgba(255, 255, 255, 0.018) 22%,
             transparent 43%
           );
       }
@@ -1737,7 +1716,7 @@ function HomeStyles() {
       .screen-vignette {
         z-index: 32;
         border-radius: inherit;
-        box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.34);
+        box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.30);
       }
 
       .modal-overlay {
@@ -1754,7 +1733,7 @@ function HomeStyles() {
 
       .modal-card {
         width: 100%;
-        max-width: 470px;
+        max-width: 520px;
         max-height: 93svh;
         overflow-y: auto;
         padding: 18px 18px 26px;
@@ -1779,12 +1758,10 @@ function HomeStyles() {
         padding: 18px;
         border-bottom: 1px solid rgba(22, 139, 255, 0.16);
         background: rgba(4, 13, 29, 0.96);
-        backdrop-filter: blur(16px);
       }
 
       .modal-header h2 {
         margin: 0;
-        color: #ffffff;
         font-size: 19px;
         font-weight: 900;
       }
@@ -1886,7 +1863,7 @@ function HomeStyles() {
 
       .media-preview {
         width: 100%;
-        max-height: 200px;
+        max-height: 220px;
         display: block;
         object-fit: contain;
         border: 1px solid rgba(22, 139, 255, 0.28);
@@ -1899,7 +1876,6 @@ function HomeStyles() {
         height: 60px;
         display: block;
         object-fit: cover;
-        border: 2px solid var(--blue);
         border-radius: 50%;
       }
 
@@ -1918,7 +1894,6 @@ function HomeStyles() {
         border: 1px solid rgba(22, 139, 255, 0.48);
         color: #ffffff;
         background: linear-gradient(145deg, var(--blue-bright), #0064df);
-        box-shadow: 0 0 15px rgba(8, 124, 255, 0.18);
       }
 
       .save-button:disabled {
@@ -1933,79 +1908,361 @@ function HomeStyles() {
         background: transparent;
       }
 
-      .comments-post-name {
-        margin: 4px 0 0;
-        color: var(--muted);
-        font-size: 11px;
+      .comments-overlay {
+        align-items: flex-end;
+        padding: 0;
       }
 
-      .comment-form {
+      .comments-sheet {
+        width: min(calc(100% - 32px), 880px);
+        max-height: 88svh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(22, 139, 255, 0.48);
+        border-radius: 32px 32px 0 0;
+        color: #ffffff;
+        background:
+          radial-gradient(circle at 15% 0%, rgba(22, 139, 255, 0.10), transparent 30%),
+          linear-gradient(180deg, #06101f 0%, #020814 100%);
+        box-shadow:
+          0 -22px 60px rgba(0, 0, 0, 0.68),
+          0 0 26px rgba(8, 124, 255, 0.14);
+      }
+
+      .comments-sheet-header {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 18px;
-        padding-bottom: 18px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        justify-content: space-between;
+        gap: 24px;
+        padding: 30px 34px 24px;
       }
 
-      .comment-flag-preview,
-      .comment-avatar {
-        width: 45px;
-        height: 45px;
-        flex: 0 0 45px;
+      .comments-sheet-header h2 {
+        margin: 0;
+        color: #ffffff;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: clamp(31px, 4vw, 46px);
+        font-weight: 900;
+        line-height: 1.05;
+        letter-spacing: -0.7px;
+      }
+
+      .comments-sheet-header h2 span {
+        color: #8d9aaf;
+        font-weight: 500;
+      }
+
+      .comments-sheet-header p {
+        margin: 13px 0 0;
+        color: #8d9aaf;
+        font-size: clamp(17px, 2vw, 23px);
+        line-height: 1.35;
+      }
+
+      .comments-collapse-button {
+        width: 64px;
+        height: 64px;
+        flex: 0 0 64px;
         display: grid;
         place-items: center;
-        overflow: hidden;
-        border: 2px solid var(--blue);
-        border-radius: 50%;
-        background: #ffffff;
-        font-size: 25px;
-      }
-
-      .comment-fields {
-        min-width: 0;
-        flex: 1;
+        padding: 0;
+        border: 0;
+        color: #c6cfdd;
+        background: transparent;
+        cursor: pointer;
       }
 
       .comments-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 34px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(22, 139, 255, 0.42) transparent;
       }
 
       .no-comments {
-        padding: 22px 12px;
-        color: var(--muted);
+        min-height: 240px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        color: #8d9aaf;
         text-align: center;
       }
 
+      .no-comments svg {
+        color: #168bff;
+        filter: drop-shadow(0 0 10px rgba(22, 139, 255, 0.42));
+      }
+
+      .no-comments strong {
+        color: #ffffff;
+        font-size: 20px;
+      }
+
       .comment-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 11px;
-        border: 1px solid rgba(22, 139, 255, 0.15);
-        border-radius: 16px;
-        background: rgba(8, 124, 255, 0.05);
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+        padding: 28px 0;
+        border-bottom: 1px solid rgba(22, 139, 255, 0.17);
       }
 
-      .comment-body {
+      .comment-avatar,
+      .comment-flag-preview {
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+      }
+
+      .comment-avatar {
+        width: 92px;
+        height: 92px;
+        font-size: 74px;
+        line-height: 1;
+      }
+
+      .comment-avatar span,
+      .comment-flag-preview span {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        line-height: 1;
+        transform: scale(1.48);
+      }
+
+      .comment-content {
         min-width: 0;
-        flex: 1;
       }
 
-      .comment-country {
-        color: #7dbbff;
-        font-size: 12px;
+      .comment-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .comment-topline strong {
+        color: #2196ff;
+        font-size: clamp(19px, 2.4vw, 27px);
         font-weight: 900;
       }
 
-      .comment-body p {
-        margin: 5px 0 0;
-        color: #f4f7fb;
-        font-size: 14px;
-        line-height: 1.45;
+      .comment-topline time {
+        flex: 0 0 auto;
+        color: #8d9aaf;
+        font-size: clamp(15px, 1.8vw, 20px);
+      }
+
+      .comment-content p {
+        margin: 12px 0 0;
+        color: #ffffff;
+        font-size: clamp(22px, 2.7vw, 31px);
+        font-weight: 400;
+        line-height: 1.4;
         overflow-wrap: anywhere;
+      }
+
+      .comment-composer {
+        padding: 22px 34px max(26px, env(safe-area-inset-bottom));
+        border-top: 1px solid rgba(22, 139, 255, 0.18);
+        background: rgba(2, 8, 20, 0.98);
+        box-shadow: 0 -16px 30px rgba(0, 0, 0, 0.28);
+      }
+
+      .comment-composer-identity {
+        display: grid;
+        grid-template-columns: 66px minmax(0, 1fr);
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 14px;
+      }
+
+      .comment-flag-preview {
+        width: 62px;
+        height: 62px;
+        font-size: 49px;
+      }
+
+      .comment-phone-field {
+        min-width: 0;
+      }
+
+      .comment-phone-field label {
+        display: block;
+        margin: 0 0 7px;
+        color: #dce5f2;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .comment-phone-field input {
+        width: 100%;
+        min-height: 52px;
+        padding: 12px 15px;
+        border: 1px solid rgba(22, 139, 255, 0.32);
+        border-radius: 14px;
+        outline: none;
+        color: #ffffff;
+        background: rgba(0, 5, 14, 0.92);
+      }
+
+      .comment-phone-field input:focus,
+      .comment-compose-row textarea:focus {
+        border-color: rgba(22, 139, 255, 0.9);
+        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.10);
+      }
+
+      .comment-compose-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .comment-compose-row textarea {
+        width: 100%;
+        min-height: 72px;
+        max-height: 150px;
+        padding: 16px;
+        resize: vertical;
+        border: 1px solid rgba(22, 139, 255, 0.32);
+        border-radius: 17px;
+        outline: none;
+        color: #ffffff;
+        background: rgba(0, 5, 14, 0.92);
+      }
+
+      .comment-send-button {
+        min-width: 128px;
+        padding: 0 26px;
+        border: 1px solid rgba(82, 169, 255, 0.7);
+        border-radius: 17px;
+        color: #ffffff;
+        background: linear-gradient(145deg, #2092ff, #0874ed);
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow:
+          0 9px 22px rgba(8, 124, 255, 0.22),
+          inset 0 0 12px rgba(255, 255, 255, 0.10);
+      }
+
+      .comment-send-button:active {
+        transform: scale(0.98);
+      }
+
+      .comment-privacy {
+        margin: 10px 2px 0;
+        color: #7f8ba0;
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: center;
+      }
+
+      @media (max-width: 700px) {
+        .comments-sheet {
+          width: 100%;
+          max-height: 90svh;
+          border-right: 0;
+          border-left: 0;
+          border-bottom: 0;
+          border-radius: 25px 25px 0 0;
+        }
+
+        .comments-sheet-header {
+          padding: 20px 20px 16px;
+        }
+
+        .comments-sheet-header h2 {
+          font-size: 28px;
+        }
+
+        .comments-sheet-header p {
+          margin-top: 8px;
+          font-size: 14px;
+        }
+
+        .comments-collapse-button {
+          width: 46px;
+          height: 46px;
+          flex-basis: 46px;
+        }
+
+        .comments-list {
+          padding: 0 20px;
+        }
+
+        .comment-item {
+          grid-template-columns: 64px minmax(0, 1fr);
+          gap: 15px;
+          padding: 20px 0;
+        }
+
+        .comment-avatar {
+          width: 62px;
+          height: 62px;
+          font-size: 50px;
+        }
+
+        .comment-topline {
+          gap: 10px;
+        }
+
+        .comment-topline strong {
+          font-size: 17px;
+        }
+
+        .comment-topline time {
+          font-size: 12px;
+        }
+
+        .comment-content p {
+          margin-top: 8px;
+          font-size: 18px;
+        }
+
+        .comment-composer {
+          padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+        }
+
+        .comment-composer-identity {
+          grid-template-columns: 50px minmax(0, 1fr);
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+
+        .comment-flag-preview {
+          width: 48px;
+          height: 48px;
+          font-size: 38px;
+        }
+
+        .comment-phone-field input {
+          min-height: 44px;
+          padding: 10px 12px;
+        }
+
+        .comment-compose-row {
+          gap: 9px;
+        }
+
+        .comment-compose-row textarea {
+          min-height: 58px;
+          padding: 13px;
+        }
+
+        .comment-send-button {
+          min-width: 88px;
+          padding: 0 16px;
+        }
       }
 
       .zoom-overlay {
@@ -2024,9 +2281,7 @@ function HomeStyles() {
         max-height: 90vh;
         display: block;
         object-fit: contain;
-        border: 2px solid var(--blue);
         border-radius: 16px;
-        box-shadow: 0 0 24px rgba(8, 124, 255, 0.30);
       }
 
       .loading-state,
@@ -2050,103 +2305,198 @@ function HomeStyles() {
       }
 
       @keyframes screenFlicker {
-        0%, 19%, 21%, 54%, 100% {
-          filter: brightness(1);
-        }
-
-        20% {
-          filter: brightness(0.992);
-        }
-
-        55% {
-          filter: brightness(1.006);
-        }
+        0%, 19%, 21%, 54%, 100% { filter: brightness(1); }
+        20% { filter: brightness(0.994); }
+        55% { filter: brightness(1.004); }
       }
 
-      @media (max-width: 390px) {
+      @media (max-width: 700px) {
         .feedx-topbar {
-          min-height: 66px;
+          width: min(calc(100% - 20px), 680px);
+          min-height: 76px;
+          padding: max(10px, env(safe-area-inset-top)) 4px 9px;
+        }
+
+        .feedx-logo {
+          font-size: clamp(36px, 10vw, 48px);
         }
 
         .top-create-button {
-          width: 48px;
-          height: 48px;
-          flex-basis: 48px;
-          font-size: 30px;
+          width: 56px;
+          height: 56px;
+          flex-basis: 56px;
+        }
+
+        .home-post {
+          width: min(calc(100% - 16px), 680px);
+          margin-bottom: 18px;
+          padding-bottom: 12px;
+          border-radius: 24px;
         }
 
         .post-header {
-          gap: 7px;
-          padding-left: 9px;
-          padding-right: 7px;
+          min-height: 78px;
+          gap: 9px;
+          padding: 11px 10px 10px;
         }
 
         .profile-picture-button {
-          width: 52px;
-          height: 52px;
-          flex-basis: 52px;
+          width: 56px;
+          height: 56px;
+          flex-basis: 56px;
+        }
+
+        .creator-name {
+          font-size: clamp(18px, 5vw, 22px);
         }
 
         .inbox-button {
-          width: 43px;
-          height: 43px;
-          flex-basis: 43px;
+          width: 58px;
+          height: 50px;
+          flex-basis: 58px;
+        }
+
+        .inbox-envelope {
+          width: 34px;
+          height: 34px;
+        }
+
+        .unread-dot {
+          width: 18px;
+          height: 18px;
+          top: 1px;
+          right: 1px;
+          border-width: 2px;
+        }
+
+        .post-menu-button {
+          width: 30px;
+          height: 44px;
+          flex-basis: 30px;
+        }
+
+        .post-menu-button svg {
+          width: 26px;
+          height: 26px;
+        }
+
+        .post-copy {
+          padding: 16px 18px 14px;
+          text-align: center;
+        }
+
+        .post-title {
+          margin-bottom: 10px;
+          font-size: clamp(20px, 6vw, 25px);
+        }
+
+        .post-message {
+          font-size: clamp(16px, 4.6vw, 19px);
+        }
+
+        .media-viewport {
+          width: calc(100% - 24px);
+          min-height: 220px;
+          max-height: 58svh;
+          aspect-ratio: 9 / 12;
+          margin: 0 12px;
+          border-radius: 22px;
         }
 
         .social-action-bar {
-          gap: 5px;
+          width: calc(100% - 24px);
+          gap: 6px;
+          margin: 12px 12px 0;
         }
 
         .metric-pill,
         .action-pill {
-          min-height: 44px;
-          gap: 4px;
-          padding: 0 4px;
-          border-radius: 15px;
+          min-height: 48px;
+          gap: 5px;
+          padding: 0 5px;
+          border-radius: 16px;
+          font-size: clamp(12px, 3.5vw, 15px);
         }
 
-        .action-symbol,
+        .action-icon,
         .heart-icon {
-          font-size: 20px;
-        }
-      }
-
-      @media (max-height: 720px) {
-        .feedx-topbar {
-          min-height: 62px;
-          padding-top: max(8px, env(safe-area-inset-top));
-          padding-bottom: 7px;
+          width: 23px;
+          height: 23px;
         }
 
-        .feedx-logo {
-          font-size: 34px;
+        .comments-sheet {
+          width: 100%;
+          max-height: 88svh;
+          border-radius: 24px 24px 0 0;
         }
 
-        .top-create-button {
-          width: 46px;
-          height: 46px;
-          flex-basis: 46px;
-          font-size: 28px;
+        .comments-sheet-header {
+          padding: 18px 18px 14px;
         }
 
-        .home-post {
-          margin-top: 6px;
+        .comments-sheet-header h2 {
+          font-size: 22px;
         }
 
-        .post-header {
-          min-height: 70px;
-          padding-top: 9px;
-          padding-bottom: 9px;
+        .comments-sheet-header p {
+          font-size: 12px;
         }
 
-        .post-copy {
-          padding-top: 10px;
-          padding-bottom: 9px;
+        .comments-collapse-button {
+          width: 42px;
+          height: 42px;
         }
 
-        .media-viewport {
-          max-height: 54svh;
-          min-height: 210px;
+        .comments-list {
+          padding: 0 18px;
+        }
+
+        .comment-item {
+          gap: 12px;
+          padding: 16px 0;
+        }
+
+        .comment-avatar,
+        .comment-flag-preview {
+          width: 52px;
+          height: 52px;
+          flex-basis: 52px;
+          font-size: 40px;
+        }
+
+        .comment-country {
+          font-size: 14px;
+        }
+
+        .comment-body p {
+          font-size: 16px;
+        }
+
+        .comment-composer {
+          padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+        }
+
+        .comment-composer-top {
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+
+        .comment-phone-field input {
+          min-height: 44px;
+          padding: 10px 12px;
+        }
+
+        .comment-compose-row {
+          gap: 10px;
+        }
+
+        .comment-compose-row textarea {
+          min-height: 58px;
+        }
+
+        .comment-send-button {
+          min-width: 92px;
+          padding: 0 18px;
         }
       }
 
