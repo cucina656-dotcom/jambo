@@ -346,12 +346,24 @@ function Home() {
   }, []);
 
   const readJsonSafely = useCallback(async (response) => {
-    const text = await response.text();
+    const responseText = await response.text();
+
+    if (!responseText) {
+      return {
+        success: response.ok,
+        message: response.ok
+          ? ""
+          : `Server returned ${response.status} ${response.statusText}`,
+      };
+    }
 
     try {
-      return JSON.parse(text);
+      return JSON.parse(responseText);
     } catch {
-      throw new Error(text || "Server did not return JSON");
+      throw new Error(
+        responseText ||
+          `Server returned ${response.status} ${response.statusText}`
+      );
     }
   }, []);
 
@@ -423,44 +435,22 @@ function Home() {
 
         const data = await readJsonSafely(response);
 
-        if (!data.success) {
-          throw new Error(data.message || "Failed to load posts");
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error ||
+              data.message ||
+              `Failed to load posts (${response.status})`
+          );
         }
 
-        if (Array.isArray(data.posts) && data.posts.length > 0) {
-          if (isMountedRef.current) {
-            setPosts((current) => (append ? [...current, ...data.posts] : data.posts));
-            setNextCursor(data.next_cursor || null);
-            setHasMore(Boolean(data.has_more));
-          }
-          return;
-        }
+        const receivedPosts = Array.isArray(data.posts) ? data.posts : [];
 
-        if (!append && isMountedRef.current) {
-          setPosts([
-            {
-              id: 0,
-              creator_name: data.creator_name || "",
-              creator_identity: data.creator_identity || "",
-              creator_type: data.creator_type || "",
-              title: data.title || DEFAULT_TITLE,
-              subtitle: data.subtitle || "",
-              logo_url: data.logo_url || DEFAULT_LOGO,
-              media_url: data.video_url || DEFAULT_VIDEO,
-              media_type: data.media_type || "",
-              watch_seconds: 0,
-              comment_count: 0,
-              share_count: 0,
-              real_views: 0,
-              manual_views: 0,
-              real_reactions: 0,
-              manual_reactions: 0,
-            },
-          ]);
-          setHasMore(false);
-          setNextCursor(null);
-        } else if (append && isMountedRef.current) {
-          setHasMore(false);
+        if (isMountedRef.current) {
+          setPosts((current) =>
+            append ? [...current, ...receivedPosts] : receivedPosts
+          );
+          setNextCursor(data.next_cursor || null);
+          setHasMore(Boolean(data.has_more));
         }
       } catch (error) {
         console.error("Failed to fetch home data:", error);
@@ -910,24 +900,30 @@ function Home() {
 
       const data = await readJsonSafely(response);
 
-      if (!data.success) {
-        alert(data.message || "Failed to create post.");
-        return;
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            `Failed to create post (${response.status})`
+        );
       }
 
-      if (Array.isArray(data.posts)) {
-        if (isMountedRef.current) {
-          setPosts(data.posts);
-        }
+      if (data.post && isMountedRef.current) {
+        setPosts((current) => [
+          data.post,
+          ...current.filter(
+            (item) => String(item.id) !== String(data.post.id)
+          ),
+        ]);
       } else {
         await fetchHomeData();
       }
 
       closeEditor();
-      alert("Post created successfully!");
+      alert(data.message || "Post created successfully!");
     } catch (error) {
       console.error("Failed to create home post:", error);
-      alert("Failed to create post.");
+      alert(error.message || "Failed to create post.");
     } finally {
       if (isMountedRef.current) {
         setSaving(false);
