@@ -1482,11 +1482,11 @@ const HomePost = memo(function HomePost({
         <button
           type="button"
           className="profile-picture-button"
-          onClick={() => onZoomImage(post.logo_url || post.profile_image_url || DEFAULT_LOGO)}
+          onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)}
           aria-label="Open profile picture"
         >
           <img
-            src={post.logo_url || post.profile_image_url || DEFAULT_LOGO}
+            src={post.logo_url || DEFAULT_LOGO}
             alt=""
             className="profile-picture"
             loading="lazy"
@@ -1540,23 +1540,25 @@ const HomePost = memo(function HomePost({
             />
           )}
 
-          {isVideo && (
-            <video
-              ref={videoRefCallback}
-              src={mediaUrl}
-              loop
-              playsInline
-              muted={!isActive}
-              controls
-              preload="metadata"
-              className="home-media"
-              onPlay={() => onVideoPlay(postId)}
-              onPause={() => onVideoPause(postId)}
-              onError={(event) => {
-                console.error("Video failed to load:", mediaUrl, event.currentTarget.error);
-              }}
-            />
-          )}
+          {isVideo &&
+            (isActive ? (
+              <video
+                ref={videoRefCallback}
+                src={mediaUrl}
+                loop
+                playsInline
+                muted={false}
+                controls
+                preload="none"
+                className="home-media"
+                onPlay={() => onVideoPlay(postId)}
+                onPause={() => onVideoPause(postId)}
+              />
+            ) : (
+              <div className="media-placeholder" aria-hidden="true">
+                <span className="embed-placeholder-icon">▶</span>
+              </div>
+            ))}
 
           {isEmbed &&
             (isActive ? (
