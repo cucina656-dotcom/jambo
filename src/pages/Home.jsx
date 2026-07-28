@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Plus,
   ChevronDown,
+  X,
 } from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
@@ -25,6 +26,19 @@ const DEFAULT_TITLE = "ChillaX";
 
 const DEFAULT_LOGO =
   "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
+
+// Small inline fallback so a broken feed image never falls back to a large
+// profile photo (per low-memory / correctness requirements).
+const IMAGE_FALLBACK_SRC =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
+
+const INITIAL_PAGE_LIMIT = 5;
+const LOAD_MORE_LIMIT = 5;
+
+const WATCH_FLUSH_INTERVAL_MS = 10_000;
+const MAX_WATCH_SECONDS_PER_REQUEST = 30;
+
+const WHATSAPP_STORAGE_KEY = "feedx-whatsapp-number";
 
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
@@ -137,8 +151,40 @@ function formatCount(value = 0) {
   return String(number);
 }
 
-function getCountryFlag(phone = "") {
-  const digits = String(phone).replace(/[^\d+]/g, "");
+/**
+ * Reusable WhatsApp / phone number normalizer.
+ * This MUST stay in sync with the identical function in Worker.js.
+ * It only checks structure — it never proves ownership of the number.
+ */
+function normalizeWhatsAppNumber(value = "") {
+  const raw = String(value || "").trim();
+  const compact = raw.replace(/[\s().-]/g, "");
+
+  if (/^07[2389]\d{7}$/.test(compact)) {
+    return `250${compact.slice(1)}`;
+  }
+
+  if (/^\+2507[2389]\d{7}$/.test(compact)) {
+    return compact.slice(1);
+  }
+
+  if (/^2507[2389]\d{7}$/.test(compact)) {
+    return compact;
+  }
+
+  if (/^\+[1-9]\d{7,14}$/.test(compact)) {
+    return compact.slice(1);
+  }
+
+  if (/^[1-9]\d{7,14}$/.test(compact)) {
+    return compact;
+  }
+
+  return "";
+}
+
+function getCountryFlag(phoneOrNormalized = "") {
+  const digits = String(phoneOrNormalized).replace(/[^\d+]/g, "");
 
   const countryPrefixes = [
     ["+250", "🇷🇼"],
@@ -175,19 +221,81 @@ function getCountryFlag(phone = "") {
   return match ? match[1] : "🌍";
 }
 
+/**
+ * Resizes/compresses an image file in the browser before upload.
+ * Keeps aspect ratio, caps dimensions, exports as WebP (falls back to JPEG).
+ * Returns the original file untouched if compression fails for any reason,
+ * so an upload error never freezes the page.
+ */
+async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } = {}) {
+  if (!file || !file.type || !file.type.startsWith("image/")) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+
+    const widthLimit = maxWidth || width;
+    const heightLimit = maxHeight || height;
+    const scale = Math.min(1, widthLimit / width, heightLimit / height);
+
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob(
+        (result) => resolve(result),
+        "image/webp",
+        quality
+      );
+    });
+
+    if (!blob) return file;
+
+    const newName = file.name
+      ? file.name.replace(/\.[^/.]+$/, "") + ".webp"
+      : "upload.webp";
+
+    return new File([blob], newName, { type: "image/webp" });
+  } catch (error) {
+    console.warn("Image compression failed, using original file:", error);
+    return file;
+  }
+}
+
 function Home() {
   const videoRefs = useRef({});
   const postRefs = useRef({});
   const observerRef = useRef(null);
   const isMountedRef = useRef(true);
 
+  // ---- Watch-time accumulation refs (not state — these change too often
+  // to justify a re-render on every tick) ----
+  const watchAccumulatorRef = useRef({}); // { [postId]: secondsPendingFlush }
+  const watchTimerRef = useRef({}); // { [postId]: intervalId while playing }
+  const iframeExposureAccumulatorRef = useRef({}); // { [postId]: seconds }
+  const iframeExposureTimerRef = useRef(null);
+  const tabHiddenRef = useRef(false);
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const [activePostIndex, setActivePostIndex] = useState(0);
 
   const [showEditor, setShowEditor] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [loadingComments, setLoadingComments] = useState(false);
 
   const [newCreatorName, setNewCreatorName] = useState("");
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
@@ -200,16 +308,42 @@ function Home() {
   const [mediaPreview, setMediaPreview] = useState("");
   const [mediaPreviewType, setMediaPreviewType] = useState("");
   const [saving, setSaving] = useState(false);
+  const [compressingMedia, setCompressingMedia] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
 
-  /*
-   * Temporary comment state.
-   * When Worker.js is changed, replace this with API data.
-   */
+  // Comments are now backed by the D1 database, keyed by post id.
   const [commentsByPost, setCommentsByPost] = useState({});
   const [commentPhone, setCommentPhone] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [localReactions, setLocalReactions] = useState({});
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  // Reactions: D1 is the source of truth. We only keep a small map of
+  // "pending" UI state so the heart can respond instantly.
+  const [reactedPosts, setReactedPosts] = useState({});
+  const [reactingPostId, setReactingPostId] = useState(null);
+
+  // WhatsApp number modal, shown once per device before the first like.
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneModalValue, setPhoneModalValue] = useState("");
+  const [phoneModalError, setPhoneModalError] = useState("");
+  const [phoneModalTargetPost, setPhoneModalTargetPost] = useState(null);
+
+  // Envelope "unread dot" state — purely a per-device localStorage concern.
+  const [openedEnvelopes, setOpenedEnvelopes] = useState({});
+
+  const objectUrlsRef = useRef(new Set());
+
+  const trackObjectUrl = useCallback((url) => {
+    if (url) objectUrlsRef.current.add(url);
+    return url;
+  }, []);
+
+  const revokeObjectUrl = useCallback((url) => {
+    if (url && objectUrlsRef.current.has(url)) {
+      URL.revokeObjectURL(url);
+      objectUrlsRef.current.delete(url);
+    }
+  }, []);
 
   const readJsonSafely = useCallback(async (response) => {
     const text = await response.text();
@@ -221,55 +355,129 @@ function Home() {
     }
   }, []);
 
-  const fetchHomeData = useCallback(async () => {
+  // ---------------------------------------------------------------------
+  // Saved WhatsApp number convenience (device-level, not verified ownership)
+  // ---------------------------------------------------------------------
+
+  const getSavedWhatsAppNumber = useCallback(() => {
     try {
-      setLoading(true);
-
-      const response = await fetch(`${API_URL}/api/home`, {
-        cache: "no-store",
-      });
-
-      const data = await readJsonSafely(response);
-
-      if (!data.success) {
-        throw new Error(data.message || "Failed to load posts");
-      }
-
-      if (Array.isArray(data.posts) && data.posts.length > 0) {
-        if (isMountedRef.current) {
-          setPosts(data.posts);
-        }
-        return;
-      }
-
-      if (isMountedRef.current) {
-        setPosts([
-          {
-            id: 0,
-            creator_name: data.creator_name || "",
-            creator_identity: data.creator_identity || "",
-            creator_type: data.creator_type || "",
-            title: data.title || DEFAULT_TITLE,
-            subtitle: data.subtitle || "",
-            logo_url: data.logo_url || DEFAULT_LOGO,
-            media_url: data.video_url || DEFAULT_VIDEO,
-            media_type: data.media_type || "",
-            watch_seconds: 0,
-            comment_count: 0,
-            share_count: 0,
-            unread_messages: 0,
-            reaction_count: 0,
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch home data:", error);
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+      return localStorage.getItem(WHATSAPP_STORAGE_KEY) || "";
+    } catch {
+      return "";
     }
-  }, [readJsonSafely]);
+  }, []);
+
+  const saveWhatsAppNumber = useCallback((normalized) => {
+    try {
+      localStorage.setItem(WHATSAPP_STORAGE_KEY, normalized);
+    } catch {
+      // localStorage may be unavailable (private mode, quota) — non-fatal.
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------
+  // Envelope opened state (per device, per post)
+  // ---------------------------------------------------------------------
+
+  const isEnvelopeOpened = useCallback(
+    (postId) => {
+      if (openedEnvelopes[postId]) return true;
+      try {
+        return localStorage.getItem(`feedx-envelope-opened-${postId}`) === "true";
+      } catch {
+        return false;
+      }
+    },
+    [openedEnvelopes]
+  );
+
+  const markEnvelopeOpened = useCallback((postId) => {
+    try {
+      localStorage.setItem(`feedx-envelope-opened-${postId}`, "true");
+    } catch {
+      // ignore storage failures — dot will just reappear on next load
+    }
+    setOpenedEnvelopes((current) => ({ ...current, [postId]: true }));
+  }, []);
+
+  // ---------------------------------------------------------------------
+  // Fetching the feed (with pagination)
+  // ---------------------------------------------------------------------
+
+  const fetchHomeData = useCallback(
+    async ({ append = false, cursor = null } = {}) => {
+      try {
+        if (append) {
+          setLoadingMore(true);
+        } else {
+          setLoading(true);
+        }
+
+        const params = new URLSearchParams();
+        params.set("limit", String(append ? LOAD_MORE_LIMIT : INITIAL_PAGE_LIMIT));
+        if (cursor) params.set("cursor", cursor);
+
+        const response = await fetch(`${API_URL}/api/home?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        const data = await readJsonSafely(response);
+
+        if (!data.success) {
+          throw new Error(data.message || "Failed to load posts");
+        }
+
+        if (Array.isArray(data.posts) && data.posts.length > 0) {
+          if (isMountedRef.current) {
+            setPosts((current) => (append ? [...current, ...data.posts] : data.posts));
+            setNextCursor(data.next_cursor || null);
+            setHasMore(Boolean(data.has_more));
+          }
+          return;
+        }
+
+        if (!append && isMountedRef.current) {
+          setPosts([
+            {
+              id: 0,
+              creator_name: data.creator_name || "",
+              creator_identity: data.creator_identity || "",
+              creator_type: data.creator_type || "",
+              title: data.title || DEFAULT_TITLE,
+              subtitle: data.subtitle || "",
+              logo_url: data.logo_url || DEFAULT_LOGO,
+              media_url: data.video_url || DEFAULT_VIDEO,
+              media_type: data.media_type || "",
+              watch_seconds: 0,
+              comment_count: 0,
+              share_count: 0,
+              real_views: 0,
+              manual_views: 0,
+              real_reactions: 0,
+              manual_reactions: 0,
+            },
+          ]);
+          setHasMore(false);
+          setNextCursor(null);
+        } else if (append && isMountedRef.current) {
+          setHasMore(false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch home data:", error);
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [readJsonSafely]
+  );
+
+  const loadMorePosts = useCallback(() => {
+    if (!hasMore || loadingMore || !nextCursor) return;
+    fetchHomeData({ append: true, cursor: nextCursor });
+  }, [hasMore, loadingMore, nextCursor, fetchHomeData]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -278,7 +486,14 @@ function Home() {
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchHomeData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------------------------------------------------------------------
+  // Intersection observer — drives active post, video autoplay, and
+  // iframe exposure-time tracking (visible time only, never claimed as
+  // exact watch time).
+  // ---------------------------------------------------------------------
 
   useEffect(() => {
     if (!posts.length) return undefined;
@@ -327,13 +542,217 @@ function Home() {
     };
   }, [posts]);
 
+  // ---------------------------------------------------------------------
+  // Watch-time tracking (direct video only)
+  // ---------------------------------------------------------------------
+
+  const flushWatchSeconds = useCallback(
+    (postId, { useBeacon = false } = {}) => {
+      const pending = Math.floor(watchAccumulatorRef.current[postId] || 0);
+      if (pending <= 0) return; // never send a zero-second request
+
+      const seconds = Math.min(pending, MAX_WATCH_SECONDS_PER_REQUEST);
+      watchAccumulatorRef.current[postId] = pending - seconds;
+
+      const payload = JSON.stringify({
+        post_id: String(postId),
+        seconds,
+        field: "watch_seconds",
+      });
+
+      if (useBeacon && navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon(`${API_URL}/api/home/watch`, blob);
+        return;
+      }
+
+      fetch(`${API_URL}/api/home/watch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch((error) => {
+        console.warn("Failed to send watch time:", error);
+      });
+    },
+    []
+  );
+
+  const startWatchTimer = useCallback(
+    (postId) => {
+      if (watchTimerRef.current[postId]) return; // already running
+
+      watchAccumulatorRef.current[postId] = watchAccumulatorRef.current[postId] || 0;
+
+      watchTimerRef.current[postId] = setInterval(() => {
+        watchAccumulatorRef.current[postId] = (watchAccumulatorRef.current[postId] || 0) + 1;
+
+        // Send accumulated watch time every 10 seconds while still playing.
+        if (watchAccumulatorRef.current[postId] >= 10) {
+          flushWatchSeconds(postId);
+        }
+      }, 1000);
+    },
+    [flushWatchSeconds]
+  );
+
+  const stopWatchTimer = useCallback(
+    (postId, { flush = true, useBeacon = false } = {}) => {
+      if (watchTimerRef.current[postId]) {
+        clearInterval(watchTimerRef.current[postId]);
+        delete watchTimerRef.current[postId];
+      }
+      if (flush) {
+        flushWatchSeconds(postId, { useBeacon });
+      }
+    },
+    [flushWatchSeconds]
+  );
+
+  const handleVideoPlay = useCallback(
+    (postId) => {
+      startWatchTimer(postId);
+    },
+    [startWatchTimer]
+  );
+
+  const handleVideoPause = useCallback(
+    (postId) => {
+      stopWatchTimer(postId, { flush: true });
+    },
+    [stopWatchTimer]
+  );
+
+  // Stop counting when the tab becomes hidden; resume bookkeeping (but not
+  // counting) when it becomes visible again — the IntersectionObserver /
+  // video "play" event naturally restarts the timer once truly playing.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const hidden = document.hidden;
+      tabHiddenRef.current = hidden;
+
+      if (hidden) {
+        Object.keys(watchTimerRef.current).forEach((postId) => {
+          stopWatchTimer(postId, { flush: true, useBeacon: true });
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [stopWatchTimer]);
+
+  // Flush any unsaved seconds (all posts) when the page is about to close.
+  useEffect(() => {
+    const handlePageHide = () => {
+      Object.keys(watchTimerRef.current).forEach((postId) => {
+        stopWatchTimer(postId, { flush: true, useBeacon: true });
+      });
+      Object.keys(iframeExposureAccumulatorRef.current).forEach((postId) => {
+        flushIframeExposure(postId, { useBeacon: true });
+      });
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
+      handlePageHide();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------------------------------------------------------------------
+  // Embedded iframe exposure-time tracking (visible time only — never
+  // presented as exact "watch time" since we don't control the player).
+  // ---------------------------------------------------------------------
+
+  const flushIframeExposure = useCallback((postId, { useBeacon = false } = {}) => {
+    const pending = Math.floor(iframeExposureAccumulatorRef.current[postId] || 0);
+    if (pending <= 0) return;
+
+    const seconds = Math.min(pending, MAX_WATCH_SECONDS_PER_REQUEST);
+    iframeExposureAccumulatorRef.current[postId] = pending - seconds;
+
+    const payload = JSON.stringify({
+      post_id: String(postId),
+      seconds,
+      field: "iframe_exposure_seconds",
+    });
+
+    if (useBeacon && navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon(`${API_URL}/api/home/watch`, blob);
+      return;
+    }
+
+    fetch(`${API_URL}/api/home/watch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {});
+  }, []);
+
+  // Ticks once per second for whichever post is both active AND an embed,
+  // as long as the tab is visible.
+  useEffect(() => {
+    if (iframeExposureTimerRef.current) {
+      clearInterval(iframeExposureTimerRef.current);
+      iframeExposureTimerRef.current = null;
+    }
+
+    const activePost = posts[activePostIndex];
+    if (!activePost) return undefined;
+
+    const mediaUrl = activePost.media_url || activePost.video_url || "";
+    const mediaType = activePost.media_type || "";
+    const isEmbed =
+      mediaType === "embed" ||
+      (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+
+    if (!isEmbed) return undefined;
+
+    const postId = String(activePost.id ?? activePostIndex);
+
+    iframeExposureTimerRef.current = setInterval(() => {
+      if (tabHiddenRef.current) return;
+
+      iframeExposureAccumulatorRef.current[postId] =
+        (iframeExposureAccumulatorRef.current[postId] || 0) + 1;
+
+      if (iframeExposureAccumulatorRef.current[postId] >= 10) {
+        flushIframeExposure(postId);
+      }
+    }, 1000);
+
+    return () => {
+      if (iframeExposureTimerRef.current) {
+        clearInterval(iframeExposureTimerRef.current);
+        iframeExposureTimerRef.current = null;
+      }
+      flushIframeExposure(postId);
+    };
+  }, [activePostIndex, posts, flushIframeExposure]);
+
+  // ---------------------------------------------------------------------
+  // Editor modal
+  // ---------------------------------------------------------------------
+
   const pauseAllVideos = useCallback(() => {
-    Object.values(videoRefs.current).forEach((video) => {
+    Object.entries(videoRefs.current).forEach(([postId, video]) => {
       if (video && !video.paused) {
         video.pause();
       }
     });
-  }, []);
+    Object.keys(watchTimerRef.current).forEach((postId) => {
+      stopWatchTimer(postId, { flush: true });
+    });
+  }, [stopWatchTimer]);
 
   const openEditor = useCallback(() => {
     pauseAllVideos();
@@ -348,33 +767,82 @@ function Home() {
     setNewTitle("");
     setSubtitle("");
     setNewLogoFile(null);
+    revokeObjectUrl(logoPreview);
     setLogoPreview("");
     setNewMediaFile(null);
+    revokeObjectUrl(mediaPreview);
     setMediaPreview("");
     setMediaPreviewType("");
-  }, []);
+  }, [logoPreview, mediaPreview, revokeObjectUrl]);
 
-  const handleLogoChange = useCallback((file) => {
-    setNewLogoFile(file || null);
+  const handleLogoChange = useCallback(
+    async (file) => {
+      revokeObjectUrl(logoPreview);
 
-    if (file) {
-      setLogoPreview(URL.createObjectURL(file));
-    } else {
-      setLogoPreview("");
-    }
-  }, []);
+      if (!file) {
+        setNewLogoFile(null);
+        setLogoPreview("");
+        return;
+      }
 
-  const handleMediaFileChange = useCallback((file) => {
-    setNewMediaFile(file || null);
+      setCompressingMedia(true);
+      try {
+        const compressed = await compressImageFile(file, {
+          maxWidth: 400,
+          maxHeight: 400,
+          quality: 0.75,
+        });
+        setNewLogoFile(compressed);
+        setLogoPreview(trackObjectUrl(URL.createObjectURL(compressed)));
+      } catch (error) {
+        console.error("Profile photo processing failed:", error);
+        alert("This image could not be processed. Please try a different photo.");
+      } finally {
+        setCompressingMedia(false);
+      }
+    },
+    [logoPreview, revokeObjectUrl, trackObjectUrl]
+  );
 
-    if (file) {
-      setMediaPreview(URL.createObjectURL(file));
-      setMediaPreviewType(file.type.startsWith("image/") ? "image" : "video");
-    } else {
-      setMediaPreview("");
-      setMediaPreviewType("");
-    }
-  }, []);
+  const handleMediaFileChange = useCallback(
+    async (file) => {
+      revokeObjectUrl(mediaPreview);
+
+      if (!file) {
+        setNewMediaFile(null);
+        setMediaPreview("");
+        setMediaPreviewType("");
+        return;
+      }
+
+      const isImage = file.type.startsWith("image/");
+
+      if (!isImage) {
+        // Videos are never compressed in the browser (per requirement).
+        setNewMediaFile(file);
+        setMediaPreview(trackObjectUrl(URL.createObjectURL(file)));
+        setMediaPreviewType("video");
+        return;
+      }
+
+      setCompressingMedia(true);
+      try {
+        const compressed = await compressImageFile(file, {
+          maxWidth: 1080,
+          quality: 0.75,
+        });
+        setNewMediaFile(compressed);
+        setMediaPreview(trackObjectUrl(URL.createObjectURL(compressed)));
+        setMediaPreviewType("image");
+      } catch (error) {
+        console.error("Image processing failed:", error);
+        alert("This image could not be processed. Please try a different photo.");
+      } finally {
+        setCompressingMedia(false);
+      }
+    },
+    [mediaPreview, revokeObjectUrl, trackObjectUrl]
+  );
 
   const applyChanges = useCallback(async () => {
     const creatorName = newCreatorName.trim();
@@ -478,52 +946,94 @@ function Home() {
     subtitle,
   ]);
 
-  const openCreatorInbox = useCallback(async (post) => {
-    const postId = String(post.id ?? "");
-    let destination = buildContactUrl(
-      post.creator_type,
-      post.creator_identity
-    );
+  // ---------------------------------------------------------------------
+  // Envelope click (inbox)
+  // ---------------------------------------------------------------------
 
-    /*
-     * Your current Worker already has /api/home/ngwino-click.
-     * It records the click and returns the creator destination.
-     */
-    if (postId) {
+  const openCreatorInbox = useCallback(
+    async (post) => {
+      const postId = String(post.id ?? "");
+      let destination = buildContactUrl(
+        post.creator_type,
+        post.creator_identity
+      );
+
+      // Hide the red dot immediately and remember it on this device.
+      if (postId) {
+        markEnvelopeOpened(postId);
+      }
+
+      if (postId) {
+        try {
+          const response = await fetch(`${API_URL}/api/home/ngwino-click`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ post_id: postId }),
+          });
+
+          const data = await readJsonSafely(response);
+
+          if (data.success && data.destination) {
+            destination = data.destination;
+          }
+        } catch (error) {
+          console.warn("Could not record inbox click:", error);
+        }
+      }
+
+      if (!destination) {
+        alert("This creator did not add contact information.");
+        return;
+      }
+
+      window.open(destination, "_blank", "noopener,noreferrer");
+    },
+    [markEnvelopeOpened, readJsonSafely]
+  );
+
+  // ---------------------------------------------------------------------
+  // Comments (persisted in D1)
+  // ---------------------------------------------------------------------
+
+  const loadComments = useCallback(
+    async (postId) => {
+      setLoadingComments(true);
       try {
-        const response = await fetch(`${API_URL}/api/home/ngwino-click`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ post_id: postId }),
-        });
-
+        const response = await fetch(
+          `${API_URL}/api/home/comments?post_id=${encodeURIComponent(postId)}`,
+          { cache: "no-store" }
+        );
         const data = await readJsonSafely(response);
 
-        if (data.success && data.destination) {
-          destination = data.destination;
+        if (data.success && Array.isArray(data.comments)) {
+          setCommentsByPost((current) => ({
+            ...current,
+            [postId]: data.comments,
+          }));
         }
       } catch (error) {
-        console.warn("Could not record inbox click:", error);
+        console.warn("Failed to load comments:", error);
+      } finally {
+        setLoadingComments(false);
       }
-    }
+    },
+    [readJsonSafely]
+  );
 
-    if (!destination) {
-      alert("This creator did not add contact information.");
-      return;
-    }
-
-    window.open(destination, "_blank", "noopener,noreferrer");
-  }, [readJsonSafely]);
-
-  const openComments = useCallback((post) => {
-    pauseAllVideos();
-    setSelectedPost(post);
-    setCommentPhone("");
-    setCommentText("");
-    setShowComments(true);
-  }, [pauseAllVideos]);
+  const openComments = useCallback(
+    (post) => {
+      pauseAllVideos();
+      const postId = String(post.id ?? "0");
+      setSelectedPost(post);
+      setCommentPhone(getSavedWhatsAppNumber());
+      setCommentText("");
+      setShowComments(true);
+      loadComments(postId);
+    },
+    [pauseAllVideos, getSavedWhatsAppNumber, loadComments]
+  );
 
   const closeComments = useCallback(() => {
     setShowComments(false);
@@ -532,12 +1042,12 @@ function Home() {
     setCommentText("");
   }, []);
 
-  const submitTemporaryComment = useCallback(() => {
-    const phone = commentPhone.trim();
+  const submitComment = useCallback(async () => {
+    const normalizedPhone = normalizeWhatsAppNumber(commentPhone);
     const text = commentText.trim();
 
-    if (!phone) {
-      alert("Please enter your phone number.");
+    if (!normalizedPhone) {
+      alert("Please enter a valid WhatsApp number (with country code).");
       return;
     }
 
@@ -549,21 +1059,161 @@ function Home() {
     if (!selectedPost) return;
 
     const postId = String(selectedPost.id ?? "0");
-    const newComment = {
-      id: `${Date.now()}-${Math.random()}`,
-      phone,
-      flag: getCountryFlag(phone),
-      text,
-      created_at: new Date().toISOString(),
-    };
 
-    setCommentsByPost((current) => ({
-      ...current,
-      [postId]: [newComment, ...(current[postId] || [])],
-    }));
+    try {
+      setSubmittingComment(true);
 
-    setCommentText("");
-  }, [commentPhone, commentText, selectedPost]);
+      const response = await fetch(`${API_URL}/api/home/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: postId,
+          phone: normalizedPhone,
+          comment: text,
+        }),
+      });
+
+      const data = await readJsonSafely(response);
+
+      if (!data.success) {
+        alert(data.error || data.message || "Failed to post comment.");
+        return;
+      }
+
+      saveWhatsAppNumber(normalizedPhone);
+
+      setCommentsByPost((current) => ({
+        ...current,
+        [postId]: [data.comment, ...(current[postId] || [])],
+      }));
+
+      setPosts((currentPosts) =>
+        currentPosts.map((item) =>
+          String(item.id) === postId
+            ? { ...item, comment_count: data.comment_count ?? (Number(item.comment_count) || 0) + 1 }
+            : item
+        )
+      );
+
+      setCommentText("");
+    } catch (error) {
+      console.error("Failed to submit comment:", error);
+      alert("Failed to post comment. Please try again.");
+    } finally {
+      if (isMountedRef.current) {
+        setSubmittingComment(false);
+      }
+    }
+  }, [commentPhone, commentText, selectedPost, readJsonSafely, saveWhatsAppNumber]);
+
+  // ---------------------------------------------------------------------
+  // Reactions (likes) — require a validated WhatsApp number
+  // ---------------------------------------------------------------------
+
+  const sendReaction = useCallback(
+    async (post, normalizedPhone) => {
+      const postId = String(post?.id ?? "");
+      if (!postId) return;
+
+      setReactingPostId(postId);
+
+      try {
+        const response = await fetch(`${API_URL}/api/home/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ post_id: postId, phone: normalizedPhone }),
+        });
+
+        const data = await readJsonSafely(response);
+
+        if (data.already_reacted) {
+          setReactedPosts((current) => ({ ...current, [postId]: true }));
+          return;
+        }
+
+        if (!data.success) {
+          alert(data.error || data.message || "Failed to like this post.");
+          return;
+        }
+
+        saveWhatsAppNumber(normalizedPhone);
+        setReactedPosts((current) => ({ ...current, [postId]: true }));
+
+        setPosts((currentPosts) =>
+          currentPosts.map((item) =>
+            String(item.id) === postId
+              ? {
+                  ...item,
+                  real_reactions: data.real_reactions,
+                  manual_reactions: data.manual_reactions,
+                  displayed_reactions: data.displayed_reactions,
+                }
+              : item
+          )
+        );
+      } catch (error) {
+        console.error("Failed to react to post:", error);
+        alert("Failed to like this post. Please try again.");
+      } finally {
+        if (isMountedRef.current) {
+          setReactingPostId(null);
+        }
+      }
+    },
+    [readJsonSafely, saveWhatsAppNumber]
+  );
+
+  const reactToPost = useCallback(
+    (post) => {
+      const postId = String(post?.id ?? "");
+      if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
+
+      const savedNumber = getSavedWhatsAppNumber();
+
+      if (savedNumber && normalizeWhatsAppNumber(savedNumber)) {
+        sendReaction(post, normalizeWhatsAppNumber(savedNumber));
+        return;
+      }
+
+      // First like on this device — ask for a WhatsApp number via a real
+      // modal (never window.prompt()).
+      pauseAllVideos();
+      setPhoneModalTargetPost(post);
+      setPhoneModalValue("");
+      setPhoneModalError("");
+      setShowPhoneModal(true);
+    },
+    [reactedPosts, reactingPostId, getSavedWhatsAppNumber, sendReaction, pauseAllVideos]
+  );
+
+  const closePhoneModal = useCallback(() => {
+    setShowPhoneModal(false);
+    setPhoneModalTargetPost(null);
+    setPhoneModalValue("");
+    setPhoneModalError("");
+  }, []);
+
+  const confirmPhoneModal = useCallback(() => {
+    const normalized = normalizeWhatsAppNumber(phoneModalValue);
+
+    if (!normalized) {
+      setPhoneModalError("Please enter a valid phone number, including the country code.");
+      return;
+    }
+
+    if (phoneModalTargetPost) {
+      sendReaction(phoneModalTargetPost, normalized);
+    }
+
+    setShowPhoneModal(false);
+    setPhoneModalTargetPost(null);
+    setPhoneModalValue("");
+    setPhoneModalError("");
+  }, [phoneModalValue, phoneModalTargetPost, sendReaction]);
+
+  // ---------------------------------------------------------------------
+  // Share
+  // ---------------------------------------------------------------------
 
   const sharePost = useCallback(async (post) => {
     const shareData = {
@@ -588,138 +1238,11 @@ function Home() {
     }
   }, []);
 
-  const reactToPost = useCallback(async (post) => {
-    const postId = String(post?.id ?? "");
-    if (!postId) return;
-
-    const storageKey = `home-reacted-${postId}`;
-
-    if (sessionStorage.getItem(storageKey)) {
-      return;
-    }
-
-    sessionStorage.setItem(storageKey, "true");
-
-    setLocalReactions((current) => ({
-      ...current,
-      [postId]: (Number(current[postId]) || 0) + 1,
-    }));
-
-    try {
-      const response = await fetch(`${API_URL}/api/home/react`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ post_id: postId }),
-      });
-
-      const data = await readJsonSafely(response);
-
-      if (data.success && Number.isFinite(Number(data.reaction_count))) {
-        setPosts((currentPosts) =>
-          currentPosts.map((item) =>
-            String(item.id) === postId
-              ? { ...item, reaction_count: Number(data.reaction_count) }
-              : item
-          )
-        );
-
-        setLocalReactions((current) => ({
-          ...current,
-          [postId]: 0,
-        }));
-      }
-    } catch (error) {
-      console.warn(
-        "Reaction was added locally. Worker route /api/home/react is not ready yet:",
-        error
-      );
-    }
-  }, [readJsonSafely]);
-
-  const renderMedia = useCallback(
-    (post, index) => {
-      const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
-      const mediaType = post.media_type || "";
-
-      const isImage =
-        mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
-
-      const isVideo =
-        mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
-
-      const isEmbed =
-        mediaType === "embed" ||
-        (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
-
-      if (isImage) {
-        return (
-          <img
-            src={mediaUrl}
-            alt={post.title || DEFAULT_TITLE}
-            className="home-media"
-            loading="lazy"
-            decoding="async"
-            onError={(event) => {
-              event.currentTarget.src = DEFAULT_LOGO;
-            }}
-          />
-        );
-      }
-
-      if (isVideo) {
-        const isActive = activePostIndex === index;
-
-        return (
-          <video
-            ref={(ref) => {
-              if (ref) {
-                videoRefs.current[index] = ref;
-              } else {
-                delete videoRefs.current[index];
-              }
-            }}
-            src={mediaUrl}
-            loop
-            playsInline
-            muted={false}
-            controls
-            preload={isActive ? "metadata" : "none"}
-            className="home-media"
-          />
-        );
-      }
-
-      if (isEmbed) {
-        if (activePostIndex === index) {
-          return (
-            <iframe
-              src={getEmbedUrl(mediaUrl)}
-              title={post.title || DEFAULT_TITLE}
-              className="home-media"
-              frameBorder="0"
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-              allowFullScreen
-              loading="lazy"
-            />
-          );
-        }
-
-        return (
-          <div className="embed-placeholder">
-            <span className="embed-placeholder-icon">▶</span>
-            <span>{post.title || DEFAULT_TITLE}</span>
-          </div>
-        );
-      }
-
-      return null;
-    },
-    [activePostIndex]
-  );
-
   const memoizedPosts = useMemo(() => posts, [posts]);
+
+  // ---------------------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------------------
 
   if (loading) {
     return (
@@ -764,6 +1287,7 @@ function Home() {
             applyChanges={applyChanges}
             closeEditor={closeEditor}
             saving={saving}
+            compressingMedia={compressingMedia}
           />
         )}
 
@@ -779,146 +1303,56 @@ function Home() {
       <main className="home-feed">
         {memoizedPosts.map((post, index) => {
           const postId = String(post.id ?? index);
-          const localComments = commentsByPost[postId] || [];
-
-          /*
-           * Until Worker.js is changed:
-           * - watch_seconds is displayed as the available viewer number.
-           * - comment_count, share_count and unread_messages default to zero.
-           */
-          const viewerCount = post.views ?? post.view_count ?? post.watch_seconds ?? 0;
-          const commentCount =
-            Number(post.comment_count || 0) + localComments.length;
-          const shareCount = post.share_count || 0;
-          const unreadMessages = post.unread_messages || 0;
-          const reactionCount =
-            Number(post.reaction_count || post.like_count || 0) +
-            Number(localReactions[postId] || 0);
-          const creatorDisplayName =
-            post.creator_name?.trim() ||
-            post.brand_name?.trim() ||
-            "Creator";
 
           return (
-            <section
-              key={post.id || index}
-              ref={(ref) => {
+            <HomePost
+              key={postId}
+              post={post}
+              index={index}
+              postId={postId}
+              isActive={activePostIndex === index}
+              localCommentCount={(commentsByPost[postId] || []).length}
+              reacted={Boolean(reactedPosts[postId])}
+              reacting={reactingPostId === postId}
+              envelopeOpened={isEnvelopeOpened(postId)}
+              postRefCallback={(ref) => {
                 if (ref) {
                   postRefs.current[index] = ref;
                 } else {
                   delete postRefs.current[index];
                 }
               }}
-              data-index={index}
-              className="home-post crt-screen"
-            >
-              <header className="post-header">
-                <button
-                  type="button"
-                  className="profile-picture-button"
-                  onClick={() =>
-                    setZoomImage(post.logo_url || DEFAULT_LOGO)
-                  }
-                  aria-label="Open profile picture"
-                >
-                  <img
-                    src={post.logo_url || DEFAULT_LOGO}
-                    alt=""
-                    className="profile-picture"
-                    loading="lazy"
-                    decoding="async"
-                    onError={(event) => {
-                      event.currentTarget.src = DEFAULT_LOGO;
-                    }}
-                  />
-                </button>
-
-                <div className="profile-details">
-                  <div className="creator-name">
-                    {creatorDisplayName}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="inbox-button"
-                  onClick={() => openCreatorInbox(post)}
-                  aria-label="Open creator message"
-                  title="Open creator message"
-                >
-                  <Mail className="inbox-envelope" size={58} strokeWidth={2} aria-hidden="true" />
-                  <span className="unread-dot" aria-hidden="true" />
-                </button>
-
-                <button
-                  type="button"
-                  className="post-menu-button"
-                  aria-label="Post options"
-                  title="Post options"
-                >
-                  <MoreVertical size={38} strokeWidth={2.5} aria-hidden="true" />
-                </button>
-              </header>
-
-              <div className="post-copy">
-                {post.title && (
-                  <h1 className="post-title">{post.title}</h1>
-                )}
-
-                {post.subtitle && (
-                  <p className="post-message">{post.subtitle}</p>
-                )}
-              </div>
-
-              <div className="media-viewport">
-                <div className="media-layer">
-                  {renderMedia(post, index)}
-                </div>
-              </div>
-
-              <div className="social-action-bar">
-                <div className="metric-pill" title="Views">
-                  <Eye className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
-                  <span>{formatCount(viewerCount)}</span>
-                </div>
-
-                <button
-                  type="button"
-                  className="action-pill"
-                  onClick={() => openComments(post)}
-                  aria-label="Open comments"
-                >
-                  <MessageCircle className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
-                  <span>{formatCount(commentCount)}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="action-pill"
-                  onClick={() => sharePost(post)}
-                  aria-label="Share post"
-                >
-                  <Share2 className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
-                  <span>Share</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="action-pill heart-action"
-                  onClick={() => reactToPost(post)}
-                  aria-label="Like post"
-                >
-                  <Heart className="heart-icon" size={40} strokeWidth={2} fill="currentColor" aria-hidden="true" />
-                  <span>{formatCount(reactionCount)}</span>
-                </button>
-              </div>
-
-              <div className="screen-scanlines" aria-hidden="true" />
-              <div className="screen-reflection" aria-hidden="true" />
-              <div className="screen-vignette" aria-hidden="true" />
-            </section>
+              videoRefCallback={(ref) => {
+                if (ref) {
+                  videoRefs.current[index] = ref;
+                } else {
+                  delete videoRefs.current[index];
+                }
+              }}
+              onVideoPlay={handleVideoPlay}
+              onVideoPause={handleVideoPause}
+              onOpenInbox={openCreatorInbox}
+              onOpenComments={openComments}
+              onShare={sharePost}
+              onReact={reactToPost}
+              onZoomImage={setZoomImage}
+            />
           );
         })}
       </main>
+
+      {hasMore && (
+        <div className="load-more-wrap">
+          <button
+            type="button"
+            className="load-more-button"
+            onClick={loadMorePosts}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      )}
 
       {showEditor && (
         <EditorModal
@@ -940,21 +1374,32 @@ function Home() {
           applyChanges={applyChanges}
           closeEditor={closeEditor}
           saving={saving}
+          compressingMedia={compressingMedia}
         />
       )}
 
       {showComments && selectedPost && (
         <CommentsModal
           post={selectedPost}
-          comments={
-            commentsByPost[String(selectedPost.id ?? "0")] || []
-          }
+          comments={commentsByPost[String(selectedPost.id ?? "0")] || []}
+          loadingComments={loadingComments}
           phone={commentPhone}
           setPhone={setCommentPhone}
           text={commentText}
           setText={setCommentText}
-          submitComment={submitTemporaryComment}
+          submitComment={submitComment}
+          submitting={submittingComment}
           closeComments={closeComments}
+        />
+      )}
+
+      {showPhoneModal && (
+        <PhoneNumberModal
+          value={phoneModalValue}
+          setValue={setPhoneModalValue}
+          error={phoneModalError}
+          onConfirm={confirmPhoneModal}
+          onClose={closePhoneModal}
         />
       )}
 
@@ -978,6 +1423,219 @@ function Home() {
     </div>
   );
 }
+
+// ===========================================================================
+// Memoized single-post component. Extracting this stops every post from
+// re-rendering whenever one like, comment, or envelope-dot state changes.
+// ===========================================================================
+
+const HomePost = memo(function HomePost({
+  post,
+  index,
+  postId,
+  isActive,
+  localCommentCount,
+  reacted,
+  reacting,
+  envelopeOpened,
+  postRefCallback,
+  videoRefCallback,
+  onVideoPlay,
+  onVideoPause,
+  onOpenInbox,
+  onOpenComments,
+  onShare,
+  onReact,
+  onZoomImage,
+}) {
+  const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
+  const mediaType = post.media_type || "";
+
+  const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
+  const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
+  const isEmbed =
+    mediaType === "embed" ||
+    (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
+
+  // Views/reactions must come from real + manual totals, never from
+  // watch_seconds or any other proxy value.
+  const viewerCount = Number(post.real_views || 0) + Number(post.manual_views || 0);
+  const reactionCount =
+    Number(post.real_reactions || 0) + Number(post.manual_reactions || 0);
+  const commentCount = Number(post.comment_count || 0) + localCommentCount;
+  const creatorDisplayName =
+    post.creator_name?.trim() || post.brand_name?.trim() || "Creator";
+
+  const handleImageError = useCallback((event) => {
+    event.currentTarget.onerror = null;
+    event.currentTarget.src = IMAGE_FALLBACK_SRC;
+  }, []);
+
+  const handleProfileImageError = useCallback((event) => {
+    event.currentTarget.onerror = null;
+    event.currentTarget.src = DEFAULT_LOGO;
+  }, []);
+
+  return (
+    <section
+      ref={postRefCallback}
+      data-index={index}
+      className="home-post crt-screen"
+    >
+      <header className="post-header">
+        <button
+          type="button"
+          className="profile-picture-button"
+          onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)}
+          aria-label="Open profile picture"
+        >
+          <img
+            src={post.logo_url || DEFAULT_LOGO}
+            alt=""
+            className="profile-picture"
+            loading="lazy"
+            decoding="async"
+            onError={handleProfileImageError}
+          />
+        </button>
+
+        <div className="profile-details">
+          <div className="creator-name">{creatorDisplayName}</div>
+        </div>
+
+        <button
+          type="button"
+          className="inbox-button"
+          onClick={() => onOpenInbox(post)}
+          aria-label="Open creator message"
+          title="Open creator message"
+        >
+          <Mail className="inbox-envelope" size={58} strokeWidth={2} aria-hidden="true" />
+          {!envelopeOpened && <span className="unread-dot" aria-hidden="true" />}
+        </button>
+
+        <button
+          type="button"
+          className="post-menu-button"
+          aria-label="Post options"
+          title="Post options"
+        >
+          <MoreVertical size={38} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      </header>
+
+      <div className="post-copy">
+        {post.title && <h1 className="post-title">{post.title}</h1>}
+        {post.subtitle && <p className="post-message">{post.subtitle}</p>}
+      </div>
+
+      <div className="media-viewport">
+        <div className="media-layer">
+          {isImage && (
+            <img
+              src={mediaUrl}
+              alt={post.title || DEFAULT_TITLE}
+              className="home-media"
+              loading="lazy"
+              decoding="async"
+              width={1080}
+              height={608}
+              onError={handleImageError}
+            />
+          )}
+
+          {isVideo &&
+            (isActive ? (
+              <video
+                ref={videoRefCallback}
+                src={mediaUrl}
+                loop
+                playsInline
+                muted={false}
+                controls
+                preload="none"
+                className="home-media"
+                onPlay={() => onVideoPlay(postId)}
+                onPause={() => onVideoPause(postId)}
+              />
+            ) : (
+              <div className="media-placeholder" aria-hidden="true">
+                <span className="embed-placeholder-icon">▶</span>
+              </div>
+            ))}
+
+          {isEmbed &&
+            (isActive ? (
+              <iframe
+                src={getEmbedUrl(mediaUrl)}
+                title={post.title || DEFAULT_TITLE}
+                className="home-media"
+                frameBorder="0"
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+                allowFullScreen
+                loading="lazy"
+              />
+            ) : (
+              <div className="embed-placeholder">
+                <span className="embed-placeholder-icon">▶</span>
+                <span>{post.title || DEFAULT_TITLE}</span>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      <div className="social-action-bar">
+        <div className="metric-pill" title="Views">
+          <Eye className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
+          <span>{formatCount(viewerCount)}</span>
+        </div>
+
+        <button
+          type="button"
+          className="action-pill"
+          onClick={() => onOpenComments(post)}
+          aria-label="Open comments"
+        >
+          <MessageCircle className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
+          <span>{formatCount(commentCount)}</span>
+        </button>
+
+        <button
+          type="button"
+          className="action-pill"
+          onClick={() => onShare(post)}
+          aria-label="Share post"
+        >
+          <Share2 className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
+          <span>Share</span>
+        </button>
+
+        <button
+          type="button"
+          className={`action-pill heart-action${reacted ? " heart-action-active" : ""}`}
+          onClick={() => onReact(post)}
+          aria-label="Like post"
+          disabled={reacting}
+        >
+          <Heart
+            className="heart-icon"
+            size={40}
+            strokeWidth={2}
+            fill="currentColor"
+            aria-hidden="true"
+          />
+          <span>{formatCount(reactionCount)}</span>
+        </button>
+      </div>
+
+      <div className="screen-scanlines" aria-hidden="true" />
+      <div className="screen-reflection" aria-hidden="true" />
+      <div className="screen-vignette" aria-hidden="true" />
+    </section>
+  );
+});
+
+HomePost.displayName = "HomePost";
 
 const FeedXTopBar = memo(({ openEditor }) => (
   <header className="feedx-topbar">
@@ -1019,6 +1677,7 @@ const EditorModal = memo(
     applyChanges,
     closeEditor,
     saving,
+    compressingMedia,
   }) => (
     <div className="modal-overlay" onClick={closeEditor}>
       <div
@@ -1110,12 +1769,15 @@ const EditorModal = memo(
             className="file-picker"
             htmlFor="field-media-upload"
           >
-            <span>▣ Choose a photo or video</span>
+            <span>
+              {compressingMedia ? "Processing..." : "▣ Choose a photo or video"}
+            </span>
 
             <input
               id="field-media-upload"
               type="file"
               accept="image/*,video/*"
+              disabled={compressingMedia}
               onChange={(event) =>
                 handleMediaFileChange(
                   event.target.files?.[0] || null
@@ -1170,12 +1832,15 @@ const EditorModal = memo(
             className="file-picker"
             htmlFor="field-profile-photo"
           >
-            <span>◎ Choose a profile photo</span>
+            <span>
+              {compressingMedia ? "Processing..." : "◎ Choose a profile photo"}
+            </span>
 
             <input
               id="field-profile-photo"
               type="file"
               accept="image/*"
+              disabled={compressingMedia}
               onChange={(event) =>
                 handleLogoChange(event.target.files?.[0] || null)
               }
@@ -1197,7 +1862,7 @@ const EditorModal = memo(
           type="button"
           onClick={applyChanges}
           className="save-button"
-          disabled={saving}
+          disabled={saving || compressingMedia}
         >
           {saving ? "Saving..." : "Create Post"}
         </button>
@@ -1220,11 +1885,13 @@ const CommentsModal = memo(
   ({
     post,
     comments,
+    loadingComments,
     phone,
     setPhone,
     text,
     setText,
     submitComment,
+    submitting,
     closeComments,
   }) => (
     <div className="modal-overlay comments-overlay" onClick={closeComments}>
@@ -1252,7 +1919,11 @@ const CommentsModal = memo(
         </header>
 
         <div className="comments-list">
-          {comments.length === 0 ? (
+          {loadingComments ? (
+            <div className="no-comments">
+              <span>Loading comments...</span>
+            </div>
+          ) : comments.length === 0 ? (
             <div className="no-comments">
               <MessageCircle size={44} strokeWidth={1.8} aria-hidden="true" />
               <strong>No comments yet</strong>
@@ -1262,7 +1933,7 @@ const CommentsModal = memo(
             comments.map((comment) => (
               <article className="comment-item" key={comment.id}>
                 <div className="comment-avatar" aria-hidden="true">
-                  <span>{comment.flag}</span>
+                  <span>{comment.country_flag || "🌍"}</span>
                 </div>
 
                 <div className="comment-content">
@@ -1278,7 +1949,7 @@ const CommentsModal = memo(
                     </time>
                   </div>
 
-                  <p>{comment.text}</p>
+                  <p>{comment.comment}</p>
                 </div>
               </article>
             ))
@@ -1311,19 +1982,22 @@ const CommentsModal = memo(
               value={text}
               onChange={(event) => setText(event.target.value)}
               rows={2}
+              maxLength={500}
             />
 
             <button
               type="button"
               className="comment-send-button"
               onClick={submitComment}
+              disabled={submitting}
             >
-              Send
+              {submitting ? "Sending..." : "Send"}
             </button>
           </div>
 
           <p className="comment-privacy">
             Your phone number stays private. Only its country flag is shown.
+            We only check the number's format — we don't verify you own it.
           </p>
         </div>
       </section>
@@ -1332,6 +2006,65 @@ const CommentsModal = memo(
 );
 
 CommentsModal.displayName = "CommentsModal";
+
+/**
+ * A proper modal (never window.prompt()) asking for a WhatsApp number
+ * before a viewer's first like on this device.
+ */
+const PhoneNumberModal = memo(({ value, setValue, error, onConfirm, onClose }) => (
+  <div className="modal-overlay phone-modal-overlay" onClick={onClose}>
+    <div
+      className="modal-card phone-modal-card"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="modal-header">
+        <h2>Enter your WhatsApp number</h2>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="modal-close"
+          aria-label="Close"
+        >
+          <X size={20} strokeWidth={2.4} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="form-section form-section-last">
+        <label htmlFor="phone-modal-input">WhatsApp number</label>
+        <input
+          id="phone-modal-input"
+          type="tel"
+          inputMode="tel"
+          autoFocus
+          placeholder="+250 788 123 456"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onConfirm();
+          }}
+        />
+
+        {error && <p className="phone-modal-error">{error}</p>}
+
+        <p className="field-help">
+          We only check that this looks like a real phone number — we don't
+          verify that you own it, and no OTP code is sent.
+        </p>
+      </div>
+
+      <button type="button" onClick={onConfirm} className="save-button">
+        Confirm &amp; Like
+      </button>
+
+      <button type="button" onClick={onClose} className="cancel-button">
+        Cancel
+      </button>
+    </div>
+  </div>
+));
+
+PhoneNumberModal.displayName = "PhoneNumberModal";
 
 function HomeStyles() {
   return (
@@ -1605,7 +2338,8 @@ function HomeStyles() {
         background: #000000;
       }
 
-      .embed-placeholder {
+      .embed-placeholder,
+      .media-placeholder {
         width: 100%;
         height: 100%;
         display: flex;
@@ -1659,6 +2393,15 @@ function HomeStyles() {
 
       .action-pill {
         cursor: pointer;
+      }
+
+      .action-pill:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      .heart-action-active .heart-icon {
+        color: #ff5773;
       }
 
       .action-icon {
@@ -1719,6 +2462,28 @@ function HomeStyles() {
         box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.30);
       }
 
+      .load-more-wrap {
+        display: flex;
+        justify-content: center;
+        padding: 6px 0 40px;
+      }
+
+      .load-more-button {
+        min-height: 54px;
+        padding: 0 28px;
+        border: 1px solid rgba(22, 139, 255, 0.42);
+        border-radius: 18px;
+        color: #ffffff;
+        background: rgba(8, 26, 55, 0.9);
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .load-more-button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+
       .modal-overlay {
         position: fixed;
         inset: 0;
@@ -1744,6 +2509,21 @@ function HomeStyles() {
           radial-gradient(circle at top, rgba(8, 124, 255, 0.14), transparent 34%),
           #06101f;
         box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
+      }
+
+      .phone-modal-overlay {
+        align-items: center;
+      }
+
+      .phone-modal-card {
+        border-radius: 24px;
+      }
+
+      .phone-modal-error {
+        margin: -2px 0 12px;
+        color: #ff5773;
+        font-size: 12px;
+        font-weight: 700;
       }
 
       .modal-header {
@@ -2155,6 +2935,11 @@ function HomeStyles() {
           inset 0 0 12px rgba(255, 255, 255, 0.10);
       }
 
+      .comment-send-button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
       .comment-send-button:active {
         transform: scale(0.98);
       }
@@ -2500,9 +3285,31 @@ function HomeStyles() {
         }
       }
 
-      @media (prefers-reduced-motion: reduce) {
+      /* Low-memory / low-power device optimizations: disable heavy CRT
+         effects on small screens. */
+      @media (max-width: 600px) {
         .crt-screen {
-          animation: none;
+          animation: none !important;
+        }
+
+        .screen-scanlines,
+        .screen-reflection,
+        .screen-vignette {
+          display: none !important;
+        }
+
+        .home-post {
+          box-shadow: none;
+          border-radius: 20px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
         }
       }
     `}</style>
