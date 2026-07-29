@@ -311,6 +311,11 @@ function Home() {
   const [compressingMedia, setCompressingMedia] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
 
+  // Real, per-post media aspect ratio (width / height), detected once the
+  // actual image/video dimensions are known. Keyed by postId so every post
+  // keeps its own independent ratio — never a single shared value.
+  const [mediaAspectRatios, setMediaAspectRatios] = useState({});
+
   // Comments are now backed by the D1 database, keyed by post id.
   const [commentsByPost, setCommentsByPost] = useState({});
   const [commentPhone, setCommentPhone] = useState("");
@@ -728,6 +733,19 @@ function Home() {
       flushIframeExposure(postId);
     };
   }, [activePostIndex, posts, flushIframeExposure]);
+
+  // ---------------------------------------------------------------------
+  // Media aspect-ratio detection (real dimensions, per post)
+  // ---------------------------------------------------------------------
+
+  const handleMediaAspectRatio = useCallback((postId, ratio) => {
+    if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
+
+    setMediaAspectRatios((current) => {
+      if (current[postId] === ratio) return current;
+      return { ...current, [postId]: ratio };
+    });
+  }, []);
 
   // ---------------------------------------------------------------------
   // Editor modal
@@ -1236,6 +1254,8 @@ function Home() {
 
   const memoizedPosts = useMemo(() => posts, [posts]);
 
+  const selectedPostId = selectedPost ? String(selectedPost.id ?? "0") : null;
+
   // ---------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------
@@ -1311,6 +1331,18 @@ function Home() {
               reacted={Boolean(reactedPosts[postId])}
               reacting={reactingPostId === postId}
               envelopeOpened={isEnvelopeOpened(postId)}
+              mediaAspectRatio={mediaAspectRatios[postId]}
+              onMediaAspectRatio={handleMediaAspectRatio}
+              showCommentsOverlay={showComments && selectedPostId === postId}
+              commentsForOverlay={commentsByPost[postId] || []}
+              loadingComments={loadingComments}
+              commentPhone={commentPhone}
+              setCommentPhone={setCommentPhone}
+              commentText={commentText}
+              setCommentText={setCommentText}
+              submitComment={submitComment}
+              submittingComment={submittingComment}
+              closeComments={closeComments}
               postRefCallback={(ref) => {
                 if (ref) {
                   postRefs.current[index] = ref;
@@ -1374,21 +1406,6 @@ function Home() {
         />
       )}
 
-      {showComments && selectedPost && (
-        <CommentsModal
-          post={selectedPost}
-          comments={commentsByPost[String(selectedPost.id ?? "0")] || []}
-          loadingComments={loadingComments}
-          phone={commentPhone}
-          setPhone={setCommentPhone}
-          text={commentText}
-          setText={setCommentText}
-          submitComment={submitComment}
-          submitting={submittingComment}
-          closeComments={closeComments}
-        />
-      )}
-
       {showPhoneModal && (
         <PhoneNumberModal
           value={phoneModalValue}
@@ -1434,6 +1451,18 @@ const HomePost = memo(function HomePost({
   reacted,
   reacting,
   envelopeOpened,
+  mediaAspectRatio,
+  onMediaAspectRatio,
+  showCommentsOverlay,
+  commentsForOverlay,
+  loadingComments,
+  commentPhone,
+  setCommentPhone,
+  commentText,
+  setCommentText,
+  submitComment,
+  submittingComment,
+  closeComments,
   postRefCallback,
   videoRefCallback,
   onVideoPlay,
@@ -1471,6 +1500,30 @@ const HomePost = memo(function HomePost({
     event.currentTarget.onerror = null;
     event.currentTarget.src = DEFAULT_LOGO;
   }, []);
+
+  const handleImageLoad = useCallback(
+    (event) => {
+      const image = event.currentTarget;
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+      if (width && height) {
+        onMediaAspectRatio(postId, width / height);
+      }
+    },
+    [onMediaAspectRatio, postId]
+  );
+
+  const handleVideoLoadedMetadata = useCallback(
+    (event) => {
+      const video = event.currentTarget;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (width && height) {
+        onMediaAspectRatio(postId, width / height);
+      }
+    },
+    [onMediaAspectRatio, postId]
+  );
 
   return (
     <section
@@ -1525,7 +1578,10 @@ const HomePost = memo(function HomePost({
         {post.subtitle && <p className="post-message">{post.subtitle}</p>}
       </div>
 
-      <div className="media-viewport">
+      <div
+        className="media-viewport"
+        style={{ aspectRatio: mediaAspectRatio || "16 / 9" }}
+      >
         <div className="media-layer">
           {isImage && (
             <img
@@ -1534,31 +1590,26 @@ const HomePost = memo(function HomePost({
               className="home-media"
               loading="lazy"
               decoding="async"
-              width={1080}
-              height={608}
+              onLoad={handleImageLoad}
               onError={handleImageError}
             />
           )}
 
-          {isVideo &&
-            (isActive ? (
-              <video
-                ref={videoRefCallback}
-                src={mediaUrl}
-                loop
-                playsInline
-                muted={false}
-                controls
-                preload="none"
-                className="home-media"
-                onPlay={() => onVideoPlay(postId)}
-                onPause={() => onVideoPause(postId)}
-              />
-            ) : (
-              <div className="media-placeholder" aria-hidden="true">
-                <span className="embed-placeholder-icon">▶</span>
-              </div>
-            ))}
+          {isVideo && (
+            <video
+              ref={videoRefCallback}
+              src={mediaUrl}
+              loop
+              playsInline
+              muted={false}
+              controls
+              preload="metadata"
+              className="home-media"
+              onPlay={() => onVideoPlay(postId)}
+              onPause={() => onVideoPause(postId)}
+              onLoadedMetadata={handleVideoLoadedMetadata}
+            />
+          )}
 
           {isEmbed &&
             (isActive ? (
@@ -1578,6 +1629,107 @@ const HomePost = memo(function HomePost({
               </div>
             ))}
         </div>
+
+        {showCommentsOverlay && (
+          <div className="comments-media-overlay">
+            <header className="comments-overlay-header">
+              <h2>
+                Comments <span>({commentsForOverlay.length})</span>
+              </h2>
+
+              <button
+                type="button"
+                onClick={closeComments}
+                className="comments-overlay-close"
+                aria-label="Close comments"
+              >
+                <X size={20} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className="comments-list">
+              {loadingComments ? (
+                <div className="no-comments">
+                  <span>Loading comments...</span>
+                </div>
+              ) : commentsForOverlay.length === 0 ? (
+                <div className="no-comments">
+                  <MessageCircle size={36} strokeWidth={1.8} aria-hidden="true" />
+                  <strong>No comments yet</strong>
+                  <span>Be the first viewer to comment.</span>
+                </div>
+              ) : (
+                commentsForOverlay.map((comment) => (
+                  <article className="comment-row" key={comment.id}>
+                    <div className="comment-avatar" aria-hidden="true">
+                      {comment.country_flag || "🌍"}
+                    </div>
+
+                    <div className="comment-body">
+                      <div className="comment-meta">
+                        <strong>Viewer</strong>
+                        <time>
+                          {comment.created_at
+                            ? new Date(comment.created_at).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : ""}
+                        </time>
+                      </div>
+
+                      <p>{comment.comment}</p>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <div className="comment-composer">
+              <div className="comment-composer-identity">
+                <div className="comment-flag-preview" aria-hidden="true">
+                  <span>{getCountryFlag(commentPhone)}</span>
+                </div>
+
+                <div className="comment-phone-field">
+                  <label htmlFor={`comment-phone-${postId}`}>Phone number</label>
+                  <input
+                    id={`comment-phone-${postId}`}
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="+250 788 123 456"
+                    value={commentPhone}
+                    onChange={(event) => setCommentPhone(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="comment-compose-row">
+                <textarea
+                  placeholder="Write your comment..."
+                  value={commentText}
+                  onChange={(event) => setCommentText(event.target.value)}
+                  rows={2}
+                  maxLength={500}
+                />
+
+                <button
+                  type="button"
+                  className="comment-send-button"
+                  onClick={submitComment}
+                  disabled={submittingComment}
+                >
+                  {submittingComment ? "Sending..." : "Send"}
+                </button>
+              </div>
+
+              <p className="comment-privacy">
+                Your phone number stays private. Only its country flag is shown.
+                We only check the number's format — we don't verify you own it.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="social-action-bar">
@@ -1876,132 +2028,6 @@ const EditorModal = memo(
 );
 
 EditorModal.displayName = "EditorModal";
-
-const CommentsModal = memo(
-  ({
-    post,
-    comments,
-    loadingComments,
-    phone,
-    setPhone,
-    text,
-    setText,
-    submitComment,
-    submitting,
-    closeComments,
-  }) => (
-    <div className="modal-overlay comments-overlay" onClick={closeComments}>
-      <section
-        className="comments-sheet"
-        onClick={(event) => event.stopPropagation()}
-        aria-label="Comments"
-      >
-        <header className="comments-sheet-header">
-          <div>
-            <h2>
-              Comments <span>({comments.length})</span>
-            </h2>
-            <p>{post.title || DEFAULT_TITLE}</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={closeComments}
-            className="comments-collapse-button"
-            aria-label="Close comments"
-          >
-            <ChevronDown size={46} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="comments-list">
-          {loadingComments ? (
-            <div className="no-comments">
-              <span>Loading comments...</span>
-            </div>
-          ) : comments.length === 0 ? (
-            <div className="no-comments">
-              <MessageCircle size={44} strokeWidth={1.8} aria-hidden="true" />
-              <strong>No comments yet</strong>
-              <span>Be the first viewer to comment.</span>
-            </div>
-          ) : (
-            comments.map((comment) => (
-              <article className="comment-item" key={comment.id}>
-                <div className="comment-avatar" aria-hidden="true">
-                  <span>{comment.country_flag || "🌍"}</span>
-                </div>
-
-                <div className="comment-content">
-                  <div className="comment-topline">
-                    <strong>Viewer from</strong>
-                    <time>
-                      {comment.created_at
-                        ? new Date(comment.created_at).toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </time>
-                  </div>
-
-                  <p>{comment.comment}</p>
-                </div>
-              </article>
-            ))
-          )}
-        </div>
-
-        <div className="comment-composer">
-          <div className="comment-composer-identity">
-            <div className="comment-flag-preview" aria-hidden="true">
-              <span>{getCountryFlag(phone)}</span>
-            </div>
-
-            <div className="comment-phone-field">
-              <label htmlFor="comment-phone">Phone number</label>
-              <input
-                id="comment-phone"
-                type="tel"
-                inputMode="tel"
-                placeholder="+250 788 123 456"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="comment-compose-row">
-            <textarea
-              id="comment-message"
-              placeholder="Write your comment..."
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              rows={2}
-              maxLength={500}
-            />
-
-            <button
-              type="button"
-              className="comment-send-button"
-              onClick={submitComment}
-              disabled={submitting}
-            >
-              {submitting ? "Sending..." : "Send"}
-            </button>
-          </div>
-
-          <p className="comment-privacy">
-            Your phone number stays private. Only its country flag is shown.
-            We only check the number's format — we don't verify you own it.
-          </p>
-        </div>
-      </section>
-    </div>
-  )
-);
-
-CommentsModal.displayName = "CommentsModal";
 
 /**
  * A proper modal (never window.prompt()) asking for a WhatsApp number
@@ -2305,9 +2331,7 @@ function HomeStyles() {
 
       .media-viewport {
         width: calc(100% - 64px);
-        min-height: 360px;
-        max-height: 72svh;
-        aspect-ratio: 16 / 9;
+        max-height: 85svh;
         position: relative;
         z-index: 4;
         overflow: hidden;
@@ -2331,6 +2355,7 @@ function HomeStyles() {
         display: block;
         border: 0;
         object-fit: contain;
+        object-position: center;
         background: #000000;
       }
 
@@ -2353,6 +2378,249 @@ function HomeStyles() {
 
       .embed-placeholder-icon {
         font-size: 48px;
+      }
+
+      .comments-media-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        color: #ffffff;
+        background:
+          linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.38),
+            rgba(0, 0, 0, 0.82)
+          );
+        backdrop-filter: blur(2px);
+      }
+
+      .comments-overlay-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px 10px;
+        flex: 0 0 auto;
+      }
+
+      .comments-overlay-header h2 {
+        margin: 0;
+        font-size: clamp(18px, 2.4vw, 24px);
+        font-weight: 900;
+      }
+
+      .comments-overlay-header h2 span {
+        color: rgba(255, 255, 255, 0.6);
+        font-weight: 500;
+        font-size: 0.75em;
+      }
+
+      .comments-overlay-close {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+
+      .comments-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 12px 20px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.32) transparent;
+      }
+
+      .no-comments {
+        min-height: 160px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        color: rgba(255, 255, 255, 0.72);
+        text-align: center;
+      }
+
+      .no-comments svg {
+        color: #ffffff;
+        opacity: 0.8;
+      }
+
+      .no-comments strong {
+        color: #ffffff;
+        font-size: 16px;
+      }
+
+      .comment-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0;
+        background: transparent;
+        border: 0;
+      }
+
+      .comment-row + .comment-row {
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .comment-avatar {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.10);
+        font-size: 19px;
+        line-height: 1;
+      }
+
+      .comment-body {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .comment-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+
+      .comment-meta strong {
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .comment-meta time {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 12px;
+      }
+
+      .comment-body p {
+        margin: 4px 0 0;
+        color: rgba(255, 255, 255, 0.92);
+        font-size: 14px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .comment-composer {
+        flex: 0 0 auto;
+        padding: 14px 20px max(16px, env(safe-area-inset-bottom));
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(0, 0, 0, 0.35);
+      }
+
+      .comment-composer-identity {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+
+      .comment-flag-preview {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.10);
+        font-size: 22px;
+      }
+
+      .comment-phone-field {
+        min-width: 0;
+      }
+
+      .comment-phone-field label {
+        display: block;
+        margin: 0 0 6px;
+        color: #dce5f2;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .comment-phone-field input {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 12px;
+        outline: none;
+        color: #ffffff;
+        background: rgba(0, 5, 14, 0.82);
+      }
+
+      .comment-phone-field input:focus,
+      .comment-compose-row textarea:focus {
+        border-color: rgba(22, 139, 255, 0.9);
+        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.10);
+      }
+
+      .comment-compose-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: stretch;
+      }
+
+      .comment-compose-row textarea {
+        width: 100%;
+        min-height: 52px;
+        max-height: 120px;
+        padding: 12px;
+        resize: vertical;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 14px;
+        outline: none;
+        color: #ffffff;
+        background: rgba(0, 5, 14, 0.82);
+      }
+
+      .comment-send-button {
+        min-width: 96px;
+        padding: 0 20px;
+        border: 1px solid rgba(82, 169, 255, 0.7);
+        border-radius: 14px;
+        color: #ffffff;
+        background: linear-gradient(145deg, #2092ff, #0874ed);
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow:
+          0 9px 22px rgba(8, 124, 255, 0.22),
+          inset 0 0 12px rgba(255, 255, 255, 0.10);
+      }
+
+      .comment-send-button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      .comment-send-button:active {
+        transform: scale(0.98);
+      }
+
+      .comment-privacy {
+        margin: 10px 2px 0;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 10px;
+        line-height: 1.4;
+        text-align: center;
       }
 
       .social-action-bar {
@@ -2415,7 +2683,7 @@ function HomeStyles() {
       }
 
       .post-menu-button svg,
-      .comments-collapse-button svg,
+      .comments-overlay-close svg,
       .top-create-button svg {
         display: block;
       }
@@ -2684,365 +2952,82 @@ function HomeStyles() {
         background: transparent;
       }
 
-      .comments-overlay {
-        align-items: flex-end;
-        padding: 0;
-      }
-
-      .comments-sheet {
-        width: min(calc(100% - 32px), 880px);
-        max-height: 88svh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        border: 1px solid rgba(22, 139, 255, 0.48);
-        border-radius: 32px 32px 0 0;
-        color: #ffffff;
-        background:
-          radial-gradient(circle at 15% 0%, rgba(22, 139, 255, 0.10), transparent 30%),
-          linear-gradient(180deg, #06101f 0%, #020814 100%);
-        box-shadow:
-          0 -22px 60px rgba(0, 0, 0, 0.68),
-          0 0 26px rgba(8, 124, 255, 0.14);
-      }
-
-      .comments-sheet-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 24px;
-        padding: 30px 34px 24px;
-      }
-
-      .comments-sheet-header h2 {
-        margin: 0;
-        color: #ffffff;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(31px, 4vw, 46px);
-        font-weight: 900;
-        line-height: 1.05;
-        letter-spacing: -0.7px;
-      }
-
-      .comments-sheet-header h2 span {
-        color: #8d9aaf;
-        font-weight: 500;
-      }
-
-      .comments-sheet-header p {
-        margin: 13px 0 0;
-        color: #8d9aaf;
-        font-size: clamp(17px, 2vw, 23px);
-        line-height: 1.35;
-      }
-
-      .comments-collapse-button {
-        width: 64px;
-        height: 64px;
-        flex: 0 0 64px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 0;
-        color: #c6cfdd;
-        background: transparent;
-        cursor: pointer;
-      }
-
-      .comments-list {
-        min-height: 0;
-        flex: 1;
-        overflow-y: auto;
-        padding: 0 34px;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(22, 139, 255, 0.42) transparent;
-      }
-
-      .no-comments {
-        min-height: 240px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 9px;
-        color: #8d9aaf;
-        text-align: center;
-      }
-
-      .no-comments svg {
-        color: #168bff;
-        filter: drop-shadow(0 0 10px rgba(22, 139, 255, 0.42));
-      }
-
-      .no-comments strong {
-        color: #ffffff;
-        font-size: 20px;
-      }
-
-      .comment-item {
-        display: grid;
-        grid-template-columns: 96px minmax(0, 1fr);
-        gap: 24px;
-        align-items: start;
-        padding: 28px 0;
-        border-bottom: 1px solid rgba(22, 139, 255, 0.17);
-      }
-
-      .comment-avatar,
-      .comment-flag-preview {
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        border: 0;
-        border-radius: 50%;
-        background: transparent;
-      }
-
-      .comment-avatar {
-        width: 92px;
-        height: 92px;
-        font-size: 74px;
-        line-height: 1;
-      }
-
-      .comment-avatar span,
-      .comment-flag-preview span {
-        width: 100%;
-        height: 100%;
-        display: grid;
-        place-items: center;
-        line-height: 1;
-        transform: scale(1.48);
-      }
-
-      .comment-content {
-        min-width: 0;
-      }
-
-      .comment-topline {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-      }
-
-      .comment-topline strong {
-        color: #2196ff;
-        font-size: clamp(19px, 2.4vw, 27px);
-        font-weight: 900;
-      }
-
-      .comment-topline time {
-        flex: 0 0 auto;
-        color: #8d9aaf;
-        font-size: clamp(15px, 1.8vw, 20px);
-      }
-
-      .comment-content p {
-        margin: 12px 0 0;
-        color: #ffffff;
-        font-size: clamp(22px, 2.7vw, 31px);
-        font-weight: 400;
-        line-height: 1.4;
-        overflow-wrap: anywhere;
-      }
-
-      .comment-composer {
-        padding: 22px 34px max(26px, env(safe-area-inset-bottom));
-        border-top: 1px solid rgba(22, 139, 255, 0.18);
-        background: rgba(2, 8, 20, 0.98);
-        box-shadow: 0 -16px 30px rgba(0, 0, 0, 0.28);
-      }
-
-      .comment-composer-identity {
-        display: grid;
-        grid-template-columns: 66px minmax(0, 1fr);
-        gap: 16px;
-        align-items: end;
-        margin-bottom: 14px;
-      }
-
-      .comment-flag-preview {
-        width: 62px;
-        height: 62px;
-        font-size: 49px;
-      }
-
-      .comment-phone-field {
-        min-width: 0;
-      }
-
-      .comment-phone-field label {
-        display: block;
-        margin: 0 0 7px;
-        color: #dce5f2;
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .comment-phone-field input {
-        width: 100%;
-        min-height: 52px;
-        padding: 12px 15px;
-        border: 1px solid rgba(22, 139, 255, 0.32);
-        border-radius: 14px;
-        outline: none;
-        color: #ffffff;
-        background: rgba(0, 5, 14, 0.92);
-      }
-
-      .comment-phone-field input:focus,
-      .comment-compose-row textarea:focus {
-        border-color: rgba(22, 139, 255, 0.9);
-        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.10);
-      }
-
-      .comment-compose-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 14px;
-        align-items: stretch;
-      }
-
-      .comment-compose-row textarea {
-        width: 100%;
-        min-height: 72px;
-        max-height: 150px;
-        padding: 16px;
-        resize: vertical;
-        border: 1px solid rgba(22, 139, 255, 0.32);
-        border-radius: 17px;
-        outline: none;
-        color: #ffffff;
-        background: rgba(0, 5, 14, 0.92);
-      }
-
-      .comment-send-button {
-        min-width: 128px;
-        padding: 0 26px;
-        border: 1px solid rgba(82, 169, 255, 0.7);
-        border-radius: 17px;
-        color: #ffffff;
-        background: linear-gradient(145deg, #2092ff, #0874ed);
-        font-weight: 900;
-        cursor: pointer;
-        box-shadow:
-          0 9px 22px rgba(8, 124, 255, 0.22),
-          inset 0 0 12px rgba(255, 255, 255, 0.10);
-      }
-
-      .comment-send-button:disabled {
-        opacity: 0.65;
-        cursor: wait;
-      }
-
-      .comment-send-button:active {
-        transform: scale(0.98);
-      }
-
-      .comment-privacy {
-        margin: 10px 2px 0;
-        color: #7f8ba0;
-        font-size: 11px;
-        line-height: 1.4;
-        text-align: center;
-      }
-
       @media (max-width: 700px) {
-        .comments-sheet {
-          width: 100%;
-          max-height: 90svh;
-          border-right: 0;
-          border-left: 0;
-          border-bottom: 0;
-          border-radius: 25px 25px 0 0;
+        .comments-overlay-header {
+          padding: 14px 16px 8px;
         }
 
-        .comments-sheet-header {
-          padding: 20px 20px 16px;
-        }
-
-        .comments-sheet-header h2 {
-          font-size: 28px;
-        }
-
-        .comments-sheet-header p {
-          margin-top: 8px;
-          font-size: 14px;
-        }
-
-        .comments-collapse-button {
-          width: 46px;
-          height: 46px;
-          flex-basis: 46px;
-        }
-
-        .comments-list {
-          padding: 0 20px;
-        }
-
-        .comment-item {
-          grid-template-columns: 64px minmax(0, 1fr);
-          gap: 15px;
-          padding: 20px 0;
-        }
-
-        .comment-avatar {
-          width: 62px;
-          height: 62px;
-          font-size: 50px;
-        }
-
-        .comment-topline {
-          gap: 10px;
-        }
-
-        .comment-topline strong {
+        .comments-overlay-header h2 {
           font-size: 17px;
         }
 
-        .comment-topline time {
-          font-size: 12px;
+        .comments-overlay-close {
+          width: 32px;
+          height: 32px;
+          flex-basis: 32px;
         }
 
-        .comment-content p {
-          margin-top: 8px;
-          font-size: 18px;
+        .comments-list {
+          padding: 8px 16px;
+        }
+
+        .comment-row {
+          gap: 10px;
+          padding: 10px 0;
+        }
+
+        .comment-avatar {
+          width: 30px;
+          height: 30px;
+          flex-basis: 30px;
+          font-size: 16px;
+        }
+
+        .comment-meta strong {
+          font-size: 13px;
+        }
+
+        .comment-meta time {
+          font-size: 11px;
+        }
+
+        .comment-body p {
+          font-size: 13px;
         }
 
         .comment-composer {
-          padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+          padding: 12px 16px max(14px, env(safe-area-inset-bottom));
         }
 
         .comment-composer-identity {
-          grid-template-columns: 50px minmax(0, 1fr);
-          gap: 10px;
+          grid-template-columns: 38px minmax(0, 1fr);
+          gap: 8px;
           margin-bottom: 10px;
         }
 
         .comment-flag-preview {
-          width: 48px;
-          height: 48px;
-          font-size: 38px;
+          width: 34px;
+          height: 34px;
+          font-size: 18px;
         }
 
         .comment-phone-field input {
-          min-height: 44px;
-          padding: 10px 12px;
+          min-height: 40px;
+          padding: 8px 10px;
         }
 
         .comment-compose-row {
-          gap: 9px;
+          gap: 8px;
         }
 
         .comment-compose-row textarea {
-          min-height: 58px;
-          padding: 13px;
+          min-height: 46px;
+          padding: 10px;
         }
 
         .comment-send-button {
-          min-width: 88px;
-          padding: 0 16px;
+          min-width: 78px;
+          padding: 0 14px;
         }
       }
 
@@ -3177,9 +3162,7 @@ function HomeStyles() {
 
         .media-viewport {
           width: calc(100% - 24px);
-          min-height: 220px;
-          max-height: 58svh;
-          aspect-ratio: 9 / 12;
+          max-height: 78svh;
           margin: 0 12px;
           border-radius: 22px;
         }
@@ -3203,81 +3186,6 @@ function HomeStyles() {
         .heart-icon {
           width: 23px;
           height: 23px;
-        }
-
-        .comments-sheet {
-          width: 100%;
-          max-height: 88svh;
-          border-radius: 24px 24px 0 0;
-        }
-
-        .comments-sheet-header {
-          padding: 18px 18px 14px;
-        }
-
-        .comments-sheet-header h2 {
-          font-size: 22px;
-        }
-
-        .comments-sheet-header p {
-          font-size: 12px;
-        }
-
-        .comments-collapse-button {
-          width: 42px;
-          height: 42px;
-        }
-
-        .comments-list {
-          padding: 0 18px;
-        }
-
-        .comment-item {
-          gap: 12px;
-          padding: 16px 0;
-        }
-
-        .comment-avatar,
-        .comment-flag-preview {
-          width: 52px;
-          height: 52px;
-          flex-basis: 52px;
-          font-size: 40px;
-        }
-
-        .comment-country {
-          font-size: 14px;
-        }
-
-        .comment-body p {
-          font-size: 16px;
-        }
-
-        .comment-composer {
-          padding: 14px 16px max(16px, env(safe-area-inset-bottom));
-        }
-
-        .comment-composer-top {
-          gap: 10px;
-          margin-bottom: 10px;
-        }
-
-        .comment-phone-field input {
-          min-height: 44px;
-          padding: 10px 12px;
-        }
-
-        .comment-compose-row {
-          gap: 10px;
-        }
-
-        .comment-compose-row textarea {
-          min-height: 58px;
-        }
-
-        .comment-send-button {
-          min-width: 92px;
-          padding: 0 18px;
         }
       }
 
