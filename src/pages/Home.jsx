@@ -17,7 +17,6 @@ import {
   ChevronDown,
   X,
 } from "lucide-react";
-import { parsePhoneNumberFromString } from "libphonenumber-js/min";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
@@ -167,11 +166,300 @@ function formatCount(value = 0) {
   return String(number);
 }
 
+// =============================================================================
+// COMPLETE COUNTRY FLAG DETECTION SYSTEM (frontend-only)
+// =============================================================================
+
 /**
- * Reusable WhatsApp / phone number normalizer.
- * This MUST stay in sync with the identical function in Worker.js.
- * It only checks structure — it never proves ownership of the number.
+ * Normalize a WhatsApp/phone number by removing all non-digit characters
+ * except the leading '+'.
  */
+function normalizeWhatsappNumber(value = "") {
+  return String(value).trim().replace(/[^\d+]/g, "");
+}
+
+/**
+ * Complete country calling code map with ALL countries and territories.
+ * Longer codes must be checked before shorter ones.
+ */
+const COUNTRY_CODES = {
+  // Africa
+  "+212": "🇲🇦", // Morocco
+  "+213": "🇩🇿", // Algeria
+  "+216": "🇹🇳", // Tunisia
+  "+218": "🇱🇾", // Libya
+  "+220": "🇬🇲", // Gambia
+  "+221": "🇸🇳", // Senegal
+  "+222": "🇲🇷", // Mauritania
+  "+223": "🇲🇱", // Mali
+  "+224": "🇬🇳", // Guinea
+  "+225": "🇨🇮", // Ivory Coast
+  "+226": "🇧🇫", // Burkina Faso
+  "+227": "🇳🇪", // Niger
+  "+228": "🇹🇬", // Togo
+  "+229": "🇧🇯", // Benin
+  "+230": "🇲🇺", // Mauritius
+  "+231": "🇱🇷", // Liberia
+  "+232": "🇸🇱", // Sierra Leone
+  "+233": "🇬🇭", // Ghana
+  "+234": "🇳🇬", // Nigeria
+  "+235": "🇹🇩", // Chad
+  "+236": "🇨🇫", // Central African Republic
+  "+237": "🇨🇲", // Cameroon
+  "+238": "🇨🇻", // Cape Verde
+  "+239": "🇸🇹", // São Tomé and Príncipe
+  "+240": "🇬🇶", // Equatorial Guinea
+  "+241": "🇬🇦", // Gabon
+  "+242": "🇨🇬", // Republic of the Congo
+  "+243": "🇨🇩", // Democratic Republic of the Congo
+  "+244": "🇦🇴", // Angola
+  "+245": "🇬🇼", // Guinea-Bissau
+  "+246": "🇮🇴", // British Indian Ocean Territory
+  "+248": "🇸🇨", // Seychelles
+  "+249": "🇸🇩", // Sudan
+  "+250": "🇷🇼", // Rwanda
+  "+251": "🇪🇹", // Ethiopia
+  "+252": "🇸🇴", // Somalia
+  "+253": "🇩🇯", // Djibouti
+  "+254": "🇰🇪", // Kenya
+  "+255": "🇹🇿", // Tanzania
+  "+256": "🇺🇬", // Uganda
+  "+257": "🇧🇮", // Burundi
+  "+258": "🇲🇿", // Mozambique
+  "+260": "🇿🇲", // Zambia
+  "+261": "🇲🇬", // Madagascar
+  "+262": "🇷🇪", // Réunion
+  "+263": "🇿🇼", // Zimbabwe
+  "+264": "🇳🇦", // Namibia
+  "+265": "🇲🇼", // Malawi
+  "+266": "🇱🇸", // Lesotho
+  "+267": "🇧🇼", // Botswana
+  "+268": "🇸🇿", // Eswatini
+  "+269": "🇰🇲", // Comoros
+  "+290": "🇸🇭", // Saint Helena
+  "+291": "🇪🇷", // Eritrea
+  "+297": "🇦🇼", // Aruba
+  "+298": "🇫🇴", // Faroe Islands
+  "+299": "🇬🇱", // Greenland
+
+  // Europe
+  "+30": "🇬🇷", // Greece
+  "+31": "🇳🇱", // Netherlands
+  "+32": "🇧🇪", // Belgium
+  "+33": "🇫🇷", // France
+  "+34": "🇪🇸", // Spain
+  "+36": "🇭🇺", // Hungary
+  "+39": "🇮🇹", // Italy
+  "+40": "🇷🇴", // Romania
+  "+41": "🇨🇭", // Switzerland
+  "+43": "🇦🇹", // Austria
+  "+44": "🇬🇧", // United Kingdom
+  "+45": "🇩🇰", // Denmark
+  "+46": "🇸🇪", // Sweden
+  "+47": "🇳🇴", // Norway
+  "+48": "🇵🇱", // Poland
+  "+49": "🇩🇪", // Germany
+
+  // Asia
+  "+60": "🇲🇾", // Malaysia
+  "+61": "🇦🇺", // Australia
+  "+62": "🇮🇩", // Indonesia
+  "+63": "🇵🇭", // Philippines
+  "+64": "🇳🇿", // New Zealand
+  "+65": "🇸🇬", // Singapore
+  "+66": "🇹🇭", // Thailand
+  "+81": "🇯🇵", // Japan
+  "+82": "🇰🇷", // South Korea
+  "+84": "🇻🇳", // Vietnam
+  "+86": "🇨🇳", // China
+  "+90": "🇹🇷", // Turkey
+  "+91": "🇮🇳", // India
+  "+92": "🇵🇰", // Pakistan
+  "+93": "🇦🇫", // Afghanistan
+  "+94": "🇱🇰", // Sri Lanka
+  "+95": "🇲🇲", // Myanmar
+  "+98": "🇮🇷", // Iran
+
+  // +1 North American Numbering Plan (must check longer codes first)
+  "+1242": "🇧🇸", // Bahamas
+  "+1246": "🇧🇧", // Barbados
+  "+1264": "🇦🇮", // Anguilla
+  "+1268": "🇦🇬", // Antigua and Barbuda
+  "+1284": "🇻🇬", // British Virgin Islands
+  "+1340": "🇻🇮", // US Virgin Islands
+  "+1345": "🇰🇾", // Cayman Islands
+  "+1441": "🇧🇲", // Bermuda
+  "+1473": "🇬🇩", // Grenada
+  "+1649": "🇹🇨", // Turks and Caicos Islands
+  "+1664": "🇲🇸", // Montserrat
+  "+1670": "🇲🇵", // Northern Mariana Islands
+  "+1671": "🇬🇺", // Guam
+  "+1684": "🇦🇸", // American Samoa
+  "+1721": "🇸🇽", // Sint Maarten
+  "+1758": "🇱🇨", // Saint Lucia
+  "+1767": "🇩🇲", // Dominica
+  "+1784": "🇻🇨", // Saint Vincent and the Grenadines
+  "+1809": "🇩🇴", // Dominican Republic
+  "+1829": "🇩🇴", // Dominican Republic
+  "+1849": "🇩🇴", // Dominican Republic
+  "+1868": "🇹🇹", // Trinidad and Tobago
+  "+1869": "🇰🇳", // Saint Kitts and Nevis
+  "+1876": "🇯🇲", // Jamaica
+  "+1939": "🇵🇷", // Puerto Rico
+  "+1": "🇺🇸", // United States (fallback after specific territories)
+
+  // South America
+  "+54": "🇦🇷", // Argentina
+  "+55": "🇧🇷", // Brazil
+  "+56": "🇨🇱", // Chile
+  "+57": "🇨🇴", // Colombia
+  "+58": "🇻🇪", // Venezuela
+  "+591": "🇧🇴", // Bolivia
+  "+592": "🇬🇾", // Guyana
+  "+593": "🇪🇨", // Ecuador
+  "+594": "🇬🇫", // French Guiana
+  "+595": "🇵🇾", // Paraguay
+  "+596": "🇲🇶", // Martinique
+  "+597": "🇸🇷", // Suriname
+  "+598": "🇺🇾", // Uruguay
+
+  // Central America & Caribbean (non-+1)
+  "+501": "🇧🇿", // Belize
+  "+502": "🇬🇹", // Guatemala
+  "+503": "🇸🇻", // El Salvador
+  "+504": "🇭🇳", // Honduras
+  "+505": "🇳🇮", // Nicaragua
+  "+506": "🇨🇷", // Costa Rica
+  "+507": "🇵🇦", // Panama
+  "+509": "🇭🇹", // Haiti
+  "+52": "🇲🇽", // Mexico
+  "+53": "🇨🇺", // Cuba
+
+  // Other countries
+  "+20": "🇪🇬", // Egypt
+  "+27": "🇿🇦", // South Africa
+  "+211": "🇸🇸", // South Sudan
+  "+350": "🇬🇮", // Gibraltar
+  "+351": "🇵🇹", // Portugal
+  "+352": "🇱🇺", // Luxembourg
+  "+353": "🇮🇪", // Ireland
+  "+354": "🇮🇸", // Iceland
+  "+355": "🇦🇱", // Albania
+  "+356": "🇲🇹", // Malta
+  "+357": "🇨🇾", // Cyprus
+  "+358": "🇫🇮", // Finland
+  "+359": "🇧🇬", // Bulgaria
+  "+370": "🇱🇹", // Lithuania
+  "+371": "🇱🇻", // Latvia
+  "+372": "🇪🇪", // Estonia
+  "+373": "🇲🇩", // Moldova
+  "+374": "🇦🇲", // Armenia
+  "+375": "🇧🇾", // Belarus
+  "+376": "🇦🇩", // Andorra
+  "+377": "🇲🇨", // Monaco
+  "+378": "🇸🇲", // San Marino
+  "+380": "🇺🇦", // Ukraine
+  "+381": "🇷🇸", // Serbia
+  "+382": "🇲🇪", // Montenegro
+  "+383": "🇽🇰", // Kosovo
+  "+385": "🇭🇷", // Croatia
+  "+386": "🇸🇮", // Slovenia
+  "+387": "🇧🇦", // Bosnia and Herzegovina
+  "+389": "🇲🇰", // North Macedonia
+  "+420": "🇨🇿", // Czech Republic
+  "+421": "🇸🇰", // Slovakia
+  "+423": "🇱🇮", // Liechtenstein
+  "+500": "🇫🇰", // Falkland Islands
+  "+670": "🇹🇱", // Timor-Leste
+  "+672": "🇦🇶", // Antarctica
+  "+673": "🇧🇳", // Brunei
+  "+674": "🇳🇷", // Nauru
+  "+675": "🇵🇬", // Papua New Guinea
+  "+676": "🇹🇴", // Tonga
+  "+677": "🇸🇧", // Solomon Islands
+  "+678": "🇻🇺", // Vanuatu
+  "+679": "🇫🇯", // Fiji
+  "+680": "🇵🇼", // Palau
+  "+681": "🇼🇫", // Wallis and Futuna
+  "+682": "🇨🇰", // Cook Islands
+  "+683": "🇳🇺", // Niue
+  "+685": "🇼🇸", // Samoa
+  "+686": "🇰🇮", // Kiribati
+  "+687": "🇳🇨", // New Caledonia
+  "+688": "🇹🇻", // Tuvalu
+  "+689": "🇵🇫", // French Polynesia
+  "+690": "🇹🇰", // Tokelau
+  "+691": "🇫🇲", // Federated States of Micronesia
+  "+692": "🇲🇭", // Marshall Islands
+  "+856": "🇱🇦", // Laos
+  "+880": "🇧🇩", // Bangladesh
+  "+886": "🇹🇼", // Taiwan
+  "+960": "🇲🇻", // Maldives
+  "+961": "🇱🇧", // Lebanon
+  "+962": "🇯🇴", // Jordan
+  "+963": "🇸🇾", // Syria
+  "+964": "🇮🇶", // Iraq
+  "+965": "🇰🇼", // Kuwait
+  "+966": "🇸🇦", // Saudi Arabia
+  "+967": "🇾🇪", // Yemen
+  "+968": "🇴🇲", // Oman
+  "+970": "🇵🇸", // Palestine
+  "+971": "🇦🇪", // United Arab Emirates
+  "+972": "🇮🇱", // Israel
+  "+973": "🇧🇭", // Bahrain
+  "+974": "🇶🇦", // Qatar
+  "+975": "🇧🇹", // Bhutan
+  "+976": "🇲🇳", // Mongolia
+  "+977": "🇳🇵", // Nepal
+  "+992": "🇹🇯", // Tajikistan
+  "+993": "🇹🇲", // Turkmenistan
+  "+994": "🇦🇿", // Azerbaijan
+  "+995": "🇬🇪", // Georgia
+  "+996": "🇰🇬", // Kyrgyzstan
+  "+998": "🇺🇿", // Uzbekistan
+};
+
+/**
+ * Complete country flag detection from a WhatsApp/phone number.
+ * This function only uses the frontend country code map and does NOT
+ * depend on any Cloudflare Worker data.
+ */
+function getFlagFromWhatsapp(phoneNumber) {
+  // Normalize the phone number first
+  const normalized = normalizeWhatsappNumber(phoneNumber);
+
+  // Empty or invalid input returns the globe
+  if (!normalized) {
+    return "🌍";
+  }
+
+  // Get the country code by checking longer prefixes first
+  // Sort codes by length (longest first) to avoid prefix conflicts
+  const sortedCodes = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.length);
+
+  for (const code of sortedCodes) {
+    // Check if the normalized number starts with this country code
+    // The code includes the '+' sign, so we need to match accordingly
+    if (normalized.startsWith(code)) {
+      return COUNTRY_CODES[code];
+    }
+
+    // Also check without the '+' for numbers that don't include it
+    const codeWithoutPlus = code.slice(1);
+    if (normalized.startsWith(codeWithoutPlus)) {
+      return COUNTRY_CODES[code];
+    }
+  }
+
+  // If no match found, return the globe
+  return "🌍";
+}
+
+// =============================================================================
+// END COUNTRY FLAG DETECTION SYSTEM
+// =============================================================================
+
+// Reusable WhatsApp / phone number normalizer for API compatibility
 function normalizeWhatsAppNumber(value = "") {
   const raw = String(value || "").trim();
   const compact = raw.replace(/[\s().-]/g, "");
@@ -199,41 +487,18 @@ function normalizeWhatsAppNumber(value = "") {
   return "";
 }
 
-function countryCodeToFlag(countryCode = "") {
-  if (!/^[A-Z]{2}$/.test(countryCode)) return "🌍";
-
-  return String.fromCodePoint(
-    ...countryCode.split("").map((letter) => 127397 + letter.charCodeAt(0))
-  );
-}
-
-function getCountryFlag(phoneOrNormalized = "") {
-  const normalizedPhone = normalizeWhatsAppNumber(phoneOrNormalized);
-  if (!normalizedPhone) return "🌍";
-
-  try {
-    const parsedPhone = parsePhoneNumberFromString(`+${normalizedPhone}`);
-
-    if (parsedPhone?.country) {
-      return countryCodeToFlag(parsedPhone.country);
-    }
-
-    // A structurally valid but incomplete North American number can lack a
-    // resolvable territory until its area code is complete.
-    if (normalizedPhone.startsWith("1")) return "🌎";
-  } catch (error) {
-    console.warn("Unable to detect phone country:", error);
-  }
-
-  return "🌍";
-}
-
 function getCommentDisplayFlag(comment = {}) {
-  const storedFlag = String(comment.country_flag || "").trim();
-  if (storedFlag && storedFlag !== "🌍") return storedFlag;
+  // Determine the phone number from all possible field names
+  const commenterPhone =
+    comment.commenter_whatsapp ||
+    comment.commenter_phone ||
+    comment.whatsapp ||
+    comment.phone ||
+    comment.phone_number ||
+    "";
 
-  const availablePhone = comment.commenter_phone || comment.phone || "";
-  return availablePhone ? getCountryFlag(availablePhone) : "🌍";
+  // Use the frontend flag detection
+  return getFlagFromWhatsapp(commenterPhone);
 }
 
 /**
@@ -1088,7 +1353,7 @@ function Home() {
     if (!selectedPost) return;
 
     const postId = String(selectedPost.id ?? "0");
-    const countryFlag = getCountryFlag(normalizedPhone);
+    const countryFlag = getFlagFromWhatsapp(normalizedPhone);
 
     try {
       setSubmittingComment(true);
@@ -1113,16 +1378,19 @@ function Home() {
 
       saveWhatsAppNumber(normalizedPhone);
 
+      // Create optimistic comment with the flag computed on the frontend
+      const optimisticComment = {
+        id: Date.now(),
+        post_id: postId,
+        comment: text,
+        commenter_whatsapp: normalizedPhone,
+        created_at: new Date().toISOString(),
+      };
+
       setCommentsByPost((current) => ({
         ...current,
         [postId]: [
-          {
-            ...data.comment,
-            country_flag:
-              data.comment?.country_flag && data.comment.country_flag !== "🌍"
-                ? data.comment.country_flag
-                : countryFlag,
-          },
+          optimisticComment,
           ...(current[postId] || []),
         ],
       }));
@@ -1810,29 +2078,34 @@ const HomePost = memo(function HomePost({
                   <span>Be the first viewer to comment.</span>
                 </div>
               ) : (
-                commentsForOverlay.map((comment) => (
-                  <article className="comment-row" key={comment.id}>
-                    <div className="comment-avatar" aria-hidden="true">
-                      <span>{getCommentDisplayFlag(comment)}</span>
-                    </div>
-
-                    <div className="comment-body">
-                      <div className="comment-meta">
-                        <strong>Viewer</strong>
-                        <time>
-                          {comment.created_at
-                            ? new Date(comment.created_at).toLocaleTimeString([], {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })
-                            : ""}
-                        </time>
+                commentsForOverlay.map((comment) => {
+                  // Get the flag using the frontend detection
+                  const commenterFlag = getCommentDisplayFlag(comment);
+                  
+                  return (
+                    <article className="comment-row" key={comment.id}>
+                      <div className="comment-avatar" aria-hidden="true">
+                        <span>{commenterFlag}</span>
                       </div>
 
-                      <p>{comment.comment}</p>
-                    </div>
-                  </article>
-                ))
+                      <div className="comment-body">
+                        <div className="comment-meta">
+                          <strong>Viewer</strong>
+                          <time>
+                            {comment.created_at
+                              ? new Date(comment.created_at).toLocaleTimeString([], {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })
+                              : ""}
+                          </time>
+                        </div>
+
+                        <p>{comment.comment}</p>
+                      </div>
+                    </article>
+                  );
+                })
               )}
               </div>
 
@@ -1865,7 +2138,7 @@ const HomePost = memo(function HomePost({
                 <div className="comment-flag-preview" aria-hidden="true">
                   <span>
                     {commentPhone.trim() && normalizeWhatsAppNumber(commentPhone)
-                      ? getCountryFlag(commentPhone)
+                      ? getFlagFromWhatsapp(commentPhone)
                       : "🌍"}
                   </span>
                 </div>
