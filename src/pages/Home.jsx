@@ -17,6 +17,8 @@ import {
   ChevronDown,
   X,
 } from "lucide-react";
+import { parsePhoneNumberFromString } from "libphonenumber-js/min";
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 const DEFAULT_VIDEO =
@@ -39,6 +41,12 @@ const WATCH_FLUSH_INTERVAL_MS = 10_000;
 const MAX_WATCH_SECONDS_PER_REQUEST = 30;
 
 const WHATSAPP_STORAGE_KEY = "feedx-whatsapp-number";
+
+const COMMENT_POSITIONS = {
+  top: 0,
+  middle: 50,
+  bottom: 100,
+};
 
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
@@ -72,7 +80,7 @@ function getEmbedUrl(url = "") {
   if (!url) return "";
 
   const youtubeMatch = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
 
   if (youtubeMatch) {
@@ -85,6 +93,14 @@ function getEmbedUrl(url = "") {
 
   if (shortsMatch) {
     return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&modestbranding=1`;
+  }
+
+  const youtubeChannelMatch = url.match(
+    /youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/
+  );
+
+  if (youtubeChannelMatch) {
+    return `https://www.youtube.com/embed?listType=user_uploads&list=${youtubeChannelMatch[1]}&autoplay=1&controls=1&rel=0&modestbranding=1`;
   }
 
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
@@ -183,42 +199,41 @@ function normalizeWhatsAppNumber(value = "") {
   return "";
 }
 
+function countryCodeToFlag(countryCode = "") {
+  if (!/^[A-Z]{2}$/.test(countryCode)) return "🌍";
+
+  return String.fromCodePoint(
+    ...countryCode.split("").map((letter) => 127397 + letter.charCodeAt(0))
+  );
+}
+
 function getCountryFlag(phoneOrNormalized = "") {
-  const digits = String(phoneOrNormalized).replace(/[^\d+]/g, "");
+  const normalizedPhone = normalizeWhatsAppNumber(phoneOrNormalized);
+  if (!normalizedPhone) return "🌍";
 
-  const countryPrefixes = [
-    ["+250", "🇷🇼"],
-    ["250", "🇷🇼"],
-    ["+257", "🇧🇮"],
-    ["257", "🇧🇮"],
-    ["+256", "🇺🇬"],
-    ["256", "🇺🇬"],
-    ["+254", "🇰🇪"],
-    ["254", "🇰🇪"],
-    ["+255", "🇹🇿"],
-    ["255", "🇹🇿"],
-    ["+243", "🇨🇩"],
-    ["243", "🇨🇩"],
-    ["+251", "🇪🇹"],
-    ["251", "🇪🇹"],
-    ["+27", "🇿🇦"],
-    ["27", "🇿🇦"],
-    ["+44", "🇬🇧"],
-    ["44", "🇬🇧"],
-    ["+33", "🇫🇷"],
-    ["33", "🇫🇷"],
-    ["+32", "🇧🇪"],
-    ["32", "🇧🇪"],
-    ["+91", "🇮🇳"],
-    ["91", "🇮🇳"],
-    ["+86", "🇨🇳"],
-    ["86", "🇨🇳"],
-    ["+1", "🌎"],
-    ["1", "🌎"],
-  ];
+  try {
+    const parsedPhone = parsePhoneNumberFromString(`+${normalizedPhone}`);
 
-  const match = countryPrefixes.find(([prefix]) => digits.startsWith(prefix));
-  return match ? match[1] : "🌍";
+    if (parsedPhone?.country) {
+      return countryCodeToFlag(parsedPhone.country);
+    }
+
+    // A structurally valid but incomplete North American number can lack a
+    // resolvable territory until its area code is complete.
+    if (normalizedPhone.startsWith("1")) return "🌎";
+  } catch (error) {
+    console.warn("Unable to detect phone country:", error);
+  }
+
+  return "🌍";
+}
+
+function getCommentDisplayFlag(comment = {}) {
+  const storedFlag = String(comment.country_flag || "").trim();
+  if (storedFlag && storedFlag !== "🌍") return storedFlag;
+
+  const availablePhone = comment.commenter_phone || comment.phone || "";
+  return availablePhone ? getCountryFlag(availablePhone) : "🌍";
 }
 
 /**
@@ -1073,6 +1088,7 @@ function Home() {
     if (!selectedPost) return;
 
     const postId = String(selectedPost.id ?? "0");
+    const countryFlag = getCountryFlag(normalizedPhone);
 
     try {
       setSubmittingComment(true);
@@ -1084,6 +1100,7 @@ function Home() {
           post_id: postId,
           phone: normalizedPhone,
           comment: text,
+          country_flag: countryFlag,
         }),
       });
 
@@ -1098,7 +1115,16 @@ function Home() {
 
       setCommentsByPost((current) => ({
         ...current,
-        [postId]: [data.comment, ...(current[postId] || [])],
+        [postId]: [
+          {
+            ...data.comment,
+            country_flag:
+              data.comment?.country_flag && data.comment.country_flag !== "🌍"
+                ? data.comment.country_flag
+                : countryFlag,
+          },
+          ...(current[postId] || []),
+        ],
       }));
 
       setPosts((currentPosts) =>
@@ -1473,6 +1499,14 @@ const HomePost = memo(function HomePost({
   onReact,
   onZoomImage,
 }) {
+  const commentsLayerRef = useRef(null);
+  const commentsSheetRef = useRef(null);
+  const commentDragRef = useRef(null);
+  const [commentSheetPosition, setCommentSheetPosition] = useState("top");
+  const [commentSheetOffset, setCommentSheetOffset] = useState(0);
+  const [isCommentSheetDragging, setIsCommentSheetDragging] = useState(false);
+  const [showCommentComposer, setShowCommentComposer] = useState(false);
+
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
   const mediaType = post.media_type || "";
 
@@ -1523,6 +1557,100 @@ const HomePost = memo(function HomePost({
       }
     },
     [onMediaAspectRatio, postId]
+  );
+
+  const getCommentSnapOffsets = useCallback(() => {
+    const layerHeight = commentsLayerRef.current?.getBoundingClientRect().height || 0;
+    const sheetHeight = commentsSheetRef.current?.getBoundingClientRect().height || 0;
+    const bottomOffset = Math.max(0, layerHeight - sheetHeight);
+
+    return {
+      top: 0,
+      middle: bottomOffset / 2,
+      bottom: bottomOffset,
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showCommentsOverlay) return;
+    setCommentSheetPosition("top");
+    setCommentSheetOffset(0);
+    setShowCommentComposer(false);
+  }, [postId, showCommentsOverlay]);
+
+  useEffect(() => {
+    if (!showCommentsOverlay) return undefined;
+
+    const updateOffset = () => {
+      const offsets = getCommentSnapOffsets();
+      setCommentSheetOffset(offsets[commentSheetPosition] || 0);
+    };
+
+    updateOffset();
+    const observer = new ResizeObserver(updateOffset);
+    if (commentsLayerRef.current) observer.observe(commentsLayerRef.current);
+    if (commentsSheetRef.current) observer.observe(commentsSheetRef.current);
+
+    return () => observer.disconnect();
+  }, [commentSheetPosition, getCommentSnapOffsets, showCommentsOverlay]);
+
+  const handleCommentDragStart = useCallback(
+    (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      commentDragRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startOffset: commentSheetOffset,
+        currentOffset: commentSheetOffset,
+      };
+      setIsCommentSheetDragging(true);
+    },
+    [commentSheetOffset]
+  );
+
+  const handleCommentDragMove = useCallback(
+    (event) => {
+      const drag = commentDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      const offsets = getCommentSnapOffsets();
+      const nextOffset = drag.startOffset + event.clientY - drag.startY;
+      const clampedOffset = Math.min(
+        offsets.bottom || 0,
+        Math.max(offsets.top || 0, nextOffset)
+      );
+      drag.currentOffset = clampedOffset;
+      setCommentSheetOffset(clampedOffset);
+    },
+    [getCommentSnapOffsets]
+  );
+
+  const handleCommentDragEnd = useCallback(
+    (event) => {
+      const drag = commentDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      const offsets = getCommentSnapOffsets();
+      const releasedOffset = drag.currentOffset ?? commentSheetOffset;
+      const nearestPosition = Object.keys(offsets).reduce((nearest, name) =>
+        Math.abs(offsets[name] - releasedOffset) <
+        Math.abs(offsets[nearest] - releasedOffset)
+          ? name
+          : nearest
+      );
+
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      commentDragRef.current = null;
+      setIsCommentSheetDragging(false);
+      setCommentSheetPosition(nearestPosition);
+      setCommentSheetOffset(offsets[nearestPosition]);
+    },
+    [commentSheetOffset, getCommentSnapOffsets]
   );
 
   return (
@@ -1631,23 +1759,46 @@ const HomePost = memo(function HomePost({
         </div>
 
         {showCommentsOverlay && (
-          <div className="comments-media-overlay">
-            <header className="comments-overlay-header">
-              <h2>
-                Comments <span>({commentsForOverlay.length})</span>
-              </h2>
-
-              <button
-                type="button"
-                onClick={closeComments}
-                className="comments-overlay-close"
-                aria-label="Close comments"
+          <div className="floating-comments-layer" ref={commentsLayerRef}>
+            <div
+              ref={commentsSheetRef}
+              className={`floating-comments-sheet${
+                isCommentSheetDragging ? " is-dragging" : ""
+              }`}
+              style={{ transform: `translateY(${commentSheetOffset}px)` }}
+            >
+              <div
+                className="comment-drag-handle"
+                onPointerDown={handleCommentDragStart}
+                onPointerMove={handleCommentDragMove}
+                onPointerUp={handleCommentDragEnd}
+                onPointerCancel={handleCommentDragEnd}
+                role="slider"
+                aria-label="Move comments up or down"
+                aria-valuemin={COMMENT_POSITIONS.top}
+                aria-valuemax={COMMENT_POSITIONS.bottom}
+                aria-valuenow={COMMENT_POSITIONS[commentSheetPosition]}
+                tabIndex={0}
               >
-                <X size={20} strokeWidth={2.2} aria-hidden="true" />
-              </button>
-            </header>
+                <span />
+              </div>
 
-            <div className="comments-list">
+              <header className="comments-overlay-header">
+                <h2>
+                  Comments <span>({commentsForOverlay.length})</span>
+                </h2>
+
+                <button
+                  type="button"
+                  onClick={closeComments}
+                  className="comments-overlay-close"
+                  aria-label="Close comments"
+                >
+                  <X size={20} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              </header>
+
+              <div className="comments-list">
               {loadingComments ? (
                 <div className="no-comments">
                   <span>Loading comments...</span>
@@ -1662,7 +1813,7 @@ const HomePost = memo(function HomePost({
                 commentsForOverlay.map((comment) => (
                   <article className="comment-row" key={comment.id}>
                     <div className="comment-avatar" aria-hidden="true">
-                      {comment.country_flag || "🌍"}
+                      <span>{getCommentDisplayFlag(comment)}</span>
                     </div>
 
                     <div className="comment-body">
@@ -1683,12 +1834,40 @@ const HomePost = memo(function HomePost({
                   </article>
                 ))
               )}
-            </div>
+              </div>
 
-            <div className="comment-composer">
+              {!showCommentComposer ? (
+                <div className="comment-add-launcher">
+                  <button
+                    type="button"
+                    className="comment-add-button"
+                    onClick={() => setShowCommentComposer(true)}
+                    aria-label="Add a comment"
+                    title="Add comment"
+                  >
+                    <Plus size={22} strokeWidth={2.5} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+              <div className="comment-composer">
+              <div className="comment-composer-header">
+                <strong>Add comment</strong>
+                <button
+                  type="button"
+                  className="comment-composer-close"
+                  onClick={() => setShowCommentComposer(false)}
+                  aria-label="Hide comment form"
+                >
+                  <X size={16} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              </div>
               <div className="comment-composer-identity">
                 <div className="comment-flag-preview" aria-hidden="true">
-                  <span>{getCountryFlag(commentPhone)}</span>
+                  <span>
+                    {commentPhone.trim() && normalizeWhatsAppNumber(commentPhone)
+                      ? getCountryFlag(commentPhone)
+                      : "🌍"}
+                  </span>
                 </div>
 
                 <div className="comment-phone-field">
@@ -1727,6 +1906,8 @@ const HomePost = memo(function HomePost({
                 Your phone number stays private. Only its country flag is shown.
                 We only check the number's format — we don't verify you own it.
               </p>
+              </div>
+              )}
             </div>
           </div>
         )}
@@ -1795,10 +1976,10 @@ const FeedXTopBar = memo(({ openEditor }) => (
       type="button"
       className="top-create-button"
       onClick={openEditor}
-      aria-label="Create post"
-      title="Create post"
+      aria-label="Tell your story"
+      title="Create a post"
     >
-      <Plus size={42} strokeWidth={2} aria-hidden="true" />
+      <span>Tell Your Story</span>
     </button>
   </header>
 ));
@@ -2157,16 +2338,22 @@ function HomeStyles() {
       }
 
       .top-create-button {
-        width: 94px;
-        height: 94px;
-        flex: 0 0 94px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
+        min-width: 154px;
+        min-height: 46px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 20px;
+        border: 1px solid rgba(113, 188, 255, 0.72);
+        border-radius: 999px;
         color: #ffffff;
         background: linear-gradient(145deg, #1d8cff, #0067ee);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
         cursor: pointer;
         box-shadow:
           0 0 12px rgba(22, 139, 255, 0.9),
@@ -2212,9 +2399,9 @@ function HomeStyles() {
       }
 
       .profile-picture-button {
-        width: 122px;
-        height: 122px;
-        flex: 0 0 122px;
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
         padding: 0;
         overflow: hidden;
         border: 0;
@@ -2261,9 +2448,9 @@ function HomeStyles() {
       }
 
       .inbox-button {
-        width: 132px;
-        height: 98px;
-        flex: 0 0 132px;
+        width: 70px;
+        height: 58px;
+        flex: 0 0 70px;
         position: relative;
         display: grid;
         place-items: center;
@@ -2278,12 +2465,12 @@ function HomeStyles() {
       }
 
       .unread-dot {
-        width: 32px;
-        height: 32px;
+        width: 20px;
+        height: 20px;
         position: absolute;
         top: 2px;
-        right: 16px;
-        border: 3px solid #06101f;
+        right: 5px;
+        border: 2px solid #06101f;
         border-radius: 50%;
         background: var(--danger);
         box-shadow:
@@ -2292,9 +2479,9 @@ function HomeStyles() {
       }
 
       .post-menu-button {
-        width: 48px;
-        height: 70px;
-        flex: 0 0 48px;
+        width: 38px;
+        height: 48px;
+        flex: 0 0 38px;
         display: grid;
         place-items: center;
         padding: 0;
@@ -2331,7 +2518,7 @@ function HomeStyles() {
 
       .media-viewport {
         width: calc(100% - 64px);
-        max-height: 85svh;
+        height: 75svh;
         position: relative;
         z-index: 4;
         overflow: hidden;
@@ -2345,8 +2532,10 @@ function HomeStyles() {
       .media-layer {
         width: 100%;
         height: 100%;
+        position: relative;
         display: grid;
         place-items: center;
+        overflow: hidden;
       }
 
       .home-media {
@@ -2357,6 +2546,15 @@ function HomeStyles() {
         object-fit: contain;
         object-position: center;
         background: #000000;
+      }
+
+      .media-layer > iframe.home-media {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        min-width: 100%;
+        min-height: 100%;
       }
 
       .embed-placeholder,
@@ -2380,20 +2578,63 @@ function HomeStyles() {
         font-size: 48px;
       }
 
-      .comments-media-overlay {
+      .floating-comments-layer {
         position: absolute;
         inset: 0;
-        z-index: 40;
+        z-index: 50;
+        overflow: hidden;
+        pointer-events: none;
+        background: linear-gradient(
+          to bottom,
+          transparent 0%,
+          rgba(0, 0, 0, 0.05) 55%,
+          rgba(0, 0, 0, 0.16) 100%
+        );
+      }
+
+      .floating-comments-sheet {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100%;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+        border-radius: inherit;
         color: #ffffff;
-        background:
-          linear-gradient(
-            to bottom,
-            rgba(0, 0, 0, 0.38),
-            rgba(0, 0, 0, 0.82)
-          );
-        backdrop-filter: blur(2px);
+        pointer-events: auto;
+        background: transparent;
+        backdrop-filter: none;
+        box-shadow: none;
+        will-change: transform;
+        transition: transform 180ms ease;
+      }
+
+      .floating-comments-sheet.is-dragging {
+        transition: none;
+      }
+
+      .comment-drag-handle {
+        min-height: 24px;
+        flex: 0 0 24px;
+        display: grid;
+        place-items: center;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+      }
+
+      .comment-drag-handle:active {
+        cursor: grabbing;
+      }
+
+      .comment-drag-handle span {
+        width: 38px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.34);
       }
 
       .comments-overlay-header {
@@ -2401,7 +2642,7 @@ function HomeStyles() {
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        padding: 18px 20px 10px;
+        padding: 2px 12px 8px;
         flex: 0 0 auto;
       }
 
@@ -2418,9 +2659,9 @@ function HomeStyles() {
       }
 
       .comments-overlay-close {
-        width: 38px;
-        height: 38px;
-        flex: 0 0 38px;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
         display: grid;
         place-items: center;
         padding: 0;
@@ -2432,16 +2673,20 @@ function HomeStyles() {
       }
 
       .comments-list {
+        position: relative;
+        z-index: 2;
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        padding: 12px 20px;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        padding: 6px 8px 10px;
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.32) transparent;
       }
 
       .no-comments {
-        min-height: 160px;
+        min-height: 84px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -2464,83 +2709,158 @@ function HomeStyles() {
       .comment-row {
         display: flex;
         align-items: flex-start;
-        gap: 12px;
-        padding: 12px 0;
+        gap: 9px;
+        padding: 8px 10px;
         background: transparent;
         border: 0;
       }
 
       .comment-row + .comment-row {
-        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        border-top: 0;
       }
 
       .comment-avatar {
-        width: 36px;
-        height: 36px;
-        flex: 0 0 36px;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
         display: grid;
         place-items: center;
+        overflow: hidden;
+        padding: 0;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.10);
-        font-size: 19px;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        font-size: 18px;
         line-height: 1;
+      }
+
+      .comment-avatar span,
+      .comment-flag-preview span {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        font-size: 21px;
+        line-height: 1;
+        transform: scale(1.72);
       }
 
       .comment-body {
         min-width: 0;
-        flex: 1;
+        width: fit-content;
+        max-width: calc(100% - 40px);
+        padding: 2px 3px;
+        background: transparent;
+        border: 0;
+        backdrop-filter: none;
       }
 
       .comment-meta {
         display: flex;
-        align-items: baseline;
-        gap: 10px;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 2px;
       }
 
       .comment-meta strong {
         color: #ffffff;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
       }
 
       .comment-meta time {
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 12px;
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 11px;
       }
 
       .comment-body p {
-        margin: 4px 0 0;
-        color: rgba(255, 255, 255, 0.92);
+        margin: 0;
+        color: #ffffff;
         font-size: 14px;
-        line-height: 1.45;
+        line-height: 1.35;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+      }
+
+      .comment-add-launcher {
+        position: relative;
+        z-index: 3;
+        flex: 0 0 auto;
+        display: flex;
+        justify-content: flex-end;
+        padding: 7px 10px max(10px, env(safe-area-inset-bottom));
+        pointer-events: none;
+      }
+
+      .comment-add-button {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(113, 188, 255, 0.72);
+        border-radius: 50%;
+        color: #ffffff;
+        background: linear-gradient(145deg, #2092ff, #0874ed);
+        box-shadow: 0 7px 20px rgba(8, 124, 255, 0.34);
+        cursor: pointer;
+        pointer-events: auto;
       }
 
       .comment-composer {
+        position: relative;
+        z-index: 3;
         flex: 0 0 auto;
-        padding: 14px 20px max(16px, env(safe-area-inset-bottom));
+        padding: 6px 8px max(7px, env(safe-area-inset-bottom));
         border-top: 1px solid rgba(255, 255, 255, 0.14);
-        background: rgba(0, 0, 0, 0.35);
+        background: rgba(0, 0, 0, 0.48);
+        backdrop-filter: blur(4px);
+      }
+
+      .comment-composer-header {
+        min-height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        color: #ffffff;
+        font-size: 12px;
+      }
+
+      .comment-composer-close {
+        width: 24px;
+        height: 24px;
+        flex: 0 0 24px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.10);
+        cursor: pointer;
       }
 
       .comment-composer-identity {
         display: grid;
-        grid-template-columns: 44px minmax(0, 1fr);
-        gap: 12px;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 7px;
         align-items: end;
-        margin-bottom: 12px;
+        margin-bottom: 6px;
       }
 
       .comment-flag-preview {
-        width: 40px;
-        height: 40px;
+        width: 32px;
+        height: 32px;
         display: grid;
         place-items: center;
         overflow: hidden;
         border-radius: 50%;
         background: rgba(255, 255, 255, 0.10);
-        font-size: 22px;
+        font-size: 17px;
       }
 
       .comment-phone-field {
@@ -2548,17 +2868,21 @@ function HomeStyles() {
       }
 
       .comment-phone-field label {
-        display: block;
-        margin: 0 0 6px;
-        color: #dce5f2;
-        font-size: 12px;
-        font-weight: 800;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
 
       .comment-phone-field input {
         width: 100%;
-        min-height: 44px;
-        padding: 10px 12px;
+        min-height: 34px;
+        padding: 6px 9px;
         border: 1px solid rgba(255, 255, 255, 0.22);
         border-radius: 12px;
         outline: none;
@@ -2575,16 +2899,16 @@ function HomeStyles() {
       .comment-compose-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 12px;
+        gap: 7px;
         align-items: stretch;
       }
 
       .comment-compose-row textarea {
         width: 100%;
-        min-height: 52px;
-        max-height: 120px;
-        padding: 12px;
-        resize: vertical;
+        min-height: 40px;
+        max-height: 72px;
+        padding: 8px 9px;
+        resize: none;
         border: 1px solid rgba(255, 255, 255, 0.22);
         border-radius: 14px;
         outline: none;
@@ -2593,8 +2917,9 @@ function HomeStyles() {
       }
 
       .comment-send-button {
-        min-width: 96px;
-        padding: 0 20px;
+        min-width: 68px;
+        min-height: 40px;
+        padding: 0 12px;
         border: 1px solid rgba(82, 169, 255, 0.7);
         border-radius: 14px;
         color: #ffffff;
@@ -2616,10 +2941,10 @@ function HomeStyles() {
       }
 
       .comment-privacy {
-        margin: 10px 2px 0;
+        margin: 5px 2px 0;
         color: rgba(255, 255, 255, 0.62);
-        font-size: 10px;
-        line-height: 1.4;
+        font-size: 9px;
+        line-height: 1.2;
         text-align: center;
       }
 
@@ -2636,19 +2961,19 @@ function HomeStyles() {
       .metric-pill,
       .action-pill {
         min-width: 0;
-        min-height: 94px;
+        min-height: 64px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 14px;
-        padding: 0 18px;
+        gap: 8px;
+        padding: 0 10px;
         border: 1px solid rgba(22, 139, 255, 0.38);
-        border-radius: 28px;
+        border-radius: 20px;
         color: #ffffff;
         background:
           linear-gradient(180deg, rgba(8, 26, 55, 0.96), rgba(2, 10, 23, 0.96));
         font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(22px, 2.6vw, 32px);
+        font-size: clamp(16px, 2vw, 22px);
         font-weight: 800;
         box-shadow:
           inset 0 0 15px rgba(22, 139, 255, 0.06),
@@ -2669,6 +2994,8 @@ function HomeStyles() {
       }
 
       .action-icon {
+        width: 30px;
+        height: 30px;
         color: #ffffff;
         filter:
           drop-shadow(0 0 6px rgba(22, 139, 255, 1))
@@ -2676,6 +3003,8 @@ function HomeStyles() {
       }
 
       .heart-icon {
+        width: 30px;
+        height: 30px;
         color: #ff3156;
         filter:
           drop-shadow(0 0 6px rgba(255, 49, 86, 1))
@@ -2683,8 +3012,7 @@ function HomeStyles() {
       }
 
       .post-menu-button svg,
-      .comments-overlay-close svg,
-      .top-create-button svg {
+      .comments-overlay-close svg {
         display: block;
       }
 
@@ -2953,34 +3281,53 @@ function HomeStyles() {
       }
 
       @media (max-width: 700px) {
+        .floating-comments-sheet {
+          left: 0;
+          right: 0;
+          height: 100%;
+          border-radius: inherit;
+        }
+
         .comments-overlay-header {
-          padding: 14px 16px 8px;
+          padding: 0 10px 5px;
         }
 
         .comments-overlay-header h2 {
-          font-size: 17px;
+          font-size: 15px;
         }
 
         .comments-overlay-close {
-          width: 32px;
-          height: 32px;
-          flex-basis: 32px;
+          width: 27px;
+          height: 27px;
+          flex-basis: 27px;
         }
 
         .comments-list {
-          padding: 8px 16px;
+          padding: 4px 6px 6px;
         }
 
         .comment-row {
-          gap: 10px;
-          padding: 10px 0;
+          gap: 9px;
+          padding: 8px 10px;
         }
 
         .comment-avatar {
-          width: 30px;
-          height: 30px;
-          flex-basis: 30px;
+          width: 26px;
+          height: 26px;
+          flex-basis: 26px;
           font-size: 16px;
+        }
+
+        .comment-avatar span,
+        .comment-flag-preview span {
+          font-size: 20px;
+          transform: scale(1.72);
+        }
+
+        .comment-add-button {
+          width: 36px;
+          height: 36px;
+          flex-basis: 36px;
         }
 
         .comment-meta strong {
@@ -2996,24 +3343,25 @@ function HomeStyles() {
         }
 
         .comment-composer {
-          padding: 12px 16px max(14px, env(safe-area-inset-bottom));
+          padding: 5px 7px max(6px, env(safe-area-inset-bottom));
         }
 
         .comment-composer-identity {
-          grid-template-columns: 38px minmax(0, 1fr);
-          gap: 8px;
-          margin-bottom: 10px;
+          grid-template-columns: 30px minmax(0, 1fr);
+          gap: 6px;
+          margin-bottom: 5px;
         }
 
         .comment-flag-preview {
-          width: 34px;
-          height: 34px;
-          font-size: 18px;
+          width: 28px;
+          height: 28px;
+          font-size: 15px;
         }
 
         .comment-phone-field input {
-          min-height: 40px;
-          padding: 8px 10px;
+          min-height: 30px;
+          padding: 5px 8px;
+          font-size: 13px;
         }
 
         .comment-compose-row {
@@ -3021,13 +3369,22 @@ function HomeStyles() {
         }
 
         .comment-compose-row textarea {
-          min-height: 46px;
-          padding: 10px;
+          min-height: 36px;
+          max-height: 58px;
+          padding: 7px 8px;
+          font-size: 13px;
         }
 
         .comment-send-button {
-          min-width: 78px;
-          padding: 0 14px;
+          min-width: 62px;
+          min-height: 36px;
+          padding: 0 9px;
+          border-radius: 11px;
+          font-size: 13px;
+        }
+
+        .comment-privacy {
+          display: none;
         }
       }
 
@@ -3088,9 +3445,10 @@ function HomeStyles() {
         }
 
         .top-create-button {
-          width: 56px;
-          height: 56px;
-          flex-basis: 56px;
+          min-width: 126px;
+          min-height: 38px;
+          padding: 0 13px;
+          font-size: 13px;
         }
 
         .home-post {
@@ -3107,9 +3465,9 @@ function HomeStyles() {
         }
 
         .profile-picture-button {
-          width: 56px;
-          height: 56px;
-          flex-basis: 56px;
+          width: 48px;
+          height: 48px;
+          flex-basis: 48px;
         }
 
         .creator-name {
@@ -3117,33 +3475,33 @@ function HomeStyles() {
         }
 
         .inbox-button {
-          width: 58px;
-          height: 50px;
-          flex-basis: 58px;
+          width: 46px;
+          height: 40px;
+          flex-basis: 46px;
         }
 
         .inbox-envelope {
-          width: 34px;
-          height: 34px;
+          width: 28px;
+          height: 28px;
         }
 
         .unread-dot {
-          width: 18px;
-          height: 18px;
+          width: 14px;
+          height: 14px;
           top: 1px;
           right: 1px;
           border-width: 2px;
         }
 
         .post-menu-button {
-          width: 30px;
-          height: 44px;
-          flex-basis: 30px;
+          width: 26px;
+          height: 36px;
+          flex-basis: 26px;
         }
 
         .post-menu-button svg {
-          width: 26px;
-          height: 26px;
+          width: 21px;
+          height: 21px;
         }
 
         .post-copy {
@@ -3162,7 +3520,7 @@ function HomeStyles() {
 
         .media-viewport {
           width: calc(100% - 24px);
-          max-height: 78svh;
+          height: 75svh;
           margin: 0 12px;
           border-radius: 22px;
         }
@@ -3175,17 +3533,17 @@ function HomeStyles() {
 
         .metric-pill,
         .action-pill {
-          min-height: 48px;
-          gap: 5px;
-          padding: 0 5px;
-          border-radius: 16px;
-          font-size: clamp(12px, 3.5vw, 15px);
+          min-height: 40px;
+          gap: 4px;
+          padding: 0 4px;
+          border-radius: 13px;
+          font-size: clamp(10px, 3vw, 13px);
         }
 
         .action-icon,
         .heart-icon {
-          width: 23px;
-          height: 23px;
+          width: 19px;
+          height: 19px;
         }
       }
 
@@ -3205,6 +3563,14 @@ function HomeStyles() {
         .home-post {
           box-shadow: none;
           border-radius: 20px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .profile-picture-button {
+          width: 42px;
+          height: 42px;
+          flex-basis: 42px;
         }
       }
 
