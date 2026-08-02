@@ -47,6 +47,17 @@ const COMMENT_POSITIONS = {
   bottom: 100,
 };
 
+// =============================================================================
+// DEBUG LOGGING - Enable/disable by setting to true/false
+// =============================================================================
+const DEBUG_FLAGS = true;
+
+function debugLog(...args) {
+  if (DEBUG_FLAGS) {
+    console.log("[FLAG-DEBUG]", ...args);
+  }
+}
+
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
 
@@ -175,7 +186,9 @@ function formatCount(value = 0) {
  * except the leading '+'.
  */
 function normalizeWhatsappNumber(value = "") {
-  return String(value).trim().replace(/[^\d+]/g, "");
+  const result = String(value).trim().replace(/[^\d+]/g, "");
+  debugLog("normalizeWhatsappNumber input:", value, "-> output:", result);
+  return result;
 }
 
 /**
@@ -425,33 +438,45 @@ const COUNTRY_CODES = {
  * depend on any Cloudflare Worker data.
  */
 function getFlagFromWhatsapp(phoneNumber) {
+  debugLog("getFlagFromWhatsapp called with:", phoneNumber);
+  
   // Normalize the phone number first
   const normalized = normalizeWhatsappNumber(phoneNumber);
 
   // Empty or invalid input returns the globe
   if (!normalized) {
+    debugLog("getFlagFromWhatsapp: normalized is empty, returning 🌍");
     return "🌍";
   }
+
+  debugLog("getFlagFromWhatsapp: normalized number:", normalized);
 
   // Get the country code by checking longer prefixes first
   // Sort codes by length (longest first) to avoid prefix conflicts
   const sortedCodes = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.length);
+  
+  debugLog("getFlagFromWhatsapp: checking", sortedCodes.length, "country codes");
 
   for (const code of sortedCodes) {
     // Check if the normalized number starts with this country code
     // The code includes the '+' sign, so we need to match accordingly
     if (normalized.startsWith(code)) {
-      return COUNTRY_CODES[code];
+      const flag = COUNTRY_CODES[code];
+      debugLog("getFlagFromWhatsapp: matched code", code, "-> flag", flag);
+      return flag;
     }
 
     // Also check without the '+' for numbers that don't include it
     const codeWithoutPlus = code.slice(1);
     if (normalized.startsWith(codeWithoutPlus)) {
-      return COUNTRY_CODES[code];
+      const flag = COUNTRY_CODES[code];
+      debugLog("getFlagFromWhatsapp: matched code (without +)", codeWithoutPlus, "-> flag", flag);
+      return flag;
     }
   }
 
   // If no match found, return the globe
+  debugLog("getFlagFromWhatsapp: no match found, returning 🌍");
   return "🌍";
 }
 
@@ -487,7 +512,13 @@ function normalizeWhatsAppNumber(value = "") {
   return "";
 }
 
+/**
+ * Get the country flag for a comment.
+ * ALWAYS uses frontend detection and NEVER relies on the worker's country_flag.
+ */
 function getCommentDisplayFlag(comment = {}) {
+  debugLog("getCommentDisplayFlag called with comment:", comment);
+  
   // Determine the phone number from all possible field names
   const commenterPhone =
     comment.commenter_whatsapp ||
@@ -497,8 +528,14 @@ function getCommentDisplayFlag(comment = {}) {
     comment.phone_number ||
     "";
 
-  // Use the frontend flag detection
-  return getFlagFromWhatsapp(commenterPhone);
+  debugLog("getCommentDisplayFlag: extracted phone:", commenterPhone);
+  debugLog("getCommentDisplayFlag: comment keys:", Object.keys(comment));
+
+  // Use the frontend flag detection - this overrides whatever the worker returned
+  const flag = getFlagFromWhatsapp(commenterPhone);
+  debugLog("getCommentDisplayFlag: final flag:", flag);
+  
+  return flag;
 }
 
 /**
@@ -1302,9 +1339,19 @@ function Home() {
         const data = await readJsonSafely(response);
 
         if (data.success && Array.isArray(data.comments)) {
+          debugLog("loadComments: received comments from API:", data.comments);
+          // Ensure every comment has the phone number field preserved
+          const commentsWithPhone = data.comments.map((comment) => {
+            debugLog("loadComments: processing comment:", comment);
+            return {
+              ...comment,
+              // If the API didn't return a phone field, try to preserve it from the comment object
+              commenter_whatsapp: comment.commenter_whatsapp || comment.commenter_phone || comment.phone || "",
+            };
+          });
           setCommentsByPost((current) => ({
             ...current,
-            [postId]: data.comments,
+            [postId]: commentsWithPhone,
           }));
         }
       } catch (error) {
@@ -1384,8 +1431,12 @@ function Home() {
         post_id: postId,
         comment: text,
         commenter_whatsapp: normalizedPhone,
+        commenter_phone: normalizedPhone,
+        phone: normalizedPhone,
         created_at: new Date().toISOString(),
       };
+
+      debugLog("submitComment: created optimistic comment:", optimisticComment);
 
       setCommentsByPost((current) => ({
         ...current,
@@ -1921,6 +1972,26 @@ const HomePost = memo(function HomePost({
     [commentSheetOffset, getCommentSnapOffsets]
   );
 
+  // Debug: Log commentsForOverlay changes
+  useEffect(() => {
+    if (commentsForOverlay && commentsForOverlay.length > 0) {
+      debugLog("HomePost: commentsForOverlay updated:", commentsForOverlay);
+      commentsForOverlay.forEach((comment, idx) => {
+        debugLog(`HomePost: comment ${idx}:`, {
+          id: comment.id,
+          comment: comment.comment,
+          commenter_whatsapp: comment.commenter_whatsapp,
+          commenter_phone: comment.commenter_phone,
+          phone: comment.phone,
+          country_flag: comment.country_flag,
+          allKeys: Object.keys(comment),
+        });
+        const flag = getCommentDisplayFlag(comment);
+        debugLog(`HomePost: comment ${idx} flag:`, flag);
+      });
+    }
+  }, [commentsForOverlay]);
+
   return (
     <section
       ref={postRefCallback}
@@ -2082,6 +2153,16 @@ const HomePost = memo(function HomePost({
                   // Get the flag using the frontend detection
                   const commenterFlag = getCommentDisplayFlag(comment);
                   
+                  debugLog(`Rendering comment ${comment.id}:`, {
+                    commenterFlag,
+                    comment: comment.comment,
+                    phoneFields: {
+                      commenter_whatsapp: comment.commenter_whatsapp,
+                      commenter_phone: comment.commenter_phone,
+                      phone: comment.phone,
+                    }
+                  });
+                  
                   return (
                     <article className="comment-row" key={comment.id}>
                       <div className="comment-avatar" aria-hidden="true">
@@ -2101,7 +2182,7 @@ const HomePost = memo(function HomePost({
                           </time>
                         </div>
 
-                        <p>{comment.comment}</p>
+                        <p className="comment-text">{comment.comment}</p>
                       </div>
                     </article>
                   );
@@ -2553,6 +2634,8 @@ function HomeStyles() {
         --blue-border: rgba(22, 139, 255, 0.78);
         --muted: #9ba8ba;
         --danger: #ff334f;
+        --neon-red: #ff0040;
+        --neon-glow: rgba(255, 0, 64, 0.8);
       }
 
       * {
@@ -3007,13 +3090,33 @@ function HomeStyles() {
         line-height: 1;
       }
 
-      .comment-avatar span,
-      .comment-flag-preview span {
+      .comment-avatar span {
         width: 100%;
         height: 100%;
         display: grid;
         place-items: center;
         font-size: 21px;
+        line-height: 1;
+        transform: scale(1.72);
+      }
+
+      .comment-flag-preview {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.10);
+        font-size: 17px;
+      }
+
+      .comment-flag-preview span {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        font-size: 20px;
         line-height: 1;
         transform: scale(1.72);
       }
@@ -3046,14 +3149,70 @@ function HomeStyles() {
         font-size: 11px;
       }
 
-      .comment-body p {
+      /* Neon blue "Viewer" text with glow effect */
+      .comment-meta strong {
+        color: #00d4ff;
+        text-shadow:
+          0 0 5px rgba(0, 212, 255, 0.8),
+          0 0 10px rgba(0, 212, 255, 0.6),
+          0 0 20px rgba(0, 212, 255, 0.4),
+          0 0 40px rgba(0, 212, 255, 0.2),
+          0 0 80px rgba(0, 212, 255, 0.1);
+        animation: neonPulseBlue 2s ease-in-out infinite;
+      }
+
+      @keyframes neonPulseBlue {
+        0%, 100% {
+          text-shadow:
+            0 0 5px rgba(0, 212, 255, 0.8),
+            0 0 10px rgba(0, 212, 255, 0.6),
+            0 0 20px rgba(0, 212, 255, 0.4),
+            0 0 40px rgba(0, 212, 255, 0.2);
+        }
+        50% {
+          text-shadow:
+            0 0 10px rgba(0, 212, 255, 1),
+            0 0 20px rgba(0, 212, 255, 0.8),
+            0 0 40px rgba(0, 212, 255, 0.6),
+            0 0 80px rgba(0, 212, 255, 0.4),
+            0 0 120px rgba(0, 212, 255, 0.2);
+        }
+      }
+
+      /* Neon red comment text with glow effect */
+      .comment-text {
         margin: 0;
-        color: #ffffff;
+        color: #ff0040;
         font-size: 14px;
         line-height: 1.35;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+        font-weight: 600;
+        text-shadow:
+          0 0 5px rgba(255, 0, 64, 0.8),
+          0 0 10px rgba(255, 0, 64, 0.6),
+          0 0 20px rgba(255, 0, 64, 0.4),
+          0 0 40px rgba(255, 0, 64, 0.2),
+          0 0 80px rgba(255, 0, 64, 0.1);
+        animation: neonPulse 2s ease-in-out infinite;
+      }
+
+      @keyframes neonPulse {
+        0%, 100% {
+          text-shadow:
+            0 0 5px rgba(255, 0, 64, 0.8),
+            0 0 10px rgba(255, 0, 64, 0.6),
+            0 0 20px rgba(255, 0, 64, 0.4),
+            0 0 40px rgba(255, 0, 64, 0.2);
+        }
+        50% {
+          text-shadow:
+            0 0 10px rgba(255, 0, 64, 1),
+            0 0 20px rgba(255, 0, 64, 0.8),
+            0 0 40px rgba(255, 0, 64, 0.6),
+            0 0 80px rgba(255, 0, 64, 0.4),
+            0 0 120px rgba(255, 0, 64, 0.2);
+        }
       }
 
       .comment-add-launcher {
@@ -3123,17 +3282,6 @@ function HomeStyles() {
         gap: 7px;
         align-items: end;
         margin-bottom: 6px;
-      }
-
-      .comment-flag-preview {
-        width: 32px;
-        height: 32px;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.10);
-        font-size: 17px;
       }
 
       .comment-phone-field {
@@ -3597,6 +3745,10 @@ function HomeStyles() {
           transform: scale(1.72);
         }
 
+        .comment-text {
+          font-size: 13px;
+        }
+
         .comment-add-button {
           width: 36px;
           height: 36px;
@@ -3609,10 +3761,6 @@ function HomeStyles() {
 
         .comment-meta time {
           font-size: 11px;
-        }
-
-        .comment-body p {
-          font-size: 13px;
         }
 
         .comment-composer {
@@ -3836,6 +3984,10 @@ function HomeStyles() {
         .home-post {
           box-shadow: none;
           border-radius: 20px;
+        }
+
+        .comment-text {
+          animation: none !important;
         }
       }
 
