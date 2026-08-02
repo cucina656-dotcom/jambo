@@ -3138,26 +3138,15 @@ function HomeStyles() {
         margin-bottom: 2px;
       }
 
+      /* Neon blue "Viewer" text with glow effect - FIXED with !important */
       .comment-meta strong {
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 700;
-      }
-
-      .comment-meta time {
-        color: rgba(255, 255, 255, 0.68);
-        font-size: 11px;
-      }
-
-      /* Neon blue "Viewer" text with glow effect */
-      .comment-meta strong {
-        color: #00d4ff;
+        color: #00d4ff !important;
         text-shadow:
           0 0 5px rgba(0, 212, 255, 0.8),
           0 0 10px rgba(0, 212, 255, 0.6),
           0 0 20px rgba(0, 212, 255, 0.4),
           0 0 40px rgba(0, 212, 255, 0.2),
-          0 0 80px rgba(0, 212, 255, 0.1);
+          0 0 80px rgba(0, 212, 255, 0.1) !important;
         animation: neonPulseBlue 2s ease-in-out infinite;
       }
 
@@ -3167,7 +3156,7 @@ function HomeStyles() {
             0 0 5px rgba(0, 212, 255, 0.8),
             0 0 10px rgba(0, 212, 255, 0.6),
             0 0 20px rgba(0, 212, 255, 0.4),
-            0 0 40px rgba(0, 212, 255, 0.2);
+            0 0 40px rgba(0, 212, 255, 0.2) !important;
         }
         50% {
           text-shadow:
@@ -3175,8 +3164,13 @@ function HomeStyles() {
             0 0 20px rgba(0, 212, 255, 0.8),
             0 0 40px rgba(0, 212, 255, 0.6),
             0 0 80px rgba(0, 212, 255, 0.4),
-            0 0 120px rgba(0, 212, 255, 0.2);
+            0 0 120px rgba(0, 212, 255, 0.2) !important;
         }
+      }
+
+      .comment-meta time {
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 11px;
       }
 
       /* Neon red comment text with glow effect */
@@ -3756,7 +3750,7 @@ function HomeStyles() {
         }
 
         .comment-meta strong {
-          font-size: 13px;
+          font-size: 13px !important;
         }
 
         .comment-meta time {
@@ -3987,6 +3981,10 @@ function HomeStyles() {
         }
 
         .comment-text {
+          animation: none !important;
+        }
+
+        .comment-meta strong {
           animation: none !important;
         }
       }
