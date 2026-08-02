@@ -9,10 +9,9 @@ import {
 import {
   Eye,
   MessageCircle,
-  Share2,
   Heart,
-  Mail,
   MoreVertical,
+  ShoppingBasket,
   Plus,
   ChevronDown,
   X,
@@ -586,6 +585,29 @@ async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } =
     console.warn("Image compression failed, using original file:", error);
     return file;
   }
+}
+
+function WhatsAppIcon({ className = "", size = 24 }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="16" cy="16" r="15" fill="#25D366" />
+      <path
+        fill="#FFFFFF"
+        d="M23.25 18.65c-.39-.2-2.29-1.13-2.65-1.26-.35-.13-.61-.2-.87.2-.26.39-1 1.26-1.23 1.52-.23.26-.45.29-.84.1-.39-.2-1.64-.6-3.12-1.93-1.15-1.03-1.93-2.3-2.16-2.69-.23-.39-.02-.6.17-.79.18-.18.39-.45.58-.68.19-.23.26-.39.39-.65.13-.26.06-.49-.03-.68-.1-.2-.87-2.1-1.19-2.87-.31-.75-.63-.65-.87-.66h-.74c-.26 0-.68.1-1.03.49-.35.39-1.36 1.33-1.36 3.23 0 1.91 1.39 3.75 1.58 4.01.19.26 2.73 4.17 6.61 5.85.92.4 1.64.64 2.2.82.93.29 1.77.25 2.44.15.74-.11 2.29-.94 2.61-1.84.32-.91.32-1.68.23-1.84-.1-.16-.36-.26-.75-.46Z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="m7.23 25.55 1.28-4.67a10.4 10.4 0 1 1 3.8 3.73l-5.08.94Zm5.31-2.83.3.18a8.36 8.36 0 1 0-2.48-2.43l.2.31-.75 2.73 2.73-.79Z"
+      />
+    </svg>
+  );
 }
 
 function Home() {
@@ -1574,27 +1596,18 @@ function Home() {
   // Share
   // ---------------------------------------------------------------------
 
-  const sharePost = useCallback(async (post) => {
-    const shareData = {
-      title: post.title || "Post",
-      text: post.subtitle || "",
-      url: window.location.href,
-    };
+  const sharePost = useCallback((post) => {
+    const title = String(post?.title || "Gwamo post").trim();
+    const message = String(post?.subtitle || "").trim();
+    const shareText = [title, message, window.location.href]
+      .filter(Boolean)
+      .join("\n\n");
 
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(window.location.href);
-        alert("Post link copied!");
-      } else {
-        alert(window.location.href);
-      }
-    } catch (error) {
-      if (error?.name !== "AbortError") {
-        console.error("Share failed:", error);
-      }
-    }
+    // WhatsApp does not allow websites to publish directly to Status.
+    // This opens WhatsApp's share screen, where the viewer can choose
+    // "My status" or a contact without exposing private post data.
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   }, []);
 
   const memoizedPosts = useMemo(() => posts, [posts]);
@@ -1608,7 +1621,7 @@ function Home() {
   if (loading) {
     return (
       <div className="home-page">
-        <FeedXTopBar openEditor={openEditor} />
+        <GwamoTopBar openEditor={openEditor} />
         <div className="loading-state">Loading...</div>
         <HomeStyles />
       </div>
@@ -1618,13 +1631,13 @@ function Home() {
   if (!memoizedPosts.length) {
     return (
       <div className="home-page">
-        <FeedXTopBar openEditor={openEditor} />
+        <GwamoTopBar openEditor={openEditor} />
 
         <div className="empty-state">
           <p>No posts yet. Create your first post!</p>
 
           <button type="button" onClick={openEditor} className="empty-button">
-            ＋ Create Post
+            ＋ Tell Your Story
           </button>
         </div>
 
@@ -1659,7 +1672,7 @@ function Home() {
 
   return (
     <div className="home-page">
-      <FeedXTopBar openEditor={openEditor} />
+      <GwamoTopBar openEditor={openEditor} />
 
       <main className="home-feed">
         {memoizedPosts.map((post, index) => {
@@ -2023,10 +2036,10 @@ const HomePost = memo(function HomePost({
           type="button"
           className="inbox-button"
           onClick={() => onOpenInbox(post)}
-          aria-label="Open creator message"
-          title="Open creator message"
+          aria-label="Open creator Agaseke"
+          title="Open creator Agaseke"
         >
-          <Mail className="inbox-envelope" size={58} strokeWidth={2} aria-hidden="true" />
+          <ShoppingBasket className="inbox-envelope agaseke-icon" size={58} strokeWidth={2} aria-hidden="true" />
           {!envelopeOpened && <span className="unread-dot" aria-hidden="true" />}
         </button>
 
@@ -2289,7 +2302,7 @@ const HomePost = memo(function HomePost({
           onClick={() => onShare(post)}
           aria-label="Share post"
         >
-          <Share2 className="action-icon" size={40} strokeWidth={2} aria-hidden="true" />
+          <WhatsAppIcon className="action-icon whatsapp-action-icon" size={40} />
           <span>Share</span>
         </button>
 
@@ -2320,10 +2333,10 @@ const HomePost = memo(function HomePost({
 
 HomePost.displayName = "HomePost";
 
-const FeedXTopBar = memo(({ openEditor }) => (
+const GwamoTopBar = memo(({ openEditor }) => (
   <header className="feedx-topbar">
     <h1 className="feedx-logo">
-      Feed<span>X</span>
+      Gwa<span>mo</span>
     </h1>
 
     <button
@@ -2338,7 +2351,7 @@ const FeedXTopBar = memo(({ openEditor }) => (
   </header>
 ));
 
-FeedXTopBar.displayName = "FeedXTopBar";
+GwamoTopBar.displayName = "GwamoTopBar";
 
 const EditorModal = memo(
   ({
@@ -3065,8 +3078,9 @@ function HomeStyles() {
       .comment-row {
         display: flex;
         align-items: flex-start;
-        gap: 9px;
-        padding: 8px 10px;
+        gap: 12px;
+        padding: 0;
+        margin: 0 0 8px;
         background: transparent;
         border: 0;
       }
@@ -3076,18 +3090,19 @@ function HomeStyles() {
       }
 
       .comment-avatar {
-        width: 28px;
-        height: 28px;
-        flex: 0 0 28px;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px;
         display: grid;
         place-items: center;
         overflow: hidden;
         padding: 0;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.20);
         font-size: 18px;
         line-height: 1;
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
       }
 
       .comment-avatar span {
@@ -3123,90 +3138,56 @@ function HomeStyles() {
 
       .comment-body {
         min-width: 0;
-        width: fit-content;
-        max-width: calc(100% - 40px);
-        padding: 2px 3px;
-        background: transparent;
-        border: 0;
-        backdrop-filter: none;
+        flex: 1;
+        max-width: calc(100% - 44px);
+        padding: 12px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.65);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
       }
 
       .comment-meta {
         display: flex;
         align-items: center;
-        gap: 7px;
-        margin-bottom: 2px;
+        gap: 8px;
+        margin-bottom: 4px;
       }
 
-      /* Neon blue "Viewer" text with glow effect - FIXED with !important */
       .comment-meta strong {
-        color: #00d4ff !important;
-        text-shadow:
-          0 0 5px rgba(0, 212, 255, 0.8),
-          0 0 10px rgba(0, 212, 255, 0.6),
-          0 0 20px rgba(0, 212, 255, 0.4),
-          0 0 40px rgba(0, 212, 255, 0.2),
-          0 0 80px rgba(0, 212, 255, 0.1) !important;
-        animation: neonPulseBlue 2s ease-in-out infinite;
-      }
-
-      @keyframes neonPulseBlue {
-        0%, 100% {
-          text-shadow:
-            0 0 5px rgba(0, 212, 255, 0.8),
-            0 0 10px rgba(0, 212, 255, 0.6),
-            0 0 20px rgba(0, 212, 255, 0.4),
-            0 0 40px rgba(0, 212, 255, 0.2) !important;
-        }
-        50% {
-          text-shadow:
-            0 0 10px rgba(0, 212, 255, 1),
-            0 0 20px rgba(0, 212, 255, 0.8),
-            0 0 40px rgba(0, 212, 255, 0.6),
-            0 0 80px rgba(0, 212, 255, 0.4),
-            0 0 120px rgba(0, 212, 255, 0.2) !important;
-        }
+        color: #ffffff !important;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-shadow: none !important;
+        animation: none !important;
       }
 
       .comment-meta time {
-        color: rgba(255, 255, 255, 0.68);
-        font-size: 11px;
+        color: rgba(255, 255, 255, 0.60);
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.2;
       }
 
-      /* Neon red comment text with glow effect */
       .comment-text {
         margin: 0;
-        color: #ff0040;
+        color: #e2e8f0;
         font-size: 14px;
-        line-height: 1.35;
+        font-weight: 400;
+        line-height: 1.4;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        font-weight: 600;
-        text-shadow:
-          0 0 5px rgba(255, 0, 64, 0.8),
-          0 0 10px rgba(255, 0, 64, 0.6),
-          0 0 20px rgba(255, 0, 64, 0.4),
-          0 0 40px rgba(255, 0, 64, 0.2),
-          0 0 80px rgba(255, 0, 64, 0.1);
-        animation: neonPulse 2s ease-in-out infinite;
+        text-shadow: none;
+        animation: none;
       }
 
-      @keyframes neonPulse {
-        0%, 100% {
-          text-shadow:
-            0 0 5px rgba(255, 0, 64, 0.8),
-            0 0 10px rgba(255, 0, 64, 0.6),
-            0 0 20px rgba(255, 0, 64, 0.4),
-            0 0 40px rgba(255, 0, 64, 0.2);
-        }
-        50% {
-          text-shadow:
-            0 0 10px rgba(255, 0, 64, 1),
-            0 0 20px rgba(255, 0, 64, 0.8),
-            0 0 40px rgba(255, 0, 64, 0.6),
-            0 0 80px rgba(255, 0, 64, 0.4),
-            0 0 120px rgba(255, 0, 64, 0.2);
-        }
+      .comment-text a,
+      .comment-text mark,
+      .comment-text .mention {
+        color: #38bdf8;
       }
 
       .comment-add-launcher {
@@ -3369,26 +3350,26 @@ function HomeStyles() {
         width: calc(100% - 64px);
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 18px;
-        margin: 24px 32px 0;
+        gap: 12px;
+        margin: 20px 32px 0;
       }
 
       .metric-pill,
       .action-pill {
         min-width: 0;
-        min-height: 64px;
+        min-height: 54px;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 10px;
         border: 1px solid rgba(22, 139, 255, 0.38);
-        border-radius: 20px;
+        border-radius: 17px;
         color: #ffffff;
         background:
           linear-gradient(180deg, rgba(8, 26, 55, 0.96), rgba(2, 10, 23, 0.96));
         font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(16px, 2vw, 22px);
+        font-size: clamp(14px, 1.8vw, 18px);
         font-weight: 800;
         box-shadow:
           inset 0 0 15px rgba(22, 139, 255, 0.06),
@@ -3404,13 +3385,22 @@ function HomeStyles() {
         cursor: default;
       }
 
+
+      .whatsapp-action-icon {
+        filter: drop-shadow(0 0 7px rgba(37, 211, 102, 0.72));
+      }
+
+      .agaseke-icon {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
       .heart-action-active .heart-icon {
         color: #ff5773;
       }
 
       .action-icon {
-        width: 30px;
-        height: 30px;
+        width: 24px;
+        height: 24px;
         color: #ffffff;
         filter:
           drop-shadow(0 0 6px rgba(22, 139, 255, 1))
@@ -3418,8 +3408,8 @@ function HomeStyles() {
       }
 
       .heart-icon {
-        width: 30px;
-        height: 30px;
+        width: 24px;
+        height: 24px;
         color: #ff3156;
         filter:
           drop-shadow(0 0 6px rgba(255, 49, 86, 1))
@@ -3948,17 +3938,17 @@ function HomeStyles() {
 
         .metric-pill,
         .action-pill {
-          min-height: 40px;
+          min-height: 38px;
           gap: 4px;
           padding: 0 4px;
-          border-radius: 13px;
+          border-radius: 12px;
           font-size: clamp(10px, 3vw, 13px);
         }
 
         .action-icon,
         .heart-icon {
-          width: 19px;
-          height: 19px;
+          width: 17px;
+          height: 17px;
         }
       }
 
