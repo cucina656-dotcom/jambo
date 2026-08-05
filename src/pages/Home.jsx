@@ -25,7 +25,7 @@ const DEFAULT_VIDEO =
 const DEFAULT_TITLE = "ChillaX";
 
 const DEFAULT_LOGO =
-  "https://pub-7b720214d16e45288fd32c5d88f01209.r2.dev/WhatsApp%20Image%202026-06-19%20at%207.17.57%20AM%20(1).jpeg";
+  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
 
 // Small inline fallback so a broken feed image never falls back to a large
 // profile photo (per low-memory / correctness requirements).
@@ -647,6 +647,7 @@ function Home() {
   const [mediaPreview, setMediaPreview] = useState("");
   const [mediaPreviewType, setMediaPreviewType] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [compressingMedia, setCompressingMedia] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
 
@@ -1108,6 +1109,7 @@ function Home() {
 
   const closeEditor = useCallback(() => {
     setShowEditor(false);
+    setUploadProgress(0);
     setNewCreatorName("");
     setNewCreatorIdentity("");
     setNewMediaUrl("");
@@ -1227,6 +1229,7 @@ function Home() {
 
     try {
       setSaving(true);
+      setUploadProgress(1);
 
       const formData = new FormData();
 
@@ -1250,20 +1253,53 @@ function Home() {
         formData.append("media_file", newMediaFile);
       }
 
-      const response = await fetch(`${API_URL}/api/home/update`, {
-        method: "POST",
-        body: formData,
-      });
+      const { status, statusText, responseText } = await new Promise(
+        (resolve, reject) => {
+          const request = new XMLHttpRequest();
+          request.open("POST", `${API_URL}/api/home/update`);
+          request.timeout = 180000;
 
-      const data = await readJsonSafely(response);
+          request.upload.onprogress = (event) => {
+            if (!event.lengthComputable || !isMountedRef.current) return;
+            const percentage = Math.min(95, Math.max(1, Math.round((event.loaded / event.total) * 95)));
+            setUploadProgress(percentage);
+          };
 
-      if (!response.ok || !data.success) {
+          request.upload.onload = () => {
+            if (isMountedRef.current) setUploadProgress(96);
+          };
+
+          request.onload = () => {
+            resolve({
+              status: request.status,
+              statusText: request.statusText,
+              responseText: request.responseText,
+            });
+          };
+
+          request.onerror = () => reject(new Error("Network error while uploading the post."));
+          request.ontimeout = () => reject(new Error("The upload took too long. Please try again."));
+          request.onabort = () => reject(new Error("The upload was cancelled."));
+          request.send(formData);
+        }
+      );
+
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : { success: status >= 200 && status < 300 };
+      } catch {
+        throw new Error(responseText || `Server returned ${status} ${statusText}`);
+      }
+
+      if (status < 200 || status >= 300 || !data.success) {
         throw new Error(
           data.error ||
             data.message ||
-            `Failed to create post (${response.status})`
+            `Failed to create post (${status})`
         );
       }
+
+      if (isMountedRef.current) setUploadProgress(100);
 
       if (data.post && isMountedRef.current) {
         setPosts((current) => [
@@ -1284,6 +1320,7 @@ function Home() {
     } finally {
       if (isMountedRef.current) {
         setSaving(false);
+        setUploadProgress(0);
       }
     }
   }, [
@@ -1661,6 +1698,7 @@ function Home() {
             applyChanges={applyChanges}
             closeEditor={closeEditor}
             saving={saving}
+            uploadProgress={uploadProgress}
             compressingMedia={compressingMedia}
           />
         )}
@@ -1760,6 +1798,7 @@ function Home() {
           applyChanges={applyChanges}
           closeEditor={closeEditor}
           saving={saving}
+          uploadProgress={uploadProgress}
           compressingMedia={compressingMedia}
         />
       )}
@@ -2373,6 +2412,7 @@ const EditorModal = memo(
     applyChanges,
     closeEditor,
     saving,
+    uploadProgress,
     compressingMedia,
   }) => (
     <div className="modal-overlay" onClick={closeEditor}>
@@ -2400,7 +2440,7 @@ const EditorModal = memo(
           <input
             id="field-creator-name"
             type="text"
-            placeholder="Madman Official"
+            placeholder="Gasana"
             value={newCreatorName}
             onChange={(event) => setNewCreatorName(event.target.value)}
           />
@@ -2554,13 +2594,31 @@ const EditorModal = memo(
           )}
         </div>
 
+        {saving && (
+          <div className="upload-progress-wrap" role="status" aria-live="polite">
+            <div className="upload-progress-text">
+              <span>{uploadProgress < 96 ? "Uploading post..." : "Finishing post..."}</span>
+              <strong>{uploadProgress}%</strong>
+            </div>
+            <div
+              className="upload-progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={uploadProgress}
+            >
+              <span style={{ width: `${uploadProgress}%` }} />
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={applyChanges}
           className="save-button"
           disabled={saving || compressingMedia}
         >
-          {saving ? "Saving..." : "Create Post"}
+          {saving ? `Creating Post... ${uploadProgress}%` : "Create Post"}
         </button>
 
         <button
@@ -3665,6 +3723,37 @@ function HomeStyles() {
         font-size: 15px;
         font-weight: 900;
         cursor: pointer;
+      }
+
+      .upload-progress-wrap {
+        margin: 16px 0 10px;
+      }
+
+      .upload-progress-text {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .upload-progress-track {
+        width: 100%;
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .upload-progress-track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #38bdf8, #2563eb);
+        transition: width 180ms ease;
       }
 
       .save-button {
