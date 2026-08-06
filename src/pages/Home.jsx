@@ -22,7 +22,16 @@ const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 
-const DEFAULT_TITLE = "ChillaX";
+const DEFAULT_MEDIA_LABEL = "Gwamo post media";
+
+function getDisplayPostTitle(value = "") {
+  const title = String(value || "").trim();
+  if (!title) return "";
+
+  // Hide old automatic placeholder titles that were previously saved.
+  const automaticTitles = new Set(["pepper", "chillax"]);
+  return automaticTitles.has(title.toLowerCase()) ? "" : title;
+}
 
 const DEFAULT_LOGO =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
@@ -1236,7 +1245,7 @@ function Home() {
       formData.append("creator_name", creatorName);
       formData.append("creator_identity", identity);
       formData.append("creator_type", detectCreatorType(identity));
-      formData.append("title", newTitle.trim() || DEFAULT_TITLE);
+      formData.append("title", newTitle.trim());
       formData.append("subtitle", subtitle.trim());
       formData.append("media_type", detectedMediaType);
       formData.append("is_new_post", "true");
@@ -1817,15 +1826,31 @@ function Home() {
         <div
           className="zoom-overlay"
           onClick={() => setZoomImage("")}
-          role="presentation"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile picture preview"
         >
-          <img
-            src={zoomImage}
-            alt="Profile"
-            className="zoom-image"
-            loading="lazy"
-            decoding="async"
-          />
+          <button
+            type="button"
+            className="zoom-close-button"
+            onClick={() => setZoomImage("")}
+            aria-label="Close profile picture"
+          >
+            <X size={26} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+
+          <div
+            className="zoom-image-shell"
+            onClick={(event) => event.stopPropagation()}
+            role="presentation"
+          >
+            <img
+              src={zoomImage}
+              alt="Profile"
+              className="zoom-image"
+              decoding="async"
+            />
+          </div>
         </div>
       )}
 
@@ -1896,6 +1921,7 @@ const HomePost = memo(function HomePost({
   const commentCount = Number(post.comment_count || 0) + localCommentCount;
   const creatorDisplayName =
     post.creator_name?.trim() || post.brand_name?.trim() || "Creator";
+  const postTitle = getDisplayPostTitle(post.title);
   const postMessage = String(post.subtitle || "");
   const messageLineCount = postMessage ? postMessage.split(/\r?\n/).length : 0;
   const hasLongMessage = postMessage.length > 220 || messageLineCount > 4;
@@ -2101,7 +2127,7 @@ const HomePost = memo(function HomePost({
       </header>
 
       <div className="post-copy">
-        {post.title && <h1 className="post-title">{post.title}</h1>}
+        {postTitle && <h1 className="post-title">{postTitle}</h1>}
         {postMessage && (
           <div className="post-message-wrap">
             <p
@@ -2126,14 +2152,22 @@ const HomePost = memo(function HomePost({
       </div>
 
       <div
-        className="media-viewport"
-        style={{ aspectRatio: mediaAspectRatio || "16 / 9" }}
+        className={`media-viewport ${
+          mediaAspectRatio && mediaAspectRatio < 0.85
+            ? "is-portrait"
+            : mediaAspectRatio && mediaAspectRatio > 1.2
+              ? "is-landscape"
+              : "is-square"
+        }`}
+        style={{
+          "--media-aspect-ratio": mediaAspectRatio || 16 / 9,
+        }}
       >
         <div className="media-layer">
           {isImage && (
             <img
               src={mediaUrl}
-              alt={post.title || DEFAULT_TITLE}
+              alt={postTitle || DEFAULT_MEDIA_LABEL}
               className="home-media"
               loading="lazy"
               decoding="async"
@@ -2162,7 +2196,7 @@ const HomePost = memo(function HomePost({
             (isActive ? (
               <iframe
                 src={getEmbedUrl(mediaUrl)}
-                title={post.title || DEFAULT_TITLE}
+                title={postTitle || "Gwamo embedded media"}
                 className="home-media"
                 frameBorder="0"
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
@@ -2172,7 +2206,7 @@ const HomePost = memo(function HomePost({
             ) : (
               <div className="embed-placeholder">
                 <span className="embed-placeholder-icon">▶</span>
-                <span>{post.title || DEFAULT_TITLE}</span>
+                {postTitle && <span>{postTitle}</span>}
               </div>
             ))}
         </div>
@@ -3066,24 +3100,44 @@ function HomeStyles() {
 
       .media-viewport {
         width: calc(100% - 64px);
-        height: 75svh;
+        aspect-ratio: var(--media-aspect-ratio, 16 / 9);
         position: relative;
         z-index: 4;
         overflow: hidden;
-        margin: 0 32px;
+        margin: 0 auto;
         border: 1px solid rgba(22, 139, 255, 0.22);
-        border-radius: 28px;
+        border-radius: 24px;
         background: #000000;
         box-shadow: 0 16px 38px rgba(0, 0, 0, 0.48);
       }
 
+      /* Wide media follows its real dimensions instead of being forced to 75vh. */
+      .media-viewport.is-landscape {
+        max-height: min(72svh, 720px);
+      }
+
+      /* Portrait media stays narrow and centered on desktop. The fixed visual
+         stage lets object-fit: contain display the complete tall video. */
+      .media-viewport.is-portrait {
+        width: min(calc(100% - 64px), 460px);
+        height: min(78svh, 820px);
+        aspect-ratio: auto;
+      }
+
+      .media-viewport.is-square {
+        width: min(calc(100% - 64px), 620px);
+        max-height: min(76svh, 700px);
+      }
+
       .media-layer {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
-        position: relative;
         display: grid;
         place-items: center;
         overflow: hidden;
+        background: #000000;
       }
 
       .home-media {
@@ -4011,9 +4065,20 @@ function HomeStyles() {
           font-size: 13px;
         }
 
-        .media-viewport {
+        .media-viewport,
+        .media-viewport.is-square,
+        .media-viewport.is-landscape {
           width: 100%;
+          max-width: none;
           max-height: 78svh;
+          margin: 0;
+          border-radius: 0;
+        }
+
+        .media-viewport.is-portrait {
+          width: 100%;
+          max-width: none;
+          height: min(78svh, 760px);
           margin: 0;
           border-radius: 0;
         }
@@ -4100,6 +4165,93 @@ function HomeStyles() {
           width: 42px;
           height: 42px;
           flex-basis: 42px;
+        }
+      }
+
+      .zoom-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 5000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(20px, env(safe-area-inset-top)) 20px
+          max(20px, env(safe-area-inset-bottom));
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        cursor: zoom-out;
+        animation: zoomOverlayIn 180ms ease-out;
+      }
+
+      .zoom-image-shell {
+        width: min(92vw, 760px);
+        height: min(82vh, 760px);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 24px;
+        background: rgba(3, 7, 18, 0.72);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+        cursor: default;
+      }
+
+      .zoom-image {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .zoom-close-button {
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        right: 16px;
+        z-index: 5001;
+        width: 46px;
+        height: 46px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(15, 23, 42, 0.82);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+        cursor: pointer;
+      }
+
+      .zoom-close-button:hover {
+        background: rgba(30, 41, 59, 0.96);
+        transform: scale(1.04);
+      }
+
+      .zoom-close-button:active {
+        transform: scale(0.96);
+      }
+
+      @keyframes zoomOverlayIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .zoom-overlay {
+          padding-left: 10px;
+          padding-right: 10px;
+        }
+
+        .zoom-image-shell {
+          width: 100%;
+          height: min(78vh, 620px);
+          border-radius: 18px;
         }
       }
 
