@@ -1877,6 +1877,7 @@ const HomePost = memo(function HomePost({
   const [commentSheetOffset, setCommentSheetOffset] = useState(0);
   const [isCommentSheetDragging, setIsCommentSheetDragging] = useState(false);
   const [showCommentComposer, setShowCommentComposer] = useState(false);
+  const [isMessageExpanded, setIsMessageExpanded] = useState(false);
 
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
   const mediaType = post.media_type || "";
@@ -1895,6 +1896,9 @@ const HomePost = memo(function HomePost({
   const commentCount = Number(post.comment_count || 0) + localCommentCount;
   const creatorDisplayName =
     post.creator_name?.trim() || post.brand_name?.trim() || "Creator";
+  const postMessage = String(post.subtitle || "");
+  const messageLineCount = postMessage ? postMessage.split(/\r?\n/).length : 0;
+  const hasLongMessage = postMessage.length > 220 || messageLineCount > 4;
 
   const handleImageError = useCallback((event) => {
     event.currentTarget.onerror = null;
@@ -1941,6 +1945,10 @@ const HomePost = memo(function HomePost({
       bottom: bottomOffset,
     };
   }, []);
+
+  useEffect(() => {
+    setIsMessageExpanded(false);
+  }, [postId]);
 
   useEffect(() => {
     if (!showCommentsOverlay) return;
@@ -2094,7 +2102,27 @@ const HomePost = memo(function HomePost({
 
       <div className="post-copy">
         {post.title && <h1 className="post-title">{post.title}</h1>}
-        {post.subtitle && <p className="post-message">{post.subtitle}</p>}
+        {postMessage && (
+          <div className="post-message-wrap">
+            <p
+              className={`post-message${
+                hasLongMessage && !isMessageExpanded ? " is-collapsed" : ""
+              }`}
+            >
+              {postMessage}
+            </p>
+            {hasLongMessage && (
+              <button
+                type="button"
+                className="message-toggle-button"
+                onClick={() => setIsMessageExpanded((current) => !current)}
+                aria-expanded={isMessageExpanded}
+              >
+                {isMessageExpanded ? "Show less" : "Read more"}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div
@@ -2374,19 +2402,22 @@ HomePost.displayName = "HomePost";
 
 const GwamoTopBar = memo(({ openEditor }) => (
   <header className="feedx-topbar">
-    <h1 className="feedx-logo">
-      Gwa<span>mo</span>
-    </h1>
+    <div className="feedx-topbar-inner">
+      <div className="gwamo-brand" aria-label="Gwamo home">
+        <span className="gwamo-brand-mark" aria-hidden="true">G</span>
+        <h1 className="feedx-logo">Gwamo</h1>
+      </div>
 
-    <button
-      type="button"
-      className="top-create-button"
-      onClick={openEditor}
-      aria-label="Tell your story"
-      title="Create a post"
-    >
-      <span>Tell Your Story</span>
-    </button>
+      <button
+        type="button"
+        className="top-create-button"
+        onClick={openEditor}
+        aria-label="Tell your story"
+        title="Create a post"
+      >
+        <span>Tell Your Story</span>
+      </button>
+    </div>
   </header>
 ));
 
@@ -2440,7 +2471,7 @@ const EditorModal = memo(
           <input
             id="field-creator-name"
             type="text"
-            placeholder="Gasana"
+            placeholder="e.g. Gasana"
             value={newCreatorName}
             onChange={(event) => setNewCreatorName(event.target.value)}
           />
@@ -2457,7 +2488,7 @@ const EditorModal = memo(
           <input
             id="field-contact"
             type="text"
-            placeholder="+250788123456 or https://mywebsite.com"
+            placeholder="e.g. +250788123456 or https://mywebsite.com"
             value={newCreatorIdentity}
             onChange={(event) =>
               setNewCreatorIdentity(event.target.value)
@@ -2476,25 +2507,25 @@ const EditorModal = memo(
           <input
             id="field-title"
             type="text"
-            placeholder="Morning in Kigali"
+            placeholder="e.g. Morning in Kigali"
             value={newTitle}
             onChange={(event) => setNewTitle(event.target.value)}
           />
 
           <p className="field-help">
-            This title will appear in bold.
+            Displayed in bold above your message.
           </p>
 
           <label htmlFor="field-message">Message (Optional)</label>
           <textarea
             id="field-message"
-            placeholder={"Welcome everyone!\nEnjoy today's video."}
+            placeholder={"e.g. Today I met amazing people in Kigali.\n\nThe weather was beautiful, and I wanted to share this moment with everyone."}
             value={subtitle}
             onChange={(event) => setSubtitle(event.target.value)}
           />
 
           <p className="field-help">
-            This message will appear below the bold title.
+            Tell people what your post is about. Paragraphs and line breaks will be preserved.
           </p>
         </div>
 
@@ -2549,7 +2580,7 @@ const EditorModal = memo(
           <input
             id="field-media-link"
             type="text"
-            placeholder="https://youtube.com/..."
+            placeholder="e.g. https://youtube.com/watch?v=xxxxx"
             value={newMediaUrl}
             onChange={(event) =>
               setNewMediaUrl(event.target.value)
@@ -2735,78 +2766,140 @@ function HomeStyles() {
         width: 100%;
         min-height: 100svh;
         color: #ffffff;
+        overflow-x: hidden;
         background:
-          radial-gradient(circle at 50% -12%, rgba(8, 124, 255, 0.13), transparent 34%),
+          radial-gradient(circle at 50% -10%, rgba(37, 99, 235, 0.20), transparent 34%),
+          radial-gradient(circle at 90% 20%, rgba(124, 58, 237, 0.12), transparent 30%),
           var(--page-bg);
       }
 
       .feedx-topbar {
-        width: min(calc(100% - 32px), 880px);
-        min-height: 118px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        width: 100%;
+        padding-top: env(safe-area-inset-top);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(3, 7, 18, 0.92);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+      }
+
+      .feedx-topbar-inner {
+        width: min(100%, 760px);
+        min-height: 72px;
         margin: 0 auto;
-        padding: max(24px, env(safe-area-inset-top)) 18px 18px;
+        padding: 10px 16px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 14px;
+      }
+
+      .gwamo-brand {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .gwamo-brand-mark {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 13px;
+        color: #ffffff;
+        background: linear-gradient(145deg, #2563eb, #7c3aed);
+        box-shadow:
+          0 10px 28px rgba(37, 99, 235, 0.30),
+          inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 20px;
+        font-weight: 900;
       }
 
       .feedx-logo {
+        min-width: 0;
         margin: 0;
+        overflow: hidden;
         color: #ffffff;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(44px, 6vw, 70px);
-        font-weight: 900;
+        font-size: 22px;
+        font-weight: 850;
         line-height: 1;
-        letter-spacing: -2px;
+        letter-spacing: -0.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .feedx-logo span {
-        color: var(--blue);
+        color: inherit;
       }
 
       .top-create-button {
-        min-width: 154px;
-        min-height: 46px;
+        min-height: 42px;
         flex: 0 0 auto;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 0 20px;
-        border: 1px solid rgba(113, 188, 255, 0.72);
-        border-radius: 999px;
+        padding: 0 17px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 14px;
         color: #ffffff;
-        background: linear-gradient(145deg, #1d8cff, #0067ee);
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 800;
         line-height: 1;
         white-space: nowrap;
         cursor: pointer;
         box-shadow:
-          0 0 12px rgba(22, 139, 255, 0.9),
-          0 0 30px rgba(22, 139, 255, 0.45),
-          inset 0 0 16px rgba(255, 255, 255, 0.18);
+          0 10px 25px rgba(37, 99, 235, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+      }
+
+      .top-create-button:hover {
+        transform: translateY(-1px);
+        box-shadow:
+          0 14px 32px rgba(37, 99, 235, 0.32),
+          inset 0 1px 0 rgba(255, 255, 255, 0.20);
+      }
+
+      .top-create-button:active {
+        transform: scale(0.97);
+      }
+
+      .top-create-button:focus-visible {
+        outline: 3px solid rgba(147, 197, 253, 0.72);
+        outline-offset: 3px;
       }
 
       .home-feed {
-        width: 100%;
-        padding: 0 0 max(40px, env(safe-area-inset-bottom));
+        width: min(100%, 760px);
+        margin: 0 auto;
+        padding: calc(92px + env(safe-area-inset-top)) 12px max(80px, env(safe-area-inset-bottom));
       }
 
       .home-post {
-        width: min(calc(100% - 32px), 880px);
-        margin: 0 auto 28px;
-        padding: 0 0 24px;
+        width: 100%;
+        margin: 0 auto 22px;
+        padding: 0;
         position: relative;
         overflow: hidden;
         isolation: isolate;
-        border: 1px solid var(--blue-border);
-        border-radius: 36px;
-        background:
-          linear-gradient(180deg, rgba(7, 19, 36, 0.995), rgba(2, 10, 22, 0.995));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        background: rgba(15, 23, 42, 0.76);
         box-shadow:
-          0 22px 50px rgba(0, 0, 0, 0.58),
-          0 0 24px rgba(8, 124, 255, 0.10);
+          0 22px 50px rgba(0, 0, 0, 0.30),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
       }
 
       .crt-screen {
@@ -2816,13 +2909,14 @@ function HomeStyles() {
       .post-header {
         position: relative;
         z-index: 10;
-        min-height: 184px;
-        display: flex;
+        min-height: 72px;
+        padding: 12px 14px;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
         align-items: center;
-        gap: 26px;
-        padding: 28px 34px 24px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        background: rgba(4, 14, 29, 0.42);
+        gap: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(3, 7, 18, 0.44);
       }
 
       .profile-picture-button {
@@ -2856,14 +2950,12 @@ function HomeStyles() {
         overflow: hidden;
         color: #ffffff;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(28px, 4vw, 42px);
+        font-size: 15px;
         font-weight: 800;
-        line-height: 1.1;
+        line-height: 1.25;
+        letter-spacing: -0.1px;
         text-overflow: ellipsis;
         white-space: nowrap;
-        text-shadow:
-          0 0 6px rgba(22, 139, 255, 1),
-          0 0 20px rgba(22, 139, 255, 0.72);
       }
 
       .inbox-button,
@@ -2917,30 +3009,59 @@ function HomeStyles() {
       .post-copy {
         position: relative;
         z-index: 5;
-        padding: 34px 36px 26px;
+        padding: 18px 20px 16px;
         text-align: left;
       }
 
       .post-title {
-        margin: 0 0 20px;
+        margin: 0 0 6px;
         color: #ffffff;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(34px, 5vw, 52px);
-        font-weight: 800;
-        line-height: 1.18;
-        letter-spacing: -0.5px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: clamp(18px, 2.2vw, 21px);
+        font-weight: 750;
+        line-height: 1.28;
+        letter-spacing: -0.3px;
         overflow-wrap: anywhere;
+      }
+
+      .post-message-wrap {
+        min-width: 0;
       }
 
       .post-message {
         margin: 0;
-        color: #c5cedb;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(24px, 3vw, 34px);
+        color: rgba(226, 232, 240, 0.88);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 15px;
         font-weight: 400;
-        line-height: 1.45;
+        line-height: 1.65;
         white-space: pre-wrap;
+        word-break: break-word;
         overflow-wrap: anywhere;
+      }
+
+      .post-message.is-collapsed {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+      }
+
+      .message-toggle-button {
+        margin: 7px 0 0;
+        padding: 0;
+        border: 0;
+        color: #93c5fd;
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .message-toggle-button:hover {
+        color: #bfdbfe;
+        text-decoration: underline;
       }
 
       .media-viewport {
@@ -3636,10 +3757,10 @@ function HomeStyles() {
 
       .modal-card label {
         display: block;
-        margin: 0 0 6px;
-        color: #e8eef8;
-        font-size: 13px;
-        font-weight: 700;
+        margin: 0 0 7px;
+        color: #f8fafc;
+        font-size: 14px;
+        font-weight: 650;
       }
 
       .modal-card input,
@@ -3647,17 +3768,24 @@ function HomeStyles() {
         width: 100%;
         min-height: 48px;
         margin: 0 0 6px;
-        padding: 12px 13px;
-        border: 1px solid rgba(22, 139, 255, 0.22);
-        border-radius: 11px;
+        padding: 13px 15px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 16px;
         outline: none;
         color: #ffffff;
         background: rgba(1, 7, 18, 0.74);
       }
 
       .modal-card textarea {
-        min-height: 88px;
+        min-height: 120px;
+        line-height: 1.6;
         resize: vertical;
+      }
+
+      .modal-card input::placeholder,
+      .modal-card textarea::placeholder {
+        color: rgba(226, 232, 240, 0.42);
+        opacity: 1;
       }
 
       .modal-card input:focus,
@@ -3667,10 +3795,10 @@ function HomeStyles() {
       }
 
       .field-help {
-        margin: 0 0 12px;
-        color: var(--muted);
-        font-size: 11px;
-        line-height: 1.45;
+        margin: 0 0 16px;
+        color: rgba(203, 213, 225, 0.62);
+        font-size: 12px;
+        line-height: 1.5;
       }
 
       .file-picker {
@@ -3775,203 +3903,67 @@ function HomeStyles() {
       }
 
       @media (max-width: 700px) {
-        .floating-comments-sheet {
-          left: 0;
-          right: 0;
-          height: 100%;
-          border-radius: inherit;
+        .feedx-topbar-inner {
+          min-height: 68px;
+          padding: 9px 12px;
         }
 
-        .comments-overlay-header {
-          padding: 0 10px 5px;
-        }
-
-        .comments-overlay-header h2 {
-          font-size: 15px;
-        }
-
-        .comments-overlay-close {
-          width: 27px;
-          height: 27px;
-          flex-basis: 27px;
-        }
-
-        .comments-list {
-          padding: 4px 6px 6px;
-        }
-
-        .comment-row {
-          gap: 9px;
-          padding: 8px 10px;
-        }
-
-        .comment-avatar {
-          width: 26px;
-          height: 26px;
-          flex-basis: 26px;
-          font-size: 16px;
-        }
-
-        .comment-avatar span,
-        .comment-flag-preview span {
-          font-size: 20px;
-          transform: scale(1.72);
-        }
-
-        .comment-text {
-          font-size: 13px;
-        }
-
-        .comment-add-button {
-          width: 36px;
-          height: 36px;
-          flex-basis: 36px;
-        }
-
-        .comment-meta strong {
-          font-size: 13px !important;
-        }
-
-        .comment-meta time {
-          font-size: 11px;
-        }
-
-        .comment-composer {
-          padding: 5px 7px max(6px, env(safe-area-inset-bottom));
-        }
-
-        .comment-composer-identity {
-          grid-template-columns: 30px minmax(0, 1fr);
-          gap: 6px;
-          margin-bottom: 5px;
-        }
-
-        .comment-flag-preview {
-          width: 28px;
-          height: 28px;
-          font-size: 15px;
-        }
-
-        .comment-phone-field input {
-          min-height: 30px;
-          padding: 5px 8px;
-          font-size: 13px;
-        }
-
-        .comment-compose-row {
+        .gwamo-brand {
           gap: 8px;
         }
 
-        .comment-compose-row textarea {
-          min-height: 36px;
-          max-height: 58px;
-          padding: 7px 8px;
-          font-size: 13px;
-        }
-
-        .comment-send-button {
-          min-width: 62px;
-          min-height: 36px;
-          padding: 0 9px;
-          border-radius: 11px;
-          font-size: 13px;
-        }
-
-        .comment-privacy {
-          display: none;
-        }
-      }
-
-      .zoom-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 10001;
-        display: grid;
-        place-items: center;
-        padding: 18px;
-        background: rgba(0, 0, 0, 0.95);
-        cursor: zoom-out;
-      }
-
-      .zoom-image {
-        max-width: 92vw;
-        max-height: 90vh;
-        display: block;
-        object-fit: contain;
-        border-radius: 16px;
-      }
-
-      .loading-state,
-      .empty-state {
-        width: min(88%, 420px);
-        margin: 110px auto 0;
-        color: #bcd9ff;
-        text-align: center;
-      }
-
-      .empty-button {
-        min-height: 48px;
-        margin-top: 12px;
-        padding: 0 18px;
-        border: 1px solid rgba(22, 139, 255, 0.50);
-        border-radius: 15px;
-        color: #ffffff;
-        background: #087cff;
-        font-weight: 900;
-        cursor: pointer;
-      }
-
-      @keyframes screenFlicker {
-        0%, 19%, 21%, 54%, 100% { filter: brightness(1); }
-        20% { filter: brightness(0.994); }
-        55% { filter: brightness(1.004); }
-      }
-
-      @media (max-width: 700px) {
-        .feedx-topbar {
-          width: min(calc(100% - 20px), 680px);
-          min-height: 76px;
-          padding: max(10px, env(safe-area-inset-top)) 4px 9px;
+        .gwamo-brand-mark {
+          width: 36px;
+          height: 36px;
+          flex-basis: 36px;
+          border-radius: 12px;
+          font-size: 19px;
         }
 
         .feedx-logo {
-          font-size: clamp(36px, 10vw, 48px);
+          font-size: 21px;
         }
 
         .top-create-button {
-          min-width: 126px;
-          min-height: 38px;
-          padding: 0 13px;
+          min-height: 40px;
+          padding: 0 14px;
+          border-radius: 13px;
           font-size: 13px;
         }
 
+        .home-feed {
+          width: 100%;
+          padding: calc(84px + env(safe-area-inset-top)) 0 max(72px, env(safe-area-inset-bottom));
+        }
+
         .home-post {
-          width: min(calc(100% - 16px), 680px);
-          margin-bottom: 18px;
-          padding-bottom: 12px;
-          border-radius: 24px;
+          width: 100%;
+          margin-bottom: 12px;
+          border-left: 0;
+          border-right: 0;
+          border-radius: 0;
         }
 
         .post-header {
-          min-height: 78px;
+          min-height: 68px;
           gap: 9px;
-          padding: 11px 10px 10px;
+          padding: 10px 12px;
         }
 
         .profile-picture-button {
-          width: 48px;
-          height: 48px;
-          flex-basis: 48px;
+          width: 44px;
+          height: 44px;
+          flex-basis: 44px;
         }
 
         .creator-name {
-          font-size: clamp(18px, 5vw, 22px);
+          font-size: 14px;
         }
 
         .inbox-button {
-          width: 46px;
+          width: 44px;
           height: 40px;
-          flex-basis: 46px;
+          flex-basis: 44px;
         }
 
         .inbox-envelope {
@@ -3980,17 +3972,17 @@ function HomeStyles() {
         }
 
         .unread-dot {
-          width: 14px;
-          height: 14px;
+          width: 13px;
+          height: 13px;
           top: 1px;
           right: 1px;
           border-width: 2px;
         }
 
         .post-menu-button {
-          width: 26px;
-          height: 36px;
-          flex-basis: 26px;
+          width: 30px;
+          height: 38px;
+          flex-basis: 30px;
         }
 
         .post-menu-button svg {
@@ -3999,45 +3991,80 @@ function HomeStyles() {
         }
 
         .post-copy {
-          padding: 16px 18px 14px;
-          text-align: center;
+          padding: 12px 14px 13px;
+          text-align: left;
         }
 
         .post-title {
-          margin-bottom: 10px;
-          font-size: clamp(20px, 6vw, 25px);
+          margin-bottom: 5px;
+          font-size: clamp(17px, 4.8vw, 19px);
+          line-height: 1.3;
         }
 
         .post-message {
-          font-size: clamp(16px, 4.6vw, 19px);
+          font-size: 15px;
+          line-height: 1.62;
+        }
+
+        .message-toggle-button {
+          margin-top: 6px;
+          font-size: 13px;
         }
 
         .media-viewport {
-          width: calc(100% - 24px);
-          height: 75svh;
-          margin: 0 12px;
-          border-radius: 22px;
+          width: 100%;
+          max-height: 78svh;
+          margin: 0;
+          border-radius: 0;
         }
 
         .social-action-bar {
-          width: calc(100% - 24px);
+          width: 100%;
           gap: 6px;
-          margin: 12px 12px 0;
+          margin: 0;
+          padding: 10px 10px 12px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(3, 7, 18, 0.76);
         }
 
         .metric-pill,
         .action-pill {
-          min-height: 38px;
-          gap: 4px;
-          padding: 0 4px;
+          min-height: 40px;
+          gap: 5px;
+          padding: 0 7px;
           border-radius: 12px;
-          font-size: clamp(10px, 3vw, 13px);
+          font-size: clamp(11px, 3vw, 13px);
         }
 
         .action-icon,
         .heart-icon {
-          width: 17px;
-          height: 17px;
+          width: 18px;
+          height: 18px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .feedx-topbar-inner {
+          padding-left: 9px;
+          padding-right: 9px;
+          gap: 8px;
+        }
+
+        .gwamo-brand-mark {
+          width: 34px;
+          height: 34px;
+          flex-basis: 34px;
+          font-size: 18px;
+        }
+
+        .feedx-logo {
+          font-size: 19px;
+        }
+
+        .top-create-button {
+          min-height: 38px;
+          padding: 0 10px;
+          font-size: 12px;
         }
       }
 
