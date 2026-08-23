@@ -1,73 +1,174 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   memo,
 } from "react";
 import {
-  Eye,
-  MessageCircle,
-  Heart,
   ShoppingBasket,
-  Plus,
-  ChevronDown,
   X,
+  Menu,
+  Send,
+  MessageSquare,
+  LogIn,
+  LogOut,
+  User,
+  Pencil,
+  Check,
+  CheckCircle,
+  Clock,
+  ShieldX,
+  Wallet,
+  Inbox,
+  Mail,
+  Plus,
+  Newspaper,
+  UtensilsCrossed,
+  Users,
+  Tv,
+  Tag,
+  Star,
+  Paperclip,
+  Image as ImageIcon,
+  Video,
+  FileText,
+  Mic,
+  Square,
+  Trash2,
+  Search,
+  CheckCheck,
 } from "lucide-react";
-
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-
-const DEFAULT_MEDIA_LABEL = "Gwamo post media";
-
+const DEFAULT_MEDIA_LABEL = "Service media";
+const IS_DEV = Boolean(
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV,
+);
+function devWarn(...args) {
+  if (IS_DEV) console.warn(...args);
+}
+function devError(...args) {
+  if (IS_DEV) console.error(...args);
+}
 function getDisplayPostTitle(value = "") {
   const title = String(value || "").trim();
   if (!title) return "";
-
-  // Hide old automatic placeholder titles that were previously saved.
   const automaticTitles = new Set(["pepper", "chillax"]);
   return automaticTitles.has(title.toLowerCase()) ? "" : title;
 }
-
+function getPostType(post = {}) {
+  const explicitType = String(post.post_type || "").trim().toLowerCase();
+  if (["offer", "need", "exchange", "moment"].includes(explicitType)) {
+    return explicitType;
+  }
+  const title = String(post.title || post.service_charge_per_minute || "")
+    .trim()
+    .toLowerCase();
+  const details = String(
+    post.subtitle || post.service_description || post.description || "",
+  ).toLowerCase();
+  if (
+    post.moment_kind ||
+    ["song saying", "movie saying", "recommendation", "my story"].includes(
+      title,
+    )
+  ) {
+    return "moment";
+  }
+  if (
+    post.exchange_need ||
+    title === "trade skills" ||
+    details.includes("i can give:") ||
+    details.includes("i need:")
+  ) {
+    return "exchange";
+  }
+  if (
+    title.startsWith("budget:") ||
+    details.includes("\nneeded:") ||
+    details.startsWith("needed:")
+  ) {
+    return "need";
+  }
+  return "offer";
+}
 const DEFAULT_LOGO =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
-
-// Small inline fallback so a broken feed image never falls back to a large
-// profile photo (per low-memory / correctness requirements).
 const IMAGE_FALLBACK_SRC =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
-
 const INITIAL_PAGE_LIMIT = 5;
 const LOAD_MORE_LIMIT = 5;
-
-const WATCH_FLUSH_INTERVAL_MS = 10_000;
 const MAX_WATCH_SECONDS_PER_REQUEST = 30;
-
-const WHATSAPP_STORAGE_KEY = "feedx-whatsapp-number";
-
-const COMMENT_POSITIONS = {
-  top: 0,
-  middle: 50,
-  bottom: 100,
+const SESSION_TOKEN_KEY = "time-market-session-token";
+const USER_DATA_KEY = "time-market-user-data";
+const MESSAGE_POLL_INTERVAL_MS = 2000;
+const VERIFICATION_REFRESH_INTERVAL_MS = 60000;
+// New in Step 1: silent background refresh intervals. Kept well inside the
+// requested 10-15s / ~5s ranges so they read as "lightweight", not "live".
+const REACTION_COUNTS_POLL_INTERVAL_MS = 12000;
+const INBOX_POLL_INTERVAL_MS = 5000;
+const PIN_RESET_STATUS_POLL_INTERVAL_MS = 4000;
+const TOAST_DURATION_MS = 4200;
+const PERSONAL_PIN_PATTERN = /^\d{8}$/;
+const PIN_AUTH_METHOD = "phone_pin";
+const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
+// Stable identity so it never causes ServicePost's memo() to think a prop
+// changed - these handlers are currently unused (no-ops), so one shared
+// reference for every card in the feed is exactly right.
+const noop = () => {};
+const CATEGORY_TABS = [
+  { key: "time-market", label: "Time Market", icon: Clock },
+  {
+    key: "social-life",
+    label: "Social Life",
+    icon: Users,
+  },
+  {
+    key: "market",
+    label: "Market",
+    icon: ShoppingBasket,
+    href: "https://market.com/",
+  },
+  { key: "tv", label: "TV", icon: Tv },
+];
+const CATEGORY_META = {
+  "social-news": {
+    label: "Social News",
+    blurb: "Open Social News at social.com.",
+  },
+  kitchen: {
+    label: "Kitchen",
+    blurb: "Food and kitchen services are coming to Gwamo.",
+  },
+  tv: {
+    label: "TV",
+    blurb: "Video and media content are coming to Gwamo.",
+  },
+  deals: {
+    label: "Deals",
+    blurb: "Offers, discounts and useful local deals are coming to Gwamo.",
+  },
 };
-
-// =============================================================================
-// DEBUG LOGGING - Enable/disable by setting to true/false
-// =============================================================================
-const DEBUG_FLAGS = false;
-
-function debugLog(...args) {
-  if (DEBUG_FLAGS) {
-    console.log("[FLAG-DEBUG]", ...args);
-  }
-}
-
+const INFO_CONTENT = {
+  about: {
+    title: "About Gwamo",
+    body: "Every person has time, and that time can have economic value. Gwamo is a market for human time: show who you are, what you can do and how much your time costs, then let people discover you through the feed. Verified providers receive the blue verified badge shown beside their name.",
+  },
+  help: {
+    title: "Help",
+    body: 'To offer a service, tap the plus icon and describe what you can do. To contact a provider, tap "Contact me", write your message, then log in with your telephone number and personal PIN when you press Send. Verified providers display a blue check badge beside their name. If you forget your PIN, request a reset and wait for an admin to call your registered number and approve the code shown on your screen.',
+  },
+  privacy: {
+    title: "Privacy Policy",
+    body: 'Messages marked "Private conversation" are not public and are intended for the conversation participants. However, authorized Gwamo administrators can access and read any conversation, including one labeled "Private conversation", for moderation, user safety, fraud investigation, support or legal compliance. Gwamo therefore does not describe these chats as end-to-end encrypted. Your telephone number is used for account identity and verification calls. Your personal PIN must be stored by the server only as a secure one-way hash; Gwamo staff should never ask you to reveal the PIN. By using messaging, you acknowledge this administrator-access policy.',
+  },
+};
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
-
   return (
     clean.endsWith(".mp4") ||
     clean.endsWith(".webm") ||
@@ -78,10 +179,8 @@ function isDirectVideoUrl(url = "") {
     clean.endsWith(".avi")
   );
 }
-
 function isImageUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
-
   return (
     clean.endsWith(".jpg") ||
     clean.endsWith(".jpeg") ||
@@ -92,563 +191,358 @@ function isImageUrl(url = "") {
     clean.endsWith(".svg")
   );
 }
-
 function getEmbedUrl(url = "") {
   if (!url) return "";
-
   const youtubeMatch = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
   );
-
   if (youtubeMatch) {
     return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&modestbranding=1`;
   }
-
-  const shortsMatch = url.match(
-    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
-  );
-
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
   if (shortsMatch) {
     return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&modestbranding=1`;
   }
-
-  const youtubeChannelMatch = url.match(
-    /youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/
-  );
-
-  if (youtubeChannelMatch) {
-    return `https://www.youtube.com/embed?listType=user_uploads&list=${youtubeChannelMatch[1]}&autoplay=1&controls=1&rel=0&modestbranding=1`;
-  }
-
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
-
   if (vimeoMatch) {
     return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
   }
-
-  const dailymotionMatch = url.match(
-    /dailymotion\.com\/video\/([a-zA-Z0-9]+)/
-  );
-
-  if (dailymotionMatch) {
-    return `https://www.dailymotion.com/embed/video/${dailymotionMatch[1]}?autoplay=1&mute=0&loop=1`;
-  }
-
   if (url.includes("/embed/") || url.includes("player.")) return url;
-
   return url;
 }
-
-function detectCreatorType(value = "") {
-  const clean = value.trim().toLowerCase();
-
-  if (!clean) return "";
-
-  if (
-    clean.startsWith("http://") ||
-    clean.startsWith("https://") ||
-    clean.includes(".")
-  ) {
-    return "website";
-  }
-
-  return "whatsapp";
-}
-
-function buildContactUrl(type = "", value = "") {
-  const clean = String(value || "").trim();
-
-  if (!clean) return "";
-
-  if (type === "website") {
-    return clean.startsWith("http://") || clean.startsWith("https://")
-      ? clean
-      : `https://${clean}`;
-  }
-
-  const digits = clean.replace(/[^\d]/g, "");
-  return digits ? `https://wa.me/${digits}` : "";
-}
-
 function formatCount(value = 0) {
   const number = Number(value) || 0;
-
-  if (number >= 1_000_000) {
-    return `${(number / 1_000_000).toFixed(1).replace(".0", "")}M`;
+  if (number >= 1000000) {
+    return `${(number / 1000000).toFixed(1).replace(".0", "")}M`;
   }
-
-  if (number >= 1_000) {
-    return `${(number / 1_000).toFixed(1).replace(".0", "")}K`;
+  if (number >= 1000) {
+    return `${(number / 1000).toFixed(1).replace(".0", "")}K`;
   }
-
   return String(number);
 }
-
-// =============================================================================
-// COMPLETE COUNTRY FLAG DETECTION SYSTEM (frontend-only)
-// =============================================================================
-
-/**
- * Normalize a WhatsApp/phone number by removing all non-digit characters
- * except the leading '+'.
- */
-function normalizeWhatsappNumber(value = "") {
-  const result = String(value).trim().replace(/[^\d+]/g, "");
-  debugLog("normalizeWhatsappNumber input:", value, "-> output:", result);
-  return result;
-}
-
-/**
- * Complete country calling code map with ALL countries and territories.
- * Longer codes must be checked before shorter ones.
- */
-const COUNTRY_CODES = {
-  // Africa
-  "+212": "🇲🇦", // Morocco
-  "+213": "🇩🇿", // Algeria
-  "+216": "🇹🇳", // Tunisia
-  "+218": "🇱🇾", // Libya
-  "+220": "🇬🇲", // Gambia
-  "+221": "🇸🇳", // Senegal
-  "+222": "🇲🇷", // Mauritania
-  "+223": "🇲🇱", // Mali
-  "+224": "🇬🇳", // Guinea
-  "+225": "🇨🇮", // Ivory Coast
-  "+226": "🇧🇫", // Burkina Faso
-  "+227": "🇳🇪", // Niger
-  "+228": "🇹🇬", // Togo
-  "+229": "🇧🇯", // Benin
-  "+230": "🇲🇺", // Mauritius
-  "+231": "🇱🇷", // Liberia
-  "+232": "🇸🇱", // Sierra Leone
-  "+233": "🇬🇭", // Ghana
-  "+234": "🇳🇬", // Nigeria
-  "+235": "🇹🇩", // Chad
-  "+236": "🇨🇫", // Central African Republic
-  "+237": "🇨🇲", // Cameroon
-  "+238": "🇨🇻", // Cape Verde
-  "+239": "🇸🇹", // São Tomé and Príncipe
-  "+240": "🇬🇶", // Equatorial Guinea
-  "+241": "🇬🇦", // Gabon
-  "+242": "🇨🇬", // Republic of the Congo
-  "+243": "🇨🇩", // Democratic Republic of the Congo
-  "+244": "🇦🇴", // Angola
-  "+245": "🇬🇼", // Guinea-Bissau
-  "+246": "🇮🇴", // British Indian Ocean Territory
-  "+248": "🇸🇨", // Seychelles
-  "+249": "🇸🇩", // Sudan
-  "+250": "🇷🇼", // Rwanda
-  "+251": "🇪🇹", // Ethiopia
-  "+252": "🇸🇴", // Somalia
-  "+253": "🇩🇯", // Djibouti
-  "+254": "🇰🇪", // Kenya
-  "+255": "🇹🇿", // Tanzania
-  "+256": "🇺🇬", // Uganda
-  "+257": "🇧🇮", // Burundi
-  "+258": "🇲🇿", // Mozambique
-  "+260": "🇿🇲", // Zambia
-  "+261": "🇲🇬", // Madagascar
-  "+262": "🇷🇪", // Réunion
-  "+263": "🇿🇼", // Zimbabwe
-  "+264": "🇳🇦", // Namibia
-  "+265": "🇲🇼", // Malawi
-  "+266": "🇱🇸", // Lesotho
-  "+267": "🇧🇼", // Botswana
-  "+268": "🇸🇿", // Eswatini
-  "+269": "🇰🇲", // Comoros
-  "+290": "🇸🇭", // Saint Helena
-  "+291": "🇪🇷", // Eritrea
-  "+297": "🇦🇼", // Aruba
-  "+298": "🇫🇴", // Faroe Islands
-  "+299": "🇬🇱", // Greenland
-
-  // Europe
-  "+30": "🇬🇷", // Greece
-  "+31": "🇳🇱", // Netherlands
-  "+32": "🇧🇪", // Belgium
-  "+33": "🇫🇷", // France
-  "+34": "🇪🇸", // Spain
-  "+36": "🇭🇺", // Hungary
-  "+39": "🇮🇹", // Italy
-  "+40": "🇷🇴", // Romania
-  "+41": "🇨🇭", // Switzerland
-  "+43": "🇦🇹", // Austria
-  "+44": "🇬🇧", // United Kingdom
-  "+45": "🇩🇰", // Denmark
-  "+46": "🇸🇪", // Sweden
-  "+47": "🇳🇴", // Norway
-  "+48": "🇵🇱", // Poland
-  "+49": "🇩🇪", // Germany
-
-  // Asia
-  "+60": "🇲🇾", // Malaysia
-  "+61": "🇦🇺", // Australia
-  "+62": "🇮🇩", // Indonesia
-  "+63": "🇵🇭", // Philippines
-  "+64": "🇳🇿", // New Zealand
-  "+65": "🇸🇬", // Singapore
-  "+66": "🇹🇭", // Thailand
-  "+81": "🇯🇵", // Japan
-  "+82": "🇰🇷", // South Korea
-  "+84": "🇻🇳", // Vietnam
-  "+86": "🇨🇳", // China
-  "+90": "🇹🇷", // Turkey
-  "+91": "🇮🇳", // India
-  "+92": "🇵🇰", // Pakistan
-  "+93": "🇦🇫", // Afghanistan
-  "+94": "🇱🇰", // Sri Lanka
-  "+95": "🇲🇲", // Myanmar
-  "+98": "🇮🇷", // Iran
-
-  // +1 North American Numbering Plan (must check longer codes first)
-  "+1242": "🇧🇸", // Bahamas
-  "+1246": "🇧🇧", // Barbados
-  "+1264": "🇦🇮", // Anguilla
-  "+1268": "🇦🇬", // Antigua and Barbuda
-  "+1284": "🇻🇬", // British Virgin Islands
-  "+1340": "🇻🇮", // US Virgin Islands
-  "+1345": "🇰🇾", // Cayman Islands
-  "+1441": "🇧🇲", // Bermuda
-  "+1473": "🇬🇩", // Grenada
-  "+1649": "🇹🇨", // Turks and Caicos Islands
-  "+1664": "🇲🇸", // Montserrat
-  "+1670": "🇲🇵", // Northern Mariana Islands
-  "+1671": "🇬🇺", // Guam
-  "+1684": "🇦🇸", // American Samoa
-  "+1721": "🇸🇽", // Sint Maarten
-  "+1758": "🇱🇨", // Saint Lucia
-  "+1767": "🇩🇲", // Dominica
-  "+1784": "🇻🇨", // Saint Vincent and the Grenadines
-  "+1809": "🇩🇴", // Dominican Republic
-  "+1829": "🇩🇴", // Dominican Republic
-  "+1849": "🇩🇴", // Dominican Republic
-  "+1868": "🇹🇹", // Trinidad and Tobago
-  "+1869": "🇰🇳", // Saint Kitts and Nevis
-  "+1876": "🇯🇲", // Jamaica
-  "+1939": "🇵🇷", // Puerto Rico
-  "+1": "🇺🇸", // United States (fallback after specific territories)
-
-  // South America
-  "+54": "🇦🇷", // Argentina
-  "+55": "🇧🇷", // Brazil
-  "+56": "🇨🇱", // Chile
-  "+57": "🇨🇴", // Colombia
-  "+58": "🇻🇪", // Venezuela
-  "+591": "🇧🇴", // Bolivia
-  "+592": "🇬🇾", // Guyana
-  "+593": "🇪🇨", // Ecuador
-  "+594": "🇬🇫", // French Guiana
-  "+595": "🇵🇾", // Paraguay
-  "+596": "🇲🇶", // Martinique
-  "+597": "🇸🇷", // Suriname
-  "+598": "🇺🇾", // Uruguay
-
-  // Central America & Caribbean (non-+1)
-  "+501": "🇧🇿", // Belize
-  "+502": "🇬🇹", // Guatemala
-  "+503": "🇸🇻", // El Salvador
-  "+504": "🇭🇳", // Honduras
-  "+505": "🇳🇮", // Nicaragua
-  "+506": "🇨🇷", // Costa Rica
-  "+507": "🇵🇦", // Panama
-  "+509": "🇭🇹", // Haiti
-  "+52": "🇲🇽", // Mexico
-  "+53": "🇨🇺", // Cuba
-
-  // Other countries
-  "+20": "🇪🇬", // Egypt
-  "+27": "🇿🇦", // South Africa
-  "+211": "🇸🇸", // South Sudan
-  "+350": "🇬🇮", // Gibraltar
-  "+351": "🇵🇹", // Portugal
-  "+352": "🇱🇺", // Luxembourg
-  "+353": "🇮🇪", // Ireland
-  "+354": "🇮🇸", // Iceland
-  "+355": "🇦🇱", // Albania
-  "+356": "🇲🇹", // Malta
-  "+357": "🇨🇾", // Cyprus
-  "+358": "🇫🇮", // Finland
-  "+359": "🇧🇬", // Bulgaria
-  "+370": "🇱🇹", // Lithuania
-  "+371": "🇱🇻", // Latvia
-  "+372": "🇪🇪", // Estonia
-  "+373": "🇲🇩", // Moldova
-  "+374": "🇦🇲", // Armenia
-  "+375": "🇧🇾", // Belarus
-  "+376": "🇦🇩", // Andorra
-  "+377": "🇲🇨", // Monaco
-  "+378": "🇸🇲", // San Marino
-  "+380": "🇺🇦", // Ukraine
-  "+381": "🇷🇸", // Serbia
-  "+382": "🇲🇪", // Montenegro
-  "+383": "🇽🇰", // Kosovo
-  "+385": "🇭🇷", // Croatia
-  "+386": "🇸🇮", // Slovenia
-  "+387": "🇧🇦", // Bosnia and Herzegovina
-  "+389": "🇲🇰", // North Macedonia
-  "+420": "🇨🇿", // Czech Republic
-  "+421": "🇸🇰", // Slovakia
-  "+423": "🇱🇮", // Liechtenstein
-  "+500": "🇫🇰", // Falkland Islands
-  "+670": "🇹🇱", // Timor-Leste
-  "+672": "🇦🇶", // Antarctica
-  "+673": "🇧🇳", // Brunei
-  "+674": "🇳🇷", // Nauru
-  "+675": "🇵🇬", // Papua New Guinea
-  "+676": "🇹🇴", // Tonga
-  "+677": "🇸🇧", // Solomon Islands
-  "+678": "🇻🇺", // Vanuatu
-  "+679": "🇫🇯", // Fiji
-  "+680": "🇵🇼", // Palau
-  "+681": "🇼🇫", // Wallis and Futuna
-  "+682": "🇨🇰", // Cook Islands
-  "+683": "🇳🇺", // Niue
-  "+685": "🇼🇸", // Samoa
-  "+686": "🇰🇮", // Kiribati
-  "+687": "🇳🇨", // New Caledonia
-  "+688": "🇹🇻", // Tuvalu
-  "+689": "🇵🇫", // French Polynesia
-  "+690": "🇹🇰", // Tokelau
-  "+691": "🇫🇲", // Federated States of Micronesia
-  "+692": "🇲🇭", // Marshall Islands
-  "+856": "🇱🇦", // Laos
-  "+880": "🇧🇩", // Bangladesh
-  "+886": "🇹🇼", // Taiwan
-  "+960": "🇲🇻", // Maldives
-  "+961": "🇱🇧", // Lebanon
-  "+962": "🇯🇴", // Jordan
-  "+963": "🇸🇾", // Syria
-  "+964": "🇮🇶", // Iraq
-  "+965": "🇰🇼", // Kuwait
-  "+966": "🇸🇦", // Saudi Arabia
-  "+967": "🇾🇪", // Yemen
-  "+968": "🇴🇲", // Oman
-  "+970": "🇵🇸", // Palestine
-  "+971": "🇦🇪", // United Arab Emirates
-  "+972": "🇮🇱", // Israel
-  "+973": "🇧🇭", // Bahrain
-  "+974": "🇶🇦", // Qatar
-  "+975": "🇧🇹", // Bhutan
-  "+976": "🇲🇳", // Mongolia
-  "+977": "🇳🇵", // Nepal
-  "+992": "🇹🇯", // Tajikistan
-  "+993": "🇹🇲", // Turkmenistan
-  "+994": "🇦🇿", // Azerbaijan
-  "+995": "🇬🇪", // Georgia
-  "+996": "🇰🇬", // Kyrgyzstan
-  "+998": "🇺🇿", // Uzbekistan
-};
-
-/**
- * Complete country flag detection from a WhatsApp/phone number.
- * This function only uses the frontend country code map and does NOT
- * depend on any Cloudflare Worker data.
- */
-function getFlagFromWhatsapp(phoneNumber) {
-  debugLog("getFlagFromWhatsapp called with:", phoneNumber);
-  
-  // Normalize the phone number first
-  const normalized = normalizeWhatsappNumber(phoneNumber);
-
-  // Empty or invalid input returns the globe
-  if (!normalized) {
-    debugLog("getFlagFromWhatsapp: normalized is empty, returning 🌍");
-    return "🌍";
+const DESCRIPTION_PREVIEW_LENGTH = 96;
+function makeDescriptionPreview(
+  value = "",
+  maxLength = DESCRIPTION_PREVIEW_LENGTH,
+) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) return text;
+  const words = text.split(/\s+/);
+  let preview = "";
+  for (const word of words) {
+    const candidate = preview ? `${preview} ${word}` : word;
+    if (candidate.length > maxLength && preview) break;
+    preview = candidate;
+    if (preview.length >= maxLength) break;
   }
-
-  debugLog("getFlagFromWhatsapp: normalized number:", normalized);
-
-  // Get the country code by checking longer prefixes first
-  // Sort codes by length (longest first) to avoid prefix conflicts
-  const sortedCodes = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.length);
-  
-  debugLog("getFlagFromWhatsapp: checking", sortedCodes.length, "country codes");
-
-  for (const code of sortedCodes) {
-    // Check if the normalized number starts with this country code
-    // The code includes the '+' sign, so we need to match accordingly
-    if (normalized.startsWith(code)) {
-      const flag = COUNTRY_CODES[code];
-      debugLog("getFlagFromWhatsapp: matched code", code, "-> flag", flag);
-      return flag;
-    }
-
-    // Also check without the '+' for numbers that don't include it
-    const codeWithoutPlus = code.slice(1);
-    if (normalized.startsWith(codeWithoutPlus)) {
-      const flag = COUNTRY_CODES[code];
-      debugLog("getFlagFromWhatsapp: matched code (without +)", codeWithoutPlus, "-> flag", flag);
-      return flag;
-    }
-  }
-
-  // If no match found, return the globe
-  debugLog("getFlagFromWhatsapp: no match found, returning 🌍");
-  return "🌍";
+  return preview;
 }
-
-// =============================================================================
-// END COUNTRY FLAG DETECTION SYSTEM
-// =============================================================================
-
-// Reusable WhatsApp / phone number normalizer for API compatibility
+function renderDescriptionWithLinks(value = "") {
+  return String(value || "")
+    .split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi)
+    .filter(Boolean)
+    .map((part, index) => {
+      if (!/^(?:https?:\/\/|www\.)/i.test(part)) return part;
+      const href = /^https?:\/\//i.test(part) ? part : `https://${part}`;
+      return (
+        <a
+          key={`${part}-${index}`}
+          className="description-link"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    });
+}
 function normalizeWhatsAppNumber(value = "") {
   const raw = String(value || "").trim();
   const compact = raw.replace(/[\s().-]/g, "");
-
   if (/^07[2389]\d{7}$/.test(compact)) {
     return `250${compact.slice(1)}`;
   }
-
   if (/^\+2507[2389]\d{7}$/.test(compact)) {
     return compact.slice(1);
   }
-
   if (/^2507[2389]\d{7}$/.test(compact)) {
     return compact;
   }
-
   if (/^\+[1-9]\d{7,14}$/.test(compact)) {
     return compact.slice(1);
   }
-
   if (/^[1-9]\d{7,14}$/.test(compact)) {
     return compact;
   }
-
   return "";
 }
-
-/**
- * Get the country flag for a comment.
- * ALWAYS uses frontend detection and NEVER relies on the worker's country_flag.
- */
-function getCommentDisplayFlag(comment = {}) {
-  debugLog("getCommentDisplayFlag called with comment:", comment);
-  
-  // Determine the phone number from all possible field names
-  const commenterPhone =
-    comment.commenter_whatsapp ||
-    comment.commenter_phone ||
-    comment.whatsapp ||
-    comment.phone ||
-    comment.phone_number ||
-    "";
-
-  debugLog("getCommentDisplayFlag: extracted phone:", commenterPhone);
-  debugLog("getCommentDisplayFlag: comment keys:", Object.keys(comment));
-
-  // Use the frontend flag detection - this overrides whatever the worker returned
-  const flag = getFlagFromWhatsapp(commenterPhone);
-  debugLog("getCommentDisplayFlag: final flag:", flag);
-  
-  return flag;
+// Never compare missing provider IDs directly: "" === "" would incorrectly
+// treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
+// use the registered telephone only as a safe legacy fallback.
+function isSameProviderAsPost(post = {}, provider = null) {
+  if (!provider) return false;
+  const ownerId = String(post.provider_id || "").trim();
+  const viewerId = String(provider.id || "").trim();
+  if (ownerId && viewerId) return ownerId === viewerId;
+  const ownerPhone = normalizeWhatsAppNumber(post.creator_identity || "");
+  const viewerPhone = normalizeWhatsAppNumber(provider.phone || "");
+  return Boolean(ownerPhone && viewerPhone && ownerPhone === viewerPhone);
 }
-
-/**
- * Resizes/compresses an image file in the browser before upload.
- * Keeps aspect ratio, caps dimensions, exports as WebP (falls back to JPEG).
- * Returns the original file untouched if compression fails for any reason,
- * so an upload error never freezes the page.
- */
-async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } = {}) {
+// Convert any valid ISO 3166-1 alpha-2 country code into its flag emoji
+// locally (no hardcoded per-country list, so every country renders its real
+// flag - not only Rwanda/Burundi with a globe fallback for everyone else).
+function countryCodeToFlagEmoji(countryCode = "") {
+  const code = String(countryCode || "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "\u{1F310}";
+  const codePoints = [...code].map((char) => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+// Shared Escape-to-close behavior for every modal/sheet/viewer in the app.
+function useEscapeToClose(onClose, isOpen = true) {
+  useEffect(() => {
+    if (!isOpen || !onClose) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+}
+async function compressImageFile(
+  file,
+  { maxWidth, maxHeight, quality = 0.75 } = {},
+) {
   if (!file || !file.type || !file.type.startsWith("image/")) return file;
-
   try {
     const bitmap = await createImageBitmap(file);
     let { width, height } = bitmap;
-
     const widthLimit = maxWidth || width;
     const heightLimit = maxHeight || height;
     const scale = Math.min(1, widthLimit / width, heightLimit / height);
-
     const targetWidth = Math.max(1, Math.round(width * scale));
     const targetHeight = Math.max(1, Math.round(height * scale));
-
     const canvas = document.createElement("canvas");
     canvas.width = targetWidth;
     canvas.height = targetHeight;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
-
     ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
-
     const blob = await new Promise((resolve) => {
-      canvas.toBlob(
-        (result) => resolve(result),
-        "image/webp",
-        quality
-      );
+      canvas.toBlob((result) => resolve(result), "image/webp", quality);
     });
-
     if (!blob) return file;
-
     const newName = file.name
       ? file.name.replace(/\.[^/.]+$/, "") + ".webp"
       : "upload.webp";
-
     return new File([blob], newName, { type: "image/webp" });
   } catch (error) {
-    console.warn("Image compression failed, using original file:", error);
+    devWarn("Image compression failed, using original file:", error);
     return file;
   }
 }
-
-function WhatsAppIcon({ className = "", size = 24 }) {
+function getVerificationStatus(entity) {
+  const rawStatus = String(entity?.verification_status || "")
+    .trim()
+    .toLowerCase();
+  let status = "pending";
+  if (
+    rawStatus === "verified" ||
+    rawStatus === "approved" ||
+    entity?.verified === true ||
+    entity?.verified === 1 ||
+    entity?.verified === "1" ||
+    entity?.is_verified === true ||
+    entity?.is_verified === 1 ||
+    entity?.is_verified === "1"
+  ) {
+    status = "verified";
+  } else if (rawStatus === "rejected" || rawStatus === "blocked") {
+    status = "rejected";
+  }
+  const labels = {
+    verified: "Verified",
+    pending: "Verification Pending",
+    rejected: "Not Approved",
+  };
+  return {
+    status,
+    label: labels[status],
+    verified: status === "verified",
+    className: `status-${status}`,
+  };
+}
+const VerificationTag = memo(function VerificationTag({ info, size = 14 }) {
+  const Icon =
+    info.status === "verified"
+      ? CheckCircle
+      : info.status === "rejected"
+        ? ShieldX
+        : Clock;
   return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <circle cx="16" cy="16" r="15" fill="#25D366" />
-      <path
-        fill="#FFFFFF"
-        d="M23.25 18.65c-.39-.2-2.29-1.13-2.65-1.26-.35-.13-.61-.2-.87.2-.26.39-1 1.26-1.23 1.52-.23.26-.45.29-.84.1-.39-.2-1.64-.6-3.12-1.93-1.15-1.03-1.93-2.3-2.16-2.69-.23-.39-.02-.6.17-.79.18-.18.39-.45.58-.68.19-.23.26-.39.39-.65.13-.26.06-.49-.03-.68-.1-.2-.87-2.1-1.19-2.87-.31-.75-.63-.65-.87-.66h-.74c-.26 0-.68.1-1.03.49-.35.39-1.36 1.33-1.36 3.23 0 1.91 1.39 3.75 1.58 4.01.19.26 2.73 4.17 6.61 5.85.92.4 1.64.64 2.2.82.93.29 1.77.25 2.44.15.74-.11 2.29-.94 2.61-1.84.32-.91.32-1.68.23-1.84-.1-.16-.36-.26-.75-.46Z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="m7.23 25.55 1.28-4.67a10.4 10.4 0 1 1 3.8 3.73l-5.08.94Zm5.31-2.83.3.18a8.36 8.36 0 1 0-2.48-2.43l.2.31-.75 2.73 2.73-.79Z"
-      />
-    </svg>
+    <span className={`verification-tag ${info.className}`}>
+      <Icon size={size} aria-hidden="true" />
+      <span>{info.label}</span>
+    </span>
+  );
+});
+VerificationTag.displayName = "VerificationTag";
+// =============================================================================
+// Messaging helpers - date grouping + attachment labels (Step 1 additions)
+// =============================================================================
+function isSameCalendarDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
   );
 }
-
+function formatDayLabel(dateInput) {
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameCalendarDay(date, now)) return "Today";
+  if (isSameCalendarDay(date, yesterday)) return "Yesterday";
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+function attachmentPreviewLabel(messageType) {
+  switch (messageType) {
+    case "image":
+      return "Photo";
+    case "video":
+      return "Video";
+    case "voice":
+      return "Voice message";
+    case "document":
+      return "Document";
+    default:
+      return "Sent a message";
+  }
+}
 function Home() {
   const videoRefs = useRef({});
   const postRefs = useRef({});
   const observerRef = useRef(null);
   const isMountedRef = useRef(true);
-
-  // ---- Watch-time accumulation refs (not state — these change too often
-  // to justify a re-render on every tick) ----
-  const watchAccumulatorRef = useRef({}); // { [postId]: secondsPendingFlush }
-  const watchTimerRef = useRef({}); // { [postId]: intervalId while playing }
-  const iframeExposureAccumulatorRef = useRef({}); // { [postId]: seconds }
-  const iframeExposureTimerRef = useRef(null);
-  const tabHiddenRef = useRef(false);
-
+  const postRefCallbackCache = useRef(new Map());
+  const videoRefCallbackCache = useRef(new Map());
+  const getPostRefCallback = useCallback((index) => {
+    if (!postRefCallbackCache.current.has(index)) {
+      postRefCallbackCache.current.set(index, (ref) => {
+        if (ref) {
+          postRefs.current[index] = ref;
+        } else {
+          delete postRefs.current[index];
+        }
+      });
+    }
+    return postRefCallbackCache.current.get(index);
+  }, []);
+  const getVideoRefCallback = useCallback((index) => {
+    if (!videoRefCallbackCache.current.has(index)) {
+      videoRefCallbackCache.current.set(index, (ref) => {
+        if (ref) {
+          videoRefs.current[index] = ref;
+        } else {
+          delete videoRefs.current[index];
+        }
+      });
+    }
+    return videoRefCallbackCache.current.get(index);
+  }, []);
+  // User state
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // UI state
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [activePostIndex, setActivePostIndex] = useState(0);
-
+  const [activeCategory, setActiveCategory] = useState("time-market");
   const [showEditor, setShowEditor] = useState(false);
-  const [showComments, setShowComments] = useState(false);
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [loadingComments, setLoadingComments] = useState(false);
-
+  const [editingServicePost, setEditingServicePost] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+  const [authPhone, setAuthPhone] = useState("");
+  const [authFullName, setAuthFullName] = useState("");
+  const [authPin, setAuthPin] = useState("");
+  const [authConfirmPin, setAuthConfirmPin] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authSuccessMessage, setAuthSuccessMessage] = useState("");
+  const [showPinResetModal, setShowPinResetModal] = useState(false);
+  const [pinResetStep, setPinResetStep] = useState("request");
+  const [pinResetPhone, setPinResetPhone] = useState("");
+  const [pinResetRequest, setPinResetRequest] = useState(null);
+  const [pinResetNewPin, setPinResetNewPin] = useState("");
+  const [pinResetConfirmPin, setPinResetConfirmPin] = useState("");
+  const [pinResetError, setPinResetError] = useState("");
+  const [pinResetLoading, setPinResetLoading] = useState(false);
+  const [pendingPhoneReview, setPendingPhoneReview] = useState(null);
+  const [showChat, setShowChat] = useState(false);
+  const [chatPartner, setChatPartner] = useState(null);
+  const [showProviderProfile, setShowProviderProfile] = useState(false);
+  const [providerProfileTarget, setProviderProfileTarget] = useState(null);
+  const [showMyProfile, setShowMyProfile] = useState(false);
+  const [profileFullName, setProfileFullName] = useState("");
+  const [profileServiceName, setProfileServiceName] = useState("");
+  const [profileServicesOffered, setProfileServicesOffered] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
+  const [profileEditContextPost, setProfileEditContextPost] = useState(null);
+  const [profileDeleteConfirming, setProfileDeleteConfirming] = useState(false);
+  const [showMyServices, setShowMyServices] = useState(false);
+  const [myServices, setMyServices] = useState([]);
+  const [myServicesLoading, setMyServicesLoading] = useState(false);
+  const [myServicesError, setMyServicesError] = useState("");
+  const [showMyTime, setShowMyTime] = useState(false);
+  // My Inbox (all of the logged-in user's conversations) - also drives the
+  // real unread badge shown on every service card's envelope icon.
+  const [showMyInbox, setShowMyInbox] = useState(false);
+  const [myInboxFilterPostId, setMyInboxFilterPostId] = useState(null);
+  const [myConversations, setMyConversations] = useState([]);
+  const [myConversationsLoading, setMyConversationsLoading] = useState(false);
+  const [myConversationsError, setMyConversationsError] = useState("");
+  const [showInfoModal, setShowInfoModal] = useState(null);
+  // Public comments: separate from private messages. Comments are shown in
+  // their own glass sheet with a scrollable list and a compact composer.
+  const [showCommentsForPostId, setShowCommentsForPostId] = useState(null);
+  const [commentsByPost, setCommentsByPost] = useState({});
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState("");
+  const [newCommentText, setNewCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  // Step 1: a single lightweight Gwamo toast for "new message" notices.
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const notifiedMessageKeysRef = useRef(new Set());
+  const previousTotalUnreadRef = useRef(0);
+  // Editor state
   const [newCreatorName, setNewCreatorName] = useState("");
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
+  const [postType, setPostType] = useState("offer");
+  const [postHeadline, setPostHeadline] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("");
+  const [postLocation, setPostLocation] = useState("");
+  const [priceUnit, setPriceUnit] = useState("job");
+  const [availability, setAvailability] = useState("today");
+  const [exchangeNeed, setExchangeNeed] = useState("");
+  const [allowCashBalance, setAllowCashBalance] = useState(true);
+  const [momentKind, setMomentKind] = useState("story");
   const [newLogoFile, setNewLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [newMediaFile, setNewMediaFile] = useState(null);
@@ -658,49 +552,24 @@ function Home() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [compressingMedia, setCompressingMedia] = useState(false);
   const [zoomImage, setZoomImage] = useState("");
-
-  // Real, per-post media aspect ratio (width / height), detected once the
-  // actual image/video dimensions are known. Keyed by postId so every post
-  // keeps its own independent ratio — never a single shared value.
   const [mediaAspectRatios, setMediaAspectRatios] = useState({});
-
-  // Comments are now backed by the D1 database, keyed by post id.
-  const [commentsByPost, setCommentsByPost] = useState({});
-  const [commentPhone, setCommentPhone] = useState("");
-  const [commentText, setCommentText] = useState("");
-  const [submittingComment, setSubmittingComment] = useState(false);
-
-  // Reactions: D1 is the source of truth. We only keep a small map of
-  // "pending" UI state so the heart can respond instantly.
   const [reactedPosts, setReactedPosts] = useState({});
   const [reactingPostId, setReactingPostId] = useState(null);
-
-  // WhatsApp number modal, shown once per device before the first like.
-  const [showPhoneModal, setShowPhoneModal] = useState(false);
-  const [phoneModalValue, setPhoneModalValue] = useState("");
-  const [phoneModalError, setPhoneModalError] = useState("");
-  const [phoneModalTargetPost, setPhoneModalTargetPost] = useState(null);
-
-  // Envelope "unread dot" state — purely a per-device localStorage concern.
-  const [openedEnvelopes, setOpenedEnvelopes] = useState({});
-
+  const pendingAuthActionRef = useRef(null);
+  const [pendingAuthResolution, setPendingAuthResolution] = useState(null);
   const objectUrlsRef = useRef(new Set());
-
   const trackObjectUrl = useCallback((url) => {
     if (url) objectUrlsRef.current.add(url);
     return url;
   }, []);
-
   const revokeObjectUrl = useCallback((url) => {
     if (url && objectUrlsRef.current.has(url)) {
       URL.revokeObjectURL(url);
       objectUrlsRef.current.delete(url);
     }
   }, []);
-
   const readJsonSafely = useCallback(async (response) => {
     const responseText = await response.text();
-
     if (!responseText) {
       return {
         success: response.ok,
@@ -709,160 +578,727 @@ function Home() {
           : `Server returned ${response.status} ${response.statusText}`,
       };
     }
-
     try {
       return JSON.parse(responseText);
     } catch {
       throw new Error(
         responseText ||
-          `Server returned ${response.status} ${response.statusText}`
+          `Server returned ${response.status} ${response.statusText}`,
       );
     }
   }, []);
-
-  // ---------------------------------------------------------------------
-  // Saved WhatsApp number convenience (device-level, not verified ownership)
-  // ---------------------------------------------------------------------
-
-  const getSavedWhatsAppNumber = useCallback(() => {
+  // =============================================================================
+  // Session Management
+  // =============================================================================
+  const getSessionToken = useCallback(() => {
     try {
-      return localStorage.getItem(WHATSAPP_STORAGE_KEY) || "";
+      return localStorage.getItem(SESSION_TOKEN_KEY) || "";
     } catch {
       return "";
     }
   }, []);
-
-  const saveWhatsAppNumber = useCallback((normalized) => {
+  const setSessionToken = useCallback((token) => {
     try {
-      localStorage.setItem(WHATSAPP_STORAGE_KEY, normalized);
-    } catch {
-      // localStorage may be unavailable (private mode, quota) — non-fatal.
-    }
-  }, []);
-
-  // ---------------------------------------------------------------------
-  // Envelope opened state (per device, per post)
-  // ---------------------------------------------------------------------
-
-  const isEnvelopeOpened = useCallback(
-    (postId) => {
-      if (openedEnvelopes[postId]) return true;
-      try {
-        return localStorage.getItem(`feedx-envelope-opened-${postId}`) === "true";
-      } catch {
-        return false;
+      if (token) {
+        localStorage.setItem(SESSION_TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(SESSION_TOKEN_KEY);
       }
-    },
-    [openedEnvelopes]
-  );
-
-  const markEnvelopeOpened = useCallback((postId) => {
-    try {
-      localStorage.setItem(`feedx-envelope-opened-${postId}`, "true");
     } catch {
-      // ignore storage failures — dot will just reappear on next load
+      // ignore
     }
-    setOpenedEnvelopes((current) => ({ ...current, [postId]: true }));
   }, []);
-
-  // ---------------------------------------------------------------------
-  // Fetching the feed (with pagination)
-  // ---------------------------------------------------------------------
-
+  const getUserData = useCallback(() => {
+    try {
+      const data = localStorage.getItem(USER_DATA_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const setUserData = useCallback((userData) => {
+    try {
+      if (userData) {
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+      } else {
+        localStorage.removeItem(USER_DATA_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+  // Shared helper for authenticated requests (adds the Bearer token; never
+  // forces a Content-Type so it stays safe for both JSON and FormData bodies).
+  const authFetch = useCallback(
+    async (path, options = {}) => {
+      const token = getSessionToken();
+      const headers = { ...(options.headers || {}) };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      return fetch(`${API_URL}${path}`, {
+        cache: "no-store",
+        ...options,
+        headers,
+      });
+    },
+    [getSessionToken],
+  );
+  const restoreSession = useCallback(async () => {
+    const token = getSessionToken();
+    if (!token) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/time-market/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await readJsonSafely(response);
+        const provider = data.provider || data.user;
+        if (data.success && provider) {
+          setUser(provider);
+          setIsLoggedIn(true);
+          setUserData(provider);
+          return true;
+        }
+      }
+    } catch (error) {
+      devWarn("Session restore failed:", error);
+    }
+    setSessionToken("");
+    setUserData(null);
+    setUser(null);
+    setIsLoggedIn(false);
+    return false;
+  }, [getSessionToken, readJsonSafely, setSessionToken, setUserData]);
+  // Keep verification status (and anything else about the account) fresh
+  // without ever trusting a stale localStorage copy as authoritative.
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    const refreshProfile = async () => {
+      if (document.hidden) return;
+      const token = getSessionToken();
+      if (!token) return;
+      try {
+        const response = await fetch(`${API_URL}/api/time-market/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!response.ok || !isMountedRef.current) return;
+        const data = await readJsonSafely(response);
+        if (data.success && data.provider && isMountedRef.current) {
+          setUser(data.provider);
+          setUserData(data.provider);
+          setPosts((current) =>
+            current.map((post) =>
+              String(post.provider_id) === String(data.provider.id)
+                ? {
+                    ...post,
+                    verification_status: data.provider.verification_status,
+                    verified: data.provider.verified,
+                  }
+                : post,
+            ),
+          );
+        }
+      } catch {
+        // Transient network issues shouldn't sign the person out.
+      }
+    };
+    const intervalId = setInterval(
+      refreshProfile,
+      VERIFICATION_REFRESH_INTERVAL_MS,
+    );
+    const handleVisible = () => {
+      if (!document.hidden) refreshProfile();
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [isLoggedIn, getSessionToken, readJsonSafely, setUserData]);
+  // =============================================================================
+  // Auth functions
+  // =============================================================================
+  const openServiceForm = useCallback(
+    (provider, initialPostType = "offer") => {
+      if (provider) {
+        setNewCreatorName(
+          provider.service_provider_name || provider.full_name || "",
+        );
+        setNewCreatorIdentity(provider.phone || "");
+      }
+      setNewMediaUrl("");
+      setNewTitle("");
+      setSubtitle("");
+      setPostType(initialPostType);
+      setPostHeadline("");
+      setServiceCategory("");
+      setPostLocation("");
+      setPriceUnit("job");
+      setAvailability("today");
+      setExchangeNeed("");
+      setAllowCashBalance(true);
+      setMomentKind("story");
+      setNewLogoFile(null);
+      revokeObjectUrl(logoPreview);
+      setLogoPreview("");
+      setNewMediaFile(null);
+      revokeObjectUrl(mediaPreview);
+      setMediaPreview("");
+      setMediaPreviewType("");
+      setEditingServicePost(null);
+      setShowEditor(true);
+    },
+    [logoPreview, mediaPreview, revokeObjectUrl],
+  );
+  const handleRegister = useCallback(async () => {
+    const phone = normalizeWhatsAppNumber(authPhone);
+    const fullName = authFullName.trim();
+    if (!phone) {
+      setAuthError("Please enter a valid phone number with country code.");
+      return;
+    }
+    if (!fullName) {
+      setAuthError("Please enter your full name.");
+      return;
+    }
+    if (!PERSONAL_PIN_PATTERN.test(authPin)) {
+      setAuthError("Create an 8-digit personal PIN.");
+      return;
+    }
+    if (authPin !== authConfirmPin) {
+      setAuthError("The two PIN entries do not match.");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError("");
+    setAuthSuccessMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/time-market/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          full_name: fullName,
+          pin: authPin,
+          auth_method: PIN_AUTH_METHOD,
+        }),
+      });
+      const data = await readJsonSafely(response);
+      if (data.already_registered) {
+        setAuthMode("login");
+        setAuthError("This number is already registered. Please press Login.");
+        return;
+      }
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Registration failed.");
+      }
+      if (
+        data.success &&
+        data.auth_method !== PIN_AUTH_METHOD &&
+        data.pin_authentication_enabled !== true
+      ) {
+        throw new Error(
+          "Worker.js must be updated to phone + PIN authentication before this Home.jsx can be used securely.",
+        );
+      }
+      if (
+        data.success &&
+        (data.requires_admin_approval || data.account_status === "pending_phone_review")
+      ) {
+        setPendingPhoneReview({
+          phone,
+          fullName,
+          verificationCode:
+            data.verification_code || data.phone_verification_code || "",
+          message:
+            data.message ||
+            "Registration received. Keep this screen open and wait for Gwamo to call your registered number.",
+        });
+        setShowAuthModal(false);
+        setAuthPhone("");
+        setAuthFullName("");
+        setAuthPin("");
+        setAuthConfirmPin("");
+        pendingAuthActionRef.current = null;
+        return;
+      }
+      const provider = data.provider || data.user;
+      const token = data.session_token || data.token;
+      if (provider && token) {
+        setUser(provider);
+        setIsLoggedIn(true);
+        setSessionToken(token);
+        setUserData(provider);
+        setShowAuthModal(false);
+        setAuthPhone("");
+        setAuthFullName("");
+        setAuthPin("");
+        setAuthConfirmPin("");
+        setAuthError("");
+        setAuthSuccessMessage("Registration successful! \ud83c\udf89");
+        const action = pendingAuthActionRef.current;
+        pendingAuthActionRef.current = null;
+        if (action) setPendingAuthResolution({ action, provider });
+        return;
+      }
+      setAuthError(data.error || data.message || "Registration failed.");
+    } catch (error) {
+      setAuthError(error.message || "Registration failed. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [
+    authPhone,
+    authFullName,
+    authPin,
+    authConfirmPin,
+    readJsonSafely,
+    setSessionToken,
+    setUserData,
+  ]);
+  const handleLogin = useCallback(async () => {
+    const phone = normalizeWhatsAppNumber(authPhone);
+    if (!phone) {
+      setAuthError("Please enter your registered phone number.");
+      return;
+    }
+    if (!PERSONAL_PIN_PATTERN.test(authPin)) {
+      setAuthError("Enter your 8-digit personal PIN.");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError("");
+    setAuthSuccessMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/time-market/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          pin: authPin,
+          auth_method: PIN_AUTH_METHOD,
+        }),
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        setAuthError(
+          data.error ||
+            data.message ||
+            "This number is not registered. Please register first.",
+        );
+        setAuthLoading(false);
+        return;
+      }
+      if (
+        data.auth_method !== PIN_AUTH_METHOD &&
+        data.pin_authentication_enabled !== true
+      ) {
+        throw new Error(
+          "Worker.js must be updated to verify the personal PIN before login.",
+        );
+      }
+      const provider = data.provider || data.user;
+      const token = data.session_token || data.token;
+      if (provider && token) {
+        setUser(provider);
+        setIsLoggedIn(true);
+        setSessionToken(token);
+        setUserData(provider);
+        setShowAuthModal(false);
+        setAuthPhone("");
+        setAuthPin("");
+        setAuthError("");
+        setAuthSuccessMessage("Login successful! \ud83d\udc4b");
+        const action = pendingAuthActionRef.current;
+        pendingAuthActionRef.current = null;
+        if (action) setPendingAuthResolution({ action, provider });
+        return;
+      }
+      setAuthError(data.error || data.message || "Login failed.");
+    } catch (error) {
+      setAuthError(error.message || "Login failed. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [authPhone, authPin, readJsonSafely, setSessionToken, setUserData]);
+  const handleLogout = useCallback(async () => {
+    const token = getSessionToken();
+    try {
+      if (token) {
+        await fetch(`${API_URL}/api/time-market/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+      }
+    } catch {
+      // Local logout must still complete when the network is unavailable.
+    }
+    setSessionToken("");
+    setUserData(null);
+    setUser(null);
+    setIsLoggedIn(false);
+    setMyConversations([]);
+  }, [getSessionToken, setSessionToken, setUserData]);
+  const openAuthModal = useCallback((mode = "login", pendingAction = null) => {
+    pendingAuthActionRef.current = pendingAction;
+    setAuthMode(mode);
+    setAuthPhone("");
+    setAuthFullName("");
+    setAuthPin("");
+    setAuthConfirmPin("");
+    setAuthError("");
+    setAuthSuccessMessage("");
+    setAuthLoading(false);
+    setShowAuthModal(true);
+  }, []);
+  const closeAuthModal = useCallback(() => {
+    pendingAuthActionRef.current = null;
+    setShowAuthModal(false);
+    setAuthError("");
+    setAuthSuccessMessage("");
+  }, []);
+  const openPinReset = useCallback(() => {
+    setShowAuthModal(false);
+    setShowPinResetModal(true);
+    setPinResetStep("request");
+    setPinResetPhone(authPhone);
+    setPinResetRequest(null);
+    setPinResetNewPin("");
+    setPinResetConfirmPin("");
+    setPinResetError("");
+  }, [authPhone]);
+  const closePinReset = useCallback(() => {
+    setShowPinResetModal(false);
+    setPinResetLoading(false);
+    setPinResetError("");
+  }, []);
+  const requestPinReset = useCallback(async () => {
+    const phone = normalizeWhatsAppNumber(pinResetPhone);
+    if (!phone) {
+      setPinResetError("Enter your registered telephone number.");
+      return;
+    }
+    setPinResetLoading(true);
+    setPinResetError("");
+    try {
+      const response = await fetch(
+        `${API_URL}/api/time-market/pin-reset/request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone }),
+          cache: "no-store",
+        },
+      );
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Could not request a PIN reset.");
+      }
+      setPinResetRequest({
+        id: data.request_id || data.request?.id || "",
+        verificationCode:
+          data.verification_code || data.request?.verification_code || "",
+        expiresAt: data.expires_at || data.request?.expires_at || "",
+        recoveryToken: "",
+      });
+      setPinResetStep("waiting");
+    } catch (error) {
+      setPinResetError(error.message || "Could not request a PIN reset.");
+    } finally {
+      setPinResetLoading(false);
+    }
+  }, [pinResetPhone, readJsonSafely]);
+  const checkPinResetStatus = useCallback(async ({ silent = false } = {}) => {
+    if (!pinResetRequest?.id) {
+      if (!silent) {
+        setPinResetError("This reset request is missing. Please start again.");
+      }
+      return;
+    }
+    if (!silent) {
+      setPinResetLoading(true);
+      setPinResetError("");
+    }
+    try {
+      const response = await fetch(
+        `${API_URL}/api/time-market/pin-reset/status?request_id=${encodeURIComponent(
+          pinResetRequest.id,
+        )}`,
+        { cache: "no-store" },
+      );
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Could not check the reset request.");
+      }
+      // Once approved, an admin has already generated and set a new 8-digit
+      // PIN on the account (see worker.js) and will read it out on the call
+      // or send it by SMS - there is nothing left for the person to type in.
+      if (data.approved && data.pin_delivered) {
+        setPinResetError("");
+        setPinResetStep("delivered");
+        return;
+      }
+      if (!data.approved) {
+        // A silent background poll only needs to react once Gwamo actually
+        // approves the reset - it should never interrupt the person with
+        // "not approved yet" every few seconds while they're simply
+        // waiting for the call. A real rejection is still worth surfacing.
+        if (!silent || data.status === "rejected") {
+          setPinResetError(
+            data.status === "rejected"
+              ? "This reset request was rejected."
+              : "Gwamo has not approved this reset yet. Keep the code open and wait for the call.",
+          );
+        }
+      }
+    } catch (error) {
+      if (!silent) {
+        setPinResetError(error.message || "Could not check the reset request.");
+      }
+    } finally {
+      if (!silent) setPinResetLoading(false);
+    }
+  }, [pinResetRequest, readJsonSafely]);
+  // Auto-check approval while waiting, so the moment an admin approves by
+  // phone the person is moved straight to "create a new PIN" without having
+  // to remember to keep tapping "Check approval" themselves.
+  useEffect(() => {
+    if (!showPinResetModal || pinResetStep !== "waiting") return undefined;
+    const intervalId = setInterval(() => {
+      if (document.hidden) return;
+      checkPinResetStatus({ silent: true });
+    }, PIN_RESET_STATUS_POLL_INTERVAL_MS);
+    const handleVisible = () => {
+      if (!document.hidden) checkPinResetStatus({ silent: true });
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [showPinResetModal, pinResetStep, checkPinResetStatus]);
+  const completePinReset = useCallback(async () => {
+    if (!PERSONAL_PIN_PATTERN.test(pinResetNewPin)) {
+      setPinResetError("Create a new 8-digit personal PIN.");
+      return;
+    }
+    if (pinResetNewPin !== pinResetConfirmPin) {
+      setPinResetError("The two PIN entries do not match.");
+      return;
+    }
+    if (!pinResetRequest?.id || !pinResetRequest?.recoveryToken) {
+      setPinResetError("The approved reset session is missing. Please start again.");
+      return;
+    }
+    setPinResetLoading(true);
+    setPinResetError("");
+    try {
+      const response = await fetch(
+        `${API_URL}/api/time-market/pin-reset/complete`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request_id: pinResetRequest.id,
+            recovery_token: pinResetRequest.recoveryToken,
+            new_pin: pinResetNewPin,
+          }),
+          cache: "no-store",
+        },
+      );
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Could not save the new PIN.");
+      }
+      closePinReset();
+      openAuthModal("login");
+      setAuthPhone(pinResetPhone);
+      setAuthSuccessMessage("Your PIN was changed. Login with the new PIN.");
+    } catch (error) {
+      setPinResetError(error.message || "Could not save the new PIN.");
+    } finally {
+      setPinResetLoading(false);
+    }
+  }, [
+    pinResetNewPin,
+    pinResetConfirmPin,
+    pinResetRequest,
+    pinResetPhone,
+    readJsonSafely,
+    closePinReset,
+    openAuthModal,
+  ]);
+  // =============================================================================
+  // Plus CTA -> authenticated create-service flow
+  // =============================================================================
+  const handleOfferTime = useCallback((requestedPostType = "offer") => {
+    const initialPostType = ["offer", "need", "exchange", "moment"].includes(
+      requestedPostType,
+    )
+      ? requestedPostType
+      : "offer";
+    if (!isLoggedIn || !user) {
+      openAuthModal("login", { type: "offer", postType: initialPostType });
+      return;
+    }
+    setNewCreatorName(user.service_provider_name || user.full_name || "");
+    setNewCreatorIdentity(user.phone || "");
+    setNewMediaUrl("");
+    setNewTitle("");
+    setSubtitle("");
+    setPostType(initialPostType);
+    setPostHeadline("");
+    setServiceCategory("");
+    setPostLocation("");
+    setPriceUnit("job");
+    setAvailability("today");
+    setExchangeNeed("");
+    setAllowCashBalance(true);
+    setMomentKind("story");
+    setNewLogoFile(null);
+    revokeObjectUrl(logoPreview);
+    setLogoPreview("");
+    setNewMediaFile(null);
+    revokeObjectUrl(mediaPreview);
+    setMediaPreview("");
+    setMediaPreviewType("");
+    setEditingServicePost(null);
+    setShowEditor(true);
+  }, [
+    isLoggedIn,
+    user,
+    openAuthModal,
+    revokeObjectUrl,
+    logoPreview,
+    mediaPreview,
+  ]);
+  // =============================================================================
+  // Fetch services - PUBLIC FEED
+  // =============================================================================
+  const fetchAbortRef = useRef(null);
+  const fetchInFlightRef = useRef(false);
   const fetchHomeData = useCallback(
     async ({ append = false, cursor = null } = {}) => {
+      // Prevent duplicate/overlapping requests (e.g. fast double taps on
+      // "Load more", or an initial mount racing a manual refresh).
+      if (fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
+      // Abort any in-flight request from a previous call so a slow, now
+      // outdated response can never clobber newer state.
+      if (fetchAbortRef.current) {
+        fetchAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      fetchAbortRef.current = controller;
       try {
         if (append) {
           setLoadingMore(true);
         } else {
           setLoading(true);
         }
-
         const params = new URLSearchParams();
-        params.set("limit", String(append ? LOAD_MORE_LIMIT : INITIAL_PAGE_LIMIT));
+        params.set(
+          "limit",
+          String(append ? LOAD_MORE_LIMIT : INITIAL_PAGE_LIMIT),
+        );
         if (cursor) params.set("cursor", cursor);
-
-        const response = await fetch(`${API_URL}/api/home?${params.toString()}`, {
-          cache: "no-store",
-        });
-
+        const response = await fetch(
+          `${API_URL}/api/home?${params.toString()}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         const data = await readJsonSafely(response);
-
         if (!response.ok || !data.success) {
           throw new Error(
             data.error ||
               data.message ||
-              `Failed to load posts (${response.status})`
+              `Failed to load services (${response.status})`,
           );
         }
-
         const receivedPosts = Array.isArray(data.posts) ? data.posts : [];
-
         if (isMountedRef.current) {
           setPosts((current) =>
-            append ? [...current, ...receivedPosts] : receivedPosts
+            append ? [...current, ...receivedPosts] : receivedPosts,
           );
           setNextCursor(data.next_cursor || null);
           setHasMore(Boolean(data.has_more));
         }
       } catch (error) {
-        console.error("Failed to fetch home data:", error);
+        if (error?.name === "AbortError") return;
+        devError("Failed to fetch services:", error);
       } finally {
+        fetchInFlightRef.current = false;
         if (isMountedRef.current) {
           setLoading(false);
           setLoadingMore(false);
         }
       }
     },
-    [readJsonSafely]
+    [readJsonSafely],
   );
-
   const loadMorePosts = useCallback(() => {
     if (!hasMore || loadingMore || !nextCursor) return;
     fetchHomeData({ append: true, cursor: nextCursor });
   }, [hasMore, loadingMore, nextCursor, fetchHomeData]);
-
+  // =============================================================================
+  // Initialize
+  // =============================================================================
+  useEffect(() => {
+    try {
+      const origin = new URL(API_URL).origin;
+      if (!document.querySelector(`link[rel="preconnect"][href="${origin}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "preconnect";
+        link.href = origin;
+        link.crossOrigin = "anonymous";
+        document.head.appendChild(link);
+      }
+    } catch {
+      // non-critical, safe to skip
+    }
+  }, []);
   useEffect(() => {
     isMountedRef.current = true;
-    fetchHomeData();
-
+    const init = async () => {
+      await Promise.all([restoreSession(), fetchHomeData()]);
+    };
+    init();
     return () => {
       isMountedRef.current = false;
+      if (fetchAbortRef.current) fetchAbortRef.current.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ---------------------------------------------------------------------
-  // Intersection observer — drives active post, video autoplay, and
-  // iframe exposure-time tracking (visible time only, never claimed as
-  // exact watch time).
-  // ---------------------------------------------------------------------
-
+  // =============================================================================
+  // Intersection Observer
+  // -----------------------------------------------------------------------
+  // This only tracks which card is "active" (for embeds) and pauses videos
+  // as they leave the screen. It does NOT auto-play video on arrival -
+  // media only plays when the person actively taps it (see ServicePost's
+  // onClick on the <video> element), never on its own after scrolling in.
+  // =============================================================================
   useEffect(() => {
     if (!posts.length) return undefined;
-
     if (observerRef.current) {
       observerRef.current.disconnect();
     }
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const index = Number(entry.target.dataset.index);
           const video = videoRefs.current[index];
-
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
             setActivePostIndex(index);
-
             Object.entries(videoRefs.current).forEach(([key, item]) => {
               if (Number(key) !== index && item && !item.paused) {
                 item.pause();
               }
             });
-
-            if (video && video.paused) {
-              video.play().catch(() => {});
-            }
           } else if (video && !video.paused) {
             video.pause();
           }
@@ -871,250 +1307,113 @@ function Home() {
       {
         threshold: [0.6],
         rootMargin: "0px 0px -10% 0px",
-      }
+      },
     );
-
     observerRef.current = observer;
-
     Object.values(postRefs.current).forEach((post) => {
       if (post) observer.observe(post);
     });
-
     return () => {
       observer.disconnect();
     };
   }, [posts]);
-
-  // ---------------------------------------------------------------------
-  // Watch-time tracking (direct video only)
-  // ---------------------------------------------------------------------
-
-  const flushWatchSeconds = useCallback(
-    (postId, { useBeacon = false } = {}) => {
-      const pending = Math.floor(watchAccumulatorRef.current[postId] || 0);
-      if (pending <= 0) return; // never send a zero-second request
-
-      const seconds = Math.min(pending, MAX_WATCH_SECONDS_PER_REQUEST);
-      watchAccumulatorRef.current[postId] = pending - seconds;
-
-      const payload = JSON.stringify({
-        post_id: String(postId),
-        seconds,
-        field: "watch_seconds",
-      });
-
-      if (useBeacon && navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: "application/json" });
-        navigator.sendBeacon(`${API_URL}/api/home/watch`, blob);
-        return;
-      }
-
-      fetch(`${API_URL}/api/home/watch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        keepalive: true,
-      }).catch((error) => {
-        console.warn("Failed to send watch time:", error);
-      });
-    },
-    []
-  );
-
-  const startWatchTimer = useCallback(
-    (postId) => {
-      if (watchTimerRef.current[postId]) return; // already running
-
-      watchAccumulatorRef.current[postId] = watchAccumulatorRef.current[postId] || 0;
-
-      watchTimerRef.current[postId] = setInterval(() => {
-        watchAccumulatorRef.current[postId] = (watchAccumulatorRef.current[postId] || 0) + 1;
-
-        // Send accumulated watch time every 10 seconds while still playing.
-        if (watchAccumulatorRef.current[postId] >= 10) {
-          flushWatchSeconds(postId);
-        }
-      }, 1000);
-    },
-    [flushWatchSeconds]
-  );
-
-  const stopWatchTimer = useCallback(
-    (postId, { flush = true, useBeacon = false } = {}) => {
-      if (watchTimerRef.current[postId]) {
-        clearInterval(watchTimerRef.current[postId]);
-        delete watchTimerRef.current[postId];
-      }
-      if (flush) {
-        flushWatchSeconds(postId, { useBeacon });
-      }
-    },
-    [flushWatchSeconds]
-  );
-
-  const handleVideoPlay = useCallback(
-    (postId) => {
-      startWatchTimer(postId);
-    },
-    [startWatchTimer]
-  );
-
-  const handleVideoPause = useCallback(
-    (postId) => {
-      stopWatchTimer(postId, { flush: true });
-    },
-    [stopWatchTimer]
-  );
-
-  // Stop counting when the tab becomes hidden; resume bookkeeping (but not
-  // counting) when it becomes visible again — the IntersectionObserver /
-  // video "play" event naturally restarts the timer once truly playing.
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      const hidden = document.hidden;
-      tabHiddenRef.current = hidden;
-
-      if (hidden) {
-        Object.keys(watchTimerRef.current).forEach((postId) => {
-          stopWatchTimer(postId, { flush: true, useBeacon: true });
-        });
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [stopWatchTimer]);
-
-  // Flush any unsaved seconds (all posts) when the page is about to close.
-  useEffect(() => {
-    const handlePageHide = () => {
-      Object.keys(watchTimerRef.current).forEach((postId) => {
-        stopWatchTimer(postId, { flush: true, useBeacon: true });
-      });
-      Object.keys(iframeExposureAccumulatorRef.current).forEach((postId) => {
-        flushIframeExposure(postId, { useBeacon: true });
-      });
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("beforeunload", handlePageHide);
-
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("beforeunload", handlePageHide);
-      handlePageHide();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---------------------------------------------------------------------
-  // Embedded iframe exposure-time tracking (visible time only — never
-  // presented as exact "watch time" since we don't control the player).
-  // ---------------------------------------------------------------------
-
-  const flushIframeExposure = useCallback((postId, { useBeacon = false } = {}) => {
-    const pending = Math.floor(iframeExposureAccumulatorRef.current[postId] || 0);
-    if (pending <= 0) return;
-
-    const seconds = Math.min(pending, MAX_WATCH_SECONDS_PER_REQUEST);
-    iframeExposureAccumulatorRef.current[postId] = pending - seconds;
-
-    const payload = JSON.stringify({
-      post_id: String(postId),
-      seconds,
-      field: "iframe_exposure_seconds",
-    });
-
-    if (useBeacon && navigator.sendBeacon) {
-      const blob = new Blob([payload], { type: "application/json" });
-      navigator.sendBeacon(`${API_URL}/api/home/watch`, blob);
-      return;
-    }
-
-    fetch(`${API_URL}/api/home/watch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-      keepalive: true,
-    }).catch(() => {});
-  }, []);
-
-  // Ticks once per second for whichever post is both active AND an embed,
-  // as long as the tab is visible.
-  useEffect(() => {
-    if (iframeExposureTimerRef.current) {
-      clearInterval(iframeExposureTimerRef.current);
-      iframeExposureTimerRef.current = null;
-    }
-
-    const activePost = posts[activePostIndex];
-    if (!activePost) return undefined;
-
-    const mediaUrl = activePost.media_url || activePost.video_url || "";
-    const mediaType = activePost.media_type || "";
-    const isEmbed =
-      mediaType === "embed" ||
-      (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
-
-    if (!isEmbed) return undefined;
-
-    const postId = String(activePost.id ?? activePostIndex);
-
-    iframeExposureTimerRef.current = setInterval(() => {
-      if (tabHiddenRef.current) return;
-
-      iframeExposureAccumulatorRef.current[postId] =
-        (iframeExposureAccumulatorRef.current[postId] || 0) + 1;
-
-      if (iframeExposureAccumulatorRef.current[postId] >= 10) {
-        flushIframeExposure(postId);
-      }
-    }, 1000);
-
-    return () => {
-      if (iframeExposureTimerRef.current) {
-        clearInterval(iframeExposureTimerRef.current);
-        iframeExposureTimerRef.current = null;
-      }
-      flushIframeExposure(postId);
-    };
-  }, [activePostIndex, posts, flushIframeExposure]);
-
-  // ---------------------------------------------------------------------
-  // Media aspect-ratio detection (real dimensions, per post)
-  // ---------------------------------------------------------------------
-
+  // =============================================================================
+  // Media aspect ratio detection
+  // =============================================================================
   const handleMediaAspectRatio = useCallback((postId, ratio) => {
     if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
-
     setMediaAspectRatios((current) => {
       if (current[postId] === ratio) return current;
       return { ...current, [postId]: ratio };
     });
   }, []);
-
-  // ---------------------------------------------------------------------
+  // =============================================================================
+  // Step 1: lightweight silent reaction-count refresh
+  // -----------------------------------------------------------------------
+  // Polls a tiny, currently-unbuilt Worker endpoint. Until Step 2 ships it,
+  // every attempt below fails safely (network error or 404) and the feed
+  // simply keeps whatever counts it already has - it never breaks anything.
+  // =============================================================================
+  const reactionPollInFlightRef = useRef(false);
+  const reactionEndpointUnavailableRef = useRef(false);
+  const postsRef = useRef(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+  useEffect(() => {
+    let intervalId = null;
+    const pollReactionCounts = async () => {
+      if (document.hidden) return;
+      if (reactionPollInFlightRef.current) return;
+      if (reactionEndpointUnavailableRef.current) return;
+      const ids = postsRef.current.map((post) => String(post.id)).filter(Boolean);
+      if (!ids.length) return;
+      reactionPollInFlightRef.current = true;
+      try {
+        const response = await fetch(
+          `${API_URL}/api/home/reaction-counts?post_ids=${encodeURIComponent(
+            ids.slice(0, 60).join(","),
+          )}`,
+          { cache: "no-store" },
+        );
+        if (response.status === 404) {
+          // Endpoint not installed yet (pre Step 2) - stop polling quietly.
+          reactionEndpointUnavailableRef.current = true;
+          return;
+        }
+        if (!response.ok) return;
+        const data = await readJsonSafely(response);
+        if (!data || !data.success || !data.counts) return;
+        if (!isMountedRef.current) return;
+        setPosts((current) =>
+          current.map((post) => {
+            const counts = data.counts[String(post.id)];
+            if (!counts) return post;
+            return {
+              ...post,
+              real_reactions: counts.real_reactions,
+              manual_reactions: counts.manual_reactions,
+              displayed_reactions: counts.displayed_reactions,
+            };
+          }),
+        );
+      } catch {
+        // Network hiccup - just try again on the next tick.
+      } finally {
+        reactionPollInFlightRef.current = false;
+      }
+    };
+    intervalId = setInterval(
+      pollReactionCounts,
+      REACTION_COUNTS_POLL_INTERVAL_MS,
+    );
+    const handleVisible = () => {
+      if (!document.hidden) pollReactionCounts();
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [readJsonSafely]);
+  // =============================================================================
   // Editor modal
-  // ---------------------------------------------------------------------
-
+  // =============================================================================
   const pauseAllVideos = useCallback(() => {
     Object.entries(videoRefs.current).forEach(([postId, video]) => {
       if (video && !video.paused) {
         video.pause();
       }
     });
-    Object.keys(watchTimerRef.current).forEach((postId) => {
-      stopWatchTimer(postId, { flush: true });
-    });
-  }, [stopWatchTimer]);
-
+  }, []);
   const openEditor = useCallback(() => {
+    if (!isLoggedIn || !user) {
+      openAuthModal("login");
+      return;
+    }
     pauseAllVideos();
     setShowEditor(true);
-  }, [pauseAllVideos]);
-
+  }, [isLoggedIn, user, openAuthModal, pauseAllVideos]);
   const closeEditor = useCallback(() => {
     setShowEditor(false);
     setUploadProgress(0);
@@ -1130,18 +1429,16 @@ function Home() {
     revokeObjectUrl(mediaPreview);
     setMediaPreview("");
     setMediaPreviewType("");
+    setEditingServicePost(null);
   }, [logoPreview, mediaPreview, revokeObjectUrl]);
-
   const handleLogoChange = useCallback(
     async (file) => {
       revokeObjectUrl(logoPreview);
-
       if (!file) {
         setNewLogoFile(null);
         setLogoPreview("");
         return;
       }
-
       setCompressingMedia(true);
       try {
         const compressed = await compressImageFile(file, {
@@ -1152,36 +1449,62 @@ function Home() {
         setNewLogoFile(compressed);
         setLogoPreview(trackObjectUrl(URL.createObjectURL(compressed)));
       } catch (error) {
-        console.error("Profile photo processing failed:", error);
-        alert("This image could not be processed. Please try a different photo.");
+        devError("Profile photo processing failed:", error);
+        alert(
+          "This image could not be processed. Please try a different photo.",
+        );
       } finally {
         setCompressingMedia(false);
       }
     },
-    [logoPreview, revokeObjectUrl, trackObjectUrl]
+    [logoPreview, revokeObjectUrl, trackObjectUrl],
   );
-
+  const handleProfilePhotoChange = useCallback(
+    async (file) => {
+      revokeObjectUrl(profilePhotoPreview);
+      if (!file) {
+        setProfilePhotoFile(null);
+        setProfilePhotoPreview("");
+        return;
+      }
+      try {
+        const compressed = await compressImageFile(file, {
+          maxWidth: 400,
+          maxHeight: 400,
+          quality: 0.75,
+        });
+        setProfilePhotoFile(compressed);
+        setProfilePhotoPreview(trackObjectUrl(URL.createObjectURL(compressed)));
+      } catch (error) {
+        devError("Profile photo processing failed:", error);
+        alert(
+          "This image could not be processed. Please try a different photo.",
+        );
+      }
+    },
+    [profilePhotoPreview, revokeObjectUrl, trackObjectUrl],
+  );
+  const removeProfilePhoto = useCallback(() => {
+    revokeObjectUrl(profilePhotoPreview);
+    setProfilePhotoFile("remove");
+    setProfilePhotoPreview("");
+  }, [profilePhotoPreview, revokeObjectUrl]);
   const handleMediaFileChange = useCallback(
     async (file) => {
       revokeObjectUrl(mediaPreview);
-
       if (!file) {
         setNewMediaFile(null);
         setMediaPreview("");
         setMediaPreviewType("");
         return;
       }
-
       const isImage = file.type.startsWith("image/");
-
       if (!isImage) {
-        // Videos are never compressed in the browser (per requirement).
         setNewMediaFile(file);
         setMediaPreview(trackObjectUrl(URL.createObjectURL(file)));
         setMediaPreviewType("video");
         return;
       }
-
       setCompressingMedia(true);
       try {
         const compressed = await compressImageFile(file, {
@@ -1192,37 +1515,65 @@ function Home() {
         setMediaPreview(trackObjectUrl(URL.createObjectURL(compressed)));
         setMediaPreviewType("image");
       } catch (error) {
-        console.error("Image processing failed:", error);
-        alert("This image could not be processed. Please try a different photo.");
+        devError("Image processing failed:", error);
+        alert(
+          "This image could not be processed. Please try a different photo.",
+        );
       } finally {
         setCompressingMedia(false);
       }
     },
-    [mediaPreview, revokeObjectUrl, trackObjectUrl]
+    [mediaPreview, revokeObjectUrl, trackObjectUrl],
   );
-
   const applyChanges = useCallback(async () => {
-    const creatorName = newCreatorName.trim();
-    const identity = newCreatorIdentity.trim();
+    const providerName = newCreatorName.trim();
+    const contactInfo = newCreatorIdentity.trim();
+    const headline = postHeadline.trim();
+    const enteredValue = newTitle.trim();
+    const baseDescription = subtitle.trim();
+    const wantedExchange = exchangeNeed.trim();
     const mediaToSave = newMediaUrl.trim();
-
-    if (!creatorName) {
-      alert("Please enter a creator name.");
+    if (!providerName) {
+      alert("Please enter your service provider name.");
       return;
     }
-
-    if (!identity) {
-      alert("Please enter your WhatsApp number or website.");
+    if (!contactInfo) {
+      alert("Please enter your phone number or website.");
       return;
     }
-
+    if (!headline) {
+      alert(
+        postType === "offer"
+          ? "Please say what work you can do."
+          : postType === "need"
+            ? "Please say what help you need."
+            : postType === "exchange"
+              ? "Please say what service you can give."
+              : "Please add a short title for your moment.",
+      );
+      return;
+    }
+    if (!baseDescription) {
+      alert(
+        postType === "moment"
+          ? "Please write your saying, story, or thought."
+          : "Please add a short description.",
+      );
+      return;
+    }
+    if (postType === "offer" && !enteredValue) {
+      alert("Please enter your price.");
+      return;
+    }
+    if (postType === "exchange" && !wantedExchange) {
+      alert("Please say what service you need in return.");
+      return;
+    }
     if (!mediaToSave && !newMediaFile) {
-      alert("Please enter a media link or upload a photo or video.");
+      alert("Please upload a photo/video or enter a media link.");
       return;
     }
-
     let detectedMediaType = "";
-
     if (newMediaFile) {
       detectedMediaType = newMediaFile.type.startsWith("image/")
         ? "image"
@@ -1234,49 +1585,101 @@ function Home() {
     } else if (mediaToSave) {
       detectedMediaType = "embed";
     }
-
+    const detailLines = [baseDescription];
+    if (postType === "exchange") {
+      detailLines.push(`I can give: ${headline}`);
+      detailLines.push(`I need: ${wantedExchange}`);
+      detailLines.push(
+        allowCashBalance
+          ? "Cash can balance the difference."
+          : "Service-for-service only.",
+      );
+    }
+    if (serviceCategory && postType !== "moment") {
+      detailLines.push(`Category: ${serviceCategory}`);
+    }
+    if (postLocation && postType !== "moment") {
+      detailLines.push(`Location: ${postLocation}`);
+    }
+    if (postType === "offer") {
+      detailLines.push(`Available: ${availability}`);
+    }
+    if (postType === "need") {
+      detailLines.push(`Needed: ${availability}`);
+    }
+    const workDescription = detailLines.join("\n");
+    const cardValue =
+      postType === "offer"
+        ? `${enteredValue} / ${priceUnit}`
+        : postType === "need"
+          ? enteredValue
+            ? `Budget: ${enteredValue}`
+            : "Budget: Let us agree"
+          : postType === "exchange"
+            ? "Trade skills"
+            : momentKind === "song"
+              ? "Song saying"
+              : momentKind === "movie"
+                ? "Movie saying"
+                : momentKind === "recommend"
+                  ? "Recommendation"
+                  : "My story";
     try {
       setSaving(true);
       setUploadProgress(1);
-
       const formData = new FormData();
-
-      formData.append("creator_name", creatorName);
-      formData.append("creator_identity", identity);
-      formData.append("creator_type", detectCreatorType(identity));
-      formData.append("title", newTitle.trim());
-      formData.append("subtitle", subtitle.trim());
+      formData.append("creator_name", providerName);
+      formData.append("creator_identity", contactInfo);
+      formData.append("title", cardValue);
+      formData.append("subtitle", workDescription);
+      formData.append("post_type", postType);
+      formData.append("service_name", headline);
+      formData.append("service_category", serviceCategory.trim());
+      formData.append("location", postLocation.trim());
+      formData.append("availability", availability);
+      formData.append("price_unit", priceUnit);
+      formData.append(
+        "exchange_offer",
+        postType === "exchange" ? headline : "",
+      );
+      formData.append(
+        "exchange_need",
+        postType === "exchange" ? wantedExchange : "",
+      );
+      formData.append("allow_cash_balance", allowCashBalance ? "1" : "0");
+      formData.append("moment_kind", postType === "moment" ? momentKind : "");
       formData.append("media_type", detectedMediaType);
-      formData.append("is_new_post", "true");
-
-      if (mediaToSave) {
-        formData.append("video_url", mediaToSave);
+      formData.append("is_new_service", "true");
+      if (user && user.id) {
+        formData.append("provider_id", user.id);
       }
-
+      if (mediaToSave) {
+        formData.append("media_url", mediaToSave);
+      }
       if (newLogoFile) {
         formData.append("logo_file", newLogoFile);
       }
-
       if (newMediaFile) {
         formData.append("media_file", newMediaFile);
       }
-
+      const token = getSessionToken();
       const { status, statusText, responseText } = await new Promise(
         (resolve, reject) => {
           const request = new XMLHttpRequest();
-          request.open("POST", `${API_URL}/api/home/update`);
+          request.open("POST", `${API_URL}/api/time-market/services`);
           request.timeout = 180000;
-
+          request.setRequestHeader("Authorization", `Bearer ${token}`);
           request.upload.onprogress = (event) => {
             if (!event.lengthComputable || !isMountedRef.current) return;
-            const percentage = Math.min(95, Math.max(1, Math.round((event.loaded / event.total) * 95)));
+            const percentage = Math.min(
+              95,
+              Math.max(1, Math.round((event.loaded / event.total) * 95)),
+            );
             setUploadProgress(percentage);
           };
-
           request.upload.onload = () => {
             if (isMountedRef.current) setUploadProgress(96);
           };
-
           request.onload = () => {
             resolve({
               status: request.status,
@@ -1284,47 +1687,48 @@ function Home() {
               responseText: request.responseText,
             });
           };
-
-          request.onerror = () => reject(new Error("Network error while uploading the post."));
-          request.ontimeout = () => reject(new Error("The upload took too long. Please try again."));
-          request.onabort = () => reject(new Error("The upload was cancelled."));
+          request.onerror = () =>
+            reject(new Error("Network error while uploading the service."));
+          request.ontimeout = () =>
+            reject(new Error("The upload took too long. Please try again."));
+          request.onabort = () =>
+            reject(new Error("The upload was cancelled."));
           request.send(formData);
-        }
+        },
       );
-
       let data;
       try {
-        data = responseText ? JSON.parse(responseText) : { success: status >= 200 && status < 300 };
+        data = responseText
+          ? JSON.parse(responseText)
+          : { success: status >= 200 && status < 300 };
       } catch {
-        throw new Error(responseText || `Server returned ${status} ${statusText}`);
-      }
-
-      if (status < 200 || status >= 300 || !data.success) {
         throw new Error(
-          data.error ||
-            data.message ||
-            `Failed to create post (${status})`
+          responseText ||
+            `Server returned ${status} ${statusText}`,
         );
       }
-
+      if (status < 200 || status >= 300 || !data.success) {
+        throw new Error(
+          data.error || data.message || `Failed to create service (${status})`,
+        );
+      }
       if (isMountedRef.current) setUploadProgress(100);
-
-      if (data.post && isMountedRef.current) {
+      const createdPost = data.post || data.service;
+      if (createdPost && isMountedRef.current) {
         setPosts((current) => [
-          data.post,
+          createdPost,
           ...current.filter(
-            (item) => String(item.id) !== String(data.post.id)
+            (item) => String(item.id) !== String(createdPost.id),
           ),
         ]);
       } else {
         await fetchHomeData();
       }
-
       closeEditor();
-      alert(data.message || "Post created successfully!");
+      alert(data.message || "Your post was created successfully!");
     } catch (error) {
-      console.error("Failed to create home post:", error);
-      alert(error.message || "Failed to create post.");
+      devError("Failed to create service:", error);
+      alert(error.message || "Failed to create service.");
     } finally {
       if (isMountedRef.current) {
         setSaving(false);
@@ -1340,231 +1744,699 @@ function Home() {
     newMediaFile,
     newMediaUrl,
     newTitle,
-    readJsonSafely,
     subtitle,
+    postType,
+    postHeadline,
+    serviceCategory,
+    postLocation,
+    priceUnit,
+    availability,
+    exchangeNeed,
+    allowCashBalance,
+    momentKind,
+    getSessionToken,
+    user,
   ]);
-
-  // ---------------------------------------------------------------------
-  // Envelope click (inbox)
-  // ---------------------------------------------------------------------
-
-  const openCreatorInbox = useCallback(
-    async (post) => {
-      const postId = String(post.id ?? "");
-      let destination = buildContactUrl(
-        post.creator_type,
-        post.creator_identity
-      );
-
-      // Hide the red dot immediately and remember it on this device.
-      if (postId) {
-        markEnvelopeOpened(postId);
-      }
-
-      if (postId) {
-        try {
-          const response = await fetch(`${API_URL}/api/home/ngwino-click`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ post_id: postId }),
-          });
-
-          const data = await readJsonSafely(response);
-
-          if (data.success && data.destination) {
-            destination = data.destination;
-          }
-        } catch (error) {
-          console.warn("Could not record inbox click:", error);
-        }
-      }
-
-      if (!destination) {
-        alert("This creator did not add contact information.");
-        return;
-      }
-
-      window.open(destination, "_blank", "noopener,noreferrer");
-    },
-    [markEnvelopeOpened, readJsonSafely]
-  );
-
-  // ---------------------------------------------------------------------
-  // Comments (persisted in D1)
-  // ---------------------------------------------------------------------
-
-  const loadComments = useCallback(
-    async (postId) => {
-      setLoadingComments(true);
-      try {
-        const response = await fetch(
-          `${API_URL}/api/home/comments?post_id=${encodeURIComponent(postId)}`,
-          { cache: "no-store" }
-        );
-        const data = await readJsonSafely(response);
-
-        if (data.success && Array.isArray(data.comments)) {
-          debugLog("loadComments: received comments from API:", data.comments);
-          // Ensure every comment has the phone number field preserved
-          const commentsWithPhone = data.comments.map((comment) => {
-            debugLog("loadComments: processing comment:", comment);
-            return {
-              ...comment,
-              // If the API didn't return a phone field, try to preserve it from the comment object
-              commenter_whatsapp: comment.commenter_whatsapp || comment.commenter_phone || comment.phone || "",
-            };
-          });
-          setCommentsByPost((current) => ({
-            ...current,
-            [postId]: commentsWithPhone,
-          }));
-        }
-      } catch (error) {
-        console.warn("Failed to load comments:", error);
-      } finally {
-        setLoadingComments(false);
-      }
-    },
-    [readJsonSafely]
-  );
-
-  const openComments = useCallback(
+  // =============================================================================
+  // Edit an existing service (real PATCH to the Worker - not a placeholder)
+  // =============================================================================
+  const openServiceEdit = useCallback(
     (post) => {
-      pauseAllVideos();
-      const postId = String(post.id ?? "0");
-      setSelectedPost(post);
-      setCommentPhone(getSavedWhatsAppNumber());
-      setCommentText("");
-      setShowComments(true);
-      loadComments(postId);
+      setEditingServicePost(post);
+      setNewCreatorName(post.service_provider_name || post.creator_name || "");
+      setNewCreatorIdentity(post.creator_identity || "");
+      setNewTitle(post.service_charge_per_minute || post.title || "");
+      setSubtitle(post.work_description || post.subtitle || "");
+      setPostType(post.post_type || "offer");
+      setPostHeadline(post.service_name || post.service_title || "");
+      setServiceCategory(post.service_category || post.category || "");
+      setPostLocation(post.location || "");
+      setPriceUnit(post.price_unit || "job");
+      setAvailability(post.availability || "today");
+      setExchangeNeed(post.exchange_need || "");
+      setAllowCashBalance(post.allow_cash_balance !== 0);
+      setMomentKind(post.moment_kind || "story");
+      setNewLogoFile(null);
+      revokeObjectUrl(logoPreview);
+      setLogoPreview("");
+      setNewMediaFile(null);
+      revokeObjectUrl(mediaPreview);
+      if (post.media_type === "embed") {
+        setMediaPreview("");
+        setMediaPreviewType("");
+        setNewMediaUrl(post.media_url || "");
+      } else {
+        setMediaPreview(post.media_url || "");
+        setMediaPreviewType(post.media_type === "video" ? "video" : "image");
+        setNewMediaUrl("");
+      }
+      setShowMyServices(false);
+      setShowEditor(true);
     },
-    [pauseAllVideos, getSavedWhatsAppNumber, loadComments]
+    [logoPreview, mediaPreview, revokeObjectUrl],
   );
-
-  const closeComments = useCallback(() => {
-    setShowComments(false);
-    setSelectedPost(null);
-    setCommentPhone("");
-    setCommentText("");
-  }, []);
-
-  const submitComment = useCallback(async () => {
-    const normalizedPhone = normalizeWhatsAppNumber(commentPhone);
-    const text = commentText.trim();
-
-    if (!normalizedPhone) {
-      alert("Please enter a valid WhatsApp number (with country code).");
+  const saveServiceEdit = useCallback(async () => {
+    if (!editingServicePost) return;
+    const chargeText = newTitle.trim();
+    const workDescription = subtitle.trim();
+    if (!chargeText) {
+      alert("Please enter how much your time costs.");
       return;
     }
-
-    if (!text) {
-      alert("Please write your comment.");
+    if (!workDescription) {
+      alert("Please describe your service.");
       return;
     }
-
-    if (!selectedPost) return;
-
-    const postId = String(selectedPost.id ?? "0");
-    const countryFlag = getFlagFromWhatsapp(normalizedPhone);
-
+    setSaving(true);
+    setUploadProgress(1);
     try {
-      setSubmittingComment(true);
-
-      const response = await fetch(`${API_URL}/api/home/comment`, {
-        method: "POST",
+      let mediaUrl = editingServicePost.media_url || "";
+      let mediaType = editingServicePost.media_type || "";
+      if (newMediaFile) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", newMediaFile);
+        uploadForm.append(
+          "kind",
+          newMediaFile.type.startsWith("image/") ? "post_image" : "video",
+        );
+        const uploadResponse = await authFetch("/api/home/upload", {
+          method: "POST",
+          body: uploadForm,
+        });
+        const uploadData = await readJsonSafely(uploadResponse);
+        if (!uploadResponse.ok || !uploadData.success) {
+          throw new Error(
+            uploadData.error ||
+              uploadData.message ||
+              "Could not upload new media.",
+          );
+        }
+        mediaUrl = uploadData.url;
+        mediaType = newMediaFile.type.startsWith("image/") ? "image" : "video";
+        setUploadProgress(70);
+      } else if (
+        newMediaUrl.trim() &&
+        newMediaUrl.trim() !== editingServicePost.media_url
+      ) {
+        mediaUrl = newMediaUrl.trim();
+        mediaType = isImageUrl(mediaUrl)
+          ? "image"
+          : isDirectVideoUrl(mediaUrl)
+            ? "video"
+            : "embed";
+      }
+      const response = await authFetch("/api/time-market/services", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          post_id: postId,
-          phone: normalizedPhone,
-          comment: text,
-          country_flag: countryFlag,
+          post_id: editingServicePost.id,
+          service_charge_per_minute: chargeText,
+          work_description: workDescription,
+          media_url: mediaUrl,
+          media_type: mediaType,
         }),
       });
-
       const data = await readJsonSafely(response);
-
-      if (!data.success) {
-        alert(data.error || data.message || "Failed to post comment.");
-        return;
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not update this service.",
+        );
       }
-
-      saveWhatsAppNumber(normalizedPhone);
-
-      // Create optimistic comment with the flag computed on the frontend
-      const optimisticComment = {
-        id: Date.now(),
-        post_id: postId,
-        comment: text,
-        commenter_whatsapp: normalizedPhone,
-        commenter_phone: normalizedPhone,
-        phone: normalizedPhone,
-        created_at: new Date().toISOString(),
-      };
-
-      debugLog("submitComment: created optimistic comment:", optimisticComment);
-
-      setCommentsByPost((current) => ({
-        ...current,
-        [postId]: [
-          optimisticComment,
-          ...(current[postId] || []),
-        ],
-      }));
-
-      setPosts((currentPosts) =>
-        currentPosts.map((item) =>
-          String(item.id) === postId
-            ? { ...item, comment_count: data.comment_count ?? (Number(item.comment_count) || 0) + 1 }
-            : item
-        )
-      );
-
-      setCommentText("");
+      setUploadProgress(100);
+      const updated = data.service;
+      if (updated) {
+        setPosts((current) =>
+          current.map((item) =>
+            String(item.id) === String(updated.id) ? updated : item,
+          ),
+        );
+        setMyServices((current) =>
+          current.map((item) =>
+            String(item.id) === String(updated.id) ? updated : item,
+          ),
+        );
+      }
+      closeEditor();
     } catch (error) {
-      console.error("Failed to submit comment:", error);
-      alert("Failed to post comment. Please try again.");
+      devError("Failed to update service:", error);
+      alert(error.message || "Could not update this service.");
     } finally {
       if (isMountedRef.current) {
-        setSubmittingComment(false);
+        setSaving(false);
+        setUploadProgress(0);
       }
     }
-  }, [commentPhone, commentText, selectedPost, readJsonSafely, saveWhatsAppNumber]);
-
-  // ---------------------------------------------------------------------
-  // Reactions (likes) — require a validated WhatsApp number
-  // ---------------------------------------------------------------------
-
+  }, [
+    editingServicePost,
+    newTitle,
+    subtitle,
+    newMediaFile,
+    newMediaUrl,
+    authFetch,
+    readJsonSafely,
+    closeEditor,
+  ]);
+  // =============================================================================
+  // Step 1: one small Gwamo toast for "new message" notices
+  // =============================================================================
+  const showToast = useCallback((message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ id: `${Date.now()}`, message });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, TOAST_DURATION_MS);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+  // =============================================================================
+  // My Inbox - fetches every conversation the logged-in user belongs to.
+  // This is also the single source of truth for the real unread badge shown
+  // on each service card's envelope icon (never ngwino_clicks).
+  // =============================================================================
+  const conversationsInFlightRef = useRef(false);
+  const fetchMyConversations = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!isLoggedIn) return;
+      if (conversationsInFlightRef.current) return;
+      conversationsInFlightRef.current = true;
+      if (!silent) {
+        setMyConversationsLoading(true);
+        setMyConversationsError("");
+      }
+      try {
+        const response = await authFetch("/api/time-market/conversations");
+        const data = await readJsonSafely(response);
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || data.message || "Could not load your conversations.",
+          );
+        }
+        if (isMountedRef.current) {
+          const nextConversations = Array.isArray(data.conversations)
+            ? data.conversations
+            : [];
+          setMyConversations(nextConversations);
+          // Toast detection: only after the very first successful load (so
+          // the badge doesn't fire a toast for every pre-existing message
+          // the moment someone logs in), and only for conversations whose
+          // latest message we haven't already notified about.
+          const nextTotalUnread = nextConversations.reduce(
+            (total, conversation) =>
+              total + Number(conversation.unread_count || 0),
+            0,
+          );
+          if (
+            previousTotalUnreadRef.current !== null &&
+            nextTotalUnread > previousTotalUnreadRef.current
+          ) {
+            const candidate = [...nextConversations]
+              .filter((conversation) => Number(conversation.unread_count || 0) > 0)
+              .sort((a, b) => {
+                const aTime = Date.parse(
+                  a.last_message_at || a.updated_at || a.created_at || 0,
+                ) || 0;
+                const bTime = Date.parse(
+                  b.last_message_at || b.updated_at || b.created_at || 0,
+                ) || 0;
+                return bTime - aTime;
+              })[0];
+            if (candidate) {
+              const dedupeKey = `${candidate.id}:${
+                candidate.last_message_at || candidate.updated_at || ""
+              }`;
+              if (!notifiedMessageKeysRef.current.has(dedupeKey)) {
+                notifiedMessageKeysRef.current.add(dedupeKey);
+                const iAmProvider =
+                  String(candidate.provider_id) === String(user?.id);
+                const partnerName = iAmProvider
+                  ? candidate.customer_full_name || "Someone"
+                  : candidate.provider_full_name ||
+                    candidate.service_provider_name ||
+                    "Someone";
+                showToast(`New message from ${partnerName}`);
+              }
+            }
+          }
+          previousTotalUnreadRef.current = nextTotalUnread;
+        }
+      } catch (error) {
+        if (isMountedRef.current && !silent) {
+          setMyConversationsError(
+            error.message || "Could not load your conversations.",
+          );
+        }
+      } finally {
+        conversationsInFlightRef.current = false;
+        if (isMountedRef.current && !silent) setMyConversationsLoading(false);
+      }
+    },
+    [isLoggedIn, authFetch, readJsonSafely, user, showToast],
+  );
+  // Fetch conversations as soon as we know who's logged in, so the envelope
+  // badge on every card is correct without waiting for the inbox to be opened.
+  useEffect(() => {
+    if (isLoggedIn) {
+      previousTotalUnreadRef.current = null;
+      notifiedMessageKeysRef.current = new Set();
+      fetchMyConversations();
+    } else {
+      setMyConversations([]);
+      previousTotalUnreadRef.current = 0;
+    }
+  }, [isLoggedIn, fetchMyConversations]);
+  // Step 1: silent Inbox polling every ~5s while logged in, paused while the
+  // tab is hidden and refreshed immediately when it becomes visible again.
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    let intervalId = setInterval(() => {
+      if (document.hidden) return;
+      fetchMyConversations({ silent: true });
+    }, INBOX_POLL_INTERVAL_MS);
+    const handleVisible = () => {
+      if (!document.hidden) fetchMyConversations({ silent: true });
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [isLoggedIn, fetchMyConversations]);
+  // Real unread count per service post, derived from the same conversations
+  // list the inbox uses - this is what every envelope badge reads from.
+  const unreadCountsByPost = useMemo(() => {
+    const counts = {};
+    for (const conversation of myConversations) {
+      const postId = String(conversation.service_post_id || "");
+      if (!postId) continue;
+      const unread = Number(conversation.unread_count || 0);
+      counts[postId] = (counts[postId] || 0) + unread;
+    }
+    return counts;
+  }, [myConversations]);
+  const totalUnreadCount = useMemo(
+    () =>
+      myConversations.reduce(
+        (total, conversation) =>
+          total + Number(conversation.unread_count || 0),
+        0,
+      ),
+    [myConversations],
+  );
+  const openMyInbox = useCallback(
+    (filterPostId = null) => {
+      if (!isLoggedIn || !user) {
+        openAuthModal("login", { type: "inbox", filterPostId });
+        return;
+      }
+      setMyInboxFilterPostId(filterPostId);
+      setShowMyInbox(true);
+      fetchMyConversations();
+    },
+    [isLoggedIn, user, openAuthModal, fetchMyConversations],
+  );
+  // The envelope icon on the social rail is always the Inbox entry point,
+  // never a second "Contact me" button.
+  const openInboxFromRail = useCallback(() => {
+    openMyInbox(null);
+  }, [openMyInbox]);
+  // =============================================================================
+  // Chat / Messaging
+  // =============================================================================
+  const closeChat = useCallback(() => {
+    setShowChat(false);
+    setChatPartner(null);
+    // Messages were marked read while the chat was open - refresh the
+    // conversations list so every envelope badge updates immediately.
+    if (isLoggedIn) {
+      fetchMyConversations();
+    }
+  }, [isLoggedIn, fetchMyConversations]);
+  const startChatWithPost = useCallback(
+    (post) => {
+      setChatPartner({
+        servicePostId: String(post.id),
+        conversationId: post.conversation_id ? String(post.conversation_id) : "",
+        providerId: String(post.provider_id || "").trim(),
+        providerPhone: normalizeWhatsAppNumber(post.creator_identity || ""),
+        name: post.creator_name || post.service_provider_name || "Provider",
+        avatar: post.logo_url || "",
+        headline: post.service_charge_per_minute || post.title || "",
+        serviceName: post.service_name || post.service_title || "",
+        serviceMediaUrl: post.media_url || "",
+        verified: Boolean(post.verified),
+      });
+      setShowChat(true);
+      pauseAllVideos();
+    },
+    [pauseAllVideos],
+  );
+  // "Contact me" always means a direct chat with the provider on this card.
+  // A real owner cannot message themselves and uses the envelope Inbox instead.
+  const openInboxForPost = useCallback(
+    (post) => {
+      if (isLoggedIn && user && isSameProviderAsPost(post, user)) {
+        showToast("This is your post. Open the envelope Inbox to reply to customers.");
+        return;
+      }
+      // Open the chat immediately. A signed-out viewer can type first; the
+      // composer requests phone + PIN only when they press Send, preserving the
+      // draft behind the auth sheet.
+      const viewerId = String(user?.id || "").trim();
+      const ownerId = String(post.provider_id || "").trim();
+      const existingConversation = isLoggedIn
+        ? myConversations.find((conversation) => {
+            if (
+              String(conversation.service_post_id || "") !== String(post.id || "")
+            ) {
+              return false;
+            }
+            const buyerId = String(conversation.customer_provider_id || "").trim();
+            const sellerId = String(conversation.provider_id || "").trim();
+            return Boolean(
+              viewerId &&
+                buyerId === viewerId &&
+                (!ownerId || sellerId === ownerId),
+            );
+          })
+        : null;
+      startChatWithPost(
+        existingConversation
+          ? { ...post, conversation_id: existingConversation.id }
+          : post,
+      );
+    },
+    [isLoggedIn, user, myConversations, showToast, startChatWithPost],
+  );
+  const openConversationFromInbox = useCallback(
+    (conversation) => {
+      const iAmProvider = String(conversation.provider_id) === String(user?.id);
+      const partnerName = iAmProvider
+        ? conversation.customer_full_name || "Customer"
+        : conversation.provider_full_name ||
+          conversation.service_provider_name ||
+          "Provider";
+      const partnerAvatar = iAmProvider
+        ? conversation.customer_profile_image_url || ""
+        : conversation.provider_profile_image_url || "";
+      const partnerVerified = iAmProvider
+        ? conversation.customer_verification_status === "verified"
+        : conversation.provider_verification_status === "verified";
+      setChatPartner({
+        conversationId: String(conversation.id),
+        servicePostId: String(conversation.service_post_id || ""),
+        name: partnerName,
+        avatar: partnerAvatar,
+        headline: conversation.service_charge_per_minute || "",
+        serviceName: conversation.service_name || "",
+        serviceMediaUrl: conversation.service_media_url || "",
+        verified: Boolean(partnerVerified),
+      });
+      setShowMyInbox(false);
+      setShowChat(true);
+      pauseAllVideos();
+    },
+    [user, pauseAllVideos],
+  );
+  // =============================================================================
+  // Provider Profile (viewing someone else's public info)
+  // =============================================================================
+  const openProviderProfile = useCallback((post) => {
+    setProviderProfileTarget(post);
+    setShowProviderProfile(true);
+  }, []);
+  const closeProviderProfile = useCallback(() => {
+    setShowProviderProfile(false);
+    setProviderProfileTarget(null);
+  }, []);
+  // =============================================================================
+  // My Profile (account-level identity, separate from a single service post)
+  // =============================================================================
+  const openMyProfile = useCallback(
+    (contextPost = null) => {
+      if (!user) return;
+      setProfileFullName(user.full_name || "");
+      setProfileServiceName(user.service_provider_name || "");
+      setProfileServicesOffered(user.services_offered || "");
+      setProfileError("");
+      setProfilePhotoFile(null);
+      setProfilePhotoPreview("");
+      setProfileEditContextPost(contextPost);
+      setShowMyProfile(true);
+    },
+    [user],
+  );
+  const saveMyProfile = useCallback(async () => {
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      let profileImageUrl = user?.profile_image_url || "";
+      if (profilePhotoFile === "remove") {
+        profileImageUrl = "";
+      } else if (profilePhotoFile) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", profilePhotoFile);
+        uploadForm.append("kind", "profile_image");
+        const uploadResponse = await authFetch("/api/home/upload", {
+          method: "POST",
+          body: uploadForm,
+        });
+        const uploadData = await readJsonSafely(uploadResponse);
+        if (!uploadResponse.ok || !uploadData.success || !uploadData.url) {
+          throw new Error(
+            uploadData.error ||
+              uploadData.message ||
+              "Could not upload your profile photo.",
+          );
+        }
+        profileImageUrl = uploadData.url;
+      }
+      const response = await authFetch("/api/time-market/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: profileFullName.trim(),
+          service_provider_name: profileServiceName.trim(),
+          services_offered: profileServicesOffered.trim(),
+          profile_image_url: profileImageUrl,
+        }),
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not update your profile.",
+        );
+      }
+      setUser(data.provider);
+      setUserData(data.provider);
+      setPosts((current) =>
+        current.map((post) =>
+          String(post.provider_id) === String(data.provider.id)
+            ? {
+                ...post,
+                creator_name: data.provider.service_provider_name,
+                service_provider_name: data.provider.service_provider_name,
+                logo_url:
+                  data.provider.profile_image_url || profileImageUrl || "",
+              }
+            : post,
+        ),
+      );
+      setShowMyProfile(false);
+    } catch (error) {
+      setProfileError(error.message || "Could not update your profile.");
+    } finally {
+      if (isMountedRef.current) setProfileSaving(false);
+    }
+  }, [
+    authFetch,
+    readJsonSafely,
+    user,
+    profileFullName,
+    profileServiceName,
+    profileServicesOffered,
+    profilePhotoFile,
+    setUserData,
+  ]);
+  const deleteMyProviderAccount = useCallback(async () => {
+    try {
+      const response = await authFetch("/api/time-market/profile", {
+        method: "DELETE",
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Could not delete your provider profile.",
+        );
+      }
+      setShowMyProfile(false);
+      setSessionToken("");
+      setUserData(null);
+      setUser(null);
+      setIsLoggedIn(false);
+      setPosts((current) =>
+        current.filter((post) => String(post.provider_id) !== String(user?.id)),
+      );
+    } catch (error) {
+      setProfileError(
+        error.message || "Could not delete your provider profile.",
+      );
+    } finally {
+      setProfileDeleteConfirming(false);
+    }
+  }, [authFetch, readJsonSafely, setSessionToken, setUserData, user]);
+  const openEditListingFromProfile = useCallback(() => {
+    if (!profileEditContextPost) return;
+    setShowMyProfile(false);
+    openServiceEdit(profileEditContextPost);
+  }, [profileEditContextPost, openServiceEdit]);
+  // =============================================================================
+  // My Services (list, edit, delete the logged-in provider's own posts)
+  // =============================================================================
+  const fetchMyServices = useCallback(async () => {
+    setMyServicesLoading(true);
+    setMyServicesError("");
+    try {
+      const response = await authFetch("/api/time-market/services");
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not load your services.",
+        );
+      }
+      if (isMountedRef.current) {
+        setMyServices(Array.isArray(data.services) ? data.services : []);
+      }
+    } catch (error) {
+      if (isMountedRef.current) {
+        setMyServicesError(error.message || "Could not load your services.");
+      }
+    } finally {
+      if (isMountedRef.current) setMyServicesLoading(false);
+    }
+  }, [authFetch, readJsonSafely]);
+  const openMyServices = useCallback(() => {
+    if (!isLoggedIn || !user) {
+      openAuthModal("login");
+      return;
+    }
+    setShowMyServices(true);
+    fetchMyServices();
+  }, [isLoggedIn, user, openAuthModal, fetchMyServices]);
+  const deleteMyService = useCallback(
+    async (postId) => {
+      if (!window.confirm("Delete this service? This cannot be undone."))
+        return;
+      try {
+        const response = await authFetch("/api/time-market/services", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ post_id: postId }),
+        });
+        const data = await readJsonSafely(response);
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || data.message || "Could not delete this service.",
+          );
+        }
+        setMyServices((current) =>
+          current.filter((item) => String(item.id) !== String(postId)),
+        );
+        setPosts((current) =>
+          current.filter((item) => String(item.id) !== String(postId)),
+        );
+      } catch (error) {
+        alert(error.message || "Could not delete this service.");
+      }
+    },
+    [authFetch, readJsonSafely],
+  );
+  // =============================================================================
+  // Reactions (Stars)
+  // =============================================================================
+  const getReactedStorageKey = useCallback(
+    (providerId) => `time-market-reacted:${providerId || "anon"}`,
+    [],
+  );
+  const loadReactedFromStorage = useCallback(
+    (providerId) => {
+      try {
+        const raw = localStorage.getItem(getReactedStorageKey(providerId));
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    },
+    [getReactedStorageKey],
+  );
+  const persistReacted = useCallback(
+    (providerId, postId) => {
+      try {
+        const key = getReactedStorageKey(providerId);
+        const current = loadReactedFromStorage(providerId);
+        current[postId] = true;
+        localStorage.setItem(key, JSON.stringify(current));
+      } catch {
+        // ignore
+      }
+    },
+    [getReactedStorageKey, loadReactedFromStorage],
+  );
   const sendReaction = useCallback(
-    async (post, normalizedPhone) => {
+    async (post) => {
       const postId = String(post?.id ?? "");
-      if (!postId) return;
-
+      if (!postId || !user?.phone) return;
       setReactingPostId(postId);
-
       try {
         const response = await fetch(`${API_URL}/api/home/react`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ post_id: postId, phone: normalizedPhone }),
+          body: JSON.stringify({ post_id: postId, phone: user.phone }),
         });
-
         const data = await readJsonSafely(response);
-
+        // Whether this is a brand-new star or an already-reacted repeat tap,
+        // the Worker still returns the current counts - always sync them so
+        // the number under the star reflects reality (including admin's
+        // manual baseline), never just a locally-guessed +1.
         if (data.already_reacted) {
           setReactedPosts((current) => ({ ...current, [postId]: true }));
+          persistReacted(user.id, postId);
+          if (
+            data.real_reactions !== undefined ||
+            data.displayed_reactions !== undefined
+          ) {
+            setPosts((currentPosts) =>
+              currentPosts.map((item) =>
+                String(item.id) === postId
+                  ? {
+                      ...item,
+                      real_reactions:
+                        data.real_reactions ?? item.real_reactions,
+                      manual_reactions:
+                        data.manual_reactions ?? item.manual_reactions,
+                      displayed_reactions:
+                        data.displayed_reactions ?? item.displayed_reactions,
+                    }
+                  : item,
+              ),
+            );
+          }
           return;
         }
-
         if (!data.success) {
-          alert(data.error || data.message || "Failed to like this post.");
+          alert(
+            data.error || data.message || "Failed to react to this service.",
+          );
           return;
         }
-
-        saveWhatsAppNumber(normalizedPhone);
         setReactedPosts((current) => ({ ...current, [postId]: true }));
-
+        persistReacted(user.id, postId);
         setPosts((currentPosts) =>
           currentPosts.map((item) =>
             String(item.id) === postId
@@ -1574,220 +2446,351 @@ function Home() {
                   manual_reactions: data.manual_reactions,
                   displayed_reactions: data.displayed_reactions,
                 }
-              : item
-          )
+              : item,
+          ),
         );
       } catch (error) {
-        console.error("Failed to react to post:", error);
-        alert("Failed to like this post. Please try again.");
+        devError("Failed to react:", error);
+        alert("Failed to react to this service. Please try again.");
       } finally {
         if (isMountedRef.current) {
           setReactingPostId(null);
         }
       }
     },
-    [readJsonSafely, saveWhatsAppNumber]
+    [readJsonSafely, user, persistReacted],
   );
-
   const reactToPost = useCallback(
     (post) => {
-      const postId = String(post?.id ?? "");
-      if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
-
-      const savedNumber = getSavedWhatsAppNumber();
-
-      if (savedNumber && normalizeWhatsAppNumber(savedNumber)) {
-        sendReaction(post, normalizeWhatsAppNumber(savedNumber));
+      if (!isLoggedIn || !user) {
+        openAuthModal("login", { type: "react", post });
         return;
       }
-
-      // First like on this device — ask for a WhatsApp number via a real
-      // modal (never window.prompt()).
-      pauseAllVideos();
-      setPhoneModalTargetPost(post);
-      setPhoneModalValue("");
-      setPhoneModalError("");
-      setShowPhoneModal(true);
+      const postId = String(post?.id ?? "");
+      if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
+      sendReaction(post);
     },
-    [reactedPosts, reactingPostId, getSavedWhatsAppNumber, sendReaction, pauseAllVideos]
+    [
+      isLoggedIn,
+      user,
+      openAuthModal,
+      reactedPosts,
+      reactingPostId,
+      sendReaction,
+    ],
   );
-
-  const closePhoneModal = useCallback(() => {
-    setShowPhoneModal(false);
-    setPhoneModalTargetPost(null);
-    setPhoneModalValue("");
-    setPhoneModalError("");
+  // =============================================================================
+  // Public comments
+  // -----------------------------------------------------------------------
+  // Separate from private messages. Assumes a Worker route mirroring the
+  // existing reaction endpoint's shape: GET /api/home/comments?post_id=... and
+  // POST /api/home/comments (post_id, text, country_flag). Verify/adjust this
+  // path against the real worker.js - it was not part of the routes supplied
+  // for this task, so it is the one endpoint here that is an assumption
+  // rather than a confirmed existing contract.
+  // =============================================================================
+  const fetchComments = useCallback(
+    async (postId) => {
+      if (!postId) return;
+      setCommentsLoading(true);
+      setCommentsError("");
+      try {
+        const response = await fetch(
+          `${API_URL}/api/home/comments?post_id=${encodeURIComponent(postId)}`,
+          { cache: "no-store" },
+        );
+        const data = await readJsonSafely(response);
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || data.message || "Could not load comments.",
+          );
+        }
+        if (isMountedRef.current) {
+          setCommentsByPost((current) => ({
+            ...current,
+            [postId]: Array.isArray(data.comments) ? data.comments : [],
+          }));
+        }
+      } catch (error) {
+        if (isMountedRef.current) {
+          setCommentsError(error.message || "Could not load comments.");
+        }
+      } finally {
+        if (isMountedRef.current) setCommentsLoading(false);
+      }
+    },
+    [readJsonSafely],
+  );
+  const openComments = useCallback(
+    (post) => {
+      const postId = String(post?.id ?? "");
+      if (!postId) return;
+      setShowCommentsForPostId(postId);
+      setNewCommentText("");
+      setCommentsError("");
+      pauseAllVideos();
+      if (!commentsByPost[postId]) fetchComments(postId);
+    },
+    [commentsByPost, fetchComments, pauseAllVideos],
+  );
+  const closeComments = useCallback(() => {
+    setShowCommentsForPostId(null);
+    setNewCommentText("");
+    setCommentsError("");
   }, []);
-
-  const confirmPhoneModal = useCallback(() => {
-    const normalized = normalizeWhatsAppNumber(phoneModalValue);
-
-    if (!normalized) {
-      setPhoneModalError("Please enter a valid phone number, including the country code.");
+  const submitComment = useCallback(async () => {
+    const text = newCommentText.trim();
+    const postId = showCommentsForPostId;
+    if (!text || !postId) return;
+    if (!isLoggedIn || !user) {
+      openAuthModal("login", { type: "comment", postId, text });
       return;
     }
-
-    if (phoneModalTargetPost) {
-      sendReaction(phoneModalTargetPost, normalized);
+    setCommentSubmitting(true);
+    setCommentsError("");
+    try {
+      // Country flags are calculated locally from a valid ISO country code -
+      // this works for every country, not just a couple of hardcoded ones.
+      let countryCode = "";
+      try {
+        const locale =
+          (navigator.languages && navigator.languages[0]) ||
+          navigator.language ||
+          "";
+        countryCode = locale.split(/[-_]/)[1] || "";
+      } catch {
+        countryCode = "";
+      }
+      const countryFlag = countryCodeToFlagEmoji(countryCode);
+      const response = await authFetch("/api/home/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: postId,
+          text,
+          country_flag: countryFlag,
+        }),
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not post your comment.",
+        );
+      }
+      const created = data.comment;
+      if (isMountedRef.current) {
+        if (created) {
+          setCommentsByPost((current) => ({
+            ...current,
+            [postId]: [...(current[postId] || []), created],
+          }));
+        } else {
+          fetchComments(postId);
+        }
+        setNewCommentText("");
+      }
+    } catch (error) {
+      if (isMountedRef.current) {
+        setCommentsError(error.message || "Could not post your comment.");
+      }
+    } finally {
+      if (isMountedRef.current) setCommentSubmitting(false);
     }
-
-    setShowPhoneModal(false);
-    setPhoneModalTargetPost(null);
-    setPhoneModalValue("");
-    setPhoneModalError("");
-  }, [phoneModalValue, phoneModalTargetPost, sendReaction]);
-
-  // ---------------------------------------------------------------------
-  // Share
-  // ---------------------------------------------------------------------
-
+  }, [
+    newCommentText,
+    showCommentsForPostId,
+    isLoggedIn,
+    user,
+    openAuthModal,
+    authFetch,
+    readJsonSafely,
+    fetchComments,
+  ]);
+  useEffect(() => {
+    if (!pendingAuthResolution || !isLoggedIn || !user) return;
+    const { action, provider } = pendingAuthResolution;
+    setPendingAuthResolution(null);
+    if (action.type === "offer") {
+      openServiceForm(provider || user, action.postType || "offer");
+      return;
+    }
+    if (action.type === "message" && action.post) {
+      openInboxForPost(action.post);
+      return;
+    }
+    if (action.type === "inbox") {
+      openMyInbox(action.filterPostId || null);
+      return;
+    }
+    if (action.type === "comment" && action.postId) {
+      setShowCommentsForPostId(action.postId);
+      setNewCommentText(action.text || "");
+      if (!commentsByPost[action.postId]) fetchComments(action.postId);
+      return;
+    }
+    if (action.type === "react" && action.post) {
+      sendReaction(action.post);
+    }
+  }, [
+    pendingAuthResolution,
+    isLoggedIn,
+    user,
+    openServiceForm,
+    openInboxForPost,
+    openMyInbox,
+    sendReaction,
+    commentsByPost,
+    fetchComments,
+  ]);
+  // The Worker's UNIQUE(post_id, phone) constraint is the real source of
+  // truth for "already reacted" - this just keeps the star's visual state
+  // in sync with it across reloads on the same device/browser.
+  useEffect(() => {
+    if (!user?.id || !posts.length) return;
+    const stored = loadReactedFromStorage(user.id);
+    const relevant = posts.reduce((acc, post) => {
+      const postId = String(post.id);
+      if (stored[postId]) acc[postId] = true;
+      return acc;
+    }, {});
+    if (Object.keys(relevant).length) {
+      setReactedPosts((current) => ({ ...relevant, ...current }));
+    }
+  }, [user, posts, loadReactedFromStorage]);
+  // =============================================================================
+  // WhatsApp Share
+  // =============================================================================
   const sharePost = useCallback((post) => {
-    const title = String(post?.title || "Gwamo post").trim();
+    const title = String(post?.title || "Time Market service").trim();
     const message = String(post?.subtitle || "").trim();
     const shareText = [title, message, window.location.href]
       .filter(Boolean)
       .join("\n\n");
-
-    // WhatsApp does not allow websites to publish directly to Status.
-    // This opens WhatsApp's share screen, where the viewer can choose
-    // "My status" or a contact without exposing private post data.
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   }, []);
-
-  const memoizedPosts = useMemo(() => posts, [posts]);
-
-  const selectedPostId = selectedPost ? String(selectedPost.id ?? "0") : null;
-
-  // ---------------------------------------------------------------------
+  // =============================================================================
   // Rendering
-  // ---------------------------------------------------------------------
-
+  // =============================================================================
+  const memoizedPosts = useMemo(() => {
+    return posts.filter((post) => {
+      const type = getPostType(post);
+      if (activeCategory === "social-life") return type === "need";
+      if (activeCategory === "tv") return type === "moment";
+      return type === "offer" || type === "exchange";
+    });
+  }, [posts, activeCategory]);
+  const emptySectionAction =
+    activeCategory === "social-life"
+      ? { label: "Ask for help", postType: "need" }
+      : activeCategory === "tv"
+        ? { label: "Share your moment", postType: "moment" }
+        : { label: "Offer work or trade skills", postType: "offer" };
+  let mainContent;
   if (loading) {
-    return (
-      <div className="home-page">
-        <GwamoTopBar openEditor={openEditor} />
-        <div className="loading-state">Loading...</div>
-        <HomeStyles />
+    mainContent = <FeedSkeleton />;
+  } else if (!memoizedPosts.length) {
+    mainContent = (
+      <div className="empty-state">
+        <p>
+          {activeCategory === "social-life"
+            ? "No one is asking for help yet."
+            : activeCategory === "tv"
+              ? "No stories or shared moments are available yet."
+              : "No work offers or skill trades are available yet."}
+        </p>
+        <button
+          type="button"
+          onClick={() => handleOfferTime(emptySectionAction.postType)}
+          className="empty-button"
+        >
+          {`\uFF0B ${emptySectionAction.label}`}
+        </button>
       </div>
     );
-  }
-
-  if (!memoizedPosts.length) {
-    return (
-      <div className="home-page">
-        <GwamoTopBar openEditor={openEditor} />
-
-        <div className="empty-state">
-          <p>No posts yet. Create your first post!</p>
-
-          <button type="button" onClick={openEditor} className="empty-button">
-            ＋ Tell Your Story
-          </button>
-        </div>
-
-        {showEditor && (
-          <EditorModal
-            newCreatorName={newCreatorName}
-            setNewCreatorName={setNewCreatorName}
-            newCreatorIdentity={newCreatorIdentity}
-            setNewCreatorIdentity={setNewCreatorIdentity}
-            newTitle={newTitle}
-            setNewTitle={setNewTitle}
-            newMediaUrl={newMediaUrl}
-            setNewMediaUrl={setNewMediaUrl}
-            subtitle={subtitle}
-            setSubtitle={setSubtitle}
-            handleLogoChange={handleLogoChange}
-            logoPreview={logoPreview}
-            handleMediaFileChange={handleMediaFileChange}
-            mediaPreview={mediaPreview}
-            mediaPreviewType={mediaPreviewType}
-            applyChanges={applyChanges}
-            closeEditor={closeEditor}
-            saving={saving}
-            uploadProgress={uploadProgress}
-            compressingMedia={compressingMedia}
-          />
+  } else {
+    mainContent = (
+      <>
+        <main className="home-feed">
+          {memoizedPosts.map((post, index) => {
+            const postId = String(post.id ?? index);
+            const isOwner =
+              isLoggedIn &&
+              user &&
+              String(post.provider_id ?? "") === String(user.id);
+            return (
+              <ServicePost
+                key={postId}
+                post={post}
+                index={index}
+                postId={postId}
+                isActive={activePostIndex === index}
+                reacted={Boolean(reactedPosts[postId])}
+                reacting={reactingPostId === postId}
+                unreadCount={unreadCountsByPost[postId] || 0}
+                mediaAspectRatio={mediaAspectRatios[postId]}
+                onMediaAspectRatio={handleMediaAspectRatio}
+                isOwner={isOwner}
+                postRefCallback={getPostRefCallback(index)}
+                videoRefCallback={getVideoRefCallback(index)}
+                onVideoPlay={noop}
+                onVideoPause={noop}
+                onViewProfile={openProviderProfile}
+                onSellTime={handleOfferTime}
+                onContactProvider={openInboxForPost}
+                onOpenInbox={openInboxFromRail}
+                onReact={reactToPost}
+                onOpenComments={openComments}
+                onZoomImage={setZoomImage}
+              />
+            );
+          })}
+        </main>
+        {hasMore && (
+          <div className="load-more-wrap">
+            <button
+              type="button"
+              className="load-more-button"
+              onClick={loadMorePosts}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Load more services"}
+            </button>
+          </div>
         )}
-
-        <HomeStyles />
-      </div>
+      </>
     );
   }
-
   return (
     <div className="home-page">
-      <GwamoTopBar openEditor={openEditor} />
-
-      <main className="home-feed">
-        {memoizedPosts.map((post, index) => {
-          const postId = String(post.id ?? index);
-
-          return (
-            <HomePost
-              key={postId}
-              post={post}
-              index={index}
-              postId={postId}
-              isActive={activePostIndex === index}
-              localCommentCount={(commentsByPost[postId] || []).length}
-              reacted={Boolean(reactedPosts[postId])}
-              reacting={reactingPostId === postId}
-              envelopeOpened={isEnvelopeOpened(postId)}
-              mediaAspectRatio={mediaAspectRatios[postId]}
-              onMediaAspectRatio={handleMediaAspectRatio}
-              showCommentsOverlay={showComments && selectedPostId === postId}
-              commentsForOverlay={commentsByPost[postId] || []}
-              loadingComments={loadingComments}
-              commentPhone={commentPhone}
-              setCommentPhone={setCommentPhone}
-              commentText={commentText}
-              setCommentText={setCommentText}
-              submitComment={submitComment}
-              submittingComment={submittingComment}
-              closeComments={closeComments}
-              postRefCallback={(ref) => {
-                if (ref) {
-                  postRefs.current[index] = ref;
-                } else {
-                  delete postRefs.current[index];
-                }
-              }}
-              videoRefCallback={(ref) => {
-                if (ref) {
-                  videoRefs.current[index] = ref;
-                } else {
-                  delete videoRefs.current[index];
-                }
-              }}
-              onVideoPlay={handleVideoPlay}
-              onVideoPause={handleVideoPause}
-              onOpenInbox={openCreatorInbox}
-              onOpenComments={openComments}
-              onShare={sharePost}
-              onReact={reactToPost}
-              onZoomImage={setZoomImage}
-            />
-          );
-        })}
-      </main>
-
-      {hasMore && (
-        <div className="load-more-wrap">
-          <button
-            type="button"
-            className="load-more-button"
-            onClick={loadMorePosts}
-            disabled={loadingMore}
-          >
-            {loadingMore ? "Loading..." : "Load more"}
-          </button>
+      <TimeMarketTopBar
+        activeCategory={activeCategory}
+        onCategoryChange={(category) => {
+          setActivePostIndex(0);
+          setActiveCategory(category);
+        }}
+        isLoggedIn={isLoggedIn}
+        user={user}
+        onLogout={handleLogout}
+        onAuth={openAuthModal}
+        onOpenMyProfile={() =>
+          isLoggedIn ? openMyProfile() : openAuthModal("login")
+        }
+        onOpenMyServices={openMyServices}
+        onOpenMyTime={() => setShowMyTime(true)}
+        onOpenMyInbox={() => openMyInbox(null)}
+        unreadCount={totalUnreadCount}
+        onAddService={() => handleOfferTime(emptySectionAction.postType)}
+        onOpenInfo={(topic) => setShowInfoModal(topic)}
+      />
+      {mainContent}
+      {toast && (
+        <div className="gwamo-toast" role="status" aria-live="polite">
+          {toast.message}
         </div>
       )}
-
       {showEditor && (
-        <EditorModal
+        <ServiceEditorModal
           newCreatorName={newCreatorName}
           setNewCreatorName={setNewCreatorName}
           newCreatorIdentity={newCreatorIdentity}
@@ -1798,143 +2801,494 @@ function Home() {
           setNewMediaUrl={setNewMediaUrl}
           subtitle={subtitle}
           setSubtitle={setSubtitle}
+          postType={postType}
+          setPostType={setPostType}
+          postHeadline={postHeadline}
+          setPostHeadline={setPostHeadline}
+          serviceCategory={serviceCategory}
+          setServiceCategory={setServiceCategory}
+          postLocation={postLocation}
+          setPostLocation={setPostLocation}
+          priceUnit={priceUnit}
+          setPriceUnit={setPriceUnit}
+          availability={availability}
+          setAvailability={setAvailability}
+          exchangeNeed={exchangeNeed}
+          setExchangeNeed={setExchangeNeed}
+          allowCashBalance={allowCashBalance}
+          setAllowCashBalance={setAllowCashBalance}
+          momentKind={momentKind}
+          setMomentKind={setMomentKind}
           handleLogoChange={handleLogoChange}
           logoPreview={logoPreview}
           handleMediaFileChange={handleMediaFileChange}
           mediaPreview={mediaPreview}
           mediaPreviewType={mediaPreviewType}
-          applyChanges={applyChanges}
+          applyChanges={editingServicePost ? saveServiceEdit : applyChanges}
           closeEditor={closeEditor}
           saving={saving}
           uploadProgress={uploadProgress}
           compressingMedia={compressingMedia}
+          isEdit={Boolean(editingServicePost)}
         />
       )}
-
-      {showPhoneModal && (
-        <PhoneNumberModal
-          value={phoneModalValue}
-          setValue={setPhoneModalValue}
-          error={phoneModalError}
-          onConfirm={confirmPhoneModal}
-          onClose={closePhoneModal}
+      {showAuthModal && (
+        <AuthModal
+          isOpen={showAuthModal}
+          mode={authMode}
+          phone={authPhone}
+          setPhone={setAuthPhone}
+          fullName={authFullName}
+          setFullName={setAuthFullName}
+          pin={authPin}
+          setPin={setAuthPin}
+          confirmPin={authConfirmPin}
+          setConfirmPin={setAuthConfirmPin}
+          error={authError}
+          successMessage={authSuccessMessage}
+          loading={authLoading}
+          onRegister={handleRegister}
+          onLogin={handleLogin}
+          onClose={closeAuthModal}
+          onForgotPin={openPinReset}
+          onSwitchMode={() => {
+            setAuthMode(authMode === "login" ? "register" : "login");
+            setAuthError("");
+            setAuthSuccessMessage("");
+            setAuthPin("");
+            setAuthConfirmPin("");
+          }}
         />
       )}
-
+      {showPinResetModal && (
+        <PinResetModal
+          step={pinResetStep}
+          phone={pinResetPhone}
+          setPhone={setPinResetPhone}
+          request={pinResetRequest}
+          newPin={pinResetNewPin}
+          setNewPin={setPinResetNewPin}
+          confirmPin={pinResetConfirmPin}
+          setConfirmPin={setPinResetConfirmPin}
+          error={pinResetError}
+          loading={pinResetLoading}
+          onRequest={requestPinReset}
+          onCheckStatus={checkPinResetStatus}
+          onComplete={completePinReset}
+          onRestart={() => {
+            setPinResetStep("request");
+            setPinResetRequest(null);
+            setPinResetError("");
+            setPinResetNewPin("");
+            setPinResetConfirmPin("");
+          }}
+          onClose={closePinReset}
+        />
+      )}
+      {pendingPhoneReview && (
+        <PendingPhoneReviewModal
+          review={pendingPhoneReview}
+          onClose={() => setPendingPhoneReview(null)}
+        />
+      )}
       {zoomImage && (
-        <div
-          className="zoom-overlay"
-          onClick={() => setZoomImage("")}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Profile picture preview"
-        >
-          <button
-            type="button"
-            className="zoom-close-button"
-            onClick={() => setZoomImage("")}
-            aria-label="Close profile picture"
-          >
-            <X size={26} strokeWidth={2.4} aria-hidden="true" />
-          </button>
-
-          <div
-            className="zoom-image-shell"
-            onClick={(event) => event.stopPropagation()}
-            role="presentation"
-          >
-            <img
-              src={zoomImage}
-              alt="Profile"
-              className="zoom-image"
-              decoding="async"
-            />
-          </div>
-        </div>
+        <ZoomableImageViewer
+          src={zoomImage}
+          alt="Profile"
+          onClose={() => setZoomImage("")}
+        />
       )}
-
+      {showChat && chatPartner && (
+        <ChatModal
+          partner={chatPartner}
+          currentUser={user}
+          getSessionToken={getSessionToken}
+          apiUrl={API_URL}
+          onClose={closeChat}
+          onZoomImage={setZoomImage}
+          onRequireAuth={() => openAuthModal("login")}
+        />
+      )}
+      {showProviderProfile && providerProfileTarget && (
+        <ProviderProfileSheet
+          post={providerProfileTarget}
+          isOwner={Boolean(
+            isLoggedIn &&
+              user &&
+              isSameProviderAsPost(providerProfileTarget, user),
+          )}
+          onClose={closeProviderProfile}
+          onMessage={() => {
+            const target = providerProfileTarget;
+            closeProviderProfile();
+            openInboxForPost(target);
+          }}
+          onShare={() => sharePost(providerProfileTarget)}
+        />
+      )}
+      {showMyProfile && (
+        <ProfileEditModal
+          user={user}
+          fullName={profileFullName}
+          setFullName={setProfileFullName}
+          serviceName={profileServiceName}
+          setServiceName={setProfileServiceName}
+          servicesOffered={profileServicesOffered}
+          setServicesOffered={setProfileServicesOffered}
+          photoPreview={profilePhotoPreview}
+          onPhotoChange={handleProfilePhotoChange}
+          onRemovePhoto={removeProfilePhoto}
+          photoRemoved={profilePhotoFile === "remove"}
+          contextPost={profileEditContextPost}
+          onEditListing={openEditListingFromProfile}
+          onOpenServices={() => {
+            setShowMyProfile(false);
+            openMyServices();
+          }}
+          onLogout={() => {
+            setShowMyProfile(false);
+            handleLogout();
+          }}
+          deleteConfirming={profileDeleteConfirming}
+          setDeleteConfirming={setProfileDeleteConfirming}
+          onDeleteAccount={deleteMyProviderAccount}
+          saving={profileSaving}
+          error={profileError}
+          onSave={saveMyProfile}
+          onClose={() => {
+            setShowMyProfile(false);
+            revokeObjectUrl(profilePhotoPreview);
+            setProfilePhotoFile(null);
+            setProfilePhotoPreview("");
+            setProfileDeleteConfirming(false);
+          }}
+        />
+      )}
+      {showMyServices && (
+        <MyServicesSheet
+          services={myServices}
+          loading={myServicesLoading}
+          error={myServicesError}
+          onEdit={openServiceEdit}
+          onDelete={deleteMyService}
+          onClose={() => setShowMyServices(false)}
+          onCreateNew={() => {
+            setShowMyServices(false);
+            handleOfferTime();
+          }}
+        />
+      )}
+      {showMyTime && <MyTimeSheet onClose={() => setShowMyTime(false)} />}
+      {showMyInbox && (
+        <MyInboxSheet
+          conversations={myConversations}
+          loading={myConversationsLoading}
+          error={myConversationsError}
+          currentUserId={user?.id}
+          filterServicePostId={myInboxFilterPostId}
+          onOpenConversation={openConversationFromInbox}
+          onClose={() => {
+            setShowMyInbox(false);
+            setMyInboxFilterPostId(null);
+          }}
+        />
+      )}
+      {showCommentsForPostId && (
+        <CommentsSheet
+          comments={commentsByPost[showCommentsForPostId] || []}
+          loading={commentsLoading}
+          error={commentsError}
+          commentText={newCommentText}
+          setCommentText={setNewCommentText}
+          submitting={commentSubmitting}
+          onSubmit={submitComment}
+          onClose={closeComments}
+        />
+      )}
+      {showInfoModal && (
+        <InfoModal
+          topic={showInfoModal}
+          onClose={() => setShowInfoModal(null)}
+        />
+      )}
       <HomeStyles />
     </div>
   );
 }
-
-// ===========================================================================
-// Memoized single-post component. Extracting this stops every post from
-// re-rendering whenever one like, comment, or envelope-dot state changes.
-// ===========================================================================
-
-const HomePost = memo(function HomePost({
+// =============================================================================
+// FeedSkeleton - shown only during the very first load (Step 1)
+// =============================================================================
+const FeedSkeleton = memo(function FeedSkeleton() {
+  return (
+    <main className="home-feed" aria-hidden="true">
+      {[0, 1].map((key) => (
+        <div className="service-reel-card skeleton-card" key={key}>
+          <div className="skeleton-shimmer" />
+        </div>
+      ))}
+    </main>
+  );
+});
+FeedSkeleton.displayName = "FeedSkeleton";
+// =============================================================================
+// TimeMarketTopBar
+// =============================================================================
+const TimeMarketTopBar = memo(
+  ({
+    activeCategory,
+    onCategoryChange,
+    onOpenMyProfile,
+    onOpenMyInbox,
+    unreadCount,
+    onAddService,
+    onOpenInfo,
+  }) => {
+    const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
+    const closeMenus = () => {
+      setShowHamburgerMenu(false);
+    };
+    const openCategory = (tab) => {
+      closeMenus();
+      if (tab.href) {
+        window.location.assign(tab.href);
+        return;
+      }
+      onCategoryChange(tab.key);
+    };
+    return (
+      <header className="feedx-topbar">
+        <div className="feedx-topbar-inner">
+          <div className="gwamo-brand">
+            <h1 className="feedx-logo">GWAMO</h1>
+            <span className="gwamo-tagline">Your Time Has Value</span>
+          </div>
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="topbar-neon-button"
+              onClick={onOpenMyProfile}
+              aria-label="Open your account and profile"
+            >
+              <User size={25} strokeWidth={2.1} aria-hidden="true" />
+              <span className="topbar-action-text">Profile</span>
+            </button>
+            <button
+              type="button"
+              className="topbar-neon-button topbar-inbox-button"
+              onClick={onOpenMyInbox}
+              aria-label={
+                unreadCount > 0
+                  ? `Open inbox, ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}`
+                  : "Open inbox"
+              }
+            >
+              <span className="inbox-icon-wrap">
+                <Mail size={25} strokeWidth={2.1} aria-hidden="true" />
+                {unreadCount > 0 && (
+                  <span className="inbox-unread-badge" aria-hidden="true">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </span>
+              <span className="topbar-action-text">Inbox</span>
+            </button>
+            <button
+              type="button"
+              className="topbar-neon-button topbar-add-button"
+              onClick={onAddService}
+              aria-label="Add your service"
+            >
+              <Plus size={27} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="menu-button"
+              onClick={() => {
+                setShowHamburgerMenu((value) => !value);
+              }}
+              aria-label="Menu"
+              aria-haspopup="true"
+              aria-expanded={showHamburgerMenu}
+            >
+              <Menu size={24} strokeWidth={2} />
+            </button>
+            {showHamburgerMenu && (
+              <div
+                className="dropdown-backdrop"
+                onClick={closeMenus}
+                aria-hidden="true"
+              />
+            )}
+            {showHamburgerMenu && (
+              <div className="dropdown-menu hamburger-dropdown">
+                {CATEGORY_TABS.filter((tab) => tab.href).map((tab) => (
+                  <button
+                    key={tab.key}
+                    className="dropdown-item"
+                    onClick={() => openCategory(tab)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    closeMenus();
+                    onOpenInfo("about");
+                  }}
+                >
+                  About Gwamo
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    closeMenus();
+                    onOpenInfo("help");
+                  }}
+                >
+                  Help
+                </button>
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    closeMenus();
+                    onOpenInfo("privacy");
+                  }}
+                >
+                  Privacy Policy
+                </button>
+              </div>
+            )}
+          </div>
+          <nav className="category-nav" aria-label="Gwamo sections">
+            {CATEGORY_TABS.map((tab) => {
+              const TabIcon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`category-tab${
+                    activeCategory === tab.key ? " is-active" : ""
+                  }`}
+                  onClick={() => openCategory(tab)}
+                  aria-current={
+                    !tab.href && activeCategory === tab.key ? "page" : undefined
+                  }
+                >
+                  <TabIcon size={15} strokeWidth={2.2} aria-hidden="true" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </header>
+    );
+  },
+);
+TimeMarketTopBar.displayName = "TimeMarketTopBar";
+// =============================================================================
+// ComingSoonPanel
+// =============================================================================
+const ComingSoonPanel = memo(({ category, onBack }) => {
+  const meta = CATEGORY_META[category] || {
+    label: "This section",
+    blurb: "This section is coming soon.",
+  };
+  return (
+    <div className="coming-soon-panel">
+      <h2>{meta.label}</h2>
+      <p>{meta.blurb}</p>
+      <button type="button" className="empty-button" onClick={onBack}>
+        Back to Time Market
+      </button>
+    </div>
+  );
+});
+ComingSoonPanel.displayName = "ComingSoonPanel";
+// =============================================================================
+// ServicePost
+// =============================================================================
+const ServicePost = memo(function ServicePost({
   post,
   index,
   postId,
   isActive,
-  localCommentCount,
   reacted,
   reacting,
-  envelopeOpened,
+  unreadCount,
   mediaAspectRatio,
   onMediaAspectRatio,
-  showCommentsOverlay,
-  commentsForOverlay,
-  loadingComments,
-  commentPhone,
-  setCommentPhone,
-  commentText,
-  setCommentText,
-  submitComment,
-  submittingComment,
-  closeComments,
+  isOwner,
   postRefCallback,
   videoRefCallback,
   onVideoPlay,
   onVideoPause,
+  onViewProfile,
+  onSellTime,
+  onContactProvider,
   onOpenInbox,
-  onOpenComments,
-  onShare,
   onReact,
+  onOpenComments,
   onZoomImage,
 }) {
-  const commentsLayerRef = useRef(null);
-  const commentsSheetRef = useRef(null);
-  const commentDragRef = useRef(null);
-  const [commentSheetPosition, setCommentSheetPosition] = useState("top");
-  const [commentSheetOffset, setCommentSheetOffset] = useState(0);
-  const [isCommentSheetDragging, setIsCommentSheetDragging] = useState(false);
-  const [showCommentComposer, setShowCommentComposer] = useState(false);
-  const [isMessageExpanded, setIsMessageExpanded] = useState(false);
-
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
   const mediaType = post.media_type || "";
-
   const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
-  const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
+  const isVideo =
+    mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
   const isEmbed =
     mediaType === "embed" ||
     (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
-
-  // Views/reactions must come from real + manual totals, never from
-  // watch_seconds or any other proxy value.
-  const viewerCount = Number(post.real_views || 0) + Number(post.manual_views || 0);
-  const reactionCount =
-    Number(post.real_reactions || 0) + Number(post.manual_reactions || 0);
-  const commentCount = Number(post.comment_count || 0) + localCommentCount;
-  const creatorDisplayName =
-    post.creator_name?.trim() || post.brand_name?.trim() || "Creator";
-  const postTitle = getDisplayPostTitle(post.title);
-  const postMessage = String(post.subtitle || "");
-  const messageLineCount = postMessage ? postMessage.split(/\r?\n/).length : 0;
-  const hasLongMessage = postMessage.length > 220 || messageLineCount > 4;
-
+  const verificationInfo = getVerificationStatus(post);
+  const providerName =
+    post.service_provider_name ||
+    post.creator_name ||
+    post.provider_name ||
+    "Provider";
+  const priceText =
+    post.service_charge_per_minute || post.title || "Price not set";
+  const priceSplit = priceText.split(/\/(.+)/);
+  const priceMain = (priceSplit[0] || priceText).trim();
+  const priceUnit = priceSplit[1] ? priceSplit[1].trim() : "";
+  const explicitServiceName = String(
+    post.service_name || post.service_title || "",
+  ).trim();
+  const fullDescription = String(
+    post.service_description ||
+      post.description ||
+      post.work_description ||
+      post.subtitle ||
+      post.services_offered ||
+      "",
+  ).trim();
+  const serviceName = explicitServiceName.slice(0, 80);
+  const tagline =
+    fullDescription &&
+    fullDescription.toLowerCase() !== serviceName.toLowerCase()
+      ? fullDescription
+      : "";
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const descriptionNeedsToggle = tagline.length > DESCRIPTION_PREVIEW_LENGTH;
+  const visibleDescription = isDescriptionExpanded
+    ? tagline
+    : makeDescriptionPreview(tagline);
+  const reactionCount = Number(post.displayed_reactions || 0);
+  const aspectClass =
+    mediaAspectRatio && mediaAspectRatio < 0.85
+      ? "is-portrait"
+      : mediaAspectRatio && mediaAspectRatio > 1.2
+        ? "is-landscape"
+        : "is-square";
   const handleImageError = useCallback((event) => {
     event.currentTarget.onerror = null;
     event.currentTarget.src = IMAGE_FALLBACK_SRC;
   }, []);
-
   const handleProfileImageError = useCallback((event) => {
     event.currentTarget.onerror = null;
     event.currentTarget.src = DEFAULT_LOGO;
   }, []);
-
   const handleImageLoad = useCallback(
     (event) => {
       const image = event.currentTarget;
@@ -1944,9 +3298,8 @@ const HomePost = memo(function HomePost({
         onMediaAspectRatio(postId, width / height);
       }
     },
-    [onMediaAspectRatio, postId]
+    [onMediaAspectRatio, postId],
   );
-
   const handleVideoLoadedMetadata = useCallback(
     (event) => {
       const video = event.currentTarget;
@@ -1956,506 +3309,188 @@ const HomePost = memo(function HomePost({
         onMediaAspectRatio(postId, width / height);
       }
     },
-    [onMediaAspectRatio, postId]
+    [onMediaAspectRatio, postId],
   );
-
-  const getCommentSnapOffsets = useCallback(() => {
-    const layerHeight = commentsLayerRef.current?.getBoundingClientRect().height || 0;
-    const sheetHeight = commentsSheetRef.current?.getBoundingClientRect().height || 0;
-    const bottomOffset = Math.max(0, layerHeight - sheetHeight);
-
-    return {
-      top: 0,
-      middle: bottomOffset / 2,
-      bottom: bottomOffset,
-    };
-  }, []);
-
-  useEffect(() => {
-    setIsMessageExpanded(false);
-  }, [postId]);
-
-  useEffect(() => {
-    if (!showCommentsOverlay) return;
-    setCommentSheetPosition("top");
-    setCommentSheetOffset(0);
-    setShowCommentComposer(false);
-  }, [postId, showCommentsOverlay]);
-
-  useEffect(() => {
-    if (!showCommentsOverlay) return undefined;
-
-    const updateOffset = () => {
-      const offsets = getCommentSnapOffsets();
-      setCommentSheetOffset(offsets[commentSheetPosition] || 0);
-    };
-
-    updateOffset();
-    const observer = new ResizeObserver(updateOffset);
-    if (commentsLayerRef.current) observer.observe(commentsLayerRef.current);
-    if (commentsSheetRef.current) observer.observe(commentsSheetRef.current);
-
-    return () => observer.disconnect();
-  }, [commentSheetPosition, getCommentSnapOffsets, showCommentsOverlay]);
-
-  const handleCommentDragStart = useCallback(
-    (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
-
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      commentDragRef.current = {
-        pointerId: event.pointerId,
-        startY: event.clientY,
-        startOffset: commentSheetOffset,
-        currentOffset: commentSheetOffset,
-      };
-      setIsCommentSheetDragging(true);
-    },
-    [commentSheetOffset]
-  );
-
-  const handleCommentDragMove = useCallback(
-    (event) => {
-      const drag = commentDragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId) return;
-
-      const offsets = getCommentSnapOffsets();
-      const nextOffset = drag.startOffset + event.clientY - drag.startY;
-      const clampedOffset = Math.min(
-        offsets.bottom || 0,
-        Math.max(offsets.top || 0, nextOffset)
-      );
-      drag.currentOffset = clampedOffset;
-      setCommentSheetOffset(clampedOffset);
-    },
-    [getCommentSnapOffsets]
-  );
-
-  const handleCommentDragEnd = useCallback(
-    (event) => {
-      const drag = commentDragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId) return;
-
-      const offsets = getCommentSnapOffsets();
-      const releasedOffset = drag.currentOffset ?? commentSheetOffset;
-      const nearestPosition = Object.keys(offsets).reduce((nearest, name) =>
-        Math.abs(offsets[name] - releasedOffset) <
-        Math.abs(offsets[nearest] - releasedOffset)
-          ? name
-          : nearest
-      );
-
-      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-      commentDragRef.current = null;
-      setIsCommentSheetDragging(false);
-      setCommentSheetPosition(nearestPosition);
-      setCommentSheetOffset(offsets[nearestPosition]);
-    },
-    [commentSheetOffset, getCommentSnapOffsets]
-  );
-
-  // Debug: Log commentsForOverlay changes
-  useEffect(() => {
-    if (commentsForOverlay && commentsForOverlay.length > 0) {
-      debugLog("HomePost: commentsForOverlay updated:", commentsForOverlay);
-      commentsForOverlay.forEach((comment, idx) => {
-        debugLog(`HomePost: comment ${idx}:`, {
-          id: comment.id,
-          comment: comment.comment,
-          commenter_whatsapp: comment.commenter_whatsapp,
-          commenter_phone: comment.commenter_phone,
-          phone: comment.phone,
-          country_flag: comment.country_flag,
-          allKeys: Object.keys(comment),
-        });
-        const flag = getCommentDisplayFlag(comment);
-        debugLog(`HomePost: comment ${idx} flag:`, flag);
-      });
+  // Media never auto-plays. A tap on the video toggles play/pause directly,
+  // on top of the native controls bar, so a single touch is always enough.
+  const handleVideoTap = useCallback((event) => {
+    const video = event.currentTarget;
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
     }
-  }, [commentsForOverlay]);
-
+  }, []);
+  const descriptionBlock = tagline ? (
+    <div className="post-tagline-wrap">
+      <p
+        className={`post-tagline${isDescriptionExpanded ? " is-expanded" : ""}`}
+      >
+        {renderDescriptionWithLinks(visibleDescription)}
+        {descriptionNeedsToggle && !isDescriptionExpanded ? "… " : " "}
+        {descriptionNeedsToggle && (
+          <button
+            type="button"
+            className="tagline-toggle-button"
+            onClick={() => setIsDescriptionExpanded((current) => !current)}
+            aria-expanded={isDescriptionExpanded}
+          >
+            {isDescriptionExpanded ? "less" : "more"}
+          </button>
+        )}
+      </p>
+    </div>
+  ) : null;
   return (
     <section
       ref={postRefCallback}
       data-index={index}
-      className="home-post crt-screen"
+      className="home-post service-reel-card"
     >
-      <div
-        className={`media-viewport ${
-          mediaAspectRatio && mediaAspectRatio < 0.85
-            ? "is-portrait"
-            : mediaAspectRatio && mediaAspectRatio > 1.2
-              ? "is-landscape"
-              : "is-square"
-        }`}
-        style={{
-          "--media-aspect-ratio": mediaAspectRatio || 16 / 9,
-        }}
-      >
-        <div className="media-layer">
-          {isImage && (
-            <img
-              src={mediaUrl}
-              alt={postTitle || DEFAULT_MEDIA_LABEL}
-              className="home-media"
-              loading="lazy"
-              decoding="async"
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-            />
-          )}
-
-          {isVideo && (
-            <video
-              ref={videoRefCallback}
-              src={mediaUrl}
-              loop
-              playsInline
-              muted={false}
-              controls
-              preload="metadata"
-              className="home-media"
-              onPlay={() => onVideoPlay(postId)}
-              onPause={() => onVideoPause(postId)}
-              onLoadedMetadata={handleVideoLoadedMetadata}
-            />
-          )}
-
-          {isEmbed &&
-            (isActive ? (
-              <iframe
-                src={getEmbedUrl(mediaUrl)}
-                title={postTitle || "Gwamo embedded media"}
+      <div className="media-card">
+        <div
+          className={`media-viewport ${aspectClass}`}
+          style={{ "--media-aspect-ratio": mediaAspectRatio || 16 / 9 }}
+        >
+          <div className="media-layer">
+            {isImage && (
+              <img
+                src={mediaUrl}
+                alt={serviceName || tagline || DEFAULT_MEDIA_LABEL}
                 className="home-media"
-                frameBorder="0"
-                allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-                allowFullScreen
-                loading="lazy"
+                loading={index === 0 ? "eager" : "lazy"}
+                decoding="async"
+                fetchPriority={index === 0 ? "high" : "auto"}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
               />
-            ) : (
-              <div className="embed-placeholder">
-                <span className="embed-placeholder-icon">▶</span>
-                {postTitle && <span>{postTitle}</span>}
-              </div>
-            ))}
-        </div>
-
-        {(postTitle || postMessage) && (
-          <div className="post-copy reel-copy-overlay">
-            {postTitle && <h1 className="post-title">{postTitle}</h1>}
-            {postMessage && (
-              <div className="post-message-wrap">
-                <p
-                  className={`post-message${
-                    hasLongMessage && !isMessageExpanded ? " is-collapsed" : ""
-                  }`}
-                >
-                  {postMessage}
-                </p>
-                {hasLongMessage && (
-                  <button
-                    type="button"
-                    className="message-toggle-button"
-                    onClick={() => setIsMessageExpanded((current) => !current)}
-                    aria-expanded={isMessageExpanded}
-                  >
-                    {isMessageExpanded ? "Show less" : "Read more"}
-                  </button>
-                )}
-              </div>
             )}
+            {isVideo && (
+              <video
+                ref={videoRefCallback}
+                src={mediaUrl}
+                loop
+                playsInline
+                muted={false}
+                controls
+                preload="metadata"
+                className="home-media"
+                onPlay={() => onVideoPlay(postId)}
+                onPause={() => onVideoPause(postId)}
+                onLoadedMetadata={handleVideoLoadedMetadata}
+                onClick={handleVideoTap}
+              />
+            )}
+            {isEmbed &&
+              (isActive ? (
+                <iframe
+                  src={getEmbedUrl(mediaUrl)}
+                  title={serviceName || tagline || "Time Market media"}
+                  className="home-media"
+                  frameBorder="0"
+                  allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              ) : (
+                <div className="embed-placeholder">
+                  <span className="embed-placeholder-icon">{"\u25B6"}</span>
+                  {(serviceName || tagline) && (
+                    <span>{serviceName || tagline}</span>
+                  )}
+                </div>
+              ))}
           </div>
-        )}
-
-        <div className="reel-creator-row">
+        </div>
+      </div>
+      <div className="service-card-gradient" aria-hidden="true" />
+      <div className="glass-frame-overlay" aria-hidden="true" />
+      <div className="post-info-block">
+        <div className="post-provider-row">
           <button
             type="button"
-            className="profile-picture-button reel-profile-button"
+            className={`service-avatar-badge ${verificationInfo.className}`}
             onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)}
-            aria-label="Open profile picture"
+            aria-label={`View ${providerName}'s profile photo`}
           >
             <img
               src={post.logo_url || DEFAULT_LOGO}
               alt=""
-              className="profile-picture"
               loading="lazy"
               decoding="async"
               onError={handleProfileImageError}
             />
           </button>
-
-          <div className="profile-details reel-profile-details">
-            <div className="creator-name">{creatorDisplayName}</div>
-          </div>
-
-          <button
-            type="button"
-            className="inbox-button reel-inbox-button"
-            onClick={() => onOpenInbox(post)}
-            aria-label="Open creator Agaseke"
-            title="Open creator Agaseke"
-          >
-            <ShoppingBasket
-              className="inbox-envelope agaseke-icon"
-              size={24}
-              strokeWidth={2}
-              aria-hidden="true"
-            />
-            {!envelopeOpened && <span className="unread-dot" aria-hidden="true" />}
-          </button>
-        </div>
-
-        <div className="reel-side-actions" aria-label="Post actions">
-          <div className="metric-pill reel-action-item" title="Views">
-            <Eye className="action-icon" size={34} strokeWidth={2} aria-hidden="true" />
-            <span>{formatCount(viewerCount)}</span>
-          </div>
-
-          <button
-            type="button"
-            className="action-pill reel-action-item"
-            onClick={() => onOpenComments(post)}
-            aria-label="Open comments"
-          >
-            <MessageCircle className="action-icon" size={34} strokeWidth={2} aria-hidden="true" />
-            <span>{formatCount(commentCount)}</span>
-          </button>
-
-          <button
-            type="button"
-            className="action-pill reel-action-item"
-            onClick={() => onShare(post)}
-            aria-label="Share post"
-          >
-            <WhatsAppIcon className="action-icon whatsapp-action-icon" size={34} />
-            <span>Share</span>
-          </button>
-
-          <button
-            type="button"
-            className={`action-pill reel-action-item heart-action${reacted ? " heart-action-active" : ""}`}
-            onClick={() => onReact(post)}
-            aria-label="Like post"
-            disabled={reacting}
-          >
-            <Heart
-              className="heart-icon"
-              size={34}
-              strokeWidth={2}
-              fill="currentColor"
-              aria-hidden="true"
-            />
-            <span>{formatCount(reactionCount)}</span>
-          </button>
-
-        </div>
-
-        {showCommentsOverlay && (
-          <div className="floating-comments-layer" ref={commentsLayerRef}>
-            <div
-              ref={commentsSheetRef}
-              className={`floating-comments-sheet${
-                isCommentSheetDragging ? " is-dragging" : ""
-              }`}
-              style={{ transform: `translateY(${commentSheetOffset}px)` }}
+          <div className="post-provider-copy">
+            <button
+              type="button"
+              className="creator-name"
+              onClick={() => onViewProfile(post)}
             >
-              <div
-                className="comment-drag-handle"
-                onPointerDown={handleCommentDragStart}
-                onPointerMove={handleCommentDragMove}
-                onPointerUp={handleCommentDragEnd}
-                onPointerCancel={handleCommentDragEnd}
-                role="slider"
-                aria-label="Move comments up or down"
-                aria-valuemin={COMMENT_POSITIONS.top}
-                aria-valuemax={COMMENT_POSITIONS.bottom}
-                aria-valuenow={COMMENT_POSITIONS[commentSheetPosition]}
-                tabIndex={0}
-              >
-                <span />
-              </div>
-
-              <header className="comments-overlay-header">
-                <h2>
-                  Comments <span>({commentsForOverlay.length})</span>
-                </h2>
-
-                <button
-                  type="button"
-                  onClick={closeComments}
-                  className="comments-overlay-close"
-                  aria-label="Close comments"
+              <span>{providerName}</span>
+              {verificationInfo.status === "verified" && (
+                <span
+                  className="verified-check-badge"
+                  role="img"
+                  aria-label="Verified"
                 >
-                  <X size={20} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-              </header>
-
-              <div className="comments-list">
-              {loadingComments ? (
-                <div className="no-comments">
-                  <span>Loading comments...</span>
-                </div>
-              ) : commentsForOverlay.length === 0 ? (
-                <div className="no-comments">
-                  <MessageCircle size={36} strokeWidth={1.8} aria-hidden="true" />
-                  <strong>No comments yet</strong>
-                  <span>Be the first viewer to comment.</span>
-                </div>
-              ) : (
-                commentsForOverlay.map((comment) => {
-                  // Get the flag using the frontend detection
-                  const commenterFlag = getCommentDisplayFlag(comment);
-                  
-                  debugLog(`Rendering comment ${comment.id}:`, {
-                    commenterFlag,
-                    comment: comment.comment,
-                    phoneFields: {
-                      commenter_whatsapp: comment.commenter_whatsapp,
-                      commenter_phone: comment.commenter_phone,
-                      phone: comment.phone,
-                    }
-                  });
-                  
-                  return (
-                    <article className="comment-row" key={comment.id}>
-                      <div className="comment-avatar" aria-hidden="true">
-                        <span>{commenterFlag}</span>
-                      </div>
-
-                      <div className="comment-body">
-                        <div className="comment-meta">
-                          <strong>Viewer</strong>
-                          <time>
-                            {comment.created_at
-                              ? new Date(comment.created_at).toLocaleTimeString([], {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })
-                              : ""}
-                          </time>
-                        </div>
-
-                        <p className="comment-text">{comment.comment}</p>
-                      </div>
-                    </article>
-                  );
-                })
+                  <Check size={11} strokeWidth={3.5} aria-hidden="true" />
+                </span>
               )}
+            </button>
+            {serviceName && <h2 className="service-name">{serviceName}</h2>}
+            {priceMain && (
+              <div className="post-price">
+                <span>{priceMain}</span>
+                {priceUnit && <span className="post-price-unit"> / {priceUnit}</span>}
               </div>
-
-              {!showCommentComposer ? (
-                <div className="comment-add-launcher">
-                  <button
-                    type="button"
-                    className="comment-add-button"
-                    onClick={() => setShowCommentComposer(true)}
-                    aria-label="Add a comment"
-                    title="Add comment"
-                  >
-                    <Plus size={22} strokeWidth={2.5} aria-hidden="true" />
-                  </button>
-                </div>
-              ) : (
-              <div className="comment-composer">
-              <div className="comment-composer-header">
-                <strong>Add comment</strong>
-                <button
-                  type="button"
-                  className="comment-composer-close"
-                  onClick={() => setShowCommentComposer(false)}
-                  aria-label="Hide comment form"
-                >
-                  <X size={16} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-              </div>
-              <div className="comment-composer-identity">
-                <div className="comment-flag-preview" aria-hidden="true">
-                  <span>
-                    {commentPhone.trim() && normalizeWhatsAppNumber(commentPhone)
-                      ? getFlagFromWhatsapp(commentPhone)
-                      : "🌍"}
-                  </span>
-                </div>
-
-                <div className="comment-phone-field">
-                  <label htmlFor={`comment-phone-${postId}`}>Phone number</label>
-                  <input
-                    id={`comment-phone-${postId}`}
-                    type="tel"
-                    inputMode="tel"
-                    placeholder="+250 788 123 456"
-                    value={commentPhone}
-                    onChange={(event) => setCommentPhone(event.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="comment-compose-row">
-                <textarea
-                  placeholder="Write your comment..."
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  rows={2}
-                  maxLength={500}
-                />
-
-                <button
-                  type="button"
-                  className="comment-send-button"
-                  onClick={submitComment}
-                  disabled={submittingComment}
-                >
-                  {submittingComment ? "Sending..." : "Send"}
-                </button>
-              </div>
-
-              <p className="comment-privacy">
-                Your phone number stays private. Only its country flag is shown.
-                We only check the number's format — we don't verify you own it.
-              </p>
-              </div>
-              )}
-            </div>
+            )}
+            {descriptionBlock}
           </div>
-        )}
+        </div>
       </div>
-
-      <div className="screen-scanlines" aria-hidden="true" />
-      <div className="screen-reflection" aria-hidden="true" />
-      <div className="screen-vignette" aria-hidden="true" />
+      <div className="service-social-rail" aria-label="Service engagement">
+        <button
+          type="button"
+          className={`rail-action star-action${reacted ? " is-active" : ""}`}
+          onClick={() => onReact(post)}
+          disabled={reacting || reacted}
+          aria-label={`React to this service, currently ${formatCount(reactionCount)} stars`}
+          aria-pressed={reacted}
+        >
+          <Star
+            className="gold-star"
+            size={34}
+            fill="currentColor"
+            aria-hidden="true"
+          />
+          <span>{formatCount(reactionCount)}</span>
+        </button>
+        <button
+          type="button"
+          className="rail-action comment-action"
+          onClick={() => onOpenComments(post)}
+          aria-label="View and write comments"
+        >
+          <MessageSquare size={30} aria-hidden="true" />
+        </button>
+      </div>
+      <button
+        type="button"
+        className="contact-me-cta"
+        onClick={() => onContactProvider(post)}
+      >
+        <Send size={20} aria-hidden="true" />
+        <span>Contact me</span>
+      </button>
     </section>
   );
 });
-
-HomePost.displayName = "HomePost";
-
-const GwamoTopBar = memo(({ openEditor }) => (
-  <header className="feedx-topbar">
-    <div className="feedx-topbar-inner">
-      <div className="gwamo-brand" aria-label="Gwamo home">
-        <h1 className="feedx-logo">Gwamo</h1>
-      </div>
-
-      <button
-        type="button"
-        className="top-create-button"
-        onClick={openEditor}
-        aria-label="Tell your story"
-        title="Create a post"
-      >
-        <span className="top-create-mark" aria-hidden="true">T</span>
-        <span className="top-create-text">ell Your Story</span>
-      </button>
-    </div>
-  </header>
-));
-
-GwamoTopBar.displayName = "GwamoTopBar";
-
-const EditorModal = memo(
+ServicePost.displayName = "ServicePost";
+// =============================================================================
+// ServiceEditorModal
+// =============================================================================
+const ServiceEditorModal = memo(
   ({
     newCreatorName,
     setNewCreatorName,
@@ -2467,6 +3502,24 @@ const EditorModal = memo(
     setNewMediaUrl,
     subtitle,
     setSubtitle,
+    postType,
+    setPostType,
+    postHeadline,
+    setPostHeadline,
+    serviceCategory,
+    setServiceCategory,
+    postLocation,
+    setPostLocation,
+    priceUnit,
+    setPriceUnit,
+    availability,
+    setAvailability,
+    exchangeNeed,
+    setExchangeNeed,
+    allowCashBalance,
+    setAllowCashBalance,
+    momentKind,
+    setMomentKind,
     handleLogoChange,
     logoPreview,
     handleMediaFileChange,
@@ -2477,114 +3530,327 @@ const EditorModal = memo(
     saving,
     uploadProgress,
     compressingMedia,
-  }) => (
+    isEdit = false,
+  }) => {
+    useEscapeToClose(closeEditor);
+    return (
     <div className="modal-overlay" onClick={closeEditor}>
-      <div
-        className="modal-card"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2>＋ Create New Post</h2>
-
+          <h2>
+            {isEdit ? "\u270E Edit Post" : "\uFF0B What are you posting?"}
+          </h2>
           <button
             type="button"
             onClick={closeEditor}
             className="modal-close"
             aria-label="Close"
           >
-            ×
+            {"\u00D7"}
           </button>
         </div>
-
+        {!isEdit && (
+          <div className="form-section post-type-section">
+            <div className="section-heading">Choose one</div>
+            <div
+              className="post-type-grid"
+              role="radiogroup"
+              aria-label="Post type"
+            >
+              {[
+                [
+                  "offer",
+                  "\uD83D\uDEE0\uFE0F",
+                  "Offer Work",
+                  "Show what you can do",
+                ],
+                [
+                  "need",
+                  "\uD83D\uDE4B",
+                  "Ask for Help",
+                  "Find someone to help",
+                ],
+                [
+                  "exchange",
+                  "\uD83D\uDD04",
+                  "Trade Skills",
+                  "Give work, get work",
+                ],
+                [
+                  "moment",
+                  "\u2728",
+                  "Share a Moment",
+                  "Story, song or movie saying",
+                ],
+              ].map(([value, icon, label, help]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={postType === value}
+                  className={`post-type-choice${postType === value ? " is-selected" : ""}`}
+                  onClick={() => setPostType(value)}
+                >
+                  <span className="post-type-icon" aria-hidden="true">
+                    {icon}
+                  </span>
+                  <strong>{label}</strong>
+                  <small>{help}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="form-section">
-          <div className="section-heading">Public profile</div>
-
-          <label htmlFor="field-creator-name">Creator Name</label>
+          <div className="section-heading">
+            {postType === "offer"
+              ? "Your work"
+              : postType === "need"
+                ? "Help you need"
+                : postType === "exchange"
+                  ? "Your trade"
+                  : "Your moment"}
+          </div>
+          {postType === "moment" && (
+            <>
+              <label>What kind of moment?</label>
+              <div
+                className="choice-pill-row"
+                role="radiogroup"
+                aria-label="Moment type"
+              >
+                {[
+                  ["story", "My story"],
+                  ["song", "Song saying"],
+                  ["movie", "Movie saying"],
+                  ["recommend", "Recommend someone"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={momentKind === value}
+                    className={`choice-pill${momentKind === value ? " is-selected" : ""}`}
+                    onClick={() => setMomentKind(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <label htmlFor="field-post-headline">
+            {postType === "offer"
+              ? "What work can you do?"
+              : postType === "need"
+                ? "What help do you need?"
+                : postType === "exchange"
+                  ? "What service can you give?"
+                  : "Short title"}
+          </label>
           <input
-            id="field-creator-name"
+            id="field-post-headline"
             type="text"
-            placeholder="e.g. Gasana"
-            value={newCreatorName}
-            onChange={(event) => setNewCreatorName(event.target.value)}
-          />
-
-          <p className="field-help">
-            This is the public name shown on your post.
-          </p>
-        </div>
-
-        <div className="form-section">
-          <div className="section-heading">Private contact</div>
-
-          <label htmlFor="field-contact">Contact</label>
-          <input
-            id="field-contact"
-            type="text"
-            placeholder="e.g. +250788123456 or https://mywebsite.com"
-            value={newCreatorIdentity}
-            onChange={(event) =>
-              setNewCreatorIdentity(event.target.value)
+            placeholder={
+              postType === "offer"
+                ? "e.g. Fast phone repair"
+                : postType === "need"
+                  ? "e.g. I need a plumber"
+                  : postType === "exchange"
+                    ? "e.g. Website design"
+                    : "e.g. This movie taught me courage"
             }
+            value={postHeadline}
+            onChange={(event) => setPostHeadline(event.target.value)}
           />
-
-          <p className="field-help">
-            This opens when a viewer taps the envelope.
-          </p>
-        </div>
-
-        <div className="form-section">
-          <div className="section-heading">Post</div>
-
-          <label htmlFor="field-title">Post Title (Optional)</label>
-          <input
-            id="field-title"
-            type="text"
-            placeholder="e.g. Morning in Kigali"
-            value={newTitle}
-            onChange={(event) => setNewTitle(event.target.value)}
-          />
-
-          <p className="field-help">
-            Displayed in bold above your message.
-          </p>
-
-          <label htmlFor="field-message">Message (Optional)</label>
+          {postType === "exchange" && (
+            <>
+              <label htmlFor="field-exchange-need">
+                What service do you need?
+              </label>
+              <input
+                id="field-exchange-need"
+                type="text"
+                placeholder="e.g. Professional photography"
+                value={exchangeNeed}
+                onChange={(event) => setExchangeNeed(event.target.value)}
+              />
+            </>
+          )}
+          {postType !== "moment" && (
+            <>
+              <label htmlFor="field-category">Category</label>
+              <select
+                id="field-category"
+                value={serviceCategory}
+                onChange={(event) => setServiceCategory(event.target.value)}
+              >
+                <option value="">Choose a category</option>
+                <option value="Phone repair">Phone repair</option>
+                <option value="Cleaning">Cleaning</option>
+                <option value="Teaching">Teaching</option>
+                <option value="Construction">Construction</option>
+                <option value="Cooking">Cooking</option>
+                <option value="Transport">Transport</option>
+                <option value="Beauty">Beauty</option>
+                <option value="Computer help">Computer help</option>
+                <option value="Farming">Farming</option>
+                <option value="Photography">Photography</option>
+                <option value="Other">Other</option>
+              </select>
+            </>
+          )}
+          <label htmlFor="field-description">
+            {postType === "offer"
+              ? "Tell people about your work"
+              : postType === "need"
+                ? "Explain the problem"
+                : postType === "exchange"
+                  ? "Explain your exchange"
+                  : "Write your saying, story, or thought"}
+          </label>
           <textarea
-            id="field-message"
-            placeholder={"e.g. Today I met amazing people in Kigali.\n\nThe weather was beautiful, and I wanted to share this moment with everyone."}
+            id="field-description"
+            placeholder={
+              postType === "offer"
+                ? "e.g. I fix screens, batteries and charging ports."
+                : postType === "need"
+                  ? "e.g. My kitchen water pipe is leaking."
+                  : postType === "exchange"
+                    ? "e.g. I can build a business website and I need photos for my work."
+                    : "Add your own words so people understand why this matters to you."
+            }
             value={subtitle}
             onChange={(event) => setSubtitle(event.target.value)}
           />
-
-          <p className="field-help">
-            Tell people what your post is about. Paragraphs and line breaks will be preserved.
-          </p>
+          {postType !== "moment" && (
+            <>
+              <label htmlFor="field-location">Where?</label>
+              <input
+                id="field-location"
+                type="text"
+                placeholder="e.g. Kigali, Gasabo"
+                value={postLocation}
+                onChange={(event) => setPostLocation(event.target.value)}
+              />
+            </>
+          )}
+          {postType === "offer" && (
+            <div className="two-field-row">
+              <div>
+                <label htmlFor="field-charge">Price</label>
+                <input
+                  id="field-charge"
+                  type="text"
+                  placeholder="e.g. 5,000 RWF"
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="field-price-unit">How do you charge?</label>
+                <select
+                  id="field-price-unit"
+                  value={priceUnit}
+                  onChange={(event) => setPriceUnit(event.target.value)}
+                >
+                  <option value="job">Per job</option>
+                  <option value="hour">Per hour</option>
+                  <option value="day">Per day</option>
+                  <option value="minute">Per minute</option>
+                </select>
+              </div>
+            </div>
+          )}
+          {postType === "need" && (
+            <>
+              <label htmlFor="field-charge">Your budget (Optional)</label>
+              <input
+                id="field-charge"
+                type="text"
+                placeholder="e.g. 15,000 RWF"
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+              />
+            </>
+          )}
+          {postType === "exchange" && (
+            <>
+              <label>Can cash balance the difference?</label>
+              <div
+                className="choice-pill-row"
+                role="radiogroup"
+                aria-label="Allow cash balance"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={allowCashBalance}
+                  className={`choice-pill${allowCashBalance ? " is-selected" : ""}`}
+                  onClick={() => setAllowCashBalance(true)}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!allowCashBalance}
+                  className={`choice-pill${!allowCashBalance ? " is-selected" : ""}`}
+                  onClick={() => setAllowCashBalance(false)}
+                >
+                  No
+                </button>
+              </div>
+            </>
+          )}
+          {(postType === "offer" || postType === "need") && (
+            <>
+              <label>When?</label>
+              <div
+                className="choice-pill-row"
+                role="radiogroup"
+                aria-label="When"
+              >
+                {[
+                  ["today", "Today"],
+                  ["this week", "This week"],
+                  ["choose date", "Choose date later"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={availability === value}
+                    className={`choice-pill${availability === value ? " is-selected" : ""}`}
+                    onClick={() => setAvailability(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-
-        <div className="form-section">
-          <div className="section-heading">Media</div>
-
-          <label
-            className="file-picker"
-            htmlFor="field-media-upload"
-          >
+        <div className={`form-section${isEdit ? " form-section-last" : ""}`}>
+          <div className="section-heading">Photo or video</div>
+          <label className="file-picker" htmlFor="field-media-upload">
             <span>
-              {compressingMedia ? "Processing..." : "▣ Choose a photo or video"}
+              {compressingMedia
+                ? "Processing..."
+                : postType === "moment"
+                  ? "\u25A3 Add a photo or short video"
+                  : "\u25A3 Show the work, need, or skill"}
             </span>
-
             <input
               id="field-media-upload"
               type="file"
               accept="image/*,video/*"
               disabled={compressingMedia}
               onChange={(event) =>
-                handleMediaFileChange(
-                  event.target.files?.[0] || null
-                )
+                handleMediaFileChange(event.target.files?.[0] || null)
               }
             />
           </label>
-
           {mediaPreview && (
             <div className="preview-wrap">
               {mediaPreviewType === "image" ? (
@@ -2604,63 +3870,60 @@ const EditorModal = memo(
               )}
             </div>
           )}
-
-          <label htmlFor="field-media-link">
-            Media Link (Optional)
-          </label>
-
+          <label htmlFor="field-media-link">Media link (Optional)</label>
           <input
             id="field-media-link"
             type="text"
             placeholder="e.g. https://youtube.com/watch?v=xxxxx"
             value={newMediaUrl}
-            onChange={(event) =>
-              setNewMediaUrl(event.target.value)
-            }
+            onChange={(event) => setNewMediaUrl(event.target.value)}
           />
-
-          <p className="field-help">
-            Upload media or paste a supported link.
-          </p>
+          <p className="field-help">Upload media or paste a supported link.</p>
         </div>
-
-        <div className="form-section form-section-last">
-          <div className="section-heading">Profile</div>
-
-          <label
-            className="file-picker"
-            htmlFor="field-profile-photo"
-          >
-            <span>
-              {compressingMedia ? "Processing..." : "◎ Choose a profile photo"}
-            </span>
-
-            <input
-              id="field-profile-photo"
-              type="file"
-              accept="image/*"
-              disabled={compressingMedia}
-              onChange={(event) =>
-                handleLogoChange(event.target.files?.[0] || null)
-              }
-            />
-          </label>
-
-          {logoPreview && (
-            <div className="preview-wrap">
-              <img
-                src={logoPreview}
-                alt="Profile preview"
-                className="logo-preview"
+        {!isEdit && (
+          <div className="form-section form-section-last">
+            <div className="section-heading">Your picture (Optional)</div>
+            <label className="file-picker" htmlFor="field-profile-photo">
+              <span>
+                {compressingMedia
+                  ? "Processing..."
+                  : "\u25CE Add or change your profile photo"}
+              </span>
+              <input
+                id="field-profile-photo"
+                type="file"
+                accept="image/*"
+                disabled={compressingMedia}
+                onChange={(event) =>
+                  handleLogoChange(event.target.files?.[0] || null)
+                }
               />
-            </div>
-          )}
-        </div>
-
+            </label>
+            {logoPreview && (
+              <div className="preview-wrap">
+                <img
+                  src={logoPreview}
+                  alt="Profile preview"
+                  className="logo-preview"
+                />
+              </div>
+            )}
+          </div>
+        )}
         {saving && (
-          <div className="upload-progress-wrap" role="status" aria-live="polite">
+          <div
+            className="upload-progress-wrap"
+            role="status"
+            aria-live="polite"
+          >
             <div className="upload-progress-text">
-              <span>{uploadProgress < 96 ? "Uploading post..." : "Finishing post..."}</span>
+              <span>
+                {uploadProgress < 96
+                  ? isEdit
+                    ? "Saving changes..."
+                    : "Uploading your post..."
+                  : "Finishing up..."}
+              </span>
               <strong>{uploadProgress}%</strong>
             </div>
             <div
@@ -2674,43 +3937,1862 @@ const EditorModal = memo(
             </div>
           </div>
         )}
-
         <button
           type="button"
           onClick={applyChanges}
           className="save-button"
           disabled={saving || compressingMedia}
         >
-          {saving ? `Creating Post... ${uploadProgress}%` : "Create Post"}
+          {saving
+            ? isEdit
+              ? `Saving... ${uploadProgress}%`
+              : `Creating Post... ${uploadProgress}%`
+            : isEdit
+              ? "Save Changes"
+              : postType === "offer"
+                ? "Post my work"
+                : postType === "need"
+                  ? "Post my request"
+                  : postType === "exchange"
+                    ? "Post my trade"
+                    : "Share my moment"}
         </button>
-
-        <button
-          type="button"
-          onClick={closeEditor}
-          className="cancel-button"
-        >
+        <button type="button" onClick={closeEditor} className="cancel-button">
           Cancel
         </button>
       </div>
     </div>
-  )
+    );
+  },
 );
-
-EditorModal.displayName = "EditorModal";
-
-/**
- * A proper modal (never window.prompt()) asking for a WhatsApp number
- * before a viewer's first like on this device.
- */
-const PhoneNumberModal = memo(({ value, setValue, error, onConfirm, onClose }) => (
-  <div className="modal-overlay phone-modal-overlay" onClick={onClose}>
+ServiceEditorModal.displayName = "ServiceEditorModal";
+// =============================================================================
+// AuthModal
+// =============================================================================
+const AuthModal = memo(
+  ({
+    isOpen,
+    mode,
+    phone,
+    setPhone,
+    fullName,
+    setFullName,
+    pin,
+    setPin,
+    confirmPin,
+    setConfirmPin,
+    error,
+    successMessage,
+    loading,
+    onRegister,
+    onLogin,
+    onClose,
+    onSwitchMode,
+    onForgotPin,
+  }) => {
+    useEscapeToClose(onClose, isOpen);
+    if (!isOpen) return null;
+    return (
+      <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
+        <div
+          className="modal-card auth-modal-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>{mode === "login" ? "Login" : "Register"}</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          {successMessage && (
+            <div className="auth-success-message">{successMessage}</div>
+          )}
+          <div className="form-section">
+            <label htmlFor="auth-phone">Telephone Number</label>
+            <input
+              id="auth-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              autoFocus
+              placeholder="+250 788 123 456"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && mode === "login") onLogin();
+              }}
+            />
+          </div>
+          {mode === "register" && (
+            <div className="form-section">
+              <label htmlFor="auth-name">Full Name</label>
+              <input
+                id="auth-name"
+                type="text"
+                autoComplete="name"
+                placeholder="e.g. John Doe"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+              />
+            </div>
+          )}
+          <div className={`form-section${mode === "login" ? " form-section-last" : ""}`}>
+            <label htmlFor="auth-pin">Personal PIN</label>
+            <input
+              id="auth-pin"
+              type="password"
+              inputMode="numeric"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              placeholder="8-digit PIN"
+              maxLength={8}
+              pattern="[0-9]{8}"
+              value={pin}
+              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && mode === "login") onLogin();
+              }}
+            />
+          </div>
+          {mode === "register" && (
+            <div className="form-section form-section-last">
+              <label htmlFor="auth-confirm-pin">Confirm PIN</label>
+              <input
+                id="auth-confirm-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                placeholder="Repeat the 8-digit PIN"
+                maxLength={8}
+                pattern="[0-9]{8}"
+                value={confirmPin}
+                onChange={(event) =>
+                  setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 8))
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onRegister();
+                }}
+              />
+              <small className="auth-helper-text">
+                Use a PIN you can remember. Gwamo staff should never ask you to reveal it.
+              </small>
+            </div>
+          )}
+          {error && <p className="auth-error">{error}</p>}
+          <button
+            type="button"
+            className="save-button"
+            onClick={mode === "login" ? onLogin : onRegister}
+            disabled={loading}
+          >
+            {loading ? "Loading..." : mode === "login" ? "Login" : "Register"}
+          </button>
+          {mode === "login" && (
+            <button
+              type="button"
+              className="forgot-pin-button"
+              onClick={onForgotPin}
+              disabled={loading}
+            >
+              Forgot PIN?
+            </button>
+          )}
+          <button
+            type="button"
+            className="switch-mode-button"
+            onClick={onSwitchMode}
+          >
+            {mode === "login"
+              ? "Don't have an account? Register"
+              : "Already have an account? Login"}
+          </button>
+          <button type="button" onClick={onClose} className="cancel-button">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  },
+);
+AuthModal.displayName = "AuthModal";
+// =============================================================================
+// Personal PIN recovery - approval is completed by an administrator only after
+// calling the registered telephone number and matching the displayed code.
+// =============================================================================
+const PinResetModal = memo(
+  ({
+    step,
+    phone,
+    setPhone,
+    request,
+    newPin,
+    setNewPin,
+    confirmPin,
+    setConfirmPin,
+    error,
+    loading,
+    onRequest,
+    onCheckStatus,
+    onComplete,
+    onRestart,
+    onClose,
+  }) => {
+    useEscapeToClose(onClose);
+    return (
+    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card auth-modal-card pin-reset-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Reset personal PIN</h2>
+            <p className="modal-header-note">Protected by a call to your registered number</p>
+          </div>
+          <button type="button" onClick={onClose} className="modal-close" aria-label="Close">
+            <X size={20} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </div>
+        {step === "request" && (
+          <>
+            <p className="pin-reset-intro">
+              Enter the telephone number on your account. An admin will call that same number
+              and ask for the one-time verification code shown here.
+            </p>
+            <div className="form-section form-section-last">
+              <label htmlFor="pin-reset-phone">Registered telephone number</label>
+              <input
+                id="pin-reset-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                autoFocus
+                placeholder="+250 788 123 456"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onRequest();
+                }}
+              />
+            </div>
+            {error && <p className="auth-error">{error}</p>}
+            <button type="button" className="save-button" onClick={onRequest} disabled={loading}>
+              {loading ? "Requesting..." : "Request PIN reset"}
+            </button>
+          </>
+        )}
+        {step === "waiting" && (
+          <>
+            <div className="pin-verification-panel" role="status" aria-live="polite">
+              <span>Your verification code</span>
+              <strong>
+                {request?.verificationCode || request?.verification_code || request?.code || "----"}
+              </strong>
+            </div>
+            <p className="pin-reset-intro">
+              Do not send this code in chat. Wait for the admin to call your registered number,
+              then read the code during that call. The admin must approve it before you continue.
+            </p>
+            {error && <p className="auth-error">{error}</p>}
+            <button
+              type="button"
+              className="save-button"
+              onClick={() => onCheckStatus()}
+              disabled={loading}
+            >
+              {loading ? "Checking..." : "Check approval"}
+            </button>
+            <p className="field-help" style={{ marginTop: 10, marginBottom: 0 }}>
+              This checks automatically every few seconds while this screen is open.
+            </p>
+            <button type="button" className="switch-mode-button" onClick={onRestart}>
+              Use a different number
+            </button>
+          </>
+        )}
+        {step === "delivered" && (
+          <>
+            <div className="auth-success-message">
+              Telephone ownership approved and a new PIN was generated.
+            </div>
+            <p className="pin-reset-intro">
+              For your safety, the new PIN is never shown in the app. Gwamo
+              will share it with you directly by phone call or SMS to your
+              registered number. Once you have it, log in with your
+              telephone number and that PIN.
+            </p>
+            <button type="button" className="save-button" onClick={onClose}>
+              Done
+            </button>
+          </>
+        )}
+        <button type="button" onClick={onClose} className="cancel-button">
+          Cancel
+        </button>
+      </div>
+    </div>
+    );
+  },
+);
+PinResetModal.displayName = "PinResetModal";
+const PendingPhoneReviewModal = memo(({ review, onClose }) => {
+  useEscapeToClose(onClose);
+  return (
+  <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
     <div
-      className="modal-card phone-modal-card"
+      className="modal-card auth-modal-card pin-reset-card"
       onClick={(event) => event.stopPropagation()}
     >
       <div className="modal-header">
-        <h2>Enter your WhatsApp number</h2>
-
+        <h2>Confirm your telephone</h2>
+        <button type="button" onClick={onClose} className="modal-close" aria-label="Close">
+          <X size={20} strokeWidth={2.4} aria-hidden="true" />
+        </button>
+      </div>
+      <p className="pin-reset-intro">
+        Your registration is pending. An admin will call the telephone number you used
+        and ask for this code before approving the account.
+      </p>
+      <div className="pin-verification-panel" role="status" aria-live="polite">
+        <span>Registration code</span>
+        <strong>
+          {review?.verificationCode || review?.verification_code || review?.code || "----"}
+        </strong>
+      </div>
+      <p className="auth-helper-text">
+        Never share your personal PIN. The admin only needs this temporary code.
+      </p>
+      <button type="button" className="save-button" onClick={onClose}>
+        I understand
+      </button>
+    </div>
+  </div>
+  );
+});
+PendingPhoneReviewModal.displayName = "PendingPhoneReviewModal";
+// =============================================================================
+// ChatModal - real conversation-start + message contract, with polling
+// =============================================================================
+const ChatModal = memo(
+  ({
+    partner,
+    currentUser,
+    getSessionToken,
+    apiUrl,
+    onClose,
+    onZoomImage,
+    onRequireAuth,
+  }) => {
+    useEscapeToClose(onClose);
+    const draftKey = `${CHAT_DRAFT_PREFIX}${
+      partner.servicePostId || partner.conversationId || "new"
+    }`;
+    const [conversationId, setConversationId] = useState(
+      partner.conversationId || "",
+    );
+    const [messages, setMessages] = useState([]);
+    const [inputText, setInputText] = useState(() => {
+      try {
+        return window.sessionStorage.getItem(draftKey) || "";
+      } catch {
+        return "";
+      }
+    });
+    const [loading, setLoading] = useState(
+      Boolean(partner.conversationId && currentUser),
+    );
+    const [sending, setSending] = useState(false);
+    const [loadError, setLoadError] = useState("");
+    const [pendingFailedText, setPendingFailedText] = useState(null);
+    const [pendingFailedAttachment, setPendingFailedAttachment] = useState(null);
+    const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+    const [attachError, setAttachError] = useState("");
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
+    const messagesEndRef = useRef(null);
+    const messagesListRef = useRef(null);
+    const pollRef = useRef(null);
+    const isNearBottomRef = useRef(true);
+    const isMountedRef = useRef(true);
+    const photoInputRef = useRef(null);
+    const videoInputRef = useRef(null);
+    const documentInputRef = useRef(null);
+    const pendingSendAfterAuthRef = useRef(false);
+    const pendingAttachmentAfterAuthRef = useRef(null);
+    const mediaRecorderRef = useRef(null);
+    const recordedChunksRef = useRef([]);
+    const recordingTimerRef = useRef(null);
+    const recordingStreamRef = useRef(null);
+    const objectUrlsRef = useRef([]);
+    const lastMessageCountRef = useRef(0);
+    const trackObjectUrl = useCallback((url) => {
+      objectUrlsRef.current.push(url);
+      return url;
+    }, []);
+    const normalizeMessage = useCallback(
+      (raw) => ({
+        id: String(raw.id),
+        senderId: String(raw.sender_provider_id ?? raw.senderId ?? ""),
+        text: raw.text_content ?? raw.text ?? "",
+        type: raw.message_type ?? raw.type ?? "text",
+        mediaUrl: raw.media_url ?? raw.mediaUrl ?? "",
+        fileName: raw.file_name ?? raw.fileName ?? "Document",
+        createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
+        readAt: raw.read_at ?? raw.readAt ?? null,
+        deliveredAt: raw.delivered_at ?? raw.deliveredAt ?? null,
+        pending: Boolean(raw.pending),
+        failed: Boolean(raw.failed),
+      }),
+      [],
+    );
+    const authHeaders = useCallback(() => {
+      const token = getSessionToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    }, [getSessionToken]);
+    useEffect(() => {
+      try {
+        if (inputText) {
+          window.sessionStorage.setItem(draftKey, inputText);
+        } else {
+          window.sessionStorage.removeItem(draftKey);
+        }
+      } catch {
+        /* A disabled storage API must never block messaging. */
+      }
+    }, [draftKey, inputText]);
+    const ensureConversation = useCallback(async () => {
+      if (conversationId) return conversationId;
+      const token = getSessionToken();
+      if (!currentUser || !token) {
+        throw new Error("Login with your telephone and personal PIN to send.");
+      }
+      const response = await fetch(`${apiUrl}/api/time-market/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          service_post_id: partner.servicePostId,
+          provider_id: partner.providerId || undefined,
+          provider_phone: partner.providerPhone || undefined,
+        }),
+      });
+      const text = await response.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(text || "Could not start this conversation.");
+      }
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not start this conversation.",
+        );
+      }
+      const id = String(data.conversation?.id || "");
+      if (!id) throw new Error("Could not start this conversation.");
+      setConversationId(id);
+      return id;
+    }, [
+      apiUrl,
+      conversationId,
+      currentUser,
+      getSessionToken,
+      partner.providerId,
+      partner.providerPhone,
+      partner.servicePostId,
+    ]);
+    const loadMessages = useCallback(
+      async (id, { silent = false } = {}) => {
+        if (!id) return;
+        if (!silent) setLoading(true);
+        try {
+          const response = await fetch(
+            `${apiUrl}/api/time-market/messages?conversation_id=${encodeURIComponent(id)}`,
+            {
+              headers: { ...authHeaders() },
+              cache: "no-store",
+            },
+          );
+          const text = await response.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            throw new Error(text || "Could not load messages.");
+          }
+          if (!response.ok || !data.success) {
+            throw new Error(
+              data.error || data.message || "Could not load messages.",
+            );
+          }
+          if (!isMountedRef.current) return;
+          const normalized = (data.messages || []).map(normalizeMessage);
+          setMessages((current) => {
+            const pendingOnes = current.filter((message) => message.pending);
+            const knownIds = new Set(normalized.map((message) => message.id));
+            const merged = [...normalized];
+            pendingOnes.forEach((pendingMessage) => {
+              if (!knownIds.has(pendingMessage.id)) merged.push(pendingMessage);
+            });
+            return merged;
+          });
+          setLoadError("");
+        } catch (error) {
+          if (!silent && isMountedRef.current) {
+            setLoadError(error.message || "Could not load messages.");
+          }
+        } finally {
+          if (!silent && isMountedRef.current) setLoading(false);
+        }
+      },
+      [apiUrl, authHeaders, normalizeMessage],
+    );
+    useEffect(() => {
+      isMountedRef.current = true;
+      if (partner.conversationId && currentUser) {
+        loadMessages(String(partner.conversationId)).catch(() => {});
+      } else {
+        setLoading(false);
+        setLoadError("");
+      }
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, [currentUser, loadMessages, partner.conversationId]);
+    // Poll while open, stop when hidden/closed/unmounted.
+    useEffect(() => {
+      if (!conversationId) return undefined;
+      const startPolling = () => {
+        if (pollRef.current) return;
+        pollRef.current = setInterval(() => {
+          if (document.hidden) return;
+          loadMessages(conversationId, { silent: true });
+        }, MESSAGE_POLL_INTERVAL_MS);
+      };
+      const stopPolling = () => {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      };
+      const handleVisibility = () => {
+        if (document.hidden) {
+          stopPolling();
+        } else {
+          loadMessages(conversationId, { silent: true });
+          startPolling();
+        }
+      };
+      startPolling();
+      document.addEventListener("visibilitychange", handleVisibility);
+      return () => {
+        stopPolling();
+        document.removeEventListener("visibilitychange", handleVisibility);
+      };
+    }, [conversationId, loadMessages]);
+    // Only auto-scroll when the reader is already near the bottom; otherwise
+    // surface a "New messages" button instead of yanking their scroll position.
+    useEffect(() => {
+      const grew = messages.length > lastMessageCountRef.current;
+      lastMessageCountRef.current = messages.length;
+      if (isNearBottomRef.current) {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ block: "end" });
+        }
+        setShowNewMessagesButton(false);
+        return;
+      }
+      if (grew) {
+        const lastMessage = messages[messages.length - 1];
+        const isOwnMessage =
+          lastMessage && String(lastMessage.senderId) === String(currentUser?.id);
+        if (!isOwnMessage) {
+          setShowNewMessagesButton(true);
+        }
+      }
+    }, [messages, currentUser]);
+    const handleScroll = useCallback(() => {
+      const node = messagesListRef.current;
+      if (!node) return;
+      const distanceFromBottom =
+        node.scrollHeight - node.scrollTop - node.clientHeight;
+      isNearBottomRef.current = distanceFromBottom < 120;
+      if (isNearBottomRef.current) setShowNewMessagesButton(false);
+    }, []);
+    const scrollToBottom = useCallback(() => {
+      isNearBottomRef.current = true;
+      setShowNewMessagesButton(false);
+      messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    }, []);
+    const sendMessage = useCallback(async () => {
+      const text = inputText.trim();
+      if (!text || sending) return;
+      if (!currentUser || !getSessionToken()) {
+        pendingSendAfterAuthRef.current = true;
+        onRequireAuth?.();
+        return;
+      }
+      setInputText("");
+      setPendingFailedText(null);
+      const tempId = `pending-${Date.now()}`;
+      const optimisticMessage = {
+        id: tempId,
+        senderId: String(currentUser?.id || ""),
+        text,
+        type: "text",
+        mediaUrl: "",
+        createdAt: new Date().toISOString(),
+        readAt: null,
+        pending: true,
+        failed: false,
+      };
+      setMessages((current) => [...current, optimisticMessage]);
+      isNearBottomRef.current = true;
+      setSending(true);
+      try {
+        const id = await ensureConversation();
+        const response = await fetch(`${apiUrl}/api/time-market/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            conversation_id: id,
+            message_type: "text",
+            text,
+          }),
+        });
+        const responseText = await response.text();
+        let data = {};
+        try {
+          data = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          throw new Error(responseText || "Could not send message.");
+        }
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || data.message || "Could not send message.",
+          );
+        }
+        const confirmed = normalizeMessage(data.message);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === tempId ? confirmed : message,
+          ),
+        );
+      } catch (error) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === tempId
+              ? { ...message, pending: false, failed: true }
+              : message,
+          ),
+        );
+        setPendingFailedText({ text, tempId });
+      } finally {
+        if (isMountedRef.current) setSending(false);
+      }
+    }, [
+      inputText,
+      sending,
+      ensureConversation,
+      apiUrl,
+      authHeaders,
+      currentUser,
+      getSessionToken,
+      normalizeMessage,
+      onRequireAuth,
+    ]);
+    useEffect(() => {
+      if (!currentUser || !pendingSendAfterAuthRef.current || !inputText.trim()) return;
+      pendingSendAfterAuthRef.current = false;
+      sendMessage();
+    }, [currentUser, inputText, sendMessage]);
+    const retryFailedText = useCallback(() => {
+      if (!pendingFailedText) return;
+      setInputText(pendingFailedText.text);
+      setPendingFailedText(null);
+      setMessages((current) =>
+        current.filter((message) => message.id !== pendingFailedText.tempId),
+      );
+    }, [pendingFailedText]);
+    // =============================================================================
+    // Attachments (photo, video, document) + voice recordings, reusing
+    // the existing multipart path on POST /api/time-market/messages.
+    // =============================================================================
+    const sendAttachment = useCallback(
+      async (file, typeHint) => {
+        if (!file) return;
+        setAttachMenuOpen(false);
+        setAttachError("");
+        if (!currentUser || !getSessionToken()) {
+          pendingAttachmentAfterAuthRef.current = { file, typeHint };
+          onRequireAuth?.();
+          return;
+        }
+        const tempId = `pending-${Date.now()}`;
+        const previewUrl = trackObjectUrl(URL.createObjectURL(file));
+        const optimisticMessage = {
+          id: tempId,
+          senderId: String(currentUser?.id || ""),
+          text: "",
+          type: typeHint,
+          mediaUrl: previewUrl,
+          fileName: file.name || "Attachment",
+          createdAt: new Date().toISOString(),
+          readAt: null,
+          pending: true,
+          failed: false,
+        };
+        setMessages((current) => [...current, optimisticMessage]);
+        isNearBottomRef.current = true;
+        setSending(true);
+        try {
+          const id = await ensureConversation();
+          const formData = new FormData();
+          formData.append("conversation_id", id);
+          formData.append("file", file);
+          formData.append("message_type", typeHint);
+          const response = await fetch(`${apiUrl}/api/time-market/messages`, {
+            method: "POST",
+            headers: { ...authHeaders() },
+            body: formData,
+          });
+          const responseText = await response.text();
+          let data = {};
+          try {
+            data = responseText ? JSON.parse(responseText) : {};
+          } catch {
+            throw new Error(responseText || "Could not send attachment.");
+          }
+          if (!response.ok || !data.success) {
+            throw new Error(
+              data.error || data.message || "Could not send attachment.",
+            );
+          }
+          const confirmed = normalizeMessage(data.message);
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === tempId ? confirmed : message,
+            ),
+          );
+        } catch (error) {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === tempId
+                ? { ...message, pending: false, failed: true }
+                : message,
+            ),
+          );
+          setAttachError(error.message || "Could not send attachment.");
+          setPendingFailedAttachment({ file, typeHint, tempId });
+        } finally {
+          if (isMountedRef.current) setSending(false);
+        }
+      },
+      [
+        apiUrl,
+        authHeaders,
+        currentUser,
+        ensureConversation,
+        getSessionToken,
+        normalizeMessage,
+        onRequireAuth,
+        trackObjectUrl,
+      ],
+    );
+    useEffect(() => {
+      if (!currentUser || !pendingAttachmentAfterAuthRef.current) return;
+      const pending = pendingAttachmentAfterAuthRef.current;
+      pendingAttachmentAfterAuthRef.current = null;
+      sendAttachment(pending.file, pending.typeHint);
+    }, [currentUser, sendAttachment]);
+    const retryFailedAttachment = useCallback(() => {
+      if (!pendingFailedAttachment) return;
+      const pending = pendingFailedAttachment;
+      setPendingFailedAttachment(null);
+      setAttachError("");
+      setMessages((current) =>
+        current.filter((message) => message.id !== pending.tempId),
+      );
+      sendAttachment(pending.file, pending.typeHint);
+    }, [pendingFailedAttachment, sendAttachment]);
+    const handlePickPhoto = useCallback(
+      (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) sendAttachment(file, "image");
+      },
+      [sendAttachment],
+    );
+    const handlePickVideo = useCallback(
+      (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) sendAttachment(file, "video");
+      },
+      [sendAttachment],
+    );
+    const handlePickDocument = useCallback(
+      (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) sendAttachment(file, "document");
+      },
+      [sendAttachment],
+    );
+    const pickSupportedAudioMime = () => {
+      const candidates = ["audio/webm", "audio/mp4", "audio/ogg"];
+      for (const type of candidates) {
+        if (window.MediaRecorder?.isTypeSupported?.(type)) return type;
+      }
+      return "";
+    };
+    const startRecording = useCallback(async () => {
+      if (isRecording) return;
+      setAttachError("");
+      if (!currentUser || !getSessionToken()) {
+        onRequireAuth?.();
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        setAttachError("Voice messages aren't supported in this browser.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        recordingStreamRef.current = stream;
+        recordedChunksRef.current = [];
+        const mimeType = pickSupportedAudioMime();
+        const recorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0)
+            recordedChunksRef.current.push(event.data);
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsRecording(true);
+        setRecordingSeconds(0);
+        recordingTimerRef.current = setInterval(() => {
+          setRecordingSeconds((seconds) => seconds + 1);
+        }, 1000);
+      } catch (error) {
+        setAttachError(
+          "Couldn't access your microphone. Check permissions and try again.",
+        );
+      }
+    }, [currentUser, getSessionToken, isRecording, onRequireAuth]);
+    const stopRecording = useCallback(
+      (shouldSend) => {
+        const recorder = mediaRecorderRef.current;
+        if (!recorder) return;
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        recorder.onstop = () => {
+          recordingStreamRef.current
+            ?.getTracks()
+            .forEach((track) => track.stop());
+          recordingStreamRef.current = null;
+          if (shouldSend && recordedChunksRef.current.length) {
+            const mimeType = recorder.mimeType || "audio/webm";
+            const extension = mimeType.includes("mp4")
+              ? "m4a"
+              : mimeType.includes("ogg")
+                ? "ogg"
+                : "webm";
+            const blob = new Blob(recordedChunksRef.current, {
+              type: mimeType,
+            });
+            sendAttachment(
+              new File([blob], `voice-message.${extension}`, {
+                type: mimeType,
+              }),
+              "voice",
+            );
+          }
+          recordedChunksRef.current = [];
+        };
+        recorder.stop();
+        setIsRecording(false);
+        setRecordingSeconds(0);
+      },
+      [sendAttachment],
+    );
+    useEffect(() => {
+      return () => {
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state !== "inactive"
+        ) {
+          try {
+            mediaRecorderRef.current.stop();
+          } catch {
+            /* ignore */
+          }
+        }
+        recordingStreamRef.current
+          ?.getTracks()
+          .forEach((track) => track.stop());
+        clearInterval(recordingTimerRef.current);
+        objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      };
+    }, []);
+    const formatRecordingTime = (totalSeconds) => {
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    };
+    // Group messages into Today/Yesterday/date sections for the separators.
+    const groupedMessages = useMemo(() => {
+      const groups = [];
+      let currentLabel = null;
+      for (const message of messages) {
+        const label = formatDayLabel(message.createdAt);
+        if (label !== currentLabel) {
+          groups.push({ type: "separator", label, key: `sep-${message.id}` });
+          currentLabel = label;
+        }
+        groups.push({ type: "message", message });
+      }
+      return groups;
+    }, [messages]);
+    return (
+      <div className="chat-modal-overlay" onClick={onClose}>
+        <div
+          className="chat-modal"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="chat-header">
+            <button
+              className="chat-back"
+              onClick={onClose}
+              aria-label="Close chat"
+            >
+              <X size={20} />
+            </button>
+            <img
+              className="chat-header-avatar"
+              src={partner.avatar || DEFAULT_LOGO}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = DEFAULT_LOGO;
+              }}
+            />
+            <div className="chat-header-copy">
+              <strong className="chat-header-name">
+                {partner.name}
+                {partner.verified && (
+                  <span
+                    className="verified-check-badge chat-header-verified"
+                    role="img"
+                    aria-label="Verified"
+                  >
+                    <Check size={10} strokeWidth={3.5} aria-hidden="true" />
+                  </span>
+                )}
+              </strong>
+              {partner.serviceName || partner.headline ? (
+                <small>{partner.serviceName || partner.headline}</small>
+              ) : null}
+              <small className="chat-privacy-note">
+                Private to participants; authorized Gwamo admins may review under the Privacy Policy.
+              </small>
+            </div>
+          </div>
+          <div
+            className="chat-messages"
+            ref={messagesListRef}
+            onScroll={handleScroll}
+          >
+            {loading ? (
+              <div className="chat-loading">Loading messages...</div>
+            ) : loadError ? (
+              <div className="chat-empty">{loadError}</div>
+            ) : messages.length === 0 ? (
+              <div className="chat-welcome">
+                <img
+                  src={partner.avatar || DEFAULT_LOGO}
+                  alt=""
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = DEFAULT_LOGO;
+                  }}
+                />
+                <strong>Message {partner.name || "provider"}</strong>
+                <p>
+                  {currentUser
+                    ? "Ask about this service or send the first message below."
+                    : "Write your message below. Login with telephone + PIN only when you press Send."}
+                </p>
+              </div>
+            ) : (
+              groupedMessages.map((entry) => {
+                if (entry.type === "separator") {
+                  return (
+                    <div className="chat-date-separator" key={entry.key}>
+                      <span>{entry.label}</span>
+                    </div>
+                  );
+                }
+                const msg = entry.message;
+                const isOwn =
+                  String(msg.senderId) === String(currentUser?.id);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`chat-message ${
+                      isOwn ? "sent" : "received"
+                    }${msg.pending ? " is-pending" : ""}${
+                      msg.failed ? " is-failed" : ""
+                    }`}
+                  >
+                    {msg.type === "image" && msg.mediaUrl ? (
+                      <img
+                        src={msg.mediaUrl}
+                        alt="Attachment"
+                        className="chat-image-attachment"
+                        onClick={() => onZoomImage?.(msg.mediaUrl)}
+                      />
+                    ) : null}
+                    {msg.type === "video" && msg.mediaUrl ? (
+                      <video
+                        src={msg.mediaUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : null}
+                    {msg.type === "voice" && msg.mediaUrl ? (
+                      <audio src={msg.mediaUrl} controls preload="none" />
+                    ) : null}
+                    {msg.type === "document" && msg.mediaUrl ? (
+                      <a
+                        className="chat-document-link"
+                        href={msg.mediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                      >
+                        <FileText size={19} aria-hidden="true" />
+                        <span>{msg.fileName || "Open document"}</span>
+                      </a>
+                    ) : null}
+                    {msg.text ? <p>{msg.text}</p> : null}
+                    <time>
+                      {msg.pending
+                        ? "Sending..."
+                        : msg.failed
+                          ? "Not delivered"
+                          : new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                      {isOwn && !msg.pending && !msg.failed && (
+                        <span
+                          className={`chat-read-status${msg.readAt ? " is-read" : ""}`}
+                          aria-label={msg.readAt ? "Read" : msg.deliveredAt ? "Delivered" : "Sent"}
+                        >
+                          {msg.readAt || msg.deliveredAt ? (
+                            <CheckCheck size={13} aria-hidden="true" />
+                          ) : (
+                            <Check size={13} aria-hidden="true" />
+                          )}
+                        </span>
+                      )}
+                    </time>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          {showNewMessagesButton && (
+            <button
+              type="button"
+              className="chat-new-messages-button"
+              onClick={scrollToBottom}
+            >
+              New messages
+            </button>
+          )}
+          {pendingFailedText ? (
+            <div className="chat-retry-banner">
+              <span>Message not sent.</span>
+              <button type="button" onClick={retryFailedText}>
+                Tap to retry
+              </button>
+            </div>
+          ) : null}
+          {attachError ? (
+            <div className="chat-retry-banner">
+              <span>{attachError}</span>
+              <button
+                type="button"
+                onClick={
+                  pendingFailedAttachment
+                    ? retryFailedAttachment
+                    : () => setAttachError("")
+                }
+              >
+                {pendingFailedAttachment ? "Tap to retry" : "Dismiss"}
+              </button>
+            </div>
+          ) : null}
+          {isRecording ? (
+            <div className="chat-recording-bar">
+              <span className="chat-recording-dot" aria-hidden="true" />
+              <span>Recording {formatRecordingTime(recordingSeconds)}</span>
+              <button
+                type="button"
+                onClick={() => stopRecording(false)}
+                aria-label="Cancel recording"
+              >
+                <Trash2 size={18} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="chat-recording-stop"
+                onClick={() => stopRecording(true)}
+                aria-label="Stop and send recording"
+              >
+                <Square size={16} fill="currentColor" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <div className="chat-composer">
+              <div className="chat-attach-wrap">
+                <button
+                  type="button"
+                  className="chat-attach-button"
+                  onClick={() => setAttachMenuOpen((value) => !value)}
+                  aria-label="Attach a photo, video or document"
+                  aria-haspopup="true"
+                  aria-expanded={attachMenuOpen}
+                >
+                  <Paperclip size={20} aria-hidden="true" />
+                </button>
+                {attachMenuOpen && (
+                  <>
+                    <div
+                      className="chat-attach-backdrop"
+                      onClick={() => setAttachMenuOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div className="chat-attach-menu">
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <ImageIcon size={18} aria-hidden="true" /> Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => videoInputRef.current?.click()}
+                      >
+                        <Video size={18} aria-hidden="true" /> Video
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => documentInputRef.current?.click()}
+                      >
+                        <FileText size={18} aria-hidden="true" /> Document
+                      </button>
+                    </div>
+                  </>
+                )}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{
+                    display: "none",
+                  }}
+                  onChange={handlePickPhoto}
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  style={{
+                    display: "none",
+                  }}
+                  onChange={handlePickVideo}
+                />
+                <input
+                  ref={documentInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,application/pdf"
+                  style={{
+                    display: "none",
+                  }}
+                  onChange={handlePickDocument}
+                />
+              </div>
+              <input
+                type="text"
+                placeholder={`Message ${partner.name || "provider"}...`}
+                autoFocus
+                value={inputText}
+                onChange={(event) => setInputText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") sendMessage();
+                }}
+              />
+              {inputText.trim() ? (
+                <button
+                  className="chat-send"
+                  onClick={sendMessage}
+                  disabled={sending || loading}
+                  aria-label="Send message"
+                >
+                  <Send size={20} aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  className="chat-send"
+                  onClick={startRecording}
+                  disabled={sending || loading}
+                  aria-label="Record a voice message"
+                >
+                  <Mic size={20} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  },
+);
+ChatModal.displayName = "ChatModal";
+// =============================================================================
+// ZoomableImageViewer - double-tap, pinch, and drag-to-pan
+// =============================================================================
+const ZOOM_MIN_SCALE = 1;
+const ZOOM_MAX_SCALE = 4;
+const ZOOM_DOUBLE_TAP_SCALE = 2.75;
+const ZoomableImageViewer = memo(({ src, alt = "Photo", onClose }) => {
+  useEscapeToClose(onClose);
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+  const pointersRef = useRef(new Map());
+  const gestureRef = useRef(null);
+  const clampTranslate = useCallback((nextScale, x, y) => {
+    const node = containerRef.current;
+    if (!node) return { x, y };
+    const rect = node.getBoundingClientRect();
+    const maxX = Math.max(0, (rect.width * (nextScale - 1)) / 2);
+    const maxY = Math.max(0, (rect.height * (nextScale - 1)) / 2);
+    return {
+      x: Math.min(maxX, Math.max(-maxX, x)),
+      y: Math.min(maxY, Math.max(-maxY, y)),
+    };
+  }, []);
+  const resetZoom = useCallback(() => {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }, []);
+  const zoomAt = useCallback(
+    (clientX, clientY, nextScale) => {
+      const node = containerRef.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const originX = clientX - rect.left - rect.width / 2;
+      const originY = clientY - rect.top - rect.height / 2;
+      const clamped = Math.min(
+        ZOOM_MAX_SCALE,
+        Math.max(ZOOM_MIN_SCALE, nextScale),
+      );
+      setScale((prevScale) => {
+        const ratio = clamped / prevScale;
+        setTranslate((prevTranslate) =>
+          clampTranslate(
+            clamped,
+            originX - (originX - prevTranslate.x) * ratio,
+            originY - (originY - prevTranslate.y) * ratio,
+          ),
+        );
+        return clamped;
+      });
+    },
+    [clampTranslate],
+  );
+  const handleDoubleClick = useCallback(
+    (event) => {
+      event.stopPropagation();
+      if (scale > 1) {
+        resetZoom();
+      } else {
+        zoomAt(event.clientX, event.clientY, ZOOM_DOUBLE_TAP_SCALE);
+      }
+    },
+    [scale, resetZoom, zoomAt],
+  );
+  const handleWheel = useCallback(
+    (event) => {
+      event.preventDefault();
+      zoomAt(
+        event.clientX,
+        event.clientY,
+        scale - event.deltaY * 0.0015 * scale,
+      );
+    },
+    [scale, zoomAt],
+  );
+  const handlePointerDown = useCallback(
+    (event) => {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      pointersRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (pointersRef.current.size === 1) {
+        gestureRef.current = {
+          mode: "pan",
+          startX: event.clientX,
+          startY: event.clientY,
+          startTranslate: translate,
+        };
+      } else if (pointersRef.current.size === 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const distance =
+          Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        gestureRef.current = {
+          mode: "pinch",
+          startDistance: distance,
+          startScale: scale,
+          midpoint: {
+            x: (pts[0].x + pts[1].x) / 2,
+            y: (pts[0].y + pts[1].y) / 2,
+          },
+        };
+      }
+    },
+    [translate, scale],
+  );
+  const handlePointerMove = useCallback(
+    (event) => {
+      if (!pointersRef.current.has(event.pointerId)) return;
+      pointersRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const gesture = gestureRef.current;
+      if (!gesture) return;
+      if (gesture.mode === "pan" && scale > 1) {
+        setTranslate(
+          clampTranslate(
+            scale,
+            gesture.startTranslate.x + (event.clientX - gesture.startX),
+            gesture.startTranslate.y + (event.clientY - gesture.startY),
+          ),
+        );
+      } else if (gesture.mode === "pinch" && pointersRef.current.size === 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const distance =
+          Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        zoomAt(
+          gesture.midpoint.x,
+          gesture.midpoint.y,
+          gesture.startScale * (distance / gesture.startDistance),
+        );
+      }
+    },
+    [scale, clampTranslate, zoomAt],
+  );
+  const handlePointerUp = useCallback(
+    (event) => {
+      pointersRef.current.delete(event.pointerId);
+      if (pointersRef.current.size === 0) {
+        gestureRef.current = null;
+        setScale((current) => {
+          if (current < 1.02) {
+            setTranslate({ x: 0, y: 0 });
+            return 1;
+          }
+          return current;
+        });
+      } else if (pointersRef.current.size === 1) {
+        const [[, point]] = Array.from(pointersRef.current.entries());
+        gestureRef.current = {
+          mode: "pan",
+          startX: point.x,
+          startY: point.y,
+          startTranslate: translate,
+        };
+      }
+    },
+    [translate],
+  );
+  useEffect(() => {
+    resetZoom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
+  return (
+    <div
+      className="zoom-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo preview"
+    >
+      <button
+        type="button"
+        className="zoom-close-button"
+        onClick={onClose}
+        aria-label="Close photo preview"
+      >
+        <X size={26} strokeWidth={2.4} aria-hidden="true" />
+      </button>
+      <div
+        className="zoom-image-shell"
+        ref={containerRef}
+        onClick={(event) => event.stopPropagation()}
+        onDoubleClick={handleDoubleClick}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        role="presentation"
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="zoom-image"
+          decoding="async"
+          draggable={false}
+          style={{
+            transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
+            cursor: scale > 1 ? "grab" : "zoom-in",
+            touchAction: "none",
+          }}
+        />
+      </div>
+      {scale > 1 && (
+        <button
+          type="button"
+          className="zoom-reset-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            resetZoom();
+          }}
+        >
+          Reset zoom
+        </button>
+      )}
+    </div>
+  );
+});
+ZoomableImageViewer.displayName = "ZoomableImageViewer";
+const ProviderProfileSheet = memo(
+  ({ post, isOwner = false, onClose, onMessage, onShare }) => {
+    useEscapeToClose(onClose);
+    const info = getVerificationStatus(post);
+    const providerName =
+      post.service_provider_name || post.creator_name || "Provider";
+    const headline = post.service_charge_per_minute || post.title || "";
+    const description = post.work_description || post.subtitle || "";
+    const postedDate = post.created_at
+      ? new Date(post.created_at).toLocaleDateString([], {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : "";
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal-card profile-sheet-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>{isOwner ? "Your Profile" : "Provider Profile"}</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="profile-sheet-top">
+            <div className={`provider-sheet-avatar ${info.className}`}>
+              <img
+                src={post.logo_url || DEFAULT_LOGO}
+                alt=""
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = DEFAULT_LOGO;
+                }}
+              />
+            </div>
+            <div className="profile-sheet-identity">
+              <h3>{providerName}</h3>
+              <VerificationTag info={info} />
+            </div>
+          </div>
+          {headline ? <p className="profile-sheet-headline">{headline}</p> : null}
+          {description ? (
+            <p className="profile-sheet-description">{description}</p>
+          ) : null}
+          {postedDate ? (
+            <p className="profile-sheet-meta">Posted {postedDate}</p>
+          ) : null}
+          <div className="profile-sheet-actions">
+            {!isOwner && (
+              <button type="button" className="save-button" onClick={onMessage}>
+                <MessageSquare size={18} aria-hidden="true" />
+                Message
+              </button>
+            )}
+            <button type="button" className="cancel-button" onClick={onShare}>
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  },
+);
+ProviderProfileSheet.displayName = "ProviderProfileSheet";
+// =============================================================================
+// ProfileEditModal - My Profile (account-level identity fields)
+// =============================================================================
+const ProfileEditModal = memo(
+  ({
+    user,
+    fullName,
+    setFullName,
+    serviceName,
+    setServiceName,
+    servicesOffered,
+    setServicesOffered,
+    photoPreview,
+    onPhotoChange,
+    onRemovePhoto,
+    photoRemoved,
+    contextPost,
+    onEditListing,
+    onOpenServices,
+    onLogout,
+    deleteConfirming,
+    setDeleteConfirming,
+    onDeleteAccount,
+    saving,
+    error,
+    onSave,
+    onClose,
+  }) => {
+    useEscapeToClose(onClose);
+    const info = getVerificationStatus(user);
+    const currentPhoto = photoRemoved
+      ? ""
+      : photoPreview || user?.profile_image_url || "";
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>My Profile</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="account-status-row">
+            <VerificationTag info={info} />
+            {info.status === "pending" && (
+              <p className="field-help">
+                Your blue verified badge appears after Gwamo staff confirms your
+                details.
+              </p>
+            )}
+          </div>
+          <div className="form-section">
+            <div className="section-heading">Photo</div>
+            <div className="profile-photo-row">
+              <div className="profile-photo-preview">
+                {currentPhoto ? (
+                  <img src={currentPhoto} alt="" />
+                ) : (
+                  <User size={26} aria-hidden="true" />
+                )}
+              </div>
+              <div className="profile-photo-actions">
+                <label
+                  className="file-picker profile-photo-picker"
+                  htmlFor="profile-photo-upload"
+                >
+                  <span>Change Photo</span>
+                  <input
+                    id="profile-photo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      onPhotoChange(event.target.files?.[0] || null)
+                    }
+                  />
+                </label>
+                {currentPhoto && (
+                  <button
+                    type="button"
+                    className="cancel-button profile-photo-remove"
+                    onClick={onRemovePhoto}
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="field-help">
+              Use a clear square photo. It will be cropped into the circular
+              profile badge.
+            </p>
+          </div>
+          <div className="form-section">
+            <label htmlFor="profile-full-name">Full name</label>
+            <input
+              id="profile-full-name"
+              type="text"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+            />
+            <p className="field-help">
+              Your legal name, used for verification.
+            </p>
+          </div>
+          <div className="form-section">
+            <label htmlFor="profile-service-name">Public / service name</label>
+            <input
+              id="profile-service-name"
+              type="text"
+              value={serviceName}
+              onChange={(event) => setServiceName(event.target.value)}
+            />
+            <p className="field-help">
+              This is the name shown on your services.
+            </p>
+          </div>
+          <div className="form-section">
+            <label htmlFor="profile-services-offered">
+              Services you can offer
+            </label>
+            <textarea
+              id="profile-services-offered"
+              placeholder="e.g. Phone repair, driving, English tutoring"
+              value={servicesOffered}
+              onChange={(event) => setServicesOffered(event.target.value)}
+            />
+            <p className="field-help">
+              Separate different skills with a comma.
+            </p>
+          </div>
+          {contextPost && (
+            <div className="form-section">
+              <div className="section-heading">This listing</div>
+              <button
+                type="button"
+                className="cancel-button"
+                onClick={onEditListing}
+              >
+                <Pencil size={16} aria-hidden="true" /> Edit price, description
+                and media
+              </button>
+              <p className="field-help">
+                Opens the Service Provider form for this specific listing.
+              </p>
+            </div>
+          )}
+          <div className="form-section">
+            <div className="section-heading">Account</div>
+            <button
+              type="button"
+              className="cancel-button"
+              onClick={onOpenServices}
+            >
+              <ShoppingBasket size={16} aria-hidden="true" /> Manage all my
+              services
+            </button>
+            <button type="button" className="cancel-button" onClick={onLogout}>
+              <LogOut size={16} aria-hidden="true" /> Log out
+            </button>
+          </div>
+          {error && <p className="auth-error">{error}</p>}
+          <button
+            type="button"
+            className="save-button"
+            onClick={onSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+          <button type="button" className="cancel-button" onClick={onClose}>
+            Cancel
+          </button>
+          <div className="form-section form-section-last profile-danger-zone">
+            <div className="section-heading">Danger zone</div>
+            {deleteConfirming ? (
+              <>
+                <p className="field-help">
+                  This deletes your provider identity, not just one listing. Are
+                  you sure?
+                </p>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={onDeleteAccount}
+                >
+                  Yes, delete my provider profile
+                </button>
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() => setDeleteConfirming(false)}
+                >
+                  Keep my profile
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() => setDeleteConfirming(true)}
+              >
+                Delete my provider profile
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  },
+);
+ProfileEditModal.displayName = "ProfileEditModal";
+// =============================================================================
+// MyServicesSheet - list / edit / delete the provider's own posts
+// =============================================================================
+const MyServicesSheet = memo(
+  ({ services, loading, error, onEdit, onDelete, onClose, onCreateNew }) => {
+    useEscapeToClose(onClose);
+    return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <h2>My Services</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-close"
+            aria-label="Close"
+          >
+            <X size={20} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </div>
+        {loading ? (
+          <p className="field-help">Loading your services...</p>
+        ) : error ? (
+          <p className="auth-error">{error}</p>
+        ) : services.length === 0 ? (
+          <div className="mysheet-empty">
+            <p>You haven't added a service yet.</p>
+            <button type="button" className="save-button" onClick={onCreateNew}>
+              Offer your service
+            </button>
+          </div>
+        ) : (
+          <div className="myservices-list">
+            {services.map((service) => {
+              const info = getVerificationStatus(service);
+              return (
+                <div className="myservice-row" key={service.id}>
+                  <img
+                    src={service.logo_url || DEFAULT_LOGO}
+                    alt=""
+                    className="myservice-thumb"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = DEFAULT_LOGO;
+                    }}
+                  />
+                  <div className="myservice-info">
+                    <strong>
+                      {service.service_charge_per_minute ||
+                        service.title ||
+                        "Price not set"}
+                      {info.verified && (
+                        <CheckCircle
+                          size={14}
+                          className="verified-badge verified"
+                          aria-label="Verified"
+                        />
+                      )}
+                    </strong>
+                    <span>
+                      {service.work_description ||
+                        service.subtitle ||
+                        "No description yet."}
+                    </span>
+                  </div>
+                  <div className="myservice-actions">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(service)}
+                      aria-label="Edit service"
+                    >
+                      <Pencil size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(service.id)}
+                      aria-label="Delete service"
+                      className="myservice-delete"
+                    >
+                      <X size={17} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <button type="button" className="cancel-button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+    );
+  },
+);
+MyServicesSheet.displayName = "MyServicesSheet";
+// =============================================================================
+// MyTimeSheet - honest placeholder, no fake numbers (backend not built yet)
+// =============================================================================
+const MyTimeSheet = memo(({ onClose }) => {
+  useEscapeToClose(onClose);
+  return (
+  <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-header">
+        <h2>My Time</h2>
         <button
           type="button"
           onClick={onClose}
@@ -2720,44 +5802,340 @@ const PhoneNumberModal = memo(({ value, setValue, error, onConfirm, onClose }) =
           <X size={20} strokeWidth={2.4} aria-hidden="true" />
         </button>
       </div>
-
-      <div className="form-section form-section-last">
-        <label htmlFor="phone-modal-input">WhatsApp number</label>
-        <input
-          id="phone-modal-input"
-          type="tel"
-          inputMode="tel"
-          autoFocus
-          placeholder="+250 788 123 456"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onConfirm();
-          }}
-        />
-
-        {error && <p className="phone-modal-error">{error}</p>}
-
+      <div className="mysheet-empty">
+        <Wallet size={40} className="mytime-icon" aria-hidden="true" />
+        <p>
+          {
+            "This is where you'll track the economic value of your time on Gwamo \u2014 time offered, time exchanged, completed requests and what you've earned."
+          }
+        </p>
         <p className="field-help">
-          We only check that this looks like a real phone number — we don't
-          verify that you own it, and no OTP code is sent.
+          {
+            "These numbers arrive once Time Requests go live. Nothing to see yet \u2014 check back soon."
+          }
         </p>
       </div>
-
-      <button type="button" onClick={onConfirm} className="save-button">
-        Confirm &amp; Like
-      </button>
-
-      <button type="button" onClick={onClose} className="cancel-button">
-        Cancel
+      <button type="button" className="cancel-button" onClick={onClose}>
+        Close
       </button>
     </div>
   </div>
-));
-
-PhoneNumberModal.displayName = "PhoneNumberModal";
-
-function HomeStyles() {
+  );
+});
+MyTimeSheet.displayName = "MyTimeSheet";
+// =============================================================================
+// MyInboxSheet - all of the logged-in user's conversations (redesigned, Step 1)
+// =============================================================================
+const MyInboxSheet = memo(
+  ({
+    conversations,
+    loading,
+    error,
+    currentUserId,
+    filterServicePostId,
+    onOpenConversation,
+    onClose,
+  }) => {
+    useEscapeToClose(onClose);
+    const [searchTerm, setSearchTerm] = useState("");
+    const visible = filterServicePostId
+      ? conversations.filter(
+          (conversation) =>
+            String(conversation.service_post_id) ===
+            String(filterServicePostId),
+        )
+      : conversations;
+    // Newest activity first.
+    const sorted = [...visible].sort((a, b) => {
+      const aTime =
+        Date.parse(a.last_message_at || a.updated_at || a.created_at || 0) ||
+        0;
+      const bTime =
+        Date.parse(b.last_message_at || b.updated_at || b.created_at || 0) ||
+        0;
+      return bTime - aTime;
+    });
+    const query = searchTerm.trim().toLowerCase();
+    const filtered = query
+      ? sorted.filter((conversation) => {
+          const iAmProvider =
+            String(conversation.provider_id) === String(currentUserId);
+          const partnerName = (
+            iAmProvider
+              ? conversation.customer_full_name
+              : conversation.provider_full_name ||
+                conversation.service_provider_name
+          ) || "";
+          const serviceName = conversation.service_name || "";
+          return (
+            partnerName.toLowerCase().includes(query) ||
+            serviceName.toLowerCase().includes(query)
+          );
+        })
+      : sorted;
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>
+              {filterServicePostId ? "Messages about this service" : "Messages"}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          {!filterServicePostId && conversations.length > 0 && (
+            <div className="myinbox-search-wrap">
+              <Search size={16} aria-hidden="true" />
+              <input
+                type="text"
+                className="myinbox-search"
+                placeholder="Search messages"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                aria-label="Search messages"
+              />
+            </div>
+          )}
+          {loading ? (
+            <p className="field-help">Loading conversations...</p>
+          ) : error ? (
+            <p className="auth-error">{error}</p>
+          ) : filtered.length === 0 ? (
+            <div className="mysheet-empty">
+              <p>No messages yet.</p>
+              <p className="field-help">
+                When someone contacts you, the message will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="myinbox-list">
+              {filtered.map((conversation) => {
+                const iAmProvider =
+                  String(conversation.provider_id) === String(currentUserId);
+                const partnerName = iAmProvider
+                  ? conversation.customer_full_name || "Customer"
+                  : conversation.provider_full_name ||
+                    conversation.service_provider_name ||
+                    "Provider";
+                const partnerAvatar = iAmProvider
+                  ? conversation.customer_profile_image_url || ""
+                  : conversation.provider_profile_image_url || "";
+                const partnerVerified = iAmProvider
+                  ? conversation.customer_verification_status === "verified"
+                  : conversation.provider_verification_status === "verified";
+                const preview = conversation.last_message
+                  ? conversation.last_message
+                  : conversation.last_message_type
+                    ? attachmentPreviewLabel(conversation.last_message_type)
+                    : "No messages yet";
+                const unread = Number(conversation.unread_count || 0);
+                const lastActivity =
+                  conversation.last_message_at ||
+                  conversation.updated_at ||
+                  conversation.created_at ||
+                  "";
+                const timeLabel = lastActivity
+                  ? new Date(lastActivity).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : "";
+                return (
+                  <button
+                    type="button"
+                    className={`myinbox-row${unread > 0 ? " has-unread" : ""}`}
+                    key={conversation.id}
+                    onClick={() => onOpenConversation(conversation)}
+                  >
+                    <span className="myinbox-avatar">
+                      <img
+                        src={partnerAvatar || DEFAULT_LOGO}
+                        alt=""
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = DEFAULT_LOGO;
+                        }}
+                      />
+                    </span>
+                    <span className="myinbox-main">
+                      <span className="myinbox-name-row">
+                        <strong>{partnerName}</strong>
+                        {partnerVerified && (
+                          <span
+                            className="verified-check-badge myinbox-verified"
+                            role="img"
+                            aria-label="Verified"
+                          >
+                            <Check size={9} strokeWidth={3.5} aria-hidden="true" />
+                          </span>
+                        )}
+                        {timeLabel && (
+                          <span className="myinbox-time">{timeLabel}</span>
+                        )}
+                      </span>
+                      <small>
+                        {conversation.service_name ||
+                          conversation.service_charge_per_minute ||
+                          conversation.service_provider_name ||
+                          ""}
+                      </small>
+                      <small className="myinbox-preview">{preview}</small>
+                    </span>
+                    {unread > 0 && (
+                      <span
+                        className="myinbox-unread-badge"
+                        aria-label={`${unread} unread messages`}
+                      >
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button type="button" className="cancel-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  },
+);
+MyInboxSheet.displayName = "MyInboxSheet";
+// =============================================================================
+// CommentsSheet - public comments, separate from private messages. Own
+// scrollable list of glass bubbles, country flag per comment, compact
+// composer. Note: POST/GET /api/home/comments is assumed to mirror the
+// existing /api/home/react contract - verify against the real worker.js.
+// =============================================================================
+const CommentsSheet = memo(
+  ({
+    comments,
+    loading,
+    error,
+    commentText,
+    setCommentText,
+    submitting,
+    onSubmit,
+    onClose,
+  }) => {
+    useEscapeToClose(onClose);
+    return (
+      <div className="modal-overlay comments-overlay" onClick={onClose}>
+        <div
+          className="modal-card comments-sheet-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>Comments</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close comments"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="comments-list">
+            {loading ? (
+              <p className="field-help">Loading comments...</p>
+            ) : error ? (
+              <p className="auth-error">{error}</p>
+            ) : !comments.length ? (
+              <div className="mysheet-empty">
+                <p>No comments yet.</p>
+                <p className="field-help">Be the first to say something.</p>
+              </div>
+            ) : (
+              comments.map((comment, index) => (
+                <div className="comment-bubble" key={comment.id ?? index}>
+                  <div className="comment-bubble-head">
+                    <span className="comment-flag" aria-hidden="true">
+                      {comment.country_flag || "\u{1F310}"}
+                    </span>
+                    <strong>
+                      {comment.author_name ||
+                        comment.full_name ||
+                        comment.commenter_name ||
+                        "Someone"}
+                    </strong>
+                  </div>
+                  <p>{comment.text || comment.text_content || comment.comment || ""}</p>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="comments-composer">
+            <input
+              type="text"
+              placeholder="Write a comment..."
+              value={commentText}
+              maxLength={280}
+              onChange={(event) => setCommentText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") onSubmit();
+              }}
+            />
+            <button
+              type="button"
+              className="chat-send"
+              onClick={onSubmit}
+              disabled={submitting || !commentText.trim()}
+              aria-label="Post comment"
+            >
+              <Send size={18} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  },
+);
+CommentsSheet.displayName = "CommentsSheet";
+// =============================================================================
+// InfoModal - About Gwamo / Help
+// =============================================================================
+const InfoModal = memo(({ topic, onClose }) => {
+  useEscapeToClose(onClose);
+  const content = INFO_CONTENT[topic] || INFO_CONTENT.about;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{content.title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-close"
+            aria-label="Close"
+          >
+            <X size={20} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </div>
+        <p className="info-modal-body">{content.body}</p>
+        <button type="button" className="cancel-button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+});
+InfoModal.displayName = "InfoModal";
+// =============================================================================
+// HomeStyles
+// =============================================================================
+function HomeStylesInner() {
   return (
     <style>{`
       :root {
@@ -2770,12 +6148,15 @@ function HomeStyles() {
         --danger: #ff334f;
         --neon-red: #ff0040;
         --neon-glow: rgba(255, 0, 64, 0.8);
+        --deep-orange: #ff6a00;
+        --deep-orange-bright: #ff8a00;
+        --deep-orange-soft: rgba(255, 106, 0, 0.34);
+        --deep-orange-glow: rgba(255, 106, 0, 0.78);
+        --verified-green: #1d9bf0;
       }
-
       * {
         box-sizing: border-box;
       }
-
       html,
       body,
       #root {
@@ -2783,17 +6164,16 @@ function HomeStyles() {
         margin: 0;
         background: var(--page-bg);
       }
-
       body {
         overflow-x: hidden;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-
       button,
       input,
       textarea {
         font: inherit;
       }
-
       .home-page {
         width: 100%;
         min-height: 100svh;
@@ -2804,7 +6184,6 @@ function HomeStyles() {
           radial-gradient(circle at 90% 20%, rgba(124, 58, 237, 0.12), transparent 30%),
           var(--page-bg);
       }
-
       .feedx-topbar {
         position: fixed;
         top: 0;
@@ -2813,344 +6192,312 @@ function HomeStyles() {
         z-index: 1000;
         width: 100%;
         padding-top: env(safe-area-inset-top);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(3, 7, 18, 0.92);
-        -webkit-backdrop-filter: blur(20px);
-        backdrop-filter: blur(20px);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+        background: rgba(1, 5, 13, 0.985);
+        border-bottom: 0;
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
+        box-shadow: none;
       }
-
       .feedx-topbar-inner {
-        width: min(100%, 760px);
-        min-height: 72px;
+        width: min(100%, 900px);
+        min-height: 92px;
         margin: 0 auto;
-        padding: 10px 16px;
+        padding: 20px 26px 12px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 14px;
       }
-
       .gwamo-brand {
         min-width: 0;
         display: flex;
-        align-items: center;
-        gap: 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
       }
-
-      .gwamo-brand-mark {
-        width: 38px;
-        height: 38px;
-        flex: 0 0 38px;
-        display: grid;
-        place-items: center;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 13px;
-        color: #ffffff;
-        background: linear-gradient(145deg, #2563eb, #7c3aed);
-        box-shadow:
-          0 10px 28px rgba(37, 99, 235, 0.30),
-          inset 0 1px 0 rgba(255, 255, 255, 0.20);
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 20px;
-        font-weight: 900;
-        text-shadow:
-          0 0 8px rgba(56, 189, 248, 0.72),
-          0 0 18px rgba(59, 130, 246, 0.40);
-      }
-
       .feedx-logo {
         min-width: 0;
         margin: 0;
         overflow: hidden;
         color: #ffffff;
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 22px;
-        font-weight: 850;
+        font-size: clamp(34px, 6vw, 48px);
+        font-weight: 900;
         line-height: 1;
-        letter-spacing: -0.5px;
+        letter-spacing: 4px;
         text-overflow: ellipsis;
         white-space: nowrap;
+        text-shadow: 0 0 6px #fff, 0 0 18px rgba(8, 124, 255, .9);
       }
-
-      .feedx-logo span {
-        color: inherit;
-      }
-
-      .top-create-button {
-        min-height: 42px;
-        flex: 0 0 auto;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 17px;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 14px;
-        color: #ffffff;
-        background: linear-gradient(135deg, #2563eb, #7c3aed);
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 14px;
-        font-weight: 800;
-        line-height: 1;
+      .gwamo-tagline {
+        color: #168bff;
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1.1;
         white-space: nowrap;
-        cursor: pointer;
-        box-shadow:
-          0 10px 25px rgba(37, 99, 235, 0.25),
-          inset 0 1px 0 rgba(255, 255, 255, 0.18);
-        transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
       }
-
-      .top-create-button:hover {
-        transform: translateY(-1px);
-        box-shadow:
-          0 14px 32px rgba(37, 99, 235, 0.32),
-          inset 0 1px 0 rgba(255, 255, 255, 0.20);
-      }
-
-      .top-create-button:active {
-        transform: scale(0.97);
-      }
-
-      .top-create-button:focus-visible {
-        outline: 3px solid rgba(147, 197, 253, 0.72);
-        outline-offset: 3px;
-      }
-
-      .home-feed {
-        width: min(100%, 760px);
-        margin: 0 auto;
-        padding: calc(92px + env(safe-area-inset-top)) 12px max(80px, env(safe-area-inset-bottom));
-      }
-
-      .home-post {
-        width: 100%;
-        margin: 0 auto 22px;
-        padding: 0;
+      .topbar-actions {
         position: relative;
-        overflow: hidden;
-        isolation: isolate;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 24px;
-        background: rgba(15, 23, 42, 0.76);
-        box-shadow:
-          0 22px 50px rgba(0, 0, 0, 0.30),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
-      }
-
-      .crt-screen {
-        animation: screenFlicker 8s infinite;
-      }
-
-      .post-header {
-        position: relative;
-        z-index: 10;
-        min-height: 72px;
-        padding: 12px 14px;
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        display: flex;
         align-items: center;
         gap: 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        background: rgba(3, 7, 18, 0.44);
+        flex-shrink: 0;
       }
-
-      .profile-picture-button {
-        width: 48px;
-        height: 48px;
-        flex: 0 0 48px;
+      .login-pill {
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 14px;
+        border: 1px solid rgba(22, 139, 255, 0.42);
+        border-radius: 999px;
+        color: #ffffff;
+        background: rgba(8, 124, 255, 0.14);
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .verified-badge {
+        flex-shrink: 0;
+      }
+      .verified-badge.verified { color: #1d9bf0; }
+      .verified-badge.pending { color: #f59e0b; }
+      .verified-badge.rejected { color: var(--muted); }
+      .menu-button {
+        width: 52px;
+        height: 52px;
+        display: grid;
+        place-items: center;
         padding: 0;
-        overflow: hidden;
         border: 0;
-        border-radius: 50%;
+        border-radius: 0;
+        color: #ffffff;
         background: transparent;
         cursor: pointer;
       }
-
-      .profile-picture {
+      .menu-button svg {
+        width: 34px;
+        height: 34px;
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.14));
+      }
+      .provider-sheet-avatar {
+        --ring-c1: var(--danger);
+        --ring-c2: rgba(255, 51, 79, 0.32);
+      }
+      .provider-sheet-avatar.status-verified {
+        --ring-c1: #1d9bf0;
+        --ring-c2: rgba(29, 155, 240, 0.32);
+      }
+      .provider-sheet-avatar.status-rejected {
+        --ring-c1: var(--muted);
+        --ring-c2: rgba(155, 168, 186, 0.32);
+      }
+      .account-avatar-button {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        position: relative;
+        padding: 2px;
+        overflow: hidden;
+        border: 2px solid var(--blue-bright);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.20), 0 3px 10px rgba(0, 0, 0, 0.38);
+        cursor: pointer;
+      }
+      .account-avatar-button img {
         width: 100%;
         height: 100%;
         display: block;
         object-fit: cover;
+        border: 0;
         border-radius: 50%;
       }
-
-      .profile-details {
-        min-width: 0;
-        flex: 1;
-        display: flex;
-        align-items: center;
+      .dropdown-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
       }
-
-      .creator-name {
-        overflow: hidden;
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        min-width: 190px;
+        padding: 8px;
+        border-radius: 12px;
+        background: #0f1a2e;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        z-index: 1001;
+      }
+      .account-dropdown {
+        min-width: 232px;
+      }
+      .account-dropdown-header {
+        padding: 8px 10px 12px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .account-dropdown-name {
         color: #ffffff;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 800;
-        line-height: 1.25;
-        letter-spacing: -0.1px;
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-
-      .inbox-button,
-      .post-menu-button {
-        border: 0;
+      .dropdown-divider {
+        height: 1px;
+        margin: 6px 4px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        border-radius: 8px;
         color: #ffffff;
         background: transparent;
         cursor: pointer;
+        font-size: 14px;
+        transition: background 0.15s;
       }
-
-      .inbox-button {
-        width: 70px;
-        height: 58px;
-        flex: 0 0 70px;
-        position: relative;
-        display: grid;
-        place-items: center;
-        padding: 0;
+      .dropdown-item:hover {
+        background: rgba(255, 255, 255, 0.08);
       }
-
-      .inbox-envelope {
-        color: #ffffff;
-        filter:
-          drop-shadow(0 0 7px rgba(22, 139, 255, 1))
-          drop-shadow(0 0 22px rgba(22, 139, 255, 0.95));
+      .dropdown-item-danger {
+        color: #ff8a97;
       }
-
-      .unread-dot {
-        width: 20px;
-        height: 20px;
-        position: absolute;
-        top: 2px;
-        right: 5px;
-        border: 2px solid #06101f;
-        border-radius: 50%;
-        background: var(--danger);
-        box-shadow:
-          0 0 8px rgba(255, 51, 79, 1),
-          0 0 18px rgba(255, 51, 79, 0.72);
+      .verification-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 12px;
+        font-weight: 800;
       }
-
-      .post-menu-button {
-        width: 38px;
-        height: 48px;
-        flex: 0 0 38px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-      }
-
-      .post-copy {
-        position: relative;
-        z-index: 5;
-        padding: 18px 20px 16px;
-        text-align: left;
-      }
-
-      .post-title {
-        margin: 0 0 6px;
-        color: #ffffff;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: clamp(18px, 2.2vw, 21px);
-        font-weight: 750;
-        line-height: 1.28;
-        letter-spacing: -0.3px;
-        overflow-wrap: anywhere;
-      }
-
-      .post-message-wrap {
-        min-width: 0;
-      }
-
-      .post-message {
-        margin: 0;
-        color: rgba(226, 232, 240, 0.88);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 15px;
-        font-weight: 400;
-        line-height: 1.65;
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow-wrap: anywhere;
-      }
-
-      .post-message.is-collapsed {
-        display: -webkit-box;
-        overflow: hidden;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 4;
-      }
-
-      .message-toggle-button {
-        margin: 7px 0 0;
-        padding: 0;
-        border: 0;
-        color: #93c5fd;
-        background: transparent;
-        font: inherit;
-        font-size: 13px;
-        font-weight: 750;
-        cursor: pointer;
-      }
-
-      .message-toggle-button:hover {
-        color: #bfdbfe;
-        text-decoration: underline;
-      }
-
-      .media-viewport {
-        width: calc(100% - 64px);
-        aspect-ratio: var(--media-aspect-ratio, 16 / 9);
-        position: relative;
-        z-index: 4;
-        overflow: hidden;
+      .verification-tag.status-verified { color: #55baff; }
+      .verification-tag.status-pending { color: #f59e0b; }
+      .verification-tag.status-rejected { color: var(--muted); }
+      .category-nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: min(100%, 900px);
         margin: 0 auto;
-        border: 1px solid rgba(22, 139, 255, 0.22);
-        border-radius: 24px;
-        background: #000000;
-        box-shadow: 0 16px 38px rgba(0, 0, 0, 0.48);
+        padding: 0 26px 16px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        -webkit-overflow-scrolling: touch;
       }
-
-      /* Wide media follows its real dimensions instead of being forced to 75vh. */
-      .media-viewport.is-landscape {
-        max-height: min(72svh, 720px);
+      .category-nav::-webkit-scrollbar {
+        display: none;
       }
-
-      /* Portrait media stays narrow and centered on desktop. The fixed visual
-         stage lets object-fit: contain display the complete tall video. */
-      .media-viewport.is-portrait {
-        width: min(calc(100% - 64px), 460px);
-        height: min(78svh, 820px);
-        aspect-ratio: auto;
+      .category-tab {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 54px;
+        padding: 0 22px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 17px;
+        color: rgba(238, 244, 255, 0.82);
+        background: linear-gradient(180deg, rgba(17, 24, 42, 0.88), rgba(7, 12, 25, 0.94));
+        font-size: 14px;
+        font-weight: 750;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
       }
-
-      .media-viewport.is-square {
-        width: min(calc(100% - 64px), 620px);
-        max-height: min(76svh, 700px);
+      .category-tab svg {
+        flex-shrink: 0;
       }
-
-      .media-layer {
+      .category-tab.is-active {
+        color: #ffffff;
+        background: linear-gradient(180deg, rgba(9, 83, 178, .38), rgba(3, 20, 50, .94));
+        border-color: #168bff;
+        box-shadow: inset 0 0 18px rgba(8, 124, 255, .16), 0 0 18px rgba(8, 124, 255, .58);
+      }
+      .coming-soon-panel {
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: calc(140px + env(safe-area-inset-top)) 24px 60px;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      .coming-soon-panel h2 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 22px;
+      }
+      .coming-soon-panel p {
+        max-width: 380px;
+        margin: 0 0 8px;
+        line-height: 1.5;
+      }
+      .home-feed {
+        width: min(100%, 900px);
+        margin: 0 auto;
+        padding: calc(174px + env(safe-area-inset-top)) 16px 46px;
+      }
+      .service-reel-card {
+        position: relative;
+        isolation: isolate;
+        width: 100%;
+        height: clamp(620px, calc(100svh - 188px), 900px);
+        margin: 0 auto 28px;
+        overflow: hidden;
+        border: 1px solid rgba(126, 119, 190, .28);
+        border-radius: 28px;
+        background: #020712;
+        box-shadow: 0 22px 64px rgba(0, 0, 0, .56), 0 0 30px rgba(8, 124, 255, .07);
+      }
+      .service-reel-card .media-card,
+      .service-reel-card .media-viewport,
+      .service-reel-card .media-layer {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
+        border: 0;
+        border-radius: inherit;
+      }
+      .media-layer {
         display: grid;
         place-items: center;
         overflow: hidden;
         background: #000000;
       }
-
       .home-media {
         width: 100%;
         height: 100%;
         display: block;
         border: 0;
-        object-fit: contain;
         object-position: center;
         background: #000000;
       }
-
+      .service-reel-card img.home-media {
+        object-fit: cover;
+      }
+      .service-reel-card video.home-media {
+        object-fit: contain;
+        background: #000;
+      }
       .media-layer > iframe.home-media {
         position: absolute;
         inset: 0;
@@ -3159,9 +6506,7 @@ function HomeStyles() {
         min-width: 100%;
         min-height: 100%;
       }
-
-      .embed-placeholder,
-      .media-placeholder {
+      .embed-placeholder {
         width: 100%;
         height: 100%;
         display: flex;
@@ -3176,599 +6521,297 @@ function HomeStyles() {
           #020712;
         text-align: center;
       }
-
       .embed-placeholder-icon {
         font-size: 48px;
       }
-
-      .floating-comments-layer {
+      .service-card-gradient {
         position: absolute;
         inset: 0;
-        z-index: 50;
-        overflow: hidden;
+        z-index: 20;
         pointer-events: none;
-        contain: layout paint;
-        background: linear-gradient(
-          to bottom,
-          rgba(2, 6, 23, 0.04) 0%,
-          rgba(2, 6, 23, 0.10) 55%,
-          rgba(2, 6, 23, 0.24) 100%
-        );
+        background:
+          linear-gradient(to bottom, transparent 48%, rgba(0,5,14,.12) 59%, rgba(0,5,14,.83) 82%, rgba(2,7,18,.98) 100%),
+          linear-gradient(to right, rgba(0,0,0,.1), transparent 60%);
       }
-
-      .floating-comments-sheet {
+      .service-avatar-badge {
         position: absolute;
-        top: 8px;
-        left: 8px;
-        right: 8px;
-        height: min(72%, 520px);
-        min-height: 210px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        border: 1px solid rgba(56, 189, 248, 0.20);
-        border-radius: 20px;
-        color: #ffffff;
-        pointer-events: auto;
-        background: linear-gradient(
-          145deg,
-          rgba(2, 6, 23, 0.42),
-          rgba(15, 23, 42, 0.28)
-        );
-        -webkit-backdrop-filter: blur(7px) saturate(125%);
-        backdrop-filter: blur(7px) saturate(125%);
-        box-shadow:
-          0 0 0 1px rgba(59, 130, 246, 0.08),
-          0 0 24px rgba(14, 165, 233, 0.12),
-          0 18px 42px rgba(0, 0, 0, 0.30);
-        will-change: transform;
-        transform: translateZ(0);
-        transition: transform 180ms cubic-bezier(.2,.75,.25,1);
+        z-index: 45;
+        top: 18px;
+        right: 18px;
+        width: 54px;
+        height: 54px;
+        padding: 2px;
+        border: 0;
+        border-radius: 50%;
+        background: #06101f;
+        cursor: pointer;
+        --ring-c1: var(--danger);
+        --ring-c2: rgba(255, 51, 79, 0.32);
       }
-
-      .floating-comments-sheet.is-dragging {
-        transition: none;
+      .service-avatar-badge.status-verified {
+        --ring-c1: #1d9bf0;
+        --ring-c2: rgba(29, 155, 240, 0.35);
       }
-
-      .comment-drag-handle {
-        min-height: 24px;
-        flex: 0 0 24px;
-        display: grid;
-        place-items: center;
-        cursor: grab;
-        touch-action: none;
-        user-select: none;
+      .service-avatar-badge.status-rejected {
+        --ring-c1: var(--muted);
+        --ring-c2: rgba(155, 168, 186, 0.32);
       }
-
-      .comment-drag-handle:active {
-        cursor: grabbing;
+      .service-avatar-badge::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        z-index: 0;
+        border-radius: 50%;
+        background: var(--ring-c1);
+        box-shadow: 0 0 14px var(--ring-c1);
       }
-
-      .comment-drag-handle span {
-        width: 38px;
-        height: 4px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #38bdf8, #818cf8);
-        box-shadow:
-          0 0 7px rgba(56, 189, 248, 0.92),
-          0 0 16px rgba(99, 102, 241, 0.62);
+      .service-avatar-badge img {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid #06101f;
       }
-
-      .comments-overlay-header {
+      .post-info-block {
+        position: absolute;
+        z-index: 40;
+        left: 40px;
+        right: 96px;
+        bottom: 150px;
+        padding: 0;
+      }
+      .creator-name {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 4px 12px 9px;
-        flex: 0 0 auto;
-        border-bottom: 1px solid rgba(56, 189, 248, 0.14);
-        background: rgba(2, 6, 23, 0.18);
+        gap: 6px;
+        font-size: 15px;
+        font-weight: 850;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-
-      .comments-overlay-header h2 {
-        margin: 0;
-        font-size: clamp(18px, 2.4vw, 24px);
-        font-weight: 900;
-      }
-
-      .comments-overlay-header h2 span {
-        color: rgba(255, 255, 255, 0.6);
-        font-weight: 500;
-        font-size: 0.75em;
-      }
-
-      .comments-overlay-close {
-        width: 34px;
-        height: 34px;
-        flex: 0 0 34px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 1px solid rgba(56, 189, 248, 0.62);
-        border-radius: 50%;
-        color: #ffffff;
-        background: rgba(3, 7, 18, 0.78);
-        cursor: pointer;
-        box-shadow:
-          0 0 8px rgba(56, 189, 248, 0.82),
-          0 0 20px rgba(37, 99, 235, 0.44),
-          inset 0 0 10px rgba(56, 189, 248, 0.12);
-        transition: transform 140ms ease, box-shadow 140ms ease;
-      }
-
-      .comments-overlay-close:hover,
-      .comments-overlay-close:focus-visible {
-        transform: scale(1.06);
-        outline: none;
-        box-shadow:
-          0 0 10px rgba(125, 211, 252, 1),
-          0 0 28px rgba(37, 99, 235, 0.66),
-          inset 0 0 12px rgba(56, 189, 248, 0.20);
-      }
-
-      .comments-overlay-close:active {
-        transform: scale(0.94);
-      }
-
-      .comments-list {
-        position: relative;
-        z-index: 2;
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        touch-action: pan-y;
-        padding: 10px 9px 14px;
-        -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
-        scrollbar-gutter: stable;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(56, 189, 248, 0.72) transparent;
-      }
-
-      .comments-list::-webkit-scrollbar {
-        width: 5px;
-      }
-
-      .comments-list::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      .comments-list::-webkit-scrollbar-thumb {
-        border-radius: 999px;
-        background: linear-gradient(#38bdf8, #6366f1);
-        box-shadow: 0 0 8px rgba(56, 189, 248, 0.72);
-      }
-
-      .no-comments {
-        min-height: 84px;
-        display: flex;
-        flex-direction: column;
+      .verified-check-badge {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 9px;
-        color: rgba(255, 255, 255, 0.72);
-        text-align: center;
-      }
-
-      .no-comments svg {
-        color: #ffffff;
-        opacity: 0.8;
-      }
-
-      .no-comments strong {
-        color: #ffffff;
-        font-size: 16px;
-      }
-
-      .comment-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 0;
-        margin: 0 0 8px;
-        background: transparent;
-        border: 0;
-      }
-
-      .comment-row + .comment-row {
-        border-top: 0;
-      }
-
-      .comment-avatar {
-        width: 32px;
-        height: 32px;
-        flex: 0 0 32px;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        padding: 0;
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.14);
-        border: 1px solid rgba(255, 255, 255, 0.20);
-        font-size: 18px;
-        line-height: 1;
-        box-shadow:
-          0 0 8px rgba(56, 189, 248, 0.46),
-          0 5px 14px rgba(0, 0, 0, 0.22);
+        background: #1d9bf0;
+        color: #ffffff;
       }
-
-      .comment-avatar span {
-        width: 100%;
-        height: 100%;
-        display: grid;
-        place-items: center;
-        font-size: 21px;
-        line-height: 1;
-        transform: scale(1.72);
-      }
-
-      .comment-flag-preview {
-        width: 32px;
-        height: 32px;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.10);
-        font-size: 17px;
-      }
-
-      .comment-flag-preview span {
-        width: 100%;
-        height: 100%;
-        display: grid;
-        place-items: center;
-        font-size: 20px;
-        line-height: 1;
-        transform: scale(1.72);
-      }
-
-      .comment-body {
-        min-width: 0;
-        flex: 1;
-        max-width: calc(100% - 44px);
-        padding: 12px 16px;
-        border: 1px solid rgba(56, 189, 248, 0.28);
-        border-radius: 16px;
-        background: linear-gradient(
-          145deg,
-          rgba(15, 23, 42, 0.74),
-          rgba(8, 47, 73, 0.48)
-        );
-        -webkit-backdrop-filter: blur(8px) saturate(120%);
-        backdrop-filter: blur(8px) saturate(120%);
-        box-shadow:
-          0 0 0 1px rgba(59, 130, 246, 0.06),
-          0 0 13px rgba(14, 165, 233, 0.16),
-          0 9px 24px rgba(0, 0, 0, 0.28);
-        transform: translateZ(0);
-      }
-
-      .comment-row:hover .comment-body {
-        border-color: rgba(125, 211, 252, 0.46);
-        box-shadow:
-          0 0 0 1px rgba(59, 130, 246, 0.10),
-          0 0 18px rgba(14, 165, 233, 0.28),
-          0 10px 26px rgba(0, 0, 0, 0.30);
-      }
-
-      .comment-meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-      }
-
-      .comment-meta strong {
-        color: #ffffff !important;
+      .service-name {
+        margin: 5px 0 3px;
+        color: #fff;
         font-size: 14px;
+        font-weight: 700;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .post-price {
+        color: #22c55e;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .post-price-unit {
+        color: rgba(34, 197, 94, 0.72);
+        font-size: .92em;
         font-weight: 600;
-        line-height: 1.2;
-        text-shadow: none !important;
-        animation: none !important;
       }
-
-      .comment-meta time {
-        color: rgba(255, 255, 255, 0.60);
-        font-size: 12px;
-        font-weight: 400;
-        line-height: 1.2;
+      .post-tagline-wrap {
+        margin-top: 5px;
       }
-
-      .comment-text {
+      .post-tagline {
         margin: 0;
-        color: #e2e8f0;
-        font-size: 14px;
+        color: rgba(255, 255, 255, .90);
+        font-size: 12.5px;
         font-weight: 400;
-        line-height: 1.4;
+        line-height: 1.38;
+        letter-spacing: .1px;
+        text-shadow: 0 1px 5px rgba(0, 0, 0, .92);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        text-shadow: none;
-        animation: none;
       }
-
-      .comment-text a,
-      .comment-text mark,
-      .comment-text .mention {
-        color: #38bdf8;
+      .post-tagline.is-expanded {
+        max-height: min(22svh, 180px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(111, 195, 255, 0.5) transparent;
       }
-
-      .comment-add-launcher {
-        position: relative;
-        z-index: 3;
-        flex: 0 0 auto;
-        display: flex;
-        justify-content: flex-end;
-        padding: 7px 10px max(10px, env(safe-area-inset-bottom));
-        pointer-events: none;
+      .description-link {
+        color: #3ea6ff;
+        font-weight: 650;
+        text-decoration: none;
+        text-shadow: 0 0 8px rgba(22, 139, 255, .58);
       }
-
-      .comment-add-button {
-        width: 40px;
-        height: 40px;
-        flex: 0 0 40px;
-        display: grid;
-        place-items: center;
+      .description-link:hover,
+      .description-link:focus-visible {
+        color: #79c7ff;
+        text-decoration: underline;
+      }
+      .tagline-toggle-button {
+        display: inline-block;
+        margin: 0;
         padding: 0;
-        border: 1px solid rgba(113, 188, 255, 0.72);
-        border-radius: 50%;
-        color: #ffffff;
-        background: linear-gradient(145deg, #2092ff, #0874ed);
-        box-shadow: 0 7px 20px rgba(8, 124, 255, 0.34);
+        border: none;
+        background: none;
+        color: rgba(255, 255, 255, .78);
+        font-size: inherit;
+        font-weight: 700;
+        letter-spacing: 0.2px;
         cursor: pointer;
-        pointer-events: auto;
+        vertical-align: baseline;
       }
-
-      .comment-composer {
-        position: relative;
-        z-index: 3;
-        flex: 0 0 auto;
-        padding: 6px 8px max(7px, env(safe-area-inset-bottom));
-        border-top: 1px solid rgba(255, 255, 255, 0.14);
-        background: rgba(0, 0, 0, 0.48);
-        backdrop-filter: blur(4px);
-      }
-
-      .comment-composer-header {
-        min-height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 4px;
-        color: #ffffff;
-        font-size: 12px;
-      }
-
-      .comment-composer-close {
-        width: 24px;
-        height: 24px;
-        flex: 0 0 24px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
-        color: #ffffff;
-        background: rgba(255, 255, 255, 0.10);
-        cursor: pointer;
-      }
-
-      .comment-composer-identity {
-        display: grid;
-        grid-template-columns: 34px minmax(0, 1fr);
-        gap: 7px;
-        align-items: end;
-        margin-bottom: 6px;
-      }
-
-      .comment-phone-field {
-        min-width: 0;
-      }
-
-      .comment-phone-field label {
+      .service-social-rail {
         position: absolute;
-        width: 1px;
-        height: 1px;
+        z-index: 42;
+        right: 22px;
+        bottom: 158px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+      .rail-action {
+        width: 48px;
+        min-height: 44px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
         padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
         border: 0;
-      }
-
-      .comment-phone-field input {
-        width: 100%;
-        min-height: 34px;
-        padding: 6px 9px;
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        border-radius: 12px;
-        outline: none;
-        color: #ffffff;
-        background: rgba(0, 5, 14, 0.82);
-      }
-
-      .comment-phone-field input:focus,
-      .comment-compose-row textarea:focus {
-        border-color: rgba(22, 139, 255, 0.9);
-        box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.10);
-      }
-
-      .comment-compose-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 7px;
-        align-items: stretch;
-      }
-
-      .comment-compose-row textarea {
-        width: 100%;
-        min-height: 40px;
-        max-height: 72px;
-        padding: 8px 9px;
-        resize: none;
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        border-radius: 14px;
-        outline: none;
-        color: #ffffff;
-        background: rgba(0, 5, 14, 0.82);
-      }
-
-      .comment-send-button {
-        min-width: 68px;
-        min-height: 40px;
-        padding: 0 12px;
-        border: 1px solid rgba(82, 169, 255, 0.7);
-        border-radius: 14px;
-        color: #ffffff;
-        background: linear-gradient(145deg, #2092ff, #0874ed);
-        font-weight: 900;
+        color: #fff;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 750;
         cursor: pointer;
-        box-shadow:
-          0 9px 22px rgba(8, 124, 255, 0.22),
-          inset 0 0 12px rgba(255, 255, 255, 0.10);
+        text-shadow: 0 1px 5px rgba(0, 0, 0, .95);
       }
-
-      .comment-send-button:disabled {
-        opacity: 0.65;
+      .rail-action svg {
+        overflow: visible;
+      }
+      .rail-action:disabled {
+        opacity: .7;
         cursor: wait;
       }
-
-      .comment-send-button:active {
-        transform: scale(0.98);
+      .gold-star {
+        color: #ffd700;
+        fill: #ffd700;
+        stroke: #fff1a8;
+        filter:
+          drop-shadow(0 1px 0 rgba(255,255,255,.75))
+          drop-shadow(0 0 7px rgba(255,184,0,.9))
+          drop-shadow(0 0 14px rgba(255,184,0,.58));
       }
-
-      .comment-privacy {
-        margin: 5px 2px 0;
-        color: rgba(255, 255, 255, 0.62);
-        font-size: 9px;
-        line-height: 1.2;
+      .star-action.is-active .gold-star {
+        color: #ffbf00;
+        fill: #ffbf00;
+        transform: scale(1.08);
+      }
+      .star-action.is-active:disabled {
+        opacity: 1;
+        cursor: default;
+      }
+      .star-action > span {
+        display: block;
+        margin-top: 2px;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1;
         text-align: center;
+        text-shadow:
+          0 1px 4px #000000,
+          0 0 8px rgba(255, 196, 0, 0.8);
       }
-
-      .social-action-bar {
+      .comment-action {
+        color: #cfe8ff;
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .85)) drop-shadow(0 0 9px rgba(22, 139, 255, .95));
+      }
+      .inbox-icon-wrap {
         position: relative;
-        z-index: 8;
-        width: calc(100% - 64px);
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin: 20px 32px 0;
+        display: inline-flex;
       }
-
-      .metric-pill,
-      .action-pill {
-        min-width: 0;
+      .inbox-unread-badge {
+        position: absolute;
+        top: -6px;
+        right: -9px;
+        min-width: 17px;
+        height: 17px;
+        padding: 0 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--danger);
+        box-shadow: 0 0 0 2px #020712, 0 0 8px rgba(255, 51, 79, .75);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        animation: gwamoBadgePulse 1.7s ease-in-out infinite;
+      }
+      @keyframes gwamoBadgePulse {
+        0%, 100% { box-shadow: 0 0 0 2px #020712, 0 0 8px rgba(255, 51, 79, .75); }
+        50% { box-shadow: 0 0 0 2px #020712, 0 0 14px rgba(255, 51, 79, 1); }
+      }
+      .inbox-rail-action {
+        color: #cfe8ff;
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .9)) drop-shadow(0 0 9px rgba(22, 139, 255, .95));
+      }
+      .plus-rail-action {
+        color: #dff2ff;
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .85)) drop-shadow(0 0 10px rgba(22, 139, 255, 1));
+      }
+      .contact-me-cta {
+        position: absolute;
+        z-index: 44;
+        left: 50%;
+        right: auto;
+        bottom: 28px;
+        width: clamp(220px, 36%, 300px);
         min-height: 54px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        padding: 0 10px;
-        border: 1px solid rgba(22, 139, 255, 0.38);
-        border-radius: 17px;
-        color: #ffffff;
-        background:
-          linear-gradient(180deg, rgba(8, 26, 55, 0.96), rgba(2, 10, 23, 0.96));
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: clamp(14px, 1.8vw, 18px);
-        font-weight: 800;
-        box-shadow:
-          inset 0 0 15px rgba(22, 139, 255, 0.06),
-          0 8px 20px rgba(0, 0, 0, 0.35);
-      }
-
-      .action-pill {
+        gap: 12px;
+        padding: 0 24px;
+        border: 1.5px solid #37a2ff;
+        border-radius: 14px;
+        color: #fff;
+        background: rgba(1, 8, 20, .24);
+        -webkit-backdrop-filter: blur(2px);
+        backdrop-filter: blur(2px);
+        box-shadow: inset 0 0 14px rgba(22, 139, 255, .10), 0 0 5px rgba(255,255,255,.24), 0 0 15px rgba(22, 139, 255, .82);
+        font-size: 20px;
+        font-weight: 700;
+        text-shadow: 0 0 5px rgba(255, 255, 255, .32), 0 0 9px rgba(22, 139, 255, .52);
         cursor: pointer;
+        transform: translateX(-50%);
       }
-
-      .action-pill:disabled {
-        opacity: 0.6;
-        cursor: default;
+      .contact-me-cta:hover {
+        background: rgba(9, 44, 91, .28);
+        box-shadow: inset 0 0 18px rgba(22, 139, 255, .14), 0 0 7px rgba(255,255,255,.28), 0 0 22px rgba(22, 139, 255, .96);
       }
-
-
-      .whatsapp-action-icon {
-        filter: drop-shadow(0 0 7px rgba(37, 211, 102, 0.72));
-      }
-
-      .agaseke-icon {
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-      .heart-action-active .heart-icon {
-        color: #ff5773;
-      }
-
-      .action-icon {
-        width: 24px;
-        height: 24px;
-        color: #ffffff;
-        filter:
-          drop-shadow(0 0 6px rgba(22, 139, 255, 1))
-          drop-shadow(0 0 18px rgba(22, 139, 255, 0.82));
-      }
-
-      .heart-icon {
-        width: 24px;
-        height: 24px;
-        color: #ff3156;
-        filter:
-          drop-shadow(0 0 6px rgba(255, 49, 86, 1))
-          drop-shadow(0 0 18px rgba(255, 49, 86, 0.74));
-      }
-
-      .post-menu-button svg,
-      .comments-overlay-close svg {
-        display: block;
-      }
-
-      .screen-scanlines,
-      .screen-reflection,
-      .screen-vignette {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-      }
-
-      .screen-scanlines {
-        z-index: 30;
-        opacity: 0.025;
-        background:
-          repeating-linear-gradient(
-            to bottom,
-            transparent 0,
-            transparent 5px,
-            rgba(255, 255, 255, 0.12) 6px
-          );
-      }
-
-      .screen-reflection {
-        z-index: 31;
-        opacity: 0.08;
-        background:
-          linear-gradient(
-            118deg,
-            rgba(255, 255, 255, 0.10) 0%,
-            rgba(255, 255, 255, 0.018) 22%,
-            transparent 43%
-          );
-      }
-
-      .screen-vignette {
-        z-index: 32;
-        border-radius: inherit;
-        box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.30);
-      }
-
       .load-more-wrap {
         display: flex;
         justify-content: center;
         padding: 6px 0 40px;
       }
-
       .load-more-button {
         min-height: 54px;
         padding: 0 28px;
@@ -3779,12 +6822,10 @@ function HomeStyles() {
         font-weight: 800;
         cursor: pointer;
       }
-
       .load-more-button:disabled {
         opacity: 0.6;
         cursor: wait;
       }
-
       .modal-overlay {
         position: fixed;
         inset: 0;
@@ -3796,7 +6837,81 @@ function HomeStyles() {
         background: rgba(0, 3, 10, 0.91);
         backdrop-filter: blur(8px);
       }
-
+      .auth-modal-overlay {
+        align-items: center;
+      }
+      .auth-modal-card {
+        border-radius: 24px;
+        max-width: 420px;
+      }
+      .auth-success-message {
+        margin-bottom: 14px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        color: #087653;
+        background: #eafaf4;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .auth-helper-text {
+        display: block;
+        margin-top: 8px;
+        color: rgba(226, 232, 240, 0.68);
+        font-size: 11.5px;
+        line-height: 1.45;
+      }
+      .forgot-pin-button {
+        width: 100%;
+        min-height: 42px;
+        margin-top: 7px;
+        padding: 8px 12px;
+        border: 0;
+        color: #79c7ff;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .forgot-pin-button:disabled { opacity: .55; cursor: wait; }
+      .pin-reset-card { max-width: 440px; }
+      .modal-header-note {
+        margin: 4px 0 0;
+        color: rgba(226, 232, 240, .58);
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.35;
+      }
+      .pin-reset-intro {
+        margin: 0 0 16px;
+        color: rgba(226, 232, 240, .82);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .pin-verification-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        margin: 5px 0 16px;
+        padding: 18px;
+        border: 1px solid rgba(55, 162, 255, .48);
+        border-radius: 16px;
+        background: rgba(2, 18, 38, .70);
+        box-shadow: inset 0 0 20px rgba(22, 139, 255, .12), 0 0 16px rgba(22, 139, 255, .18);
+      }
+      .pin-verification-panel span {
+        color: rgba(226, 232, 240, .68);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .pin-verification-panel strong {
+        color: #ffffff;
+        font-size: clamp(28px, 9vw, 42px);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: .16em;
+        text-shadow: 0 0 14px rgba(55, 162, 255, .72);
+      }
       .modal-card {
         width: 100%;
         max-width: 520px;
@@ -3811,22 +6926,6 @@ function HomeStyles() {
           #06101f;
         box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
       }
-
-      .phone-modal-overlay {
-        align-items: center;
-      }
-
-      .phone-modal-card {
-        border-radius: 24px;
-      }
-
-      .phone-modal-error {
-        margin: -2px 0 12px;
-        color: #ff5773;
-        font-size: 12px;
-        font-weight: 700;
-      }
-
       .modal-header {
         position: sticky;
         top: -18px;
@@ -3840,13 +6939,11 @@ function HomeStyles() {
         border-bottom: 1px solid rgba(22, 139, 255, 0.16);
         background: rgba(4, 13, 29, 0.96);
       }
-
       .modal-header h2 {
         margin: 0;
         font-size: 19px;
         font-weight: 900;
       }
-
       .modal-close {
         width: 38px;
         height: 38px;
@@ -3860,17 +6957,14 @@ function HomeStyles() {
         font-size: 23px;
         cursor: pointer;
       }
-
       .form-section {
         margin-bottom: 18px;
         padding-bottom: 18px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.075);
       }
-
       .form-section-last {
         border-bottom: 0;
       }
-
       .section-heading {
         margin-bottom: 10px;
         color: #64b3ff;
@@ -3879,7 +6973,6 @@ function HomeStyles() {
         letter-spacing: 1px;
         text-transform: uppercase;
       }
-
       .modal-card label {
         display: block;
         margin: 0 0 7px;
@@ -3887,9 +6980,9 @@ function HomeStyles() {
         font-size: 14px;
         font-weight: 650;
       }
-
       .modal-card input,
-      .modal-card textarea {
+      .modal-card textarea,
+      .modal-card select {
         width: 100%;
         min-height: 48px;
         margin: 0 0 6px;
@@ -3900,32 +6993,111 @@ function HomeStyles() {
         color: #ffffff;
         background: rgba(1, 7, 18, 0.74);
       }
-
+      .modal-card select {
+        appearance: none;
+        background-image: linear-gradient(45deg, transparent 50%, #64b3ff 50%), linear-gradient(135deg, #64b3ff 50%, transparent 50%);
+        background-position: calc(100% - 19px) 20px, calc(100% - 13px) 20px;
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+      }
+      .modal-card select option {
+        color: #ffffff;
+        background: #06101f;
+      }
       .modal-card textarea {
         min-height: 120px;
         line-height: 1.6;
         resize: vertical;
       }
-
       .modal-card input::placeholder,
       .modal-card textarea::placeholder {
         color: rgba(226, 232, 240, 0.42);
         opacity: 1;
       }
-
       .modal-card input:focus,
-      .modal-card textarea:focus {
+      .modal-card textarea:focus,
+      .modal-card select:focus {
         border-color: rgba(22, 139, 255, 0.78);
         box-shadow: 0 0 0 3px rgba(22, 139, 255, 0.09);
       }
-
+      .post-type-section {
+        padding-bottom: 14px;
+      }
+      .post-type-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .post-type-choice {
+        min-height: 104px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 4px;
+        padding: 13px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 17px;
+        color: #ffffff;
+        background: rgba(1, 7, 18, 0.68);
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+      }
+      .post-type-choice:hover {
+        transform: translateY(-1px);
+      }
+      .post-type-choice.is-selected {
+        border-color: #168bff;
+        background: linear-gradient(145deg, rgba(8, 124, 255, 0.24), rgba(1, 7, 18, 0.76));
+        box-shadow: inset 0 0 18px rgba(8, 124, 255, 0.12), 0 0 16px rgba(8, 124, 255, 0.22);
+      }
+      .post-type-icon {
+        font-size: 22px;
+        line-height: 1;
+      }
+      .post-type-choice strong {
+        font-size: 14px;
+      }
+      .post-type-choice small {
+        color: rgba(226, 232, 240, 0.58);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .choice-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+      .choice-pill {
+        min-height: 40px;
+        padding: 0 13px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 999px;
+        color: rgba(255, 255, 255, 0.74);
+        background: rgba(1, 7, 18, 0.7);
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .choice-pill.is-selected {
+        color: #ffffff;
+        border-color: #168bff;
+        background: rgba(8, 124, 255, 0.22);
+        box-shadow: 0 0 12px rgba(8, 124, 255, 0.24);
+      }
+      .two-field-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        gap: 10px;
+      }
       .field-help {
         margin: 0 0 16px;
         color: rgba(203, 213, 225, 0.62);
         font-size: 12px;
         line-height: 1.5;
       }
-
       .file-picker {
         min-height: 50px;
         display: flex !important;
@@ -3936,7 +7108,6 @@ function HomeStyles() {
         background: rgba(8, 124, 255, 0.06);
         cursor: pointer;
       }
-
       .file-picker input {
         position: absolute;
         width: 1px;
@@ -3944,11 +7115,68 @@ function HomeStyles() {
         opacity: 0;
         overflow: hidden;
       }
-
+      .profile-photo-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 10px;
+      }
+      .profile-photo-preview {
+        width: 64px;
+        height: 64px;
+        flex: 0 0 64px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .profile-photo-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .profile-photo-actions {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .profile-photo-picker {
+        min-height: 42px;
+        padding: 0 14px;
+        justify-content: center;
+      }
+      .profile-photo-remove {
+        min-height: 38px;
+        margin-top: 0;
+        padding: 0 14px;
+        font-size: 13px;
+      }
+      .profile-danger-zone {
+        margin-top: 22px;
+        padding: 16px;
+        border: 1px solid rgba(255, 51, 79, 0.28);
+        border-radius: 14px;
+        background: rgba(255, 51, 79, 0.06);
+      }
+      .danger-button {
+        width: 100%;
+        min-height: 46px;
+        margin-top: 6px;
+        border: 1px solid rgba(255, 51, 79, 0.4);
+        border-radius: 12px;
+        color: #ff8a97;
+        background: rgba(255, 51, 79, 0.1);
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+      }
       .preview-wrap {
         margin: 10px 0 14px;
       }
-
       .media-preview {
         width: 100%;
         max-height: 220px;
@@ -3958,7 +7186,6 @@ function HomeStyles() {
         border-radius: 12px;
         background: #000000;
       }
-
       .logo-preview {
         width: 60px;
         height: 60px;
@@ -3966,9 +7193,9 @@ function HomeStyles() {
         object-fit: cover;
         border-radius: 50%;
       }
-
       .save-button,
-      .cancel-button {
+      .cancel-button,
+      .switch-mode-button {
         width: 100%;
         min-height: 50px;
         padding: 13px;
@@ -3977,11 +7204,397 @@ function HomeStyles() {
         font-weight: 900;
         cursor: pointer;
       }
-
+      .save-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid rgba(22, 139, 255, 0.48);
+        color: #ffffff;
+        background: linear-gradient(145deg, var(--blue-bright), #0064df);
+      }
+      .save-button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+      .cancel-button {
+        margin-top: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #d9e2ef;
+        background: transparent;
+      }
+      .switch-mode-button {
+        margin-top: 10px;
+        border: none;
+        color: #64b3ff;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .auth-error {
+        margin: -2px 0 12px;
+        color: #ff5773;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .account-status-row {
+        margin-bottom: 16px;
+      }
+      .account-status-row .field-help {
+        margin-top: 8px;
+        margin-bottom: 0;
+      }
+      .mysheet-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 30px 10px;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      .mysheet-empty p {
+        margin: 0;
+        line-height: 1.5;
+      }
+      .mytime-icon {
+        color: #64b3ff;
+      }
+      .myservices-list,
+      .myinbox-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .myservice-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .myservice-thumb {
+        width: 52px;
+        height: 52px;
+        flex: 0 0 52px;
+        object-fit: cover;
+        border-radius: 12px;
+        background: #000;
+      }
+      .myservice-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .myservice-info strong {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .myservice-info span {
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .myservice-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .myservice-actions button {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 10px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
+        cursor: pointer;
+      }
+      .myservice-actions .myservice-delete {
+        color: #ff8a97;
+        border-color: rgba(255, 51, 79, 0.28);
+      }
+      .myinbox-search-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 0 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        background: rgba(1, 7, 18, 0.74);
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .myinbox-search {
+        flex: 1;
+        min-height: 44px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #ffffff;
+        font-size: 14px;
+      }
+      .myinbox-search::placeholder {
+        color: rgba(226, 232, 240, 0.42);
+      }
+      .myinbox-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+        color: #ffffff;
+        text-align: left;
+        cursor: pointer;
+      }
+      .myinbox-row.has-unread {
+        border-color: rgba(22, 139, 255, 0.55);
+        background: rgba(8, 124, 255, 0.1);
+        box-shadow: inset 0 0 0 1px rgba(22, 139, 255, 0.18);
+      }
+      .myinbox-row.has-unread .myinbox-main strong {
+        color: #ffffff;
+      }
+      .myinbox-avatar {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        display: block;
+        overflow: hidden;
+        border-radius: 50%;
+        background: rgba(8, 124, 255, 0.14);
+      }
+      .myinbox-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .myinbox-main {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .myinbox-name-row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .myinbox-name-row strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+      }
+      .myinbox-verified {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+      .myinbox-time {
+        margin-left: auto;
+        flex-shrink: 0;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+      .myinbox-main strong,
+      .myinbox-main small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .myinbox-main strong {
+        font-size: 14px;
+      }
+      .myinbox-main small {
+        color: rgba(255, 255, 255, 0.56);
+        font-size: 11px;
+      }
+      .myinbox-preview {
+        color: rgba(255, 255, 255, 0.72) !important;
+      }
+      .myinbox-row.has-unread .myinbox-preview {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-weight: 650;
+      }
+      .myinbox-unread-badge {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--danger);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .comments-sheet-card {
+        max-width: 480px;
+      }
+      .comments-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 46svh;
+        overflow-y: auto;
+        margin-bottom: 14px;
+        padding-right: 2px;
+      }
+      .comment-bubble {
+        padding: 10px 13px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.045);
+      }
+      .comment-bubble-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 3px;
+        font-size: 12.5px;
+        font-weight: 800;
+      }
+      .comment-flag {
+        font-size: 14px;
+      }
+      .comment-bubble p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: rgba(255, 255, 255, 0.88);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .comments-composer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .comments-composer input {
+        flex: 1;
+        min-height: 44px;
+        margin: 0;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #ffffff;
+        outline: none;
+      }
+      .info-modal-body {
+        margin: 0 0 18px;
+        color: rgba(226, 232, 240, 0.86);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .profile-sheet-card {
+        max-width: 460px;
+      }
+      .profile-sheet-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .provider-sheet-avatar {
+        width: 72px;
+        height: 72px;
+        flex: 0 0 72px;
+        position: relative;
+        isolation: isolate;
+        padding: 4px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.92);
+      }
+      @keyframes gwamoTireSpin {
+        to { transform: rotate(360deg); }
+      }
+      .provider-sheet-avatar::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        z-index: 0;
+        border-radius: 50%;
+        background: repeating-conic-gradient(from 0deg, var(--ring-c1) 0deg 12deg, var(--ring-c2) 12deg 18deg, var(--ring-c1) 18deg 28deg, var(--ring-c2) 28deg 34deg);
+        animation: gwamoTireSpin 2.8s linear infinite;
+      }
+      .provider-sheet-avatar img {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        border-radius: 50%;
+      }
+      .profile-sheet-identity {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .profile-sheet-identity h3 {
+        margin: 0;
+        font-size: 18px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .profile-sheet-headline {
+        margin: 0 0 8px;
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 800;
+      }
+      .profile-sheet-description {
+        margin: 0 0 10px;
+        color: rgba(226, 232, 240, 0.82);
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+      .profile-sheet-meta {
+        margin: 0 0 18px;
+        color: rgba(203, 213, 225, 0.56);
+        font-size: 12px;
+      }
+      .profile-sheet-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .profile-sheet-actions .save-button,
+      .profile-sheet-actions .cancel-button {
+        margin-top: 0;
+      }
       .upload-progress-wrap {
         margin: 16px 0 10px;
       }
-
       .upload-progress-text {
         display: flex;
         align-items: center;
@@ -3992,7 +7605,6 @@ function HomeStyles() {
         font-size: 13px;
         font-weight: 700;
       }
-
       .upload-progress-track {
         width: 100%;
         height: 10px;
@@ -4000,7 +7612,6 @@ function HomeStyles() {
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.12);
       }
-
       .upload-progress-track span {
         display: block;
         height: 100%;
@@ -4008,287 +7619,395 @@ function HomeStyles() {
         background: linear-gradient(90deg, #38bdf8, #2563eb);
         transition: width 180ms ease;
       }
-
-      .save-button {
-        border: 1px solid rgba(22, 139, 255, 0.48);
-        color: #ffffff;
-        background: linear-gradient(145deg, var(--blue-bright), #0064df);
-      }
-
-      .save-button:disabled {
-        opacity: 0.65;
-        cursor: wait;
-      }
-
-      .cancel-button {
-        margin-top: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        color: #d9e2ef;
-        background: transparent;
-      }
-
-      @media (max-width: 700px) {
-        .feedx-topbar-inner {
-          min-height: 68px;
-          padding: 9px 12px;
-        }
-
-        .gwamo-brand {
-          gap: 8px;
-        }
-
-        .gwamo-brand-mark {
-          width: 36px;
-          height: 36px;
-          flex-basis: 36px;
-          border-radius: 12px;
-          font-size: 19px;
-        }
-
-        .feedx-logo {
-          font-size: 21px;
-        }
-
-        .top-create-button {
-          min-height: 40px;
-          padding: 0 14px;
-          border-radius: 13px;
-          font-size: 13px;
-        }
-
-        .home-feed {
-          width: 100%;
-          padding: calc(84px + env(safe-area-inset-top)) 0 max(72px, env(safe-area-inset-bottom));
-        }
-
-        .home-post {
-          width: 100%;
-          margin-bottom: 12px;
-          border-left: 0;
-          border-right: 0;
-          border-radius: 0;
-        }
-
-        .post-header {
-          min-height: 68px;
-          gap: 9px;
-          padding: 10px 12px;
-        }
-
-        .profile-picture-button {
-          width: 44px;
-          height: 44px;
-          flex-basis: 44px;
-        }
-
-        .creator-name {
-          font-size: 14px;
-        }
-
-        .inbox-button {
-          width: 44px;
-          height: 40px;
-          flex-basis: 44px;
-        }
-
-        .inbox-envelope {
-          width: 28px;
-          height: 28px;
-        }
-
-        .unread-dot {
-          width: 13px;
-          height: 13px;
-          top: 1px;
-          right: 1px;
-          border-width: 2px;
-        }
-
-        .post-menu-button {
-          width: 30px;
-          height: 38px;
-          flex-basis: 30px;
-        }
-
-        .post-menu-button svg {
-          width: 21px;
-          height: 21px;
-        }
-
-        .post-copy {
-          padding: 12px 14px 13px;
-          text-align: left;
-        }
-
-        .post-title {
-          margin-bottom: 5px;
-          font-size: clamp(17px, 4.8vw, 19px);
-          line-height: 1.3;
-        }
-
-        .post-message {
-          font-size: 15px;
-          line-height: 1.62;
-        }
-
-        .message-toggle-button {
-          margin-top: 6px;
-          font-size: 13px;
-        }
-
-        .media-viewport,
-        .media-viewport.is-square,
-        .media-viewport.is-landscape {
-          width: 100%;
-          max-width: none;
-          max-height: 78svh;
-          margin: 0;
-          border-radius: 0;
-        }
-
-        .media-viewport.is-portrait {
-          width: 100%;
-          max-width: none;
-          height: min(78svh, 760px);
-          margin: 0;
-          border-radius: 0;
-        }
-
-        .social-action-bar {
-          width: 100%;
-          gap: 6px;
-          margin: 0;
-          padding: 10px 10px 12px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          background: rgba(3, 7, 18, 0.76);
-        }
-
-        .metric-pill,
-        .action-pill {
-          min-height: 40px;
-          gap: 5px;
-          padding: 0 7px;
-          border-radius: 12px;
-          font-size: clamp(11px, 3vw, 13px);
-        }
-
-        .action-icon,
-        .heart-icon {
-          width: 18px;
-          height: 18px;
-        }
-      }
-
-      @media (max-width: 360px) {
-        .feedx-topbar-inner {
-          padding-left: 9px;
-          padding-right: 9px;
-          gap: 8px;
-        }
-
-        .gwamo-brand-mark {
-          width: 34px;
-          height: 34px;
-          flex-basis: 34px;
-          font-size: 18px;
-        }
-
-        .feedx-logo {
-          font-size: 19px;
-        }
-
-        .top-create-button {
-          min-height: 38px;
-          padding: 0 10px;
-          font-size: 12px;
-        }
-      }
-
-      /* Low-memory / low-power device optimizations: disable heavy CRT
-         effects on small screens. */
-      @media (max-width: 600px) {
-
-        .floating-comments-sheet {
-          left: 5px;
-          right: 5px;
-          height: min(76%, 540px);
-          min-height: 200px;
-          border-radius: 18px;
-        }
-
-        .comment-body {
-          padding: 10px 13px;
-        }
-        .crt-screen {
-          animation: none !important;
-        }
-
-        .screen-scanlines,
-        .screen-reflection,
-        .screen-vignette {
-          display: none !important;
-        }
-
-        .home-post {
-          box-shadow: none;
-          border-radius: 20px;
-        }
-
-        .comment-text {
-          animation: none !important;
-        }
-
-        .comment-meta strong {
-          animation: none !important;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .profile-picture-button {
-          width: 42px;
-          height: 42px;
-          flex-basis: 42px;
-        }
-      }
-
-
-      /* Feed performance: off-screen posts are skipped until near viewport. */
-      .home-post {
-        content-visibility: auto;
-        contain-intrinsic-size: 760px;
-        contain: layout paint style;
-      }
-
-      .home-media {
-        transform: translateZ(0);
-        backface-visibility: hidden;
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .floating-comments-sheet,
-        .comments-overlay-close,
-        .comment-body {
-          transition: none !important;
-          animation: none !important;
-        }
-      }
-
-      .zoom-overlay {
+      .chat-modal-overlay {
         position: fixed;
         inset: 0;
-        z-index: 5000;
+        z-index: 9998;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+      }
+      .chat-modal {
+        width: 100%;
+        max-width: 500px;
+        height: 80vh;
+        height: 80dvh;
+        max-height: 700px;
+        display: flex;
+        flex-direction: column;
+        border-radius: 24px 24px 0 0;
+        background: #0f1a2e;
+        color: #ffffff;
+        overflow: hidden;
+      }
+      .chat-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: #0a1424;
+      }
+      .chat-back {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+      .chat-header-avatar {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .chat-header div {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .chat-header-name {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 16px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chat-header-verified {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+      }
+      .chat-header small { font-size: 12px; color: rgba(255,255,255,0.6); }
+      .chat-header-copy { flex: 1; }
+      .chat-header .chat-privacy-note {
+        margin-top: 3px;
+        color: rgba(255,255,255,.43);
+        font-size: 9.5px;
+        line-height: 1.25;
+        white-space: normal;
+      }
+      .chat-messages {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .chat-date-separator {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: max(20px, env(safe-area-inset-top)) 20px
-          max(20px, env(safe-area-inset-bottom));
+        margin: 6px 0;
+      }
+      .chat-date-separator span {
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.66);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .chat-loading, .chat-empty {
+        text-align: center;
+        color: rgba(255,255,255,0.5);
+        padding: 40px 0;
+      }
+      .chat-welcome {
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 8px;
+        padding: 28px 18px;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      .chat-welcome img {
+        width: 68px;
+        height: 68px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid rgba(55, 162, 255, 0.72);
+        box-shadow: 0 0 18px rgba(22, 139, 255, 0.35);
+      }
+      .chat-welcome strong {
+        color: #fff;
+        font-size: 16px;
+      }
+      .chat-welcome p {
+        max-width: 320px;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .chat-message {
+        max-width: 80%;
+        padding: 10px 14px;
+        border-radius: 16px;
+      }
+      .chat-message.sent {
+        align-self: flex-end;
+        background: #087cff;
+      }
+      .chat-message.received {
+        align-self: flex-start;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .chat-message.is-pending {
+        opacity: 0.62;
+      }
+      .chat-message.is-failed {
+        border: 1px solid var(--danger);
+      }
+      .chat-message p {
+        margin: 0;
+        font-size: 14px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .chat-message img,
+      .chat-message video {
+        max-width: 100%;
+        border-radius: 10px;
+        margin-bottom: 6px;
+      }
+      .chat-image-attachment {
+        cursor: zoom-in;
+      }
+      .chat-message audio {
+        width: 100%;
+        margin-bottom: 6px;
+      }
+      .chat-document-link {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        max-width: 100%;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, .14);
+        border-radius: 11px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, .08);
+        text-decoration: none;
+      }
+      .chat-document-link span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chat-message time {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+        opacity: 0.6;
+        margin-top: 4px;
+      }
+      .chat-read-status {
+        display: inline-flex;
+        align-items: center;
+        opacity: 0.75;
+      }
+      .chat-read-status.is-read {
+        color: #7ee0ff;
+        opacity: 1;
+      }
+      .chat-new-messages-button {
+        align-self: center;
+        margin: 4px 0 8px;
+        padding: 7px 16px;
+        border: 1px solid rgba(22, 139, 255, 0.5);
+        border-radius: 999px;
+        color: #ffffff;
+        background: rgba(8, 124, 255, 0.28);
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        animation: gwamoFadeIn 220ms ease-out;
+      }
+      @keyframes gwamoFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .chat-retry-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 16px;
+        color: #ff8a97;
+        background: rgba(255, 51, 79, 0.12);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .chat-retry-banner button {
+        border: none;
+        background: none;
+        color: #ff8a97;
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .chat-composer {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: #0a1424;
+      }
+      .chat-composer input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.06);
+        outline: none;
+      }
+      .chat-composer input:focus {
+        border-color: #087cff;
+      }
+      .chat-send {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        color: #ffffff;
+        background: #087cff;
+        cursor: pointer;
+        transition: box-shadow 160ms ease;
+      }
+      .chat-send:not(:disabled):hover {
+        box-shadow: 0 0 14px rgba(8, 124, 255, 0.65);
+      }
+      .chat-send:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .chat-attach-wrap {
+        position: relative;
+        flex-shrink: 0;
+      }
+      .chat-attach-button {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+      .chat-attach-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9;
+      }
+      .chat-attach-menu {
+        position: absolute;
+        bottom: 50px;
+        left: 0;
+        z-index: 10;
+        min-width: 160px;
+        padding: 6px;
+        border-radius: 14px;
+        background: #14213a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.4);
+      }
+      .chat-attach-menu button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 42px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 9px;
+        color: #ffffff;
+        background: transparent;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .chat-attach-menu button:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .chat-recording-bar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: #0a1424;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .chat-recording-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--danger);
+        animation: chatRecordingPulse 1.1s ease-in-out infinite;
+      }
+      @keyframes chatRecordingPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      .chat-recording-bar span:nth-child(2) {
+        flex: 1;
+      }
+      .chat-recording-bar button {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+      .chat-recording-stop {
+        color: #ffffff;
+        background: #087cff !important;
+      }
+      .zoom-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 11000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
         background: rgba(0, 0, 0, 0.88);
         backdrop-filter: blur(14px);
         -webkit-backdrop-filter: blur(14px);
         cursor: zoom-out;
         animation: zoomOverlayIn 180ms ease-out;
       }
-
       .zoom-image-shell {
         width: min(92vw, 760px);
         height: min(82vh, 760px);
@@ -4301,7 +8020,6 @@ function HomeStyles() {
         box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
         cursor: default;
       }
-
       .zoom-image {
         width: 100%;
         height: 100%;
@@ -4310,12 +8028,11 @@ function HomeStyles() {
         user-select: none;
         -webkit-user-drag: none;
       }
-
       .zoom-close-button {
         position: fixed;
         top: max(16px, env(safe-area-inset-top));
         right: 16px;
-        z-index: 5001;
+        z-index: 11001;
         width: 46px;
         height: 46px;
         display: grid;
@@ -4328,38 +8045,216 @@ function HomeStyles() {
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
         cursor: pointer;
       }
-
-      .zoom-close-button:hover {
-        background: rgba(30, 41, 59, 0.96);
-        transform: scale(1.04);
-      }
-
-      .zoom-close-button:active {
-        transform: scale(0.96);
-      }
-
       @keyframes zoomOverlayIn {
-        from {
-          opacity: 0;
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .loading-state, .empty-state {
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding-top: calc(174px + env(safe-area-inset-top));
+        color: rgba(255,255,255,0.6);
+      }
+      .empty-state p {
+        margin-bottom: 20px;
+      }
+      .empty-button {
+        min-height: 50px;
+        padding: 0 28px;
+        border: none;
+        border-radius: 14px;
+        color: #ffffff;
+        background: #087cff;
+        font-weight: 800;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .skeleton-card {
+        pointer-events: none;
+      }
+      .skeleton-shimmer {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          100deg,
+          rgba(255, 255, 255, 0.03) 30%,
+          rgba(255, 255, 255, 0.09) 50%,
+          rgba(255, 255, 255, 0.03) 70%
+        );
+        background-size: 200% 100%;
+        animation: gwamoSkeletonShimmer 1.6s ease-in-out infinite;
+      }
+      @keyframes gwamoSkeletonShimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton-shimmer { animation: none; }
+      }
+      .gwamo-toast {
+        position: fixed;
+        left: 50%;
+        top: calc(96px + env(safe-area-inset-top));
+        z-index: 10500;
+        max-width: min(86vw, 360px);
+        padding: 11px 18px;
+        border: 1px solid rgba(22, 139, 255, 0.42);
+        border-radius: 999px;
+        color: #ffffff;
+        background: rgba(4, 13, 29, 0.92);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 0 0 1px rgba(22, 139, 255, 0.1), 0 12px 34px rgba(0, 0, 0, 0.5), 0 0 16px rgba(22, 139, 255, 0.3);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        transform: translateX(-50%);
+        animation: gwamoToastIn 220ms ease-out;
+      }
+      @keyframes gwamoToastIn {
+        from { opacity: 0; transform: translate(-50%, -6px); }
+        to { opacity: 1; transform: translate(-50%, 0); }
+      }
+      @media (max-width: 700px) {
+        .feedx-topbar-inner {
+          min-height: 82px;
+          padding: 15px 18px 10px;
         }
-        to {
-          opacity: 1;
+        .feedx-logo {
+          font-size: 34px;
+          letter-spacing: 3px;
+        }
+        .gwamo-tagline {
+          display: block;
+          font-size: 14px;
+        }
+        .category-nav {
+          padding: 0 18px 14px;
+          gap: 8px;
+        }
+        .category-tab {
+          min-height: 48px;
+          padding: 0 17px;
+          border-radius: 15px;
+        }
+        .account-avatar-button {
+          width: 38px;
+          height: 38px;
+          flex-basis: 38px;
+        }
+        .login-pill span {
+          display: none;
+        }
+        .login-pill {
+          min-height: 38px;
+          padding: 0 11px;
+        }
+        .dropdown-menu {
+          top: calc(100% + 8px);
+        }
+        .home-feed {
+          padding: calc(158px + env(safe-area-inset-top)) 12px 34px;
+        }
+        .coming-soon-panel,
+        .loading-state,
+        .empty-state {
+          padding-top: calc(158px + env(safe-area-inset-top));
+        }
+        .service-reel-card {
+          height: clamp(590px, calc(100svh - 172px), 780px);
+          border-radius: 22px;
+        }
+        .service-avatar-badge {
+          top: 14px;
+          right: 14px;
+          width: 46px;
+          height: 46px;
+        }
+        .post-info-block {
+          left: 22px;
+          right: 82px;
+          bottom: 122px;
+        }
+        .creator-name {
+          font-size: 14px;
+        }
+        .service-name {
+          font-size: 13px;
+          line-height: 1.3;
+        }
+        .post-price {
+          font-size: 13.5px;
+        }
+        .post-tagline {
+          font-size: 11.5px;
+          font-weight: 400;
+          line-height: 1.38;
+        }
+        .service-social-rail {
+          right: 14px;
+          bottom: 130px;
+          gap: 18px;
+        }
+        .rail-action {
+          width: 46px;
+          font-size: 12px;
+        }
+        .contact-me-cta {
+          left: 50%;
+          right: auto;
+          bottom: 20px;
+          width: clamp(210px, 58vw, 260px);
+          min-height: 50px;
+          padding: 0 20px;
+          font-size: 17px;
+          transform: translateX(-50%);
+        }
+        .modal-card {
+          border-radius: 20px 20px 0 0;
+        }
+        .auth-modal-card {
+          border-radius: 24px;
+        }
+        .chat-modal {
+          height: 90vh;
+          height: 90dvh;
+          max-height: none;
+          border-radius: 20px 20px 0 0;
         }
       }
-
-      @media (max-width: 600px) {
-        .zoom-overlay {
-          padding-left: 10px;
-          padding-right: 10px;
+      @media (max-width: 360px) {
+        .feedx-logo {
+          font-size: 30px;
         }
-
-        .zoom-image-shell {
-          width: 100%;
-          height: min(78vh, 620px);
-          border-radius: 18px;
+        .account-avatar-button {
+          width: 38px;
+          height: 38px;
+          flex-basis: 38px;
+        }
+        .menu-button {
+          width: 46px;
+          height: 46px;
+        }
+        .service-name {
+          font-size: 12.5px;
+        }
+        .post-info-block {
+          right: 68px;
         }
       }
-
+      .service-avatar-badge:focus-visible,
+      .rail-action:focus-visible,
+      .contact-me-cta:focus-visible,
+      .account-avatar-button:focus-visible,
+      .login-pill:focus-visible,
+      .menu-button:focus-visible,
+      .category-tab:focus-visible {
+        outline: 2px solid #168bff;
+        outline-offset: 2px;
+      }
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -4368,565 +8263,447 @@ function HomeStyles() {
           transition: none !important;
         }
       }
-
-
-      /* ================================================================
-         REELS-STYLE VISUAL LAYOUT — presentation only
-         Existing comments, media, reactions, watch-time and API logic stay intact.
-         ================================================================ */
+      /* Gwamo glass reel refresh: keep the original feed, chat and media logic. */
       .feedx-topbar {
-        background: rgba(8, 15, 26, 0.74);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-        -webkit-backdrop-filter: blur(14px);
-        backdrop-filter: blur(14px);
-        box-shadow: none;
+        background: linear-gradient(180deg, rgba(1, 5, 13, .92), rgba(1, 5, 13, .42), transparent);
+        border-bottom: 0;
       }
-
       .feedx-topbar-inner {
-        width: min(100%, 760px);
-        min-height: 64px;
-        padding: 8px 14px;
+        min-height: 70px;
+        padding: 15px 24px 8px;
       }
-
-      .gwamo-brand {
-        gap: 0;
-      }
-
-      .feedx-logo {
-        font-size: clamp(25px, 3.2vw, 30px);
-        font-weight: 850;
-        line-height: 1;
-        letter-spacing: -0.7px;
-        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.34);
-      }
-
-      .top-create-button {
-        min-height: 44px;
-        gap: 8px;
-        padding: 5px 13px 5px 7px;
-        border: 0;
-        border-radius: 10px;
-        background: #087cff;
-        box-shadow: none;
-        font-size: 14px;
-        font-weight: 800;
-      }
-
-      .top-create-mark {
-        width: 31px;
-        height: 31px;
-        flex: 0 0 31px;
-        display: grid;
-        place-items: center;
-        border-radius: 50%;
-        color: #087cff;
-        background: #ffffff;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 22px;
-        font-weight: 950;
-        line-height: 1;
-      }
-
-      .home-feed {
-        padding-top: calc(78px + env(safe-area-inset-top));
-      }
-
-      .home-post {
-        overflow: visible;
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-      }
-
-      .media-viewport {
-        overflow: hidden;
-        border-color: rgba(255, 255, 255, 0.09);
-        background: #000000;
-      }
-
-      .reel-creator-row {
-        position: absolute;
-        left: 16px;
-        right: 76px;
-        bottom: 18px;
-        z-index: 42;
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        color: #ffffff;
-        pointer-events: auto;
-        filter: drop-shadow(0 2px 7px rgba(0, 0, 0, 0.78));
-      }
-
-      .reel-profile-button {
-        width: 43px;
-        height: 43px;
-        flex: 0 0 43px;
-        border: 3px solid #ffffff;
-        box-shadow: 0 0 0 2px #168bff, 0 3px 10px rgba(0, 0, 0, 0.52);
-      }
-
-      .reel-profile-details {
-        min-width: 0;
-        flex: 0 1 auto;
-        max-width: min(46vw, 270px);
-      }
-
-      .reel-profile-details .creator-name {
-        font-size: 16px;
-        font-weight: 850;
-        text-shadow: 0 2px 7px rgba(0, 0, 0, 0.94);
-      }
-
-      .reel-inbox-button {
-        width: 48px;
-        height: 34px;
-        flex: 0 0 48px;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        border: 1px solid rgba(255, 255, 255, 0.30);
-        border-radius: 10px;
-        background: rgba(10, 10, 12, 0.34);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
-      }
-
-      .reel-inbox-button .inbox-envelope {
-        width: 24px;
-        height: 24px;
-        filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.75));
-      }
-
-      .reel-inbox-button .unread-dot {
-        width: 11px;
-        height: 11px;
-        top: -3px;
-        right: -3px;
-        border-width: 2px;
-      }
-
-      .reel-side-actions {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        z-index: 42;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 17px;
-        transform: translateY(-42%);
-        pointer-events: auto;
-      }
-
-      .reel-side-actions .metric-pill,
-      .reel-side-actions .action-pill,
-      .reel-more-button {
-        width: 58px;
-        min-width: 58px;
-        min-height: 0;
-        height: auto;
-        display: flex;
-        flex-direction: column;
+      .feedx-logo { font-size: clamp(26px, 4vw, 36px); letter-spacing: 5px; }
+      .gwamo-tagline { display: none; }
+      .topbar-actions { gap: 5px; }
+      .topbar-neon-button {
+        min-width: 44px;
+        height: 44px;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 3px;
-        padding: 2px 0;
+        gap: 6px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 50%;
+        color: #eaf8ff;
+        background: transparent;
+        filter: drop-shadow(0 0 7px rgba(45, 186, 255, .72));
+        cursor: pointer;
+      }
+      .topbar-neon-button:hover { color: #ffffff; filter: drop-shadow(0 0 12px rgba(45, 186, 255, 1)); }
+      .topbar-action-text { font-size: 11px; font-weight: 700; }
+      .topbar-add-button { color: #ffffff; border: 1px solid rgba(255, 255, 255, .24); background: rgba(5, 17, 34, .26); }
+      .category-nav { position: absolute; left: 0; right: 0; bottom: -55px; width: 100%; padding: 0 18px; gap: 7px; }
+      .category-tab { min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 11px; background: rgba(3, 12, 27, .38); backdrop-filter: blur(12px); }
+      .category-tab svg { width: 13px; height: 13px; }
+      .home-feed { width: min(100%, 760px); padding: calc(80px + env(safe-area-inset-top)) 0 0; }
+      .service-reel-card { height: calc(100svh - env(safe-area-inset-top)); min-height: 600px; margin: 0; border: 0; border-radius: 0; box-shadow: none; scroll-snap-align: start; }
+      .home-page { background: #020712; }
+      .service-reel-card img.home-media, .service-reel-card video.home-media { object-fit: cover; }
+      .service-card-gradient { background: linear-gradient(to bottom, rgba(0, 3, 10, .48), transparent 34%, transparent 54%, rgba(0, 4, 12, .25) 66%, rgba(0, 4, 12, .94) 95%, #020712 100%); }
+      .reel-type-label { position: absolute; z-index: 41; top: 118px; left: 22px; padding: 10px 14px; border: 1px solid rgba(80, 194, 255, .92); border-radius: 14px; color: #79cbff; background: rgba(3, 21, 45, .38); backdrop-filter: blur(12px); box-shadow: inset 0 0 16px rgba(20, 134, 255, .14), 0 0 17px rgba(25, 151, 255, .63); font-size: 12px; font-weight: 800; letter-spacing: .4px; }
+      .service-avatar-badge { top: 112px; right: 20px; width: 48px; height: 48px; background: rgba(3, 13, 27, .4); backdrop-filter: blur(10px); }
+      .post-info-block { left: 24px; right: 84px; bottom: 144px; padding: 13px 14px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 18px; background: rgba(3, 12, 27, .32); backdrop-filter: blur(12px); box-shadow: 0 10px 32px rgba(0, 0, 0, .18); }
+      .creator-name { font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, .88); }
+      .service-name { margin-top: 4px; font-size: clamp(21px, 4.3vw, 30px); font-weight: 800; line-height: 1.12; }
+      .post-price { display: none; }
+      .post-tagline { margin-top: 6px; font-size: 13px; line-height: 1.42; color: rgba(255, 255, 255, .84); }
+      .service-social-rail { right: 16px; bottom: 148px; gap: 19px; }
+      .rail-action { width: 50px; min-height: 50px; color: #e8f7ff; filter: drop-shadow(0 0 7px rgba(39, 178, 255, .74)); }
+      .contact-me-cta { bottom: 28px; width: min(86vw, 380px); min-height: 58px; border-radius: 18px; background: rgba(2, 19, 38, .36); backdrop-filter: blur(14px); box-shadow: inset 0 0 20px rgba(36, 173, 255, .18), 0 0 21px rgba(23, 161, 255, .84); }
+      @media (max-width: 700px) {
+        .feedx-topbar-inner { min-height: 62px; padding: 13px 16px 7px; }
+        .feedx-logo { font-size: 25px; }
+        .topbar-action-text { display: none; }
+        .category-nav { bottom: -47px; padding: 0 12px; }
+        .category-tab { min-height: 30px; padding: 0 10px; font-size: 10px; }
+        .home-feed { padding-top: calc(68px + env(safe-area-inset-top)); }
+        .service-reel-card { min-height: 540px; }
+        .reel-type-label { top: 95px; left: 16px; padding: 8px 11px; font-size: 10px; }
+        .service-avatar-badge { top: 92px; right: 15px; }
+        .post-info-block { left: 16px; right: 75px; bottom: 124px; padding: 10px 11px; }
+        .service-name { font-size: 21px; }
+        .post-tagline { font-size: 12px; }
+        .service-social-rail { right: 11px; bottom: 132px; gap: 14px; }
+        .contact-me-cta { bottom: 17px; min-height: 53px; font-size: 18px; }
+      }
+      .glass-frame-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        pointer-events: none;
+        background: transparent;
+        border: 1px solid rgba(116, 211, 255, .74);
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, .12),
+          inset 0 0 22px rgba(31, 174, 255, .16),
+          0 0 15px rgba(28, 167, 255, .42);
+      }
+      /* Final Gwamo layout: stable for both photo and video posts. */
+      .feedx-topbar {
+        background: #03070d;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+      .category-nav {
+        z-index: 90;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 8px 16px;
+        background: rgba(0, 0, 0, .90);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        scrollbar-width: none;
+      }
+      .category-nav::-webkit-scrollbar { display: none; }
+      .category-tab {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: 0 12px;
+        border-color: rgba(255,255,255,.10);
+        background: rgba(255,255,255,.08);
+      }
+      .category-tab.is-active {
+        background: rgba(4, 28, 56, .92);
+      }
+      .service-reel-card img.home-media,
+      .service-reel-card video.home-media {
+        object-fit: contain;
+        object-position: center;
+        background: #000;
+      }
+      .reel-type-label { display: none !important; }
+      .post-info-block {
+        left: 22px;
+        right: 74px;
+        bottom: 84px;
+        max-height: min(24svh, 180px);
+        padding: 0;
+        overflow: visible;
         border: 0;
         border-radius: 0;
-        color: #ffffff;
         background: transparent;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
         box-shadow: none;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 12px;
-        font-weight: 800;
-        line-height: 1.1;
-        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
+        text-align: left;
       }
-
-      .reel-side-actions .action-pill {
-        cursor: pointer;
+      .post-provider-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 0;
       }
-
-      .reel-side-actions .action-icon,
-      .reel-side-actions .heart-icon {
-        width: 31px;
-        height: 31px;
-        filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.92));
+      .post-provider-copy {
+        min-width: 0;
+        flex: 1;
+        padding-top: 1px;
       }
-
-      .reel-side-actions .whatsapp-action-icon {
-        width: 31px;
-        height: 31px;
-        filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.92));
+      .service-avatar-badge {
+        position: relative;
+        inset: auto;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        padding: 2px;
       }
-
-      .reel-more-button {
-        cursor: pointer;
-      }
-
-      .reel-more-button svg {
-        filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.92));
-      }
-
-      @media (max-width: 700px) {
-        .feedx-topbar-inner {
-          min-height: 62px;
-          padding: 7px 10px;
-        }
-
-        .feedx-logo {
-          font-size: 26px;
-        }
-
-        .top-create-button {
-          min-height: 42px;
-          gap: 7px;
-          padding: 5px 11px 5px 6px;
-          border-radius: 9px;
-          font-size: 13px;
-        }
-
-        .top-create-mark {
-          width: 30px;
-          height: 30px;
-          flex-basis: 30px;
-          font-size: 21px;
-        }
-
-        .home-feed {
-          padding-top: calc(72px + env(safe-area-inset-top));
-        }
-
-        .home-post {
-          border-radius: 0;
-        }
-
-        .media-viewport,
-        .media-viewport.is-square,
-        .media-viewport.is-landscape,
-        .media-viewport.is-portrait {
-          border-left: 0;
-          border-right: 0;
-          border-radius: 0;
-        }
-
-        .reel-creator-row {
-          left: 12px;
-          right: 68px;
-          bottom: 14px;
-          gap: 8px;
-        }
-
-        .reel-profile-button {
-          width: 40px;
-          height: 40px;
-          flex-basis: 40px;
-        }
-
-        .reel-profile-details {
-          max-width: 42vw;
-        }
-
-        .reel-profile-details .creator-name {
-          font-size: 14px;
-        }
-
-        .reel-inbox-button {
-          width: 44px;
-          height: 32px;
-          flex-basis: 44px;
-        }
-
-        .reel-side-actions {
-          right: 7px;
-          gap: 15px;
-        }
-
-        .reel-side-actions .metric-pill,
-        .reel-side-actions .action-pill,
-        .reel-more-button {
-          width: 52px;
-          min-width: 52px;
-          padding: 1px 0;
-          font-size: 11px;
-        }
-
-        .reel-side-actions .action-icon,
-        .reel-side-actions .heart-icon,
-        .reel-side-actions .whatsapp-action-icon {
-          width: 29px;
-          height: 29px;
-        }
-      }
-
-      @media (max-width: 360px) {
-        .feedx-logo {
-          font-size: 24px;
-        }
-
-        .top-create-button {
-          padding-right: 9px;
-          font-size: 12px;
-        }
-
-        .top-create-mark {
-          width: 28px;
-          height: 28px;
-          flex-basis: 28px;
-          font-size: 19px;
-        }
-
-        .reel-profile-details {
-          max-width: 37vw;
-        }
-      }
-
-
-      /* ================================================================
-         Requested Reels refinements only
-         ================================================================ */
-      :root {
-        --deep-orange: #ff6a00;
-        --deep-orange-bright: #ff8a00;
-        --deep-orange-soft: rgba(255, 106, 0, 0.34);
-        --deep-orange-glow: rgba(255, 106, 0, 0.78);
-      }
-
-      /* Make the white T badge and the remaining text read as one title. */
-      .top-create-button {
-        gap: 3px;
-      }
-
-      .top-create-text {
-        margin-left: -1px;
-      }
-
-      /* Media itself is the visual card, close to a full-screen Reel. */
-      .media-viewport,
-      .media-viewport.is-square,
-      .media-viewport.is-landscape,
-      .media-viewport.is-portrait {
-        width: 100%;
-        height: min(calc(100svh - 86px), 900px);
-        max-width: none;
-        max-height: none;
-        aspect-ratio: auto;
+      .creator-name {
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
         margin: 0;
+        padding: 0;
         border: 0;
-        border-radius: 18px;
-        background: #000;
-        box-shadow: 0 18px 46px rgba(0, 0, 0, 0.46);
-      }
-
-      /* Title and message now live over the bottom of the media like Reels. */
-      .reel-copy-overlay {
-        position: absolute;
-        left: 16px;
-        right: 82px;
-        bottom: 76px;
-        z-index: 41;
-        max-height: 44%;
-        padding: 58px 0 0;
-        overflow: visible;
         color: #fff;
-        background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.18) 32%, rgba(0,0,0,.56) 100%);
-        pointer-events: auto;
-      }
-
-      .reel-copy-overlay .post-title {
-        margin: 0 0 5px;
-        color: #fff;
-        font-size: clamp(17px, 2.2vw, 20px);
-        line-height: 1.25;
-        text-shadow: 0 2px 7px rgba(0,0,0,.95);
-      }
-
-      .reel-copy-overlay .post-message {
-        color: rgba(255,255,255,.94);
+        background: transparent;
+        font: inherit;
         font-size: 14px;
-        line-height: 1.5;
-        text-shadow: 0 2px 7px rgba(0,0,0,.95);
+        font-weight: 800;
+        line-height: 1.25;
+        text-align: left;
+        text-shadow: 0 1px 5px rgba(0,0,0,.98), 0 0 12px rgba(0,0,0,.82);
+        cursor: pointer;
       }
-
-      .reel-copy-overlay .post-message.is-collapsed {
-        -webkit-line-clamp: 3;
+      .creator-name > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-
-      .reel-copy-overlay .post-message:not(.is-collapsed) {
-        max-height: 28svh;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: var(--deep-orange) transparent;
+      .verified-check-badge {
+        width: 17px;
+        height: 17px;
       }
-
-      .reel-copy-overlay .message-toggle-button {
-        margin-top: 4px;
+      .service-name {
+        margin: 4px 0 0;
         color: #fff;
         font-size: 13px;
-        font-weight: 850;
-        text-shadow: 0 0 8px var(--deep-orange-glow), 0 2px 6px rgba(0,0,0,.95);
+        font-weight: 650;
+        line-height: 1.3;
+        text-align: left;
+        text-shadow: 0 1px 5px rgba(0,0,0,.98), 0 0 12px rgba(0,0,0,.82);
+        -webkit-line-clamp: 1;
       }
-
-      /* Comments remain inside the whole media card and can both drag and scroll. */
-      .floating-comments-layer {
-        inset: 0;
-        pointer-events: none;
+      .post-tagline-wrap { margin-top: 3px; }
+      .post-tagline {
+        margin: 0;
+        color: rgba(255,255,255,.92);
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.36;
+        text-align: left;
+        text-shadow: 0 1px 5px #000, 0 0 12px rgba(0,0,0,.9);
+        white-space: pre-line;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
       }
-
-      .floating-comments-sheet {
-        top: 8px;
-        left: 8px;
-        right: 8px;
-        height: min(68%, 620px);
-        max-height: calc(100% - 16px);
-        min-height: 210px;
-        pointer-events: auto;
-        border-color: rgba(255,106,0,.38);
-        box-shadow: 0 0 0 1px rgba(255,106,0,.09), 0 0 28px rgba(255,106,0,.24), 0 18px 42px rgba(0,0,0,.32);
-      }
-
-      .comments-list {
-        flex: 1 1 auto;
-        min-height: 0;
+      .post-tagline.is-expanded {
+        display: block;
+        max-height: min(18svh, 130px);
         overflow-y: auto;
-        overflow-x: hidden;
-        touch-action: pan-y;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-color: rgba(255,106,0,.9) transparent;
       }
-
-      .comments-list::-webkit-scrollbar-thumb {
-        background: linear-gradient(var(--deep-orange-bright), var(--deep-orange));
-        box-shadow: 0 0 10px var(--deep-orange-glow);
-      }
-
-      /* Every neon accent becomes deep orange. */
-      .comment-drag-handle span {
-        background: linear-gradient(90deg, var(--deep-orange-bright), var(--deep-orange));
-        box-shadow: 0 0 8px var(--deep-orange-glow), 0 0 18px var(--deep-orange-soft);
-      }
-
-      .comments-overlay-header {
-        border-bottom-color: rgba(255,106,0,.20);
-      }
-
-      .comments-overlay-close {
-        border-color: rgba(255,106,0,.76);
-        box-shadow: 0 0 9px var(--deep-orange-glow), 0 0 22px var(--deep-orange-soft), inset 0 0 10px rgba(255,106,0,.14);
-      }
-
-      .comments-overlay-close:hover,
-      .comments-overlay-close:focus-visible {
-        box-shadow: 0 0 12px rgba(255,138,0,1), 0 0 30px rgba(255,106,0,.66), inset 0 0 12px rgba(255,106,0,.22);
-      }
-
-      .comment-avatar {
-        box-shadow: 0 0 10px rgba(255,106,0,.58), 0 5px 14px rgba(0,0,0,.24);
-      }
-
-      .comment-body {
-        border-color: rgba(255,106,0,.34);
-        background: linear-gradient(145deg, rgba(28,18,10,.78), rgba(54,24,4,.52));
-        box-shadow: 0 0 0 1px rgba(255,106,0,.07), 0 0 15px rgba(255,106,0,.20), 0 9px 24px rgba(0,0,0,.30);
-      }
-
-      .comment-row:hover .comment-body {
-        border-color: rgba(255,138,0,.58);
-        box-shadow: 0 0 0 1px rgba(255,106,0,.12), 0 0 20px rgba(255,106,0,.34), 0 10px 26px rgba(0,0,0,.32);
-      }
-
-      .comment-text a,
-      .comment-text mark,
-      .comment-text .mention,
-      .message-toggle-button {
-        color: var(--deep-orange-bright);
-      }
-
-      .comment-add-button {
-        border-color: rgba(255,138,0,.82);
-        background: linear-gradient(145deg, var(--deep-orange-bright), var(--deep-orange));
-        box-shadow: 0 0 12px var(--deep-orange-glow), 0 7px 20px rgba(255,106,0,.32);
-      }
-
-      .reel-inbox-button .inbox-envelope {
+      .tagline-toggle-button {
         color: #fff;
-        filter: drop-shadow(0 0 7px var(--deep-orange-glow)) drop-shadow(0 0 18px rgba(255,106,0,.52));
+        text-shadow: 0 1px 5px #000;
       }
-
-      /* Remove the blue profile ring and replace it with a rotating tire tread. */
-      .reel-profile-button {
+      .post-price { display: none; }
+      .service-social-rail {
+        right: 18px;
+        bottom: 92px;
+        gap: 0;
+      }
+      .rail-action {
+        width: 44px;
+        min-height: 44px;
+      }
+      .rail-action svg { width: 31px; height: 31px; }
+      .inbox-rail-action,
+      .plus-rail-action { display: none !important; }
+      .contact-me-cta {
+        bottom: calc(22px + env(safe-area-inset-bottom));
+        width: min(70%, 280px);
+        min-height: 44px;
+        padding: 0 18px;
+        gap: 9px;
+        border-radius: 14px;
+        font-size: 16px;
+        font-weight: 700;
+        background: rgba(2, 13, 27, .38);
+        -webkit-backdrop-filter: blur(9px);
+        backdrop-filter: blur(9px);
+        box-shadow: inset 0 0 12px rgba(36,173,255,.12), 0 0 12px rgba(23,161,255,.62);
+      }
+      .contact-me-cta svg { width: 18px; height: 18px; }
+      /* Use the Gwamo glass frame as the shared visual language for forms and chat. */
+      .modal-card,
+      .chat-modal {
         position: relative;
         isolation: isolate;
-        padding: 3px;
-        overflow: hidden;
-        border: 0;
-        background: rgba(255,255,255,.92);
-        box-shadow: 0 3px 10px rgba(0,0,0,.38);
+        border: 1px solid rgba(76, 195, 255, .52);
+        background-color: #06101f;
+        background-image:
+          radial-gradient(circle at top, rgba(8,124,255,.16), transparent 42%),
+          linear-gradient(180deg, rgba(4,14,31,.98), rgba(2,8,18,.98));
+        background-position: center, center;
+        background-repeat: no-repeat, no-repeat;
+        background-size: cover, cover;
+        box-shadow: 0 0 22px rgba(26,161,255,.38), 0 -18px 50px rgba(0,0,0,.56);
       }
-
-      .reel-profile-button::before {
-        content: "";
-        position: absolute;
-        inset: -2px;
-        z-index: 0;
-        border-radius: 50%;
-        background: repeating-conic-gradient(from 0deg, #f8fafc 0deg 12deg, #aeb7c2 12deg 18deg, #ffffff 18deg 28deg, #7f8a96 28deg 34deg);
-        animation: gwamoTireSpin 2.8s linear infinite;
+      .modal-header,
+      .chat-header {
+        background: rgba(2, 8, 18, .86);
+        -webkit-backdrop-filter: blur(15px);
+        backdrop-filter: blur(15px);
       }
-
-      .reel-profile-button::after {
-        content: "";
-        position: absolute;
-        inset: 3px;
-        z-index: 1;
-        border: 1px solid rgba(255,255,255,.78);
-        border-radius: 50%;
-        box-shadow: inset 0 0 5px rgba(15,23,42,.55), 0 0 7px rgba(255,255,255,.42);
-        pointer-events: none;
+      .modal-card input,
+      .modal-card textarea,
+      .modal-card select,
+      .post-type-choice {
+        background-color: rgba(1, 7, 18, .78);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
       }
-
-      .reel-profile-button .profile-picture {
-        position: relative;
-        z-index: 2;
-        border: 0;
-      }
-
-      @keyframes gwamoTireSpin {
-        to { transform: rotate(360deg); }
-      }
-
       @media (max-width: 700px) {
-        .media-viewport,
-        .media-viewport.is-square,
-        .media-viewport.is-landscape,
-        .media-viewport.is-portrait {
-          height: calc(100svh - 72px);
-          min-height: 560px;
-          border-radius: 0;
+        .category-nav {
+          padding: 7px 12px;
         }
-
-        .reel-copy-overlay {
-          left: 12px;
-          right: 70px;
-          bottom: 70px;
-          max-height: 46%;
-          padding-top: 48px;
+        .category-tab {
+          min-height: 30px;
+          padding: 0 10px;
+          font-size: 10px;
         }
-
-        .floating-comments-sheet {
-          left: 5px;
-          right: 5px;
-          height: 68%;
-          max-height: calc(100% - 10px);
+        .post-info-block {
+          left: 17px;
+          right: 66px;
+          bottom: 78px;
+        }
+        .service-avatar-badge {
+          width: 41px;
+          height: 41px;
+          flex-basis: 41px;
+        }
+        .creator-name { font-size: 13.5px; }
+        .service-name { font-size: 12.5px; }
+        .post-tagline { font-size: 11.5px; }
+        .service-social-rail {
+          right: 12px;
+          bottom: 84px;
+        }
+        .contact-me-cta {
+          bottom: calc(17px + env(safe-area-inset-bottom));
+          width: min(68%, 250px);
+          min-height: 42px;
+          font-size: 15.5px;
         }
       }
-
+      /* Final media bounds and compact controls. */
+      .service-reel-card {
+        --media-top-boundary: 47px;
+        --media-edge-gap: 8px;
+        --media-bottom-boundary: 88px;
+      }
+      .service-reel-card .media-card {
+        top: var(--media-top-boundary);
+        right: var(--media-edge-gap);
+        bottom: var(--media-bottom-boundary);
+        left: var(--media-edge-gap);
+        width: auto;
+        height: auto;
+        border-radius: 0 0 22px 22px;
+      }
+      .service-reel-card .media-viewport,
+      .service-reel-card .media-layer {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+      }
+      .service-reel-card .media-layer {
+        background: #000;
+      }
+      .service-reel-card img.home-media,
+      .service-reel-card video.home-media {
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        object-position: center;
+      }
+      .service-avatar-badge {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      .service-avatar-badge::before { display: none; }
+      .service-avatar-badge img {
+        border: 0;
+        background: transparent;
+      }
+      .contact-me-cta {
+        width: min(58%, 220px);
+        min-height: 38px;
+        padding: 0 14px;
+        gap: 7px;
+        border-radius: 12px;
+        font-size: 14px;
+      }
+      .contact-me-cta svg {
+        width: 16px;
+        height: 16px;
+      }
+      .topbar-inbox-button .inbox-icon-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      .post-price {
+        display: block !important;
+        margin-top: 2px;
+        color: #39e982;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.25;
+        text-shadow: 0 1px 5px rgba(0,0,0,.98), 0 0 9px rgba(23,195,105,.35);
+      }
+      .post-price-unit {
+        color: rgba(144, 255, 191, .78);
+        font-size: .92em;
+      }
+      @media (max-width: 700px) {
+        .service-reel-card {
+          --media-top-boundary: 44px;
+          --media-edge-gap: 7px;
+          --media-bottom-boundary: 74px;
+        }
+        .topbar-actions { gap: 2px; }
+        .topbar-neon-button {
+          min-width: 37px;
+          width: 37px;
+          height: 40px;
+          padding: 0 4px;
+        }
+        .topbar-neon-button svg {
+          width: 23px;
+          height: 23px;
+        }
+        .contact-me-cta {
+          width: min(56%, 205px);
+          min-height: 37px;
+          bottom: calc(16px + env(safe-area-inset-bottom));
+          font-size: 13.5px;
+        }
+        /* Mobile-safe glass fallback. Some low-memory Android GPUs corrupt layers
+           that combine backdrop-filter, SVG filters and fixed/absolute overlays. */
+        .home-page *,
+        .home-page *::before,
+        .home-page *::after {
+          -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+        }
+        .feedx-topbar {
+          background: #03070d !important;
+        }
+        .category-nav {
+          background: rgba(0, 0, 0, .97) !important;
+        }
+        .category-tab {
+          background: linear-gradient(180deg, #121a2a, #070c19) !important;
+        }
+        .category-tab.is-active {
+          background: linear-gradient(180deg, #0a4c96, #041a39) !important;
+        }
+        .service-reel-card,
+        .modal-card,
+        .chat-modal {
+          background-color: #06101f !important;
+        }
+        .contact-me-cta {
+          background: linear-gradient(180deg, rgba(5, 31, 59, .98), rgba(2, 13, 27, .98)) !important;
+        }
+        .comments-sheet-card {
+          background-color: #06101f !important;
+        }
+        .gold-star,
+        .rail-action,
+        .topbar-neon-button {
+          filter: none !important;
+        }
+        .glass-frame-overlay {
+          contain: paint;
+        }
+      }
     `}</style>
   );
 }
-
+const HomeStyles = memo(HomeStylesInner);
+HomeStyles.displayName = "HomeStyles";
 export default Home;
