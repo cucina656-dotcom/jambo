@@ -182,7 +182,6 @@ export default function Admin() {
   const [verifyingProviderId, setVerifyingProviderId] = useState("");
   const [decidingResetId, setDecidingResetId] = useState("");
   const [verificationReview, setVerificationReview] = useState(null);
-  const [verificationCode, setVerificationCode] = useState("");
   const [verificationError, setVerificationError] = useState("");
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -293,7 +292,6 @@ export default function Admin() {
     setSelectedConversation(null);
     setConversationMessages([]);
     setVerificationReview(null);
-    setVerificationCode("");
     setVerificationError("");
     setPrivacyNotice("");
     setStatus("");
@@ -388,7 +386,7 @@ export default function Admin() {
   );
  
   const verifyProvider = useCallback(
-    async (provider, nextStatus, phoneCode = "") => {
+    async (provider, nextStatus) => {
       const action =
         nextStatus === "verified"
           ? "approve"
@@ -406,18 +404,6 @@ export default function Admin() {
       ) {
         return;
       }
-
-      const cleanCode = String(phoneCode || "").trim();
-      if (
-        nextStatus === "verified" &&
-        providerNeedsPhoneApproval(provider) &&
-        !/^\d{6}$/.test(cleanCode)
-      ) {
-        setVerificationError(
-          "Call the registered telephone number and enter the 6-digit code the owner reads to you."
-        );
-        return;
-      }
  
       setVerifyingProviderId(String(provider.id));
       setVerificationError("");
@@ -431,7 +417,6 @@ export default function Admin() {
             body: JSON.stringify({
               provider_id: provider.id,
               status: nextStatus,
-              verification_code: cleanCode || undefined,
               note:
                 nextStatus === "verified"
                   ? "Identity and phone confirmed by admin."
@@ -452,14 +437,13 @@ export default function Admin() {
 
         if (nextStatus === "verified") {
           setVerificationReview(null);
-          setVerificationCode("");
         }
  
         showStatus(result.message || "Provider updated.", "success");
       } catch (error) {
         if (nextStatus === "verified") {
           setVerificationError(
-            error.message || "Could not verify this telephone number."
+            error.message || "Could not approve this provider."
           );
         }
         showStatus(error.message || "Could not update provider.", "error");
@@ -470,6 +454,11 @@ export default function Admin() {
     [adminPin, showStatus]
   );
 
+  // Every approval - whether it's a brand-new registration or an existing
+  // provider - is now a direct confirmation. The admin still calls the
+  // registered number themselves to confirm identity for a first-time
+  // pending_phone_review account (see ProviderVerificationModal below); no
+  // code is exchanged or checked by the app on either side.
   const beginProviderApproval = useCallback(
     (provider) => {
       if (!providerNeedsPhoneApproval(provider)) {
@@ -484,7 +473,6 @@ export default function Admin() {
       }
 
       setVerificationReview(provider);
-      setVerificationCode("");
       setVerificationError("");
     },
     [verifyProvider]
@@ -986,22 +974,12 @@ export default function Admin() {
       {verificationReview ? (
         <ProviderVerificationModal
           provider={verificationReview}
-          code={verificationCode}
           error={verificationError}
           busy={verifyingProviderId === String(verificationReview.id)}
-          setCode={(value) => {
-            setVerificationCode(
-              String(value || "").replace(/\D/g, "").slice(0, 6)
-            );
-            setVerificationError("");
-          }}
-          approve={() =>
-            verifyProvider(verificationReview, "verified", verificationCode)
-          }
+          approve={() => verifyProvider(verificationReview, "verified")}
           close={() => {
             if (verifyingProviderId) return;
             setVerificationReview(null);
-            setVerificationCode("");
             setVerificationError("");
           }}
         />
@@ -1098,16 +1076,6 @@ function ProvidersView({
                 <Info
                   label="Telephone verified"
                   value={provider.phone_verified ? "Yes" : "Not yet"}
-                />
-                <Info
-                  label="Code expires"
-                  value={
-                    provider.phone_verification_expires_at
-                      ? formatDate(provider.phone_verification_expires_at)
-                      : provider.phone_verified
-                      ? "Completed"
-                      : "Not issued"
-                  }
                 />
               </div>
  
@@ -1738,10 +1706,8 @@ function ConversationModal({
 
 function ProviderVerificationModal({
   provider,
-  code,
   error,
   busy,
-  setCode,
   approve,
   close,
 }) {
@@ -1755,10 +1721,11 @@ function ProviderVerificationModal({
       >
         <header className="modal-header">
           <div>
-            <span>TELEPHONE OWNERSHIP REVIEW</span>
+            <span>NAME &amp; TELEPHONE REVIEW</span>
             <h2>{provider.full_name || provider.service_provider_name}</h2>
             <small>
-              Approve only after speaking to the owner of the registered number.
+              Approve only after confirming this name belongs to the
+              registered number below.
             </small>
           </div>
           <button type="button" onClick={close} disabled={busy}>
@@ -1769,10 +1736,12 @@ function ProviderVerificationModal({
         <div className="security-callout compact">
           <ShieldCheck size={20} />
           <div>
-            <strong>Do not ask for the user's personal PIN</strong>
+            <strong>No code needed</strong>
             <p>
-              Ask only for the temporary 6-digit verification code displayed
-              after registration.
+              Call the registered number and confirm the person answering is{" "}
+              {provider.full_name || provider.service_provider_name || "this person"}
+              . Once you're satisfied the name matches the number, approve
+              below.
             </p>
           </div>
         </div>
@@ -1780,10 +1749,7 @@ function ProviderVerificationModal({
         <div className="provider-info-grid">
           <Info label="Registered telephone" value={phone ? `+${phone}` : "None"} />
           <Info label="Account" value={provider.account_status || "pending_phone_review"} />
-          <Info
-            label="Verification expires"
-            value={formatDate(provider.phone_verification_expires_at)}
-          />
+          <Info label="Registered" value={formatDate(provider.created_at)} />
         </div>
 
         {phone ? (
@@ -1795,20 +1761,6 @@ function ProviderVerificationModal({
           <div className="notice error">This provider has no registered telephone.</div>
         )}
 
-        <label className="verification-code-field">
-          <span>Code read by the account owner</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={code}
-            placeholder="000000"
-            onChange={(event) => setCode(event.target.value)}
-            autoFocus
-          />
-        </label>
-
         {error ? <div className="notice error">{error}</div> : null}
 
         <div className="verification-actions">
@@ -1819,10 +1771,10 @@ function ProviderVerificationModal({
             type="button"
             className="approve-button"
             onClick={approve}
-            disabled={busy || !phone || !/^\d{6}$/.test(code)}
+            disabled={busy || !phone}
           >
             {busy ? <Loader2 className="spin" size={18} /> : <CheckCircle2 size={18} />}
-            Confirm code and approve
+            Confirm and approve
           </button>
         </div>
       </section>
@@ -2436,8 +2388,7 @@ function AdminStyles() {
         border-top: 1px solid var(--line);
       }
 
-      .pin-reset-review label span,
-      .verification-code-field span {
+      .pin-reset-review label span {
         display: block;
         margin-bottom: 5px;
         color: var(--muted);
@@ -2445,8 +2396,7 @@ function AdminStyles() {
         font-weight: 800;
       }
 
-      .pin-reset-review input,
-      .verification-code-field input {
+      .pin-reset-review input {
         width: 100%;
         height: 42px;
         padding: 0 12px;
@@ -2456,8 +2406,7 @@ function AdminStyles() {
         letter-spacing: 2px;
         font-weight: 900;
       }
-      .pin-reset-review input:focus,
-      .verification-code-field input:focus {
+      .pin-reset-review input:focus {
         border-color: var(--blue);
         box-shadow: 0 0 0 4px rgba(8,124,255,.1);
       }
@@ -2945,13 +2894,6 @@ function AdminStyles() {
       .privacy-callout p { margin: 0; }
 
       .verification-call { width: 100%; margin-top: 12px; }
-      .verification-code-field { display: block; margin-top: 13px; }
-      .verification-code-field input {
-        height: 54px;
-        text-align: center;
-        font-size: 22px;
-        letter-spacing: 8px;
-      }
       .verification-actions {
         display: flex;
         justify-content: flex-end;
