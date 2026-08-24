@@ -4085,22 +4085,29 @@ const PendingPhoneReviewModal = memo(({ review, onClose }) => {
       onClick={(event) => event.stopPropagation()}
     >
       <div className="modal-header">
-        <h2>Registration received</h2>
+        <h2>You're almost in!</h2>
         <button type="button" onClick={onClose} className="modal-close" aria-label="Close">
           <X size={20} strokeWidth={2.4} aria-hidden="true" />
         </button>
       </div>
       <p className="pin-reset-intro">
-        To own a Gwamo account, the admin will contact you to verify that you
-        are a legitimate user.
+        Thank you for joining Gwamo. Your registration is now with our team
+        for a quick review to confirm you're a real person with a genuine
+        account.
+      </p>
+      <p className="pin-reset-intro">
+        This usually takes about an hour, though it can take up to a day
+        during busier periods. There's nothing more for you to do right now
+        - just check back soon and your account will be ready to go.
       </p>
       {review?.phone && (
         <p className="auth-helper-text">
-          Gwamo will reach out on the number you registered with.
+          We'll be in touch on the number you registered with if we need
+          anything from you.
         </p>
       )}
       <button type="button" className="save-button" onClick={onClose}>
-        I understand
+        Got it, I'll check back soon
       </button>
     </div>
   </div>
