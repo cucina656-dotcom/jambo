@@ -269,6 +269,24 @@ function renderDescriptionWithLinks(value = "") {
       );
     });
 }
+function getProviderWebsite(post = {}) {
+  const candidates = [
+    post.website_url,
+    post.website,
+    post.provider_link,
+    post.link,
+    post.contact_url,
+    post.creator_identity,
+  ];
+  for (const value of candidates) {
+    const raw = String(value || "").trim();
+    if (!raw) continue;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^www\./i.test(raw)) return `https://${raw}`;
+  }
+  return "";
+}
+
 function normalizeWhatsAppNumber(value = "") {
   const raw = String(value || "").trim();
   const compact = raw.replace(/[\s().-]/g, "");
@@ -3655,6 +3673,10 @@ const ServicePost = memo(function ServicePost({
     fullDescription.toLowerCase() !== serviceName.toLowerCase()
       ? fullDescription
       : "";
+  const providerWebsite = getProviderWebsite(post);
+  const providerWebsiteLabel = providerWebsite
+    ? providerWebsite.replace(/^https?:\/\//i, "").replace(/\/$/, "")
+    : "";
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const descriptionNeedsToggle = tagline.length > DESCRIPTION_PREVIEW_LENGTH;
   const visibleDescription = isDescriptionExpanded
@@ -3736,7 +3758,7 @@ const ServicePost = memo(function ServicePost({
     <section
       ref={postRefCallback}
       data-index={index}
-      className="home-post service-reel-card"
+      className={`home-post service-reel-card${showTvPublicConversation ? " is-tv-card" : ""}`}
     >
       <div className="media-card">
         <div
@@ -3847,6 +3869,19 @@ const ServicePost = memo(function ServicePost({
               </div>
             )}
             {descriptionBlock}
+            {providerWebsite && (
+              <a
+                className="provider-detail-link"
+                href={providerWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                aria-label={`Open ${providerName}'s website`}
+              >
+                <span className="provider-detail-link-icon" aria-hidden="true">↗</span>
+                <span>{providerWebsiteLabel}</span>
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -3868,22 +3903,26 @@ const ServicePost = memo(function ServicePost({
           <span>{formatCount(reactionCount)}</span>
         </button>
       </div>
-      <button
-        type="button"
-        className="contact-me-cta"
-        onClick={() => onContactProvider(post)}
-      >
-        <Send size={20} aria-hidden="true" />
-        <span>Contact me</span>
-      </button>
-      {callHref && (
-        <a
-          className="call-me-button"
-          href={callHref}
-          aria-label={`Call ${providerName}`}
-        >
-          <Phone size={20} aria-hidden="true" />
-        </a>
+      {!showTvPublicConversation && (
+        <>
+          <button
+            type="button"
+            className="contact-me-cta"
+            onClick={() => onContactProvider(post)}
+          >
+            <Send size={20} aria-hidden="true" />
+            <span>Contact me</span>
+          </button>
+          {callHref && (
+            <a
+              className="call-me-button"
+              href={callHref}
+              aria-label={`Call ${providerName}`}
+            >
+              <Phone size={20} aria-hidden="true" />
+            </a>
+          )}
+        </>
       )}
     </section>
   );
@@ -7144,6 +7183,37 @@ function HomeStylesInner() {
         color: #9cd7ff;
         text-decoration-color: rgba(156, 215, 255, 0.95);
       }
+      .provider-detail-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        margin-top: 6px;
+        color: #55b6ff;
+        font-size: 12.5px;
+        font-weight: 800;
+        line-height: 1.25;
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+        text-shadow: 0 0 8px rgba(22, 139, 255, .72);
+        overflow: hidden;
+      }
+      .provider-detail-link span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .provider-detail-link-icon {
+        flex: 0 0 auto;
+        font-size: 13px;
+      }
+      .provider-detail-link:hover,
+      .provider-detail-link:focus-visible {
+        color: #b7e3ff;
+        outline: none;
+        text-shadow: 0 0 11px rgba(58, 174, 255, .95);
+      }
       .tagline-toggle-button {
         display: inline-block;
         margin: 0;
@@ -7284,6 +7354,77 @@ function HomeStylesInner() {
       .contact-me-cta:hover {
         background: rgba(9, 44, 91, .28);
         box-shadow: inset 0 0 18px rgba(22, 139, 255, .14), 0 0 7px rgba(255,255,255,.28), 0 0 22px rgba(22, 139, 255, .96);
+      }
+
+      /* TV only: the media itself remains the visual background.
+         No Contact me/call controls are rendered on TV cards. */
+      .service-reel-card.is-tv-card .glass-frame-overlay {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      .service-reel-card.is-tv-card .service-card-gradient {
+        background: linear-gradient(
+          to bottom,
+          transparent 46%,
+          rgba(0, 0, 0, .06) 58%,
+          rgba(0, 0, 0, .34) 76%,
+          rgba(0, 0, 0, .68) 100%
+        );
+      }
+      .service-reel-card.is-tv-card .post-info-block {
+        left: 22px;
+        right: 84px;
+        bottom: 92px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      .service-reel-card.is-tv-card .service-social-rail {
+        right: 18px;
+        bottom: 106px;
+      }
+      .service-reel-card.is-tv-card .tv-public-conversation {
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        overflow: hidden;
+      }
+      .service-reel-card.is-tv-card .tv-public-live-toggle {
+        top: 12px;
+        left: 12px;
+      }
+      .service-reel-card.is-tv-card .tv-public-say-sign {
+        left: 50%;
+        bottom: 22px;
+        min-height: 40px;
+        max-width: calc(100% - 120px);
+        padding: 0 15px 0 10px;
+        transform: translateX(-50%);
+        background: rgba(0, 7, 18, .34);
+        border: 1px solid rgba(71, 174, 255, .72);
+        box-shadow: 0 0 13px rgba(22, 139, 255, .52);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      .service-reel-card.is-tv-card .tv-public-stream {
+        top: 48px;
+        right: 72px;
+        bottom: 150px;
+        left: 12px;
+      }
+      .service-reel-card.is-tv-card .tv-public-composer {
+        right: 12px;
+        bottom: 18px;
+        left: 12px;
+        width: auto;
       }
       .load-more-wrap {
         display: flex;
