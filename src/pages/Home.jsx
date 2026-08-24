@@ -35,9 +35,6 @@ import {
   Image as ImageIcon,
   Video,
   FileText,
-  Mic,
-  Square,
-  Trash2,
   Search,
   CheckCheck,
   Phone,
@@ -291,15 +288,6 @@ function isSameProviderAsPost(post = {}, provider = null) {
   const viewerPhone = normalizeWhatsAppNumber(provider.phone || "");
   return Boolean(ownerPhone && viewerPhone && ownerPhone === viewerPhone);
 }
-// Convert any valid ISO 3166-1 alpha-2 country code into its flag emoji
-// locally (no hardcoded per-country list, so every country renders its real
-// flag - not only Rwanda/Burundi with a globe fallback for everyone else).
-function countryCodeToFlagEmoji(countryCode = "") {
-  const code = String(countryCode || "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return "\u{1F310}";
-  const codePoints = [...code].map((char) => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-}
 // Shared Escape-to-close behavior for every modal/sheet/viewer in the app.
 function useEscapeToClose(onClose, isOpen = true) {
   useEffect(() => {
@@ -516,14 +504,6 @@ function Home() {
   const [myConversationsLoading, setMyConversationsLoading] = useState(false);
   const [myConversationsError, setMyConversationsError] = useState("");
   const [showInfoModal, setShowInfoModal] = useState(null);
-  // Public comments: separate from private messages. Comments are shown in
-  // their own glass sheet with a scrollable list and a compact composer.
-  const [showCommentsForPostId, setShowCommentsForPostId] = useState(null);
-  const [commentsByPost, setCommentsByPost] = useState({});
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [commentsError, setCommentsError] = useState("");
-  const [newCommentText, setNewCommentText] = useState("");
-  const [commentSubmitting, setCommentSubmitting] = useState(false);
   // Step 1: a single lightweight Gwamo toast for "new message" notices.
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
@@ -811,11 +791,6 @@ function Home() {
         setPendingPhoneReview({
           phone,
           fullName,
-          verificationCode:
-            data.verification_code || data.phone_verification_code || "",
-          message:
-            data.message ||
-            "Registration received. Keep this screen open and wait for Gwamo to call your registered number.",
         });
         setShowAuthModal(false);
         setAuthPhone("");
@@ -2146,6 +2121,9 @@ function Home() {
       const partnerVerified = iAmProvider
         ? conversation.customer_verification_status === "verified"
         : conversation.provider_verification_status === "verified";
+      const partnerPhone = normalizeWhatsAppNumber(
+        (iAmProvider ? conversation.customer_phone : conversation.provider_phone) || "",
+      );
       setChatPartner({
         conversationId: String(conversation.id),
         servicePostId: String(conversation.service_post_id || ""),
@@ -2155,6 +2133,7 @@ function Home() {
         serviceName: conversation.service_name || "",
         serviceMediaUrl: conversation.service_media_url || "",
         verified: Boolean(partnerVerified),
+        providerPhone: partnerPhone,
       });
       setShowMyInbox(false);
       setShowChat(true);
@@ -2480,133 +2459,6 @@ function Home() {
       sendReaction,
     ],
   );
-  // =============================================================================
-  // Public comments
-  // -----------------------------------------------------------------------
-  // Separate from private messages. Assumes a Worker route mirroring the
-  // existing reaction endpoint's shape: GET /api/home/comments?post_id=... and
-  // POST /api/home/comments (post_id, text, country_flag). Verify/adjust this
-  // path against the real worker.js - it was not part of the routes supplied
-  // for this task, so it is the one endpoint here that is an assumption
-  // rather than a confirmed existing contract.
-  // =============================================================================
-  const fetchComments = useCallback(
-    async (postId) => {
-      if (!postId) return;
-      setCommentsLoading(true);
-      setCommentsError("");
-      try {
-        const response = await fetch(
-          `${API_URL}/api/home/comments?post_id=${encodeURIComponent(postId)}`,
-          { cache: "no-store" },
-        );
-        const data = await readJsonSafely(response);
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.error || data.message || "Could not load comments.",
-          );
-        }
-        if (isMountedRef.current) {
-          setCommentsByPost((current) => ({
-            ...current,
-            [postId]: Array.isArray(data.comments) ? data.comments : [],
-          }));
-        }
-      } catch (error) {
-        if (isMountedRef.current) {
-          setCommentsError(error.message || "Could not load comments.");
-        }
-      } finally {
-        if (isMountedRef.current) setCommentsLoading(false);
-      }
-    },
-    [readJsonSafely],
-  );
-  const openComments = useCallback(
-    (post) => {
-      const postId = String(post?.id ?? "");
-      if (!postId) return;
-      setShowCommentsForPostId(postId);
-      setNewCommentText("");
-      setCommentsError("");
-      pauseAllVideos();
-      if (!commentsByPost[postId]) fetchComments(postId);
-    },
-    [commentsByPost, fetchComments, pauseAllVideos],
-  );
-  const closeComments = useCallback(() => {
-    setShowCommentsForPostId(null);
-    setNewCommentText("");
-    setCommentsError("");
-  }, []);
-  const submitComment = useCallback(async () => {
-    const text = newCommentText.trim();
-    const postId = showCommentsForPostId;
-    if (!text || !postId) return;
-    if (!isLoggedIn || !user) {
-      openAuthModal("login", { type: "comment", postId, text });
-      return;
-    }
-    setCommentSubmitting(true);
-    setCommentsError("");
-    try {
-      // Country flags are calculated locally from a valid ISO country code -
-      // this works for every country, not just a couple of hardcoded ones.
-      let countryCode = "";
-      try {
-        const locale =
-          (navigator.languages && navigator.languages[0]) ||
-          navigator.language ||
-          "";
-        countryCode = locale.split(/[-_]/)[1] || "";
-      } catch {
-        countryCode = "";
-      }
-      const countryFlag = countryCodeToFlagEmoji(countryCode);
-      const response = await authFetch("/api/home/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post_id: postId,
-          text,
-          country_flag: countryFlag,
-        }),
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error || data.message || "Could not post your comment.",
-        );
-      }
-      const created = data.comment;
-      if (isMountedRef.current) {
-        if (created) {
-          setCommentsByPost((current) => ({
-            ...current,
-            [postId]: [...(current[postId] || []), created],
-          }));
-        } else {
-          fetchComments(postId);
-        }
-        setNewCommentText("");
-      }
-    } catch (error) {
-      if (isMountedRef.current) {
-        setCommentsError(error.message || "Could not post your comment.");
-      }
-    } finally {
-      if (isMountedRef.current) setCommentSubmitting(false);
-    }
-  }, [
-    newCommentText,
-    showCommentsForPostId,
-    isLoggedIn,
-    user,
-    openAuthModal,
-    authFetch,
-    readJsonSafely,
-    fetchComments,
-  ]);
   useEffect(() => {
     if (!pendingAuthResolution || !isLoggedIn || !user) return;
     const { action, provider } = pendingAuthResolution;
@@ -2623,12 +2475,6 @@ function Home() {
       openMyInbox(action.filterPostId || null);
       return;
     }
-    if (action.type === "comment" && action.postId) {
-      setShowCommentsForPostId(action.postId);
-      setNewCommentText(action.text || "");
-      if (!commentsByPost[action.postId]) fetchComments(action.postId);
-      return;
-    }
     if (action.type === "react" && action.post) {
       sendReaction(action.post);
     }
@@ -2640,8 +2486,6 @@ function Home() {
     openInboxForPost,
     openMyInbox,
     sendReaction,
-    commentsByPost,
-    fetchComments,
   ]);
   // The Worker's UNIQUE(post_id, phone) constraint is the real source of
   // truth for "already reacted" - this just keeps the star's visual state
@@ -2741,7 +2585,6 @@ function Home() {
                 onContactProvider={openInboxForPost}
                 onOpenInbox={openInboxFromRail}
                 onReact={reactToPost}
-                onOpenComments={openComments}
                 onZoomImage={setZoomImage}
               />
             );
@@ -2994,18 +2837,6 @@ function Home() {
           }}
         />
       )}
-      {showCommentsForPostId && (
-        <CommentsSheet
-          comments={commentsByPost[showCommentsForPostId] || []}
-          loading={commentsLoading}
-          error={commentsError}
-          commentText={newCommentText}
-          setCommentText={setNewCommentText}
-          submitting={commentSubmitting}
-          onSubmit={submitComment}
-          onClose={closeComments}
-        />
-      )}
       {showInfoModal && (
         <InfoModal
           topic={showInfoModal}
@@ -3231,7 +3062,6 @@ const ServicePost = memo(function ServicePost({
   onContactProvider,
   onOpenInbox,
   onReact,
-  onOpenComments,
   onZoomImage,
 }) {
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
@@ -3471,14 +3301,6 @@ const ServicePost = memo(function ServicePost({
             aria-hidden="true"
           />
           <span>{formatCount(reactionCount)}</span>
-        </button>
-        <button
-          type="button"
-          className="rail-action comment-action"
-          onClick={() => onOpenComments(post)}
-          aria-label="View and write comments"
-        >
-          <MessageSquare size={30} aria-hidden="true" />
         </button>
       </div>
       <button
@@ -4263,24 +4085,20 @@ const PendingPhoneReviewModal = memo(({ review, onClose }) => {
       onClick={(event) => event.stopPropagation()}
     >
       <div className="modal-header">
-        <h2>Confirm your telephone</h2>
+        <h2>Registration received</h2>
         <button type="button" onClick={onClose} className="modal-close" aria-label="Close">
           <X size={20} strokeWidth={2.4} aria-hidden="true" />
         </button>
       </div>
       <p className="pin-reset-intro">
-        Your registration is pending. An admin will call the telephone number you used
-        and ask for this code before approving the account.
+        To own a Gwamo account, the admin will contact you to verify that you
+        are a legitimate user.
       </p>
-      <div className="pin-verification-panel" role="status" aria-live="polite">
-        <span>Registration code</span>
-        <strong>
-          {review?.verificationCode || review?.verification_code || review?.code || "----"}
-        </strong>
-      </div>
-      <p className="auth-helper-text">
-        Never share your personal PIN. The admin only needs this temporary code.
-      </p>
+      {review?.phone && (
+        <p className="auth-helper-text">
+          Gwamo will reach out on the number you registered with.
+        </p>
+      )}
       <button type="button" className="save-button" onClick={onClose}>
         I understand
       </button>
@@ -4326,8 +4144,6 @@ const ChatModal = memo(
     const [pendingFailedAttachment, setPendingFailedAttachment] = useState(null);
     const [attachMenuOpen, setAttachMenuOpen] = useState(false);
     const [attachError, setAttachError] = useState("");
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
     const messagesEndRef = useRef(null);
     const messagesListRef = useRef(null);
@@ -4339,10 +4155,6 @@ const ChatModal = memo(
     const documentInputRef = useRef(null);
     const pendingSendAfterAuthRef = useRef(false);
     const pendingAttachmentAfterAuthRef = useRef(null);
-    const mediaRecorderRef = useRef(null);
-    const recordedChunksRef = useRef([]);
-    const recordingTimerRef = useRef(null);
-    const recordingStreamRef = useRef(null);
     const objectUrlsRef = useRef([]);
     const lastMessageCountRef = useRef(0);
     const trackObjectUrl = useCallback((url) => {
@@ -4637,8 +4449,8 @@ const ChatModal = memo(
       );
     }, [pendingFailedText]);
     // =============================================================================
-    // Attachments (photo, video, document) + voice recordings, reusing
-    // the existing multipart path on POST /api/time-market/messages.
+    // Attachments (photo, video, document), reusing the existing multipart
+    // path on POST /api/time-market/messages.
     // =============================================================================
     const sendAttachment = useCallback(
       async (file, typeHint) => {
@@ -4761,111 +4573,17 @@ const ChatModal = memo(
       },
       [sendAttachment],
     );
-    const pickSupportedAudioMime = () => {
-      const candidates = ["audio/webm", "audio/mp4", "audio/ogg"];
-      for (const type of candidates) {
-        if (window.MediaRecorder?.isTypeSupported?.(type)) return type;
-      }
-      return "";
-    };
-    const startRecording = useCallback(async () => {
-      if (isRecording) return;
-      setAttachError("");
-      if (!currentUser || !getSessionToken()) {
-        onRequireAuth?.();
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-        setAttachError("Voice messages aren't supported in this browser.");
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        recordingStreamRef.current = stream;
-        recordedChunksRef.current = [];
-        const mimeType = pickSupportedAudioMime();
-        const recorder = mimeType
-          ? new MediaRecorder(stream, { mimeType })
-          : new MediaRecorder(stream);
-        recorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0)
-            recordedChunksRef.current.push(event.data);
-        };
-        mediaRecorderRef.current = recorder;
-        recorder.start();
-        setIsRecording(true);
-        setRecordingSeconds(0);
-        recordingTimerRef.current = setInterval(() => {
-          setRecordingSeconds((seconds) => seconds + 1);
-        }, 1000);
-      } catch (error) {
-        setAttachError(
-          "Couldn't access your microphone. Check permissions and try again.",
-        );
-      }
-    }, [currentUser, getSessionToken, isRecording, onRequireAuth]);
-    const stopRecording = useCallback(
-      (shouldSend) => {
-        const recorder = mediaRecorderRef.current;
-        if (!recorder) return;
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-        recorder.onstop = () => {
-          recordingStreamRef.current
-            ?.getTracks()
-            .forEach((track) => track.stop());
-          recordingStreamRef.current = null;
-          if (shouldSend && recordedChunksRef.current.length) {
-            const mimeType = recorder.mimeType || "audio/webm";
-            const extension = mimeType.includes("mp4")
-              ? "m4a"
-              : mimeType.includes("ogg")
-                ? "ogg"
-                : "webm";
-            const blob = new Blob(recordedChunksRef.current, {
-              type: mimeType,
-            });
-            sendAttachment(
-              new File([blob], `voice-message.${extension}`, {
-                type: mimeType,
-              }),
-              "voice",
-            );
-          }
-          recordedChunksRef.current = [];
-        };
-        recorder.stop();
-        setIsRecording(false);
-        setRecordingSeconds(0);
-      },
-      [sendAttachment],
-    );
+    // The provider's phone number for the call icon in the composer (the
+    // same public number used by the card-level Call button); falls back to
+    // empty when a conversation was opened from the inbox for a legacy post
+    // that has no linked phone.
+    const callPhone = partner.providerPhone || "";
+    const callHref = callPhone ? `tel:+${callPhone}` : "";
     useEffect(() => {
       return () => {
-        if (
-          mediaRecorderRef.current &&
-          mediaRecorderRef.current.state !== "inactive"
-        ) {
-          try {
-            mediaRecorderRef.current.stop();
-          } catch {
-            /* ignore */
-          }
-        }
-        recordingStreamRef.current
-          ?.getTracks()
-          .forEach((track) => track.stop());
-        clearInterval(recordingTimerRef.current);
         objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
       };
     }, []);
-    const formatRecordingTime = (totalSeconds) => {
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return `${minutes}:${String(seconds).padStart(2, "0")}`;
-    };
     // Group messages into Today/Yesterday/date sections for the separators.
     const groupedMessages = useMemo(() => {
       const groups = [];
@@ -5063,127 +4781,113 @@ const ChatModal = memo(
               </button>
             </div>
           ) : null}
-          {isRecording ? (
-            <div className="chat-recording-bar">
-              <span className="chat-recording-dot" aria-hidden="true" />
-              <span>Recording {formatRecordingTime(recordingSeconds)}</span>
+          <div className="chat-composer">
+            <div className="chat-attach-wrap">
               <button
                 type="button"
-                onClick={() => stopRecording(false)}
-                aria-label="Cancel recording"
+                className="chat-attach-button"
+                onClick={() => setAttachMenuOpen((value) => !value)}
+                aria-label="Attach a photo, video or document"
+                aria-haspopup="true"
+                aria-expanded={attachMenuOpen}
               >
-                <Trash2 size={18} aria-hidden="true" />
+                <Paperclip size={20} aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                className="chat-recording-stop"
-                onClick={() => stopRecording(true)}
-                aria-label="Stop and send recording"
-              >
-                <Square size={16} fill="currentColor" aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <div className="chat-composer">
-              <div className="chat-attach-wrap">
-                <button
-                  type="button"
-                  className="chat-attach-button"
-                  onClick={() => setAttachMenuOpen((value) => !value)}
-                  aria-label="Attach a photo, video or document"
-                  aria-haspopup="true"
-                  aria-expanded={attachMenuOpen}
-                >
-                  <Paperclip size={20} aria-hidden="true" />
-                </button>
-                {attachMenuOpen && (
-                  <>
-                    <div
-                      className="chat-attach-backdrop"
-                      onClick={() => setAttachMenuOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <div className="chat-attach-menu">
-                      <button
-                        type="button"
-                        onClick={() => photoInputRef.current?.click()}
-                      >
-                        <ImageIcon size={18} aria-hidden="true" /> Photo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => videoInputRef.current?.click()}
-                      >
-                        <Video size={18} aria-hidden="true" /> Video
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => documentInputRef.current?.click()}
-                      >
-                        <FileText size={18} aria-hidden="true" /> Document
-                      </button>
-                    </div>
-                  </>
-                )}
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{
-                    display: "none",
-                  }}
-                  onChange={handlePickPhoto}
-                />
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/*"
-                  style={{
-                    display: "none",
-                  }}
-                  onChange={handlePickVideo}
-                />
-                <input
-                  ref={documentInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,application/pdf"
-                  style={{
-                    display: "none",
-                  }}
-                  onChange={handlePickDocument}
-                />
-              </div>
-              <input
-                type="text"
-                placeholder={`Message ${partner.name || "provider"}...`}
-                autoFocus
-                value={inputText}
-                onChange={(event) => setInputText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") sendMessage();
-                }}
-              />
-              {inputText.trim() ? (
-                <button
-                  className="chat-send"
-                  onClick={sendMessage}
-                  disabled={sending || loading}
-                  aria-label="Send message"
-                >
-                  <Send size={20} aria-hidden="true" />
-                </button>
-              ) : (
-                <button
-                  className="chat-send"
-                  onClick={startRecording}
-                  disabled={sending || loading}
-                  aria-label="Record a voice message"
-                >
-                  <Mic size={20} aria-hidden="true" />
-                </button>
+              {attachMenuOpen && (
+                <>
+                  <div
+                    className="chat-attach-backdrop"
+                    onClick={() => setAttachMenuOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div className="chat-attach-menu">
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                    >
+                      <ImageIcon size={18} aria-hidden="true" /> Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                    >
+                      <Video size={18} aria-hidden="true" /> Video
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => documentInputRef.current?.click()}
+                    >
+                      <FileText size={18} aria-hidden="true" /> Document
+                    </button>
+                  </div>
+                </>
               )}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                style={{
+                  display: "none",
+                }}
+                onChange={handlePickPhoto}
+              />
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                style={{
+                  display: "none",
+                }}
+                onChange={handlePickVideo}
+              />
+              <input
+                ref={documentInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,application/pdf"
+                style={{
+                  display: "none",
+                }}
+                onChange={handlePickDocument}
+              />
             </div>
-          )}
+            <input
+              type="text"
+              placeholder={`Message ${partner.name || "provider"}...`}
+              autoFocus
+              value={inputText}
+              onChange={(event) => setInputText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") sendMessage();
+              }}
+            />
+            {inputText.trim() ? (
+              <button
+                className="chat-send"
+                onClick={sendMessage}
+                disabled={sending || loading}
+                aria-label="Send message"
+              >
+                <Send size={20} aria-hidden="true" />
+              </button>
+            ) : callHref ? (
+              <a
+                className="chat-send"
+                href={callHref}
+                aria-label={`Call ${partner.name || "provider"}`}
+              >
+                <Phone size={20} aria-hidden="true" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="chat-send"
+                disabled
+                aria-label="No phone number available for this provider"
+              >
+                <Phone size={20} aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -6028,97 +5732,6 @@ const MyInboxSheet = memo(
 );
 MyInboxSheet.displayName = "MyInboxSheet";
 // =============================================================================
-// CommentsSheet - public comments, separate from private messages. Own
-// scrollable list of glass bubbles, country flag per comment, compact
-// composer. Note: POST/GET /api/home/comments is assumed to mirror the
-// existing /api/home/react contract - verify against the real worker.js.
-// =============================================================================
-const CommentsSheet = memo(
-  ({
-    comments,
-    loading,
-    error,
-    commentText,
-    setCommentText,
-    submitting,
-    onSubmit,
-    onClose,
-  }) => {
-    useEscapeToClose(onClose);
-    return (
-      <div className="modal-overlay comments-overlay" onClick={onClose}>
-        <div
-          className="modal-card comments-sheet-card"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="modal-header">
-            <h2>Comments</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="modal-close"
-              aria-label="Close comments"
-            >
-              <X size={20} strokeWidth={2.4} aria-hidden="true" />
-            </button>
-          </div>
-          <div className="comments-list">
-            {loading ? (
-              <p className="field-help">Loading comments...</p>
-            ) : error ? (
-              <p className="auth-error">{error}</p>
-            ) : !comments.length ? (
-              <div className="mysheet-empty">
-                <p>No comments yet.</p>
-                <p className="field-help">Be the first to say something.</p>
-              </div>
-            ) : (
-              comments.map((comment, index) => (
-                <div className="comment-bubble" key={comment.id ?? index}>
-                  <div className="comment-bubble-head">
-                    <span className="comment-flag" aria-hidden="true">
-                      {comment.country_flag || "\u{1F310}"}
-                    </span>
-                    <strong>
-                      {comment.author_name ||
-                        comment.full_name ||
-                        comment.commenter_name ||
-                        "Someone"}
-                    </strong>
-                  </div>
-                  <p>{comment.text || comment.text_content || comment.comment || ""}</p>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="comments-composer">
-            <input
-              type="text"
-              placeholder="Write a comment..."
-              value={commentText}
-              maxLength={280}
-              onChange={(event) => setCommentText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onSubmit();
-              }}
-            />
-            <button
-              type="button"
-              className="chat-send"
-              onClick={onSubmit}
-              disabled={submitting || !commentText.trim()}
-              aria-label="Post comment"
-            >
-              <Send size={18} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  },
-);
-CommentsSheet.displayName = "CommentsSheet";
-// =============================================================================
 // InfoModal - About Gwamo / Help
 // =============================================================================
 const InfoModal = memo(({ topic, onClose }) => {
@@ -6667,15 +6280,17 @@ function HomeStylesInner() {
         scrollbar-color: rgba(111, 195, 255, 0.5) transparent;
       }
       .description-link {
-        color: #3ea6ff;
-        font-weight: 650;
-        text-decoration: none;
+        color: #55b6ff;
+        font-weight: 700;
+        text-decoration: underline;
+        text-decoration-color: rgba(85, 182, 255, 0.55);
+        text-underline-offset: 2px;
         text-shadow: 0 0 8px rgba(22, 139, 255, .58);
       }
       .description-link:hover,
       .description-link:focus-visible {
-        color: #79c7ff;
-        text-decoration: underline;
+        color: #9cd7ff;
+        text-decoration-color: rgba(156, 215, 255, 0.95);
       }
       .tagline-toggle-button {
         display: inline-block;
@@ -6752,10 +6367,6 @@ function HomeStylesInner() {
         text-shadow:
           0 1px 4px #000000,
           0 0 8px rgba(255, 196, 0, 0.8);
-      }
-      .comment-action {
-        color: #cfe8ff;
-        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .85)) drop-shadow(0 0 9px rgba(22, 139, 255, .95));
       }
       .inbox-icon-wrap {
         position: relative;
@@ -7468,59 +7079,6 @@ function HomeStylesInner() {
         font-size: 12px;
         font-weight: 800;
       }
-      .comments-sheet-card {
-        max-width: 480px;
-      }
-      .comments-list {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        max-height: 46svh;
-        overflow-y: auto;
-        margin-bottom: 14px;
-        padding-right: 2px;
-      }
-      .comment-bubble {
-        padding: 10px 13px;
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.045);
-      }
-      .comment-bubble-head {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        margin-bottom: 3px;
-        font-size: 12.5px;
-        font-weight: 800;
-      }
-      .comment-flag {
-        font-size: 14px;
-      }
-      .comment-bubble p {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.45;
-        color: rgba(255, 255, 255, 0.88);
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      .comments-composer {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .comments-composer input {
-        flex: 1;
-        min-height: 44px;
-        margin: 0;
-        padding: 10px 14px;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.06);
-        color: #ffffff;
-        outline: none;
-      }
       .info-modal-body {
         margin: 0 0 18px;
         color: rgba(226, 232, 240, 0.86);
@@ -7967,47 +7525,6 @@ function HomeStylesInner() {
       }
       .chat-attach-menu button:hover {
         background: rgba(255, 255, 255, 0.08);
-      }
-      .chat-recording-bar {
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 16px;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        background: #0a1424;
-        color: #ffffff;
-        font-size: 14px;
-        font-weight: 700;
-      }
-      .chat-recording-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--danger);
-        animation: chatRecordingPulse 1.1s ease-in-out infinite;
-      }
-      @keyframes chatRecordingPulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-      }
-      .chat-recording-bar span:nth-child(2) {
-        flex: 1;
-      }
-      .chat-recording-bar button {
-        width: 38px;
-        height: 38px;
-        display: grid;
-        place-items: center;
-        border: none;
-        border-radius: 50%;
-        color: #ffffff;
-        background: rgba(255, 255, 255, 0.08);
-        cursor: pointer;
-      }
-      .chat-recording-stop {
-        color: #ffffff;
-        background: #087cff !important;
       }
       .zoom-overlay {
         position: fixed;
@@ -8736,9 +8253,6 @@ function HomeStylesInner() {
         }
         .contact-me-cta {
           background: linear-gradient(180deg, rgba(5, 31, 59, .98), rgba(2, 13, 27, .98)) !important;
-        }
-        .comments-sheet-card {
-          background-color: #06101f !important;
         }
         .gold-star,
         .rail-action,
