@@ -40,6 +40,7 @@ import {
   Trash2,
   Search,
   CheckCheck,
+  Phone,
 } from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
@@ -3341,6 +3342,11 @@ const ServicePost = memo(function ServicePost({
       </p>
     </div>
   ) : null;
+  // "Call" is a second, independent way to reach the provider alongside
+  // "Contact me" (chat). Built from the same public phone number the post
+  // already carries (creator_identity) - not a new privacy exposure.
+  const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
+  const callHref = callPhone ? `tel:+${callPhone}` : "";
   return (
     <section
       ref={postRefCallback}
@@ -3483,6 +3489,15 @@ const ServicePost = memo(function ServicePost({
         <Send size={20} aria-hidden="true" />
         <span>Contact me</span>
       </button>
+      {callHref && (
+        <a
+          className="call-me-button"
+          href={callHref}
+          aria-label={`Call ${providerName}`}
+        >
+          <Phone size={20} aria-hidden="true" />
+        </a>
+      )}
     </section>
   );
 });
@@ -8502,6 +8517,29 @@ function HomeStylesInner() {
         box-shadow: inset 0 0 12px rgba(36,173,255,.12), 0 0 12px rgba(23,161,255,.62);
       }
       .contact-me-cta svg { width: 18px; height: 18px; }
+      .call-me-button {
+        position: absolute;
+        z-index: 44;
+        right: 18px;
+        bottom: calc(22px + env(safe-area-inset-bottom));
+        width: 46px;
+        height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid #37a2ff;
+        border-radius: 50%;
+        color: #fff;
+        background: rgba(1, 8, 20, .34);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+        box-shadow: inset 0 0 10px rgba(22,139,255,.12), 0 0 5px rgba(255,255,255,.2), 0 0 14px rgba(22,139,255,.7);
+        text-decoration: none;
+      }
+      .call-me-button:hover {
+        background: rgba(9, 44, 91, .4);
+        box-shadow: inset 0 0 14px rgba(22,139,255,.16), 0 0 7px rgba(255,255,255,.24), 0 0 18px rgba(22,139,255,.9);
+      }
       /* Use the Gwamo glass frame as the shared visual language for forms and chat. */
       .modal-card,
       .chat-modal {
@@ -8660,6 +8698,16 @@ function HomeStylesInner() {
           min-height: 37px;
           bottom: calc(16px + env(safe-area-inset-bottom));
           font-size: 13.5px;
+        }
+        .call-me-button {
+          right: 12px;
+          bottom: calc(16px + env(safe-area-inset-bottom));
+          width: 40px;
+          height: 40px;
+        }
+        .call-me-button svg {
+          width: 17px;
+          height: 17px;
         }
         /* Mobile-safe glass fallback. Some low-memory Android GPUs corrupt layers
            that combine backdrop-filter, SVG filters and fixed/absolute overlays. */
