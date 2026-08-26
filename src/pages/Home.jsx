@@ -38,6 +38,10 @@ import {
   Search,
   CheckCheck,
   Phone,
+  Eye,
+  EyeOff,
+  ImagePlus,
+  Zap,
 } from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
@@ -285,28 +289,23 @@ function countryCodeToFlagEmoji(countryCode = "") {
   const codePoints = [...code].map((char) => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
 }
-const TV_COUNTRY_OPTIONS = [
-  ["RW", "Rwanda"],
-  ["UG", "Uganda"],
-  ["KE", "Kenya"],
-  ["TZ", "Tanzania"],
-  ["BI", "Burundi"],
-  ["CD", "DR Congo"],
-  ["ET", "Ethiopia"],
-  ["NG", "Nigeria"],
-  ["GH", "Ghana"],
-  ["ZA", "South Africa"],
-  ["US", "United States"],
-  ["GB", "United Kingdom"],
-  ["FR", "France"],
-  ["IN", "India"],
-  ["CN", "China"],
-  ["CA", "Canada"],
-  ["DE", "Germany"],
-  ["AE", "United Arab Emirates"],
-];
-const TV_VISIBLE_MESSAGE_LIMIT = 5;
+const TV_COUNTRY_CODES = `
+AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK
+`.trim().split(/\s+/);
+const TV_REGION_NAMES = (() => {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return null;
+  }
+})();
+const TV_COUNTRY_OPTIONS = TV_COUNTRY_CODES.map((code) => [
+  code,
+  TV_REGION_NAMES?.of(code) || (code === "XK" ? "Kosovo" : code),
+]).sort((a, b) => a[1].localeCompare(b[1]));
+const TV_VISIBLE_MESSAGE_LIMIT = 8;
 const TV_POLL_INTERVAL_MS = 7000;
+const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
 // Never compare missing provider IDs directly: "" === "" would incorrectly
 // treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
 // use the registered telephone only as a safe legacy fallback.
@@ -2773,7 +2772,7 @@ function Home() {
     );
   }
   return (
-    <div className="home-page">
+    <div className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}`}>
       <TimeMarketTopBar
         activeCategory={activeCategory}
         onCategoryChange={(category) => {
@@ -3088,7 +3087,7 @@ const TimeMarketTopBar = memo(
       onCategoryChange(tab.key);
     };
     return (
-      <header className="feedx-topbar">
+      <header className={`feedx-topbar${activeCategory === "tv" ? " is-tv-mode" : ""}`}>
         <div className="feedx-topbar-inner">
           <div className="gwamo-brand">
             <h1 className="feedx-logo">GWAMO</h1>
@@ -3453,6 +3452,7 @@ const ServicePost = memo(function ServicePost({
           currentUser={currentUser}
           getSessionToken={getSessionToken}
           onRequireAuth={onRequireAuth}
+          onZoomImage={onZoomImage}
         />
       )}
       <div className="post-info-block">
@@ -3517,15 +3517,27 @@ const ServicePost = memo(function ServicePost({
           <span>{formatCount(reactionCount)}</span>
         </button>
       </div>
-      <button
-        type="button"
-        className="contact-me-cta"
-        onClick={() => onContactProvider(post)}
-      >
-        <Send size={20} aria-hidden="true" />
-        <span>Contact me</span>
-      </button>
-      {callHref && (
+      {isTvTab ? (
+        <button
+          type="button"
+          className="tv-private-contact-cta"
+          onClick={() => onContactProvider(post)}
+          aria-label={`Privately contact ${providerName}`}
+          title="Private contact"
+        >
+          <Mail size={20} aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="contact-me-cta"
+          onClick={() => onContactProvider(post)}
+        >
+          <Send size={20} aria-hidden="true" />
+          <span>Contact me</span>
+        </button>
+      )}
+      {!isTvTab && callHref && (
         <a
           className="call-me-button"
           href={callHref}
@@ -3552,31 +3564,133 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   currentUser,
   getSessionToken,
   onRequireAuth,
+  onZoomImage,
 }) {
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [composerText, setComposerText] = useState("");
-  const [composerCountry, setComposerCountry] = useState("RW");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [introStep, setIntroStep] = useState("name");
+  const [introName, setIntroName] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [pausedMessageIds, setPausedMessageIds] = useState(() => new Set());
+  const [remoteTypingUsers, setRemoteTypingUsers] = useState({});
+  const [localTyping, setLocalTyping] = useState(false);
+  const [tvIdentity, setTvIdentity] = useState({
+    name: "",
+    photoUrl: "",
+    countryCode: "",
+  });
   const socketRef = useRef(null);
   const pollTimerRef = useRef(null);
   const seenIdsRef = useRef(new Set());
   const isMountedRef = useRef(true);
+  const typingStopTimerRef = useRef(null);
+  const remoteTypingTimersRef = useRef(new Map());
+  const identityKey = useMemo(() => {
+    const raw =
+      currentUser?.id ||
+      currentUser?.phone ||
+      currentUser?.creator_identity ||
+      "viewer";
+    return `${TV_IDENTITY_KEY_PREFIX}${String(raw)}`;
+  }, [currentUser]);
+  const identityComplete = Boolean(
+    tvIdentity.name && tvIdentity.photoUrl && tvIdentity.countryCode,
+  );
+  const filteredCountries = useMemo(() => {
+    const query = countrySearch.trim().toLowerCase();
+    if (!query) return TV_COUNTRY_OPTIONS;
+    return TV_COUNTRY_OPTIONS.filter(([code, name]) =>
+      `${name} ${code}`.toLowerCase().includes(query),
+    );
+  }, [countrySearch]);
+  const circulatingMessages = useMemo(
+    () => [...visibleMessages].reverse(),
+    [visibleMessages],
+  );
+  const localTypingIdentity = useMemo(
+    () =>
+      localTyping && identityComplete
+        ? {
+            id: `self-${currentUser?.id || "viewer"}`,
+            user_name: tvIdentity.name,
+            profile_image: tvIdentity.photoUrl,
+            country_code: tvIdentity.countryCode,
+          }
+        : null,
+    [localTyping, identityComplete, currentUser, tvIdentity],
+  );
+  const typingPresence = useMemo(() => {
+    if (localTypingIdentity) return localTypingIdentity;
+    const remote = Object.values(remoteTypingUsers);
+    if (!remote.length) return null;
+    remote.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    return remote[0];
+  }, [localTypingIdentity, remoteTypingUsers]);
+
+  const saveIdentity = useCallback(
+    (nextIdentity) => {
+      setTvIdentity(nextIdentity);
+      try {
+        if (currentUser) {
+          localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
+        }
+      } catch {
+        // Local persistence is a convenience only; live chat still works.
+      }
+    },
+    [currentUser, identityKey],
+  );
+
+  useEffect(() => {
+    if (!currentUser) {
+      setTvIdentity({ name: "", photoUrl: "", countryCode: "" });
+      setIntroName("");
+      setIntroStep("name");
+      setComposerOpen(false);
+      return;
+    }
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(identityKey) || "null");
+    } catch {
+      saved = null;
+    }
+    const normalized = {
+      name: String(saved?.name || "").trim().slice(0, 50),
+      photoUrl: String(saved?.photoUrl || "").trim(),
+      countryCode: String(saved?.countryCode || "").trim().toUpperCase(),
+    };
+    setTvIdentity(normalized);
+    setIntroName(normalized.name);
+    if (!normalized.name) setIntroStep("name");
+    else if (!normalized.photoUrl) setIntroStep("photo");
+    else if (!normalized.countryCode) setIntroStep("country");
+    else setIntroStep("message");
+  }, [currentUser, identityKey]);
+
   const appendMessages = useCallback((incoming) => {
     if (!incoming || !incoming.length) return;
     setVisibleMessages((current) => {
       const merged = [...current];
-      for (const message of incoming) {
-        if (!message || seenIdsRef.current.has(message.id)) continue;
-        seenIdsRef.current.add(message.id);
-        merged.push(message);
+      for (const rawMessage of incoming) {
+        if (!rawMessage) continue;
+        const fallbackId = `${rawMessage.created_at || "now"}-${rawMessage.user_name || "viewer"}-${rawMessage.message || ""}`;
+        const messageId = String(rawMessage.id ?? fallbackId);
+        if (seenIdsRef.current.has(messageId)) continue;
+        seenIdsRef.current.add(messageId);
+        merged.push({ ...rawMessage, id: messageId });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
         ? merged.slice(merged.length - TV_VISIBLE_MESSAGE_LIMIT)
         : merged;
     });
   }, []);
+
   const loadRecent = useCallback(async () => {
     try {
       const response = await fetch(
@@ -3593,12 +3707,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       // The realtime/poll path below will keep the overlay alive either way.
     }
   }, [apiUrl, postId, appendMessages]);
+
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
   }, []);
+
   const startPolling = useCallback(() => {
     if (pollTimerRef.current) return;
     pollTimerRef.current = setInterval(async () => {
@@ -3617,6 +3733,46 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       }
     }, TV_POLL_INTERVAL_MS);
   }, [apiUrl, postId, appendMessages]);
+
+  const clearRemoteTyping = useCallback((key) => {
+    setRemoteTypingUsers((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    const timer = remoteTypingTimersRef.current.get(key);
+    if (timer) clearTimeout(timer);
+    remoteTypingTimersRef.current.delete(key);
+  }, []);
+
+  const receiveTypingPresence = useCallback(
+    (payload) => {
+      const typing = payload?.typing ?? payload?.active ?? true;
+      const userId = String(payload?.user_id || payload?.viewer_id || "");
+      if (userId && String(currentUser?.id || "") === userId) return;
+      const key = userId || String(payload?.user_name || payload?.name || "viewer");
+      if (!typing) {
+        clearRemoteTyping(key);
+        return;
+      }
+      const person = {
+        id: key,
+        user_name: payload?.user_name || payload?.name || "Someone",
+        profile_image:
+          payload?.profile_image || payload?.profile_image_url || DEFAULT_LOGO,
+        country_code: payload?.country_code || "",
+        updatedAt: Date.now(),
+      };
+      setRemoteTypingUsers((current) => ({ ...current, [key]: person }));
+      const oldTimer = remoteTypingTimersRef.current.get(key);
+      if (oldTimer) clearTimeout(oldTimer);
+      const timer = setTimeout(() => clearRemoteTyping(key), 2600);
+      remoteTypingTimersRef.current.set(key, timer);
+    },
+    [clearRemoteTyping, currentUser],
+  );
+
   const connectRealtime = useCallback(async () => {
     try {
       const response = await fetch(`${apiUrl}/api/tv/realtime/ticket`, {
@@ -3637,6 +3793,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           const payload = JSON.parse(event.data);
           if (payload?.type === "tv_message" && payload.message) {
             appendMessages([payload.message]);
+          } else if (payload?.type === "tv_typing") {
+            receiveTypingPresence(payload);
           }
         } catch {
           // Ignore malformed frames.
@@ -3656,7 +3814,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     } catch {
       startPolling();
     }
-  }, [apiUrl, postId, appendMessages, startPolling]);
+  }, [
+    apiUrl,
+    postId,
+    appendMessages,
+    startPolling,
+    receiveTypingPresence,
+  ]);
+
   useEffect(() => {
     isMountedRef.current = true;
     if (!isActive) return undefined;
@@ -3665,6 +3830,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     return () => {
       isMountedRef.current = false;
       stopPolling();
+      if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+      remoteTypingTimersRef.current.forEach((timer) => clearTimeout(timer));
+      remoteTypingTimersRef.current.clear();
       if (socketRef.current) {
         try {
           socketRef.current.close();
@@ -3676,11 +3844,146 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, postId]);
-  const handleAnimationEnd = useCallback((id) => {
-    setVisibleMessages((current) =>
-      current.filter((message) => message.id !== id),
-    );
+
+  const announceTyping = useCallback(
+    (active) => {
+      setLocalTyping(Boolean(active));
+      const socket = socketRef.current;
+      if (!identityComplete || !socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "tv_typing",
+            tv_post_id: postId,
+            typing: Boolean(active),
+            user_id: currentUser?.id || "",
+            user_name: tvIdentity.name,
+            profile_image: tvIdentity.photoUrl,
+            country_code: tvIdentity.countryCode,
+          }),
+        );
+      } catch {
+        // Typing presence is optional; sending the actual message still works.
+      }
+    },
+    [identityComplete, postId, currentUser, tvIdentity],
+  );
+
+  const scheduleTypingStop = useCallback(() => {
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = setTimeout(() => announceTyping(false), 1400);
+  }, [announceTyping]);
+
+  const beginConversation = useCallback(() => {
+    setError("");
+    if (!currentUser) {
+      onRequireAuth?.();
+      return;
+    }
+    setComposerOpen(true);
+    if (!tvIdentity.name) setIntroStep("name");
+    else if (!tvIdentity.photoUrl) setIntroStep("photo");
+    else if (!tvIdentity.countryCode) setIntroStep("country");
+    else setIntroStep("message");
+  }, [currentUser, onRequireAuth, tvIdentity]);
+
+  const closeComposer = useCallback(() => {
+    announceTyping(false);
+    setComposerOpen(false);
+    setCountrySearch("");
+    setError("");
+  }, [announceTyping]);
+
+  const submitName = useCallback(() => {
+    const name = introName.trim().replace(/\s+/g, " ").slice(0, 50);
+    if (!name) {
+      setError("Tell Gwamo what people should call you.");
+      return;
+    }
+    setError("");
+    const next = { ...tvIdentity, name };
+    saveIdentity(next);
+    setIntroStep("photo");
+  }, [introName, tvIdentity, saveIdentity]);
+
+  const uploadTvPhoto = useCallback(
+    async (file) => {
+      if (!file) return;
+      if (!file.type?.startsWith("image/")) {
+        setError("Choose an image for your profile picture.");
+        return;
+      }
+      if (!currentUser) {
+        onRequireAuth?.();
+        return;
+      }
+      setUploadingPhoto(true);
+      setError("");
+      try {
+        const prepared = await compressImageFile(file, {
+          maxWidth: 420,
+          maxHeight: 420,
+          quality: 0.76,
+        });
+        const uploadForm = new FormData();
+        uploadForm.append("file", prepared);
+        uploadForm.append("kind", "profile_image");
+        const token = getSessionToken?.() || "";
+        const uploadResponse = await fetch(`${apiUrl}/api/home/upload`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: uploadForm,
+          cache: "no-store",
+        });
+        const uploadData = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok || !uploadData.success || !uploadData.url) {
+          throw new Error(
+            uploadData.error ||
+              uploadData.message ||
+              "Could not upload your profile picture.",
+          );
+        }
+        const next = { ...tvIdentity, photoUrl: uploadData.url };
+        saveIdentity(next);
+        setIntroStep("country");
+      } catch (err) {
+        setError(err.message || "Could not upload your profile picture.");
+      } finally {
+        setUploadingPhoto(false);
+      }
+    },
+    [
+      currentUser,
+      onRequireAuth,
+      getSessionToken,
+      apiUrl,
+      tvIdentity,
+      saveIdentity,
+    ],
+  );
+
+  const chooseCountry = useCallback(
+    (code) => {
+      const next = { ...tvIdentity, countryCode: code };
+      saveIdentity(next);
+      setCountrySearch("");
+      setIntroStep("message");
+      setError("");
+    },
+    [tvIdentity, saveIdentity],
+  );
+
+  const toggleMessagePause = useCallback((messageId) => {
+    setPausedMessageIds((current) => {
+      const next = new Set(current);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
   }, []);
+
   const sendMessage = useCallback(async () => {
     const text = composerText.trim();
     if (!text) return;
@@ -3688,6 +3991,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       onRequireAuth?.();
       return;
     }
+    if (!identityComplete) {
+      beginConversation();
+      return;
+    }
+    announceTyping(false);
     setSending(true);
     setError("");
     try {
@@ -3701,7 +4009,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         body: JSON.stringify({
           tv_post_id: postId,
           message: text,
-          country_code: composerCountry,
+          country_code: tvIdentity.countryCode,
+          user_name: tvIdentity.name,
+          display_name: tvIdentity.name,
+          profile_image: tvIdentity.photoUrl,
+          profile_image_url: tvIdentity.photoUrl,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -3711,7 +4023,25 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         );
       }
       setComposerText("");
-      if (data.message) appendMessages([data.message]);
+      const sent = data.message
+        ? {
+            ...data.message,
+            user_name: data.message.user_name || tvIdentity.name,
+            profile_image:
+              data.message.profile_image ||
+              data.message.profile_image_url ||
+              tvIdentity.photoUrl,
+            country_code: data.message.country_code || tvIdentity.countryCode,
+          }
+        : {
+            id: `local-${Date.now()}`,
+            user_name: tvIdentity.name,
+            profile_image: tvIdentity.photoUrl,
+            country_code: tvIdentity.countryCode,
+            message: text,
+            created_at: new Date().toISOString(),
+          };
+      appendMessages([sent]);
     } catch (err) {
       setError(err.message || "Could not send your message.");
     } finally {
@@ -3719,99 +4049,328 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     }
   }, [
     composerText,
-    composerCountry,
     currentUser,
-    onRequireAuth,
+    identityComplete,
+    beginConversation,
+    announceTyping,
     getSessionToken,
     apiUrl,
     postId,
+    tvIdentity,
     appendMessages,
+    onRequireAuth,
   ]);
-  return (
-    <>
-      <button
-        type="button"
-        className="tv-visibility-toggle"
-        onClick={() => setOverlayVisible((value) => !value)}
-        aria-pressed={overlayVisible}
-        aria-label={
-          overlayVisible ? "Hide live conversation" : "Show live conversation"
-        }
-      >
-        {"\ud83d\udcac"} {overlayVisible ? "Live" : "Off"}
-      </button>
-      {overlayVisible && (
-        <div className="tv-conversation-column" aria-live="polite">
-          {visibleMessages.map((message) => (
-            <div
-              className="tv-message-item"
-              key={message.id}
-              onAnimationEnd={() => handleAnimationEnd(message.id)}
-            >
-              <span className="tv-message-avatar">
-                <img
-                  src={message.profile_image || DEFAULT_LOGO}
-                  alt=""
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = DEFAULT_LOGO;
-                  }}
-                />
-                <span className="tv-message-flag" aria-hidden="true">
-                  {countryCodeToFlagEmoji(message.country_code)}
-                </span>
-              </span>
-              <span className="tv-message-body">
-                <strong className="tv-message-name">
-                  {message.user_name || "Someone"}
-                </strong>
-                <span className="tv-message-text">{message.message}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+
+  const renderMessage = (message, index) => {
+    const messageId = String(message.id);
+    const paused = pausedMessageIds.has(messageId);
+    const duration = Math.max(13, circulatingMessages.length * 2.8);
+    const delay = index * 2.8;
+    const profileImage =
+      message.profile_image || message.profile_image_url || DEFAULT_LOGO;
+    return (
       <div
-        className="tv-composer"
-        onClick={(event) => event.stopPropagation()}
+        className={`tv-message-item${paused ? " is-paused" : ""}`}
+        key={messageId}
+        style={{
+          "--tv-message-duration": `${duration}s`,
+          "--tv-message-delay": `${delay}s`,
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          toggleMessagePause(messageId);
+        }}
+        role="button"
+        tabIndex={0}
+        aria-pressed={paused}
+        aria-label={
+          paused
+            ? "Resume this public conversation message"
+            : "Pause this public conversation message"
+        }
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleMessagePause(messageId);
+          }
+        }}
       >
-        <input
-          type="text"
-          className="tv-composer-input"
-          placeholder="Say something..."
-          maxLength={220}
-          value={composerText}
-          onFocus={() => {
-            if (!currentUser) onRequireAuth?.();
-          }}
-          onChange={(event) => setComposerText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") sendMessage();
-          }}
-        />
-        <select
-          className="tv-composer-country"
-          value={composerCountry}
-          onChange={(event) => setComposerCountry(event.target.value)}
-          aria-label="Choose your country"
-        >
-          {TV_COUNTRY_OPTIONS.map(([code]) => (
-            <option key={code} value={code}>
-              {`${countryCodeToFlagEmoji(code)} ${code}`}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
-          className="tv-composer-send"
-          onClick={sendMessage}
-          disabled={sending || !composerText.trim()}
-          aria-label="Send message"
+          className="tv-message-avatar"
+          onClick={(event) => {
+            event.stopPropagation();
+            onZoomImage?.(profileImage);
+          }}
+          aria-label={`View ${message.user_name || "viewer"}'s profile picture`}
         >
-          <Send size={16} aria-hidden="true" />
+          <img
+            src={profileImage}
+            alt=""
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = DEFAULT_LOGO;
+            }}
+          />
+          <span className="tv-message-flag" aria-hidden="true">
+            {countryCodeToFlagEmoji(message.country_code)}
+          </span>
+        </button>
+        <span className="tv-message-body">
+          <strong className="tv-message-name">
+            {message.user_name || "Someone"}
+          </strong>
+          <span className="tv-message-text">{message.message}</span>
+          {paused && (
+            <span className="tv-message-paused-mark" aria-hidden="true">
+              Ⅱ
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="tv-live-anchor" aria-hidden="true">
+        <span className="tv-live-dot" />
+        <span>LIVE</span>
+      </div>
+
+      <div
+        className={`tv-conversation-column${overlayVisible ? "" : " is-hidden"}`}
+        aria-live="polite"
+        aria-hidden={!overlayVisible}
+      >
+        {circulatingMessages.map(renderMessage)}
+      </div>
+
+      <div className="tv-public-action-dock" onClick={(event) => event.stopPropagation()}>
+        {typingPresence && (
+          <div className="tv-typing-presence" aria-label={`${typingPresence.user_name || "Someone"} is typing`}>
+            <button
+              type="button"
+              className="tv-typing-avatar"
+              onClick={() =>
+                onZoomImage?.(
+                  typingPresence.profile_image ||
+                    typingPresence.profile_image_url ||
+                    DEFAULT_LOGO,
+                )
+              }
+              aria-label={`View ${typingPresence.user_name || "viewer"}'s profile picture`}
+            >
+              <img
+                src={
+                  typingPresence.profile_image ||
+                  typingPresence.profile_image_url ||
+                  DEFAULT_LOGO
+                }
+                alt=""
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = DEFAULT_LOGO;
+                }}
+              />
+              <span>{countryCodeToFlagEmoji(typingPresence.country_code)}</span>
+            </button>
+            <strong>{typingPresence.user_name || "Someone"}</strong>
+            <span className="tv-typing-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        )}
+        <button
+          type="button"
+          className="tv-public-conversation-cta"
+          onClick={beginConversation}
+          aria-label="Join the public TV conversation"
+          title="Public conversation"
+        >
+          <MessageSquare size={29} strokeWidth={1.8} aria-hidden="true" />
+          <Zap className="tv-public-conversation-bolt" size={14} strokeWidth={2.8} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="tv-visibility-toggle"
+          onClick={() => setOverlayVisible((value) => !value)}
+          aria-pressed={overlayVisible}
+          aria-label={
+            overlayVisible ? "Hide live conversation" : "Show live conversation"
+          }
+          title={overlayVisible ? "Hide conversation" : "Show conversation"}
+        >
+          {overlayVisible ? (
+            <Eye size={20} aria-hidden="true" />
+          ) : (
+            <EyeOff size={20} aria-hidden="true" />
+          )}
         </button>
       </div>
-      {error && <div className="tv-composer-error">{error}</div>}
+
+      {composerOpen && (
+        <div
+          className="tv-chat-guide"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="tv-chat-guide-head">
+            <span className="tv-gwamo-orb" aria-hidden="true">G</span>
+            <div className="tv-chat-guide-copy">
+              <strong>Gwamo</strong>
+              <span>
+                {introStep === "name" && "What should people call you?"}
+                {introStep === "photo" && "Add your profile picture."}
+                {introStep === "country" && "Where are you watching from?"}
+                {introStep === "message" && "You’re live. Say something ⚡"}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="tv-guide-close"
+              onClick={closeComposer}
+              aria-label="Close public conversation"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+
+          {introStep === "name" && (
+            <div className="tv-guide-reply-row">
+              <input
+                type="text"
+                className="tv-guide-input"
+                value={introName}
+                maxLength={50}
+                autoFocus
+                placeholder="Your name"
+                onChange={(event) => setIntroName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") submitName();
+                }}
+                aria-label="Your public TV name"
+              />
+              <button
+                type="button"
+                className="tv-guide-symbol-button"
+                onClick={submitName}
+                aria-label="Continue"
+              >
+                <Send size={17} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
+          {introStep === "photo" && (
+            <div className="tv-guide-photo-step">
+              {tvIdentity.photoUrl ? (
+                <img
+                  className="tv-guide-photo-preview"
+                  src={tvIdentity.photoUrl}
+                  alt="Your TV profile"
+                />
+              ) : null}
+              <label
+                className={`tv-guide-upload-symbol${uploadingPhoto ? " is-busy" : ""}`}
+                aria-label="Upload your profile picture"
+                title="Upload profile picture"
+              >
+                <ImagePlus size={24} aria-hidden="true" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingPhoto}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) uploadTvPhoto(file);
+                  }}
+                />
+              </label>
+            </div>
+          )}
+
+          {introStep === "country" && (
+            <div className="tv-country-picker">
+              <input
+                type="search"
+                className="tv-country-search"
+                placeholder="Search country"
+                value={countrySearch}
+                onChange={(event) => setCountrySearch(event.target.value)}
+                aria-label="Search countries"
+              />
+              <div className="tv-country-list" role="listbox" aria-label="Choose your country">
+                {filteredCountries.map(([code, name]) => (
+                  <button
+                    type="button"
+                    className="tv-country-option"
+                    key={code}
+                    onClick={() => chooseCountry(code)}
+                    role="option"
+                    aria-selected={tvIdentity.countryCode === code}
+                  >
+                    <span className="tv-country-flag" aria-hidden="true">
+                      {countryCodeToFlagEmoji(code)}
+                    </span>
+                    <span>{name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {introStep === "message" && (
+            <div className="tv-guide-message-row">
+              <button
+                type="button"
+                className="tv-guide-self-avatar"
+                onClick={() => onZoomImage?.(tvIdentity.photoUrl || DEFAULT_LOGO)}
+                aria-label="View your TV profile picture"
+              >
+                <img src={tvIdentity.photoUrl || DEFAULT_LOGO} alt="" />
+                <span aria-hidden="true">
+                  {countryCodeToFlagEmoji(tvIdentity.countryCode)}
+                </span>
+              </button>
+              <input
+                type="text"
+                className="tv-guide-input tv-guide-message-input"
+                placeholder="Say something…"
+                maxLength={220}
+                value={composerText}
+                autoFocus
+                onChange={(event) => {
+                  setComposerText(event.target.value);
+                  if (event.target.value.trim()) {
+                    announceTyping(true);
+                    scheduleTypingStop();
+                  } else {
+                    announceTyping(false);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") sendMessage();
+                }}
+                onBlur={() => announceTyping(false)}
+                aria-label="Public TV message"
+              />
+              <button
+                type="button"
+                className="tv-guide-symbol-button"
+                onClick={sendMessage}
+                disabled={sending || !composerText.trim()}
+                aria-label="Send public message"
+              >
+                <Send size={17} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {error && <div className="tv-composer-error">{error}</div>}
+        </div>
+      )}
     </>
   );
 });
@@ -8948,234 +9507,714 @@ function HomeStylesInner() {
         }
       }
       /* =========================================================
-         Public TV conversation - entirely separate from private
-         "Contact me" messaging. Floats over the media, never in a
-         large opaque box, capped to a handful of visible messages.
+         GWAMO TV mode: media becomes the visual background while
+         controls stay light, transparent and symbol-first.
       ========================================================== */
-      .tv-visibility-toggle {
-        position: absolute;
-        z-index: 43;
-        top: 128px;
-        left: 18px;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        min-height: 26px;
-        padding: 0 10px;
-        border: 1px solid rgba(255, 255, 255, .22);
-        border-radius: 999px;
+      .home-page.is-tv-mode {
+        background: #020712;
+      }
+      .home-page.is-tv-mode .feedx-topbar,
+      .feedx-topbar.is-tv-mode {
+        background: linear-gradient(
+          180deg,
+          rgba(1, 5, 13, .56) 0%,
+          rgba(1, 5, 13, .20) 52%,
+          transparent 100%
+        ) !important;
+        border-bottom: 0 !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+      }
+      .home-page.is-tv-mode .category-nav {
+        background: transparent !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+      }
+      .home-page.is-tv-mode .category-tab,
+      .home-page.is-tv-mode .category-tab.is-active {
+        border-color: transparent !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        color: rgba(255, 255, 255, .9);
+        text-shadow: 0 1px 4px rgba(0, 0, 0, .94), 0 0 8px rgba(24, 153, 255, .35);
+      }
+      .home-page.is-tv-mode .category-tab.is-active {
         color: #fff;
-        background: rgba(1, 8, 20, .38);
-        -webkit-backdrop-filter: blur(4px);
-        backdrop-filter: blur(4px);
-        font-size: 11px;
-        font-weight: 800;
-        pointer-events: auto;
+        filter: drop-shadow(0 0 6px rgba(40, 169, 255, .9));
+      }
+      .home-page.is-tv-mode .home-feed {
+        width: min(100%, 900px);
+        padding: 0;
+      }
+      .home-page.is-tv-mode .service-reel-card {
+        height: 100svh;
+        min-height: 560px;
+        margin-bottom: 0;
+        background: #020712 !important;
+      }
+      .home-page.is-tv-mode .service-reel-card .media-card {
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 0 !important;
+      }
+      .home-page.is-tv-mode .service-reel-card .media-viewport,
+      .home-page.is-tv-mode .service-reel-card .media-layer {
+        inset: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+      }
+      .home-page.is-tv-mode .service-reel-card img.home-media,
+      .home-page.is-tv-mode .service-reel-card video.home-media {
+        width: 100%;
+        height: 100%;
+        object-fit: cover !important;
+        object-position: center;
+        background: #020712 !important;
+      }
+      .home-page.is-tv-mode .glass-frame-overlay {
+        display: none;
+      }
+      .home-page.is-tv-mode .service-card-gradient {
+        background:
+          linear-gradient(to bottom, rgba(0, 5, 14, .18) 0%, transparent 24%, transparent 58%, rgba(0, 5, 14, .42) 82%, rgba(2, 7, 18, .82) 100%);
+      }
+      .home-page.is-tv-mode .post-info-block {
+        bottom: 76px;
+        right: 118px;
+      }
+      .home-page.is-tv-mode .service-social-rail {
+        right: 17px;
+        bottom: 116px;
+      }
+      .tv-private-contact-cta {
+        position: absolute;
+        z-index: 44;
+        right: 17px;
+        bottom: 61px;
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, .24);
+        border-radius: 50%;
+        color: #fff;
+        background: rgba(2, 15, 32, .20);
+        box-shadow: 0 0 14px rgba(37, 169, 255, .45);
         cursor: pointer;
       }
-      .tv-conversation-column {
+      .tv-private-contact-cta:hover,
+      .tv-private-contact-cta:focus-visible {
+        background: rgba(7, 71, 133, .30);
+        box-shadow: 0 0 20px rgba(37, 169, 255, .72);
+      }
+
+      /* Public TV conversation: separate from private Contact me. */
+      .tv-live-anchor {
         position: absolute;
-        z-index: 41;
-        left: 18px;
-        right: 76px;
-        top: 118px;
-        bottom: 200px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        gap: 8px;
-        overflow: hidden;
+        z-index: 45;
+        top: 111px;
+        left: 17px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        padding: 0 8px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        border-radius: 999px;
+        color: rgba(255, 255, 255, .95);
+        background: rgba(2, 11, 24, .16);
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 1.5px;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, .9);
         pointer-events: none;
       }
+      .tv-live-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ff3855;
+        box-shadow: 0 0 8px rgba(255, 56, 85, .9);
+        animation: tvLivePulse 1.4s ease-in-out infinite;
+      }
+      @keyframes tvLivePulse {
+        0%, 100% { opacity: .52; transform: scale(.82); }
+        50% { opacity: 1; transform: scale(1.15); }
+      }
+      .tv-conversation-column {
+        --tv-y-82: calc(-82svh + 180px);
+        --tv-y-94: calc(-94svh + 206px);
+        --tv-y-end: calc(-100svh + 219px);
+        position: absolute;
+        z-index: 41;
+        top: 111px;
+        right: 74px;
+        bottom: 108px;
+        left: 17px;
+        overflow: hidden;
+        pointer-events: none;
+        transition: opacity 140ms ease;
+      }
+      .tv-conversation-column.is-hidden {
+        visibility: hidden;
+        opacity: 0;
+      }
+      .tv-conversation-column.is-hidden .tv-message-item {
+        animation-play-state: paused;
+      }
       .tv-message-item {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: min(82%, 430px);
         display: flex;
         align-items: flex-start;
         gap: 8px;
-        animation: tvMessageFloat 10s linear forwards;
+        opacity: 0;
+        pointer-events: auto;
+        cursor: pointer;
         will-change: transform, opacity;
+        animation-name: tvMessageRiseToLive;
+        animation-duration: var(--tv-message-duration, 16s);
+        animation-delay: var(--tv-message-delay, 0s);
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-fill-mode: both;
       }
-      @keyframes tvMessageFloat {
-        0% { opacity: 0; transform: translate3d(0, 14px, 0); }
-        8% { opacity: 1; transform: translate3d(0, 0, 0); }
-        78% { opacity: 1; transform: translate3d(0, -120px, 0); }
-        100% { opacity: 0; transform: translate3d(0, -170px, 0); }
+      .tv-message-item.is-paused {
+        animation-play-state: paused;
+      }
+      @keyframes tvMessageRiseToLive {
+        0% {
+          opacity: 0;
+          transform: translate3d(0, 16px, 0) scale(.98);
+        }
+        7% {
+          opacity: 1;
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+        82% {
+          opacity: 1;
+          transform: translate3d(0, var(--tv-y-82), 0) scale(.985);
+        }
+        94% {
+          opacity: .7;
+          transform: translate3d(0, var(--tv-y-94), 0) scale(.94);
+        }
+        100% {
+          opacity: 0;
+          transform: translate3d(0, var(--tv-y-end), 0) scale(.88);
+        }
       }
       .tv-message-avatar {
         position: relative;
-        width: 28px;
-        height: 28px;
-        flex: 0 0 28px;
+        width: 29px;
+        height: 29px;
+        flex: 0 0 29px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        cursor: zoom-in;
       }
       .tv-message-avatar img {
         width: 100%;
         height: 100%;
+        display: block;
         border-radius: 50%;
         object-fit: cover;
-        border: 1.5px solid rgba(255, 255, 255, .55);
-        box-shadow: 0 0 8px rgba(22, 139, 255, .5);
+        border: 1.5px solid rgba(255, 255, 255, .68);
+        box-shadow: 0 0 9px rgba(22, 139, 255, .55);
       }
       .tv-message-flag {
         position: absolute;
         right: -3px;
         bottom: -3px;
-        width: 14px;
-        height: 14px;
+        width: 15px;
+        height: 15px;
         display: grid;
         place-items: center;
         border-radius: 50%;
-        background: rgba(1, 8, 20, .85);
+        background: rgba(1, 8, 20, .86);
         font-size: 10px;
         line-height: 1;
-        box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .5);
+        box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .58);
       }
       .tv-message-body {
+        position: relative;
+        min-width: 0;
+        max-width: 100%;
         display: flex;
         flex-direction: column;
         gap: 1px;
-        min-width: 0;
-        max-width: 78%;
+        padding-top: 1px;
       }
       .tv-message-name {
-        font-size: 12px;
-        font-weight: 800;
-        color: #fff;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, .9), 0 0 8px rgba(22, 139, 255, .65);
+        max-width: 230px;
         overflow: hidden;
+        color: #fff;
+        font-size: 11.5px;
+        font-weight: 850;
+        line-height: 1.2;
         text-overflow: ellipsis;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, .98), 0 0 8px rgba(22, 139, 255, .65);
         white-space: nowrap;
       }
       .tv-message-text {
-        font-size: 12px;
-        line-height: 1.35;
-        color: rgba(255, 255, 255, .95);
-        text-shadow: 0 1px 3px rgba(0, 0, 0, .9), 0 0 6px rgba(22, 139, 255, .4);
+        max-width: 100%;
+        color: rgba(255, 255, 255, .96);
+        font-size: 11.5px;
+        font-weight: 560;
+        line-height: 1.34;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 1), 0 0 6px rgba(22, 139, 255, .35);
         display: -webkit-box;
         -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
         overflow: hidden;
       }
-      .tv-composer {
+      .tv-message-paused-mark {
         position: absolute;
-        z-index: 43;
-        left: 18px;
-        right: 76px;
-        bottom: 176px;
+        top: -2px;
+        right: -18px;
+        color: rgba(255, 255, 255, .64);
+        font-size: 9px;
+        letter-spacing: -2px;
+      }
+
+      .tv-public-action-dock {
+        position: absolute;
+        z-index: 47;
+        left: 16px;
+        bottom: calc(18px + env(safe-area-inset-bottom));
         display: flex;
         align-items: center;
-        gap: 6px;
-        min-height: 38px;
-        padding: 0 8px;
-        border: 1px solid rgba(255, 255, 255, .2);
-        border-radius: 999px;
-        background: rgba(1, 8, 20, .42);
-        -webkit-backdrop-filter: blur(6px);
-        backdrop-filter: blur(6px);
+        gap: 8px;
+        pointer-events: auto;
       }
-      .tv-composer-input {
-        flex: 1;
-        min-width: 0;
-        height: 30px;
-        padding: 0 8px;
-        border: 0;
-        outline: 0;
-        background: transparent;
-        color: #fff;
-        font-size: 12px;
-      }
-      .tv-composer-input::placeholder {
-        color: rgba(255, 255, 255, .5);
-      }
-      .tv-composer-country {
-        flex: 0 0 auto;
-        height: 28px;
-        padding: 0 4px;
-        border: 1px solid rgba(255, 255, 255, .2);
-        border-radius: 8px;
-        background: rgba(255, 255, 255, .08);
-        color: #fff;
-        font-size: 11px;
-      }
-      .tv-composer-country option {
-        color: #000;
-      }
-      .tv-composer-send {
-        flex: 0 0 auto;
-        width: 30px;
-        height: 30px;
+      .tv-public-conversation-cta,
+      .tv-visibility-toggle {
+        position: relative;
+        width: 44px;
+        height: 44px;
         display: grid;
         place-items: center;
-        border: 0;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, .24);
         border-radius: 50%;
-        color: #fff;
-        background: #087cff;
+        color: #f8fdff;
+        background: rgba(2, 15, 32, .20);
+        box-shadow: 0 0 15px rgba(32, 164, 255, .46);
         cursor: pointer;
       }
-      .tv-composer-send:disabled {
-        opacity: .5;
+      .tv-public-conversation-cta {
+        animation: tvPublicCtaBreath 2.8s ease-in-out infinite;
+      }
+      .tv-public-conversation-bolt {
+        position: absolute;
+        color: #8eeaff;
+        filter: drop-shadow(0 0 5px rgba(88, 219, 255, .9));
+      }
+      @keyframes tvPublicCtaBreath {
+        0%, 100% { box-shadow: 0 0 10px rgba(32, 164, 255, .30); transform: scale(1); }
+        50% { box-shadow: 0 0 22px rgba(32, 164, 255, .72); transform: scale(1.035); }
+      }
+      .tv-visibility-toggle {
+        width: 38px;
+        height: 38px;
+        color: rgba(255, 255, 255, .86);
+        box-shadow: 0 0 10px rgba(32, 164, 255, .30);
+      }
+      .tv-typing-presence {
+        position: absolute;
+        left: 0;
+        bottom: 53px;
+        min-width: 82px;
+        max-width: 160px;
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: center;
+        column-gap: 7px;
+        padding: 5px 7px 5px 5px;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(2, 12, 28, .26);
+        pointer-events: auto;
+      }
+      .tv-typing-avatar {
+        position: relative;
+        grid-row: 1 / 3;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        cursor: zoom-in;
+      }
+      .tv-typing-avatar img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(255, 255, 255, .68);
+      }
+      .tv-typing-avatar span {
+        position: absolute;
+        right: -4px;
+        bottom: -3px;
+        font-size: 10px;
+      }
+      .tv-typing-presence strong {
+        min-width: 0;
+        overflow: hidden;
+        font-size: 10.5px;
+        line-height: 1.1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-shadow: 0 1px 4px #000;
+      }
+      .tv-typing-dots {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        height: 10px;
+      }
+      .tv-typing-dots i {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: #82ddff;
+        animation: tvTypingDot 1s ease-in-out infinite;
+      }
+      .tv-typing-dots i:nth-child(2) { animation-delay: .14s; }
+      .tv-typing-dots i:nth-child(3) { animation-delay: .28s; }
+      @keyframes tvTypingDot {
+        0%, 70%, 100% { opacity: .28; transform: translateY(0); }
+        35% { opacity: 1; transform: translateY(-2px); }
+      }
+
+      .tv-chat-guide {
+        position: absolute;
+        z-index: 48;
+        left: 16px;
+        right: 74px;
+        bottom: calc(72px + env(safe-area-inset-bottom));
+        max-width: 520px;
+        padding: 10px;
+        border: 1px solid rgba(123, 211, 255, .26);
+        border-radius: 17px;
+        color: #fff;
+        background: rgba(2, 12, 28, .72);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, .28), 0 0 18px rgba(31, 164, 255, .22);
+      }
+      .tv-chat-guide-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tv-gwamo-orb {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(126, 221, 255, .7);
+        border-radius: 50%;
+        color: #fff;
+        background: radial-gradient(circle at 35% 30%, #2fd4ff, #0a4c96 58%, #041328);
+        box-shadow: 0 0 13px rgba(46, 189, 255, .55);
+        font-size: 12px;
+        font-weight: 950;
+      }
+      .tv-chat-guide-copy {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .tv-chat-guide-copy strong {
+        color: #86ddff;
+        font-size: 10.5px;
+      }
+      .tv-chat-guide-copy span {
+        color: rgba(255, 255, 255, .96);
+        font-size: 12px;
+        font-weight: 720;
+        line-height: 1.25;
+      }
+      .tv-guide-close,
+      .tv-guide-symbol-button,
+      .tv-guide-upload-symbol {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        color: #fff;
+        background: transparent;
+        cursor: pointer;
+      }
+      .tv-guide-close {
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
+        border-radius: 50%;
+        color: rgba(255, 255, 255, .75);
+      }
+      .tv-guide-reply-row,
+      .tv-guide-message-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 9px;
+      }
+      .tv-guide-input,
+      .tv-country-search {
+        min-width: 0;
+        height: 35px;
+        padding: 0 11px;
+        border: 1px solid rgba(255, 255, 255, .18);
+        border-radius: 999px;
+        outline: none;
+        color: #fff;
+        background: rgba(255, 255, 255, .06);
+        font-size: 12px;
+      }
+      .tv-guide-input {
+        flex: 1;
+      }
+      .tv-guide-input::placeholder,
+      .tv-country-search::placeholder {
+        color: rgba(255, 255, 255, .48);
+      }
+      .tv-guide-input:focus,
+      .tv-country-search:focus {
+        border-color: rgba(80, 194, 255, .72);
+        box-shadow: 0 0 0 2px rgba(44, 173, 255, .12);
+      }
+      .tv-guide-symbol-button {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border-radius: 50%;
+        background: rgba(8, 124, 255, .84);
+        box-shadow: 0 0 12px rgba(8, 124, 255, .42);
+      }
+      .tv-guide-symbol-button:disabled {
+        opacity: .45;
         cursor: wait;
       }
-      .tv-composer-error {
+      .tv-guide-photo-step {
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 11px 0 2px;
+      }
+      .tv-guide-photo-preview {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(255, 255, 255, .62);
+      }
+      .tv-guide-upload-symbol {
+        width: 48px;
+        height: 48px;
+        border: 1px dashed rgba(111, 215, 255, .72);
+        border-radius: 50%;
+        background: rgba(8, 124, 255, .12);
+      }
+      .tv-guide-upload-symbol.is-busy {
+        opacity: .55;
+        cursor: wait;
+      }
+      .tv-guide-upload-symbol input {
         position: absolute;
-        z-index: 43;
-        left: 18px;
-        right: 76px;
-        bottom: 218px;
-        padding: 5px 10px;
-        border-radius: 8px;
-        background: rgba(255, 51, 79, .16);
-        color: #ff8a97;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .tv-country-picker {
+        margin-top: 9px;
+      }
+      .tv-country-search {
+        width: 100%;
+        margin-bottom: 7px;
+      }
+      .tv-country-list {
+        max-height: min(34svh, 260px);
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 2px;
+        scrollbar-width: thin;
+      }
+      .tv-country-option {
+        min-width: 0;
+        min-height: 34px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 8px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        color: rgba(255, 255, 255, .92);
+        background: rgba(255, 255, 255, .045);
+        text-align: left;
+        cursor: pointer;
+      }
+      .tv-country-option:hover,
+      .tv-country-option[aria-selected="true"] {
+        border-color: rgba(67, 190, 255, .48);
+        background: rgba(8, 124, 255, .14);
+      }
+      .tv-country-option span:last-child {
+        min-width: 0;
+        overflow: hidden;
         font-size: 10.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tv-country-flag {
+        flex: 0 0 auto;
+        font-size: 17px;
+        line-height: 1;
+      }
+      .tv-guide-self-avatar {
+        position: relative;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        cursor: zoom-in;
+      }
+      .tv-guide-self-avatar img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid rgba(255, 255, 255, .62);
+      }
+      .tv-guide-self-avatar span {
+        position: absolute;
+        right: -4px;
+        bottom: -3px;
+        font-size: 10px;
+      }
+      .tv-composer-error {
+        margin-top: 7px;
+        padding: 5px 8px;
+        border-radius: 8px;
+        color: #ff9ba7;
+        background: rgba(255, 51, 79, .12);
+        font-size: 10px;
         font-weight: 700;
       }
+
       @media (max-width: 700px) {
-        .tv-visibility-toggle {
-          top: 108px;
+        .home-page.is-tv-mode .feedx-topbar,
+        .feedx-topbar.is-tv-mode {
+          background: linear-gradient(
+            180deg,
+            rgba(1, 5, 13, .54) 0%,
+            rgba(1, 5, 13, .16) 56%,
+            transparent 100%
+          ) !important;
+        }
+        .home-page.is-tv-mode .category-nav,
+        .home-page.is-tv-mode .category-tab,
+        .home-page.is-tv-mode .category-tab.is-active {
+          background: transparent !important;
+        }
+        .home-page.is-tv-mode .service-reel-card {
+          min-height: 520px;
+        }
+        .home-page.is-tv-mode .post-info-block {
           left: 14px;
+          right: 74px;
+          bottom: 74px;
+        }
+        .home-page.is-tv-mode .service-social-rail {
+          right: 11px;
+          bottom: 112px;
+        }
+        .tv-private-contact-cta {
+          right: 11px;
+          bottom: calc(58px + env(safe-area-inset-bottom));
+          width: 39px;
+          height: 39px;
+          background: rgba(2, 15, 32, .18) !important;
+        }
+        .tv-live-anchor {
+          top: 102px;
+          left: 13px;
         }
         .tv-conversation-column {
-          left: 14px;
-          right: 64px;
-          top: 100px;
-          bottom: 168px;
+          --tv-y-82: calc(-82svh + 169px);
+          --tv-y-94: calc(-94svh + 194px);
+          --tv-y-end: calc(-100svh + 206px);
+          top: 102px;
+          right: 60px;
+          bottom: 104px;
+          left: 13px;
+        }
+        .tv-message-item {
+          width: min(88%, 350px);
         }
         .tv-message-avatar {
-          width: 24px;
-          height: 24px;
-          flex-basis: 24px;
+          width: 26px;
+          height: 26px;
+          flex-basis: 26px;
         }
         .tv-message-flag {
-          width: 12px;
-          height: 12px;
+          width: 13px;
+          height: 13px;
           font-size: 9px;
         }
         .tv-message-name,
         .tv-message-text {
-          font-size: 11px;
+          font-size: 10.8px;
         }
-        .tv-composer {
-          left: 14px;
-          right: 64px;
-          bottom: 150px;
-          min-height: 34px;
+        .tv-public-action-dock {
+          left: 12px;
+          bottom: calc(13px + env(safe-area-inset-bottom));
         }
-        .tv-composer-input {
-          height: 26px;
-          font-size: 11px;
+        .tv-public-conversation-cta {
+          width: 42px;
+          height: 42px;
+          background: rgba(2, 15, 32, .18) !important;
         }
-        .tv-composer-send {
-          width: 26px;
-          height: 26px;
+        .tv-visibility-toggle {
+          width: 36px;
+          height: 36px;
+          background: rgba(2, 15, 32, .18) !important;
         }
-        .tv-composer-error {
-          left: 14px;
-          right: 64px;
-          bottom: 188px;
+        .tv-chat-guide {
+          left: 12px;
+          right: 58px;
+          bottom: calc(65px + env(safe-area-inset-bottom));
+          padding: 9px;
+          background: rgba(2, 12, 28, .86) !important;
         }
-        .tv-visibility-toggle,
-        .tv-composer {
-          -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
-          background: rgba(3, 12, 27, .74) !important;
+        .tv-country-list {
+          max-height: min(31svh, 220px);
+          grid-template-columns: 1fr;
+        }
+        .tv-typing-presence {
+          bottom: 50px;
         }
       }
       @media (prefers-reduced-motion: reduce) {
