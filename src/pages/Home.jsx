@@ -9646,15 +9646,16 @@ function HomeStylesInner() {
         50% { opacity: 1; transform: scale(1.15); }
       }
       .tv-conversation-column {
-        --tv-y-82: calc(-82svh + 180px);
-        --tv-y-94: calc(-94svh + 206px);
-        --tv-y-end: calc(-100svh + 219px);
         position: absolute;
         z-index: 41;
         top: 111px;
         right: 74px;
         bottom: 108px;
         left: 17px;
+        display: flex;
+        flex-direction: column-reverse;
+        justify-content: flex-start;
+        gap: 12px;
         overflow: hidden;
         pointer-events: none;
         transition: opacity 140ms ease;
@@ -9667,10 +9668,9 @@ function HomeStylesInner() {
         animation-play-state: paused;
       }
       .tv-message-item {
-        position: absolute;
-        left: 0;
-        bottom: 0;
+        position: relative;
         width: min(82%, 430px);
+        flex: 0 0 auto;
         display: flex;
         align-items: flex-start;
         gap: 8px;
@@ -9678,36 +9678,22 @@ function HomeStylesInner() {
         pointer-events: auto;
         cursor: pointer;
         will-change: transform, opacity;
-        animation-name: tvMessageRiseToLive;
-        animation-duration: var(--tv-message-duration, 16s);
-        animation-delay: var(--tv-message-delay, 0s);
-        animation-timing-function: linear;
-        animation-iteration-count: infinite;
-        animation-fill-mode: both;
+        animation-name: tvMessageEnter;
+        animation-duration: 320ms;
+        animation-timing-function: ease-out;
+        animation-fill-mode: forwards;
       }
       .tv-message-item.is-paused {
         animation-play-state: paused;
       }
-      @keyframes tvMessageRiseToLive {
+      @keyframes tvMessageEnter {
         0% {
           opacity: 0;
-          transform: translate3d(0, 16px, 0) scale(.98);
-        }
-        7% {
-          opacity: 1;
-          transform: translate3d(0, 0, 0) scale(1);
-        }
-        82% {
-          opacity: 1;
-          transform: translate3d(0, var(--tv-y-82), 0) scale(.985);
-        }
-        94% {
-          opacity: .7;
-          transform: translate3d(0, var(--tv-y-94), 0) scale(.94);
+          transform: translate3d(0, 10px, 0) scale(.97);
         }
         100% {
-          opacity: 0;
-          transform: translate3d(0, var(--tv-y-end), 0) scale(.88);
+          opacity: 1;
+          transform: translate3d(0, 0, 0) scale(1);
         }
       }
       .tv-message-avatar {
@@ -10163,9 +10149,6 @@ function HomeStylesInner() {
           left: 13px;
         }
         .tv-conversation-column {
-          --tv-y-82: calc(-82svh + 169px);
-          --tv-y-94: calc(-94svh + 194px);
-          --tv-y-end: calc(-100svh + 206px);
           top: 102px;
           right: 60px;
           bottom: 104px;
