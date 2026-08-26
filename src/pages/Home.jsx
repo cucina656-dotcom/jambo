@@ -8,10 +8,6 @@ import {
   memo,
 } from "react";
 import {
-  getCountries,
-  parsePhoneNumberFromString,
-} from "libphonenumber-js";
-import {
   ShoppingBasket,
   X,
   Menu,
@@ -118,15 +114,6 @@ const TOAST_DURATION_MS = 4200;
 const PERSONAL_PIN_PATTERN = /^\d{8}$/;
 const PIN_AUTH_METHOD = "phone_pin";
 const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
-const TV_PUBLIC_COUNTRY_KEY = "gwamo-tv-public-country";
-const TV_PUBLIC_CONVERSATION_PATH = "/api/tv-public-conversations";
-const TV_PUBLIC_CONVERSATION_LIVE_PATH =
-  "/api/tv-public-conversations/live";
-const TV_PUBLIC_MESSAGE_LIMIT = 180;
-const TV_PUBLIC_HISTORY_LIMIT = 30;
-const TV_PUBLIC_ACTIVE_LIMIT = 5;
-const TV_PUBLIC_SEND_COOLDOWN_MS = 1500;
-const TV_PUBLIC_FALLBACK_REFRESH_MS = 20000;
 // Stable identity so it never causes ServicePost's memo() to think a prop
 // changed - these handlers are currently unused (no-ops), so one shared
 // reference for every card in the feed is exactly right.
@@ -269,24 +256,6 @@ function renderDescriptionWithLinks(value = "") {
       );
     });
 }
-function getProviderWebsite(post = {}) {
-  const candidates = [
-    post.website_url,
-    post.website,
-    post.provider_link,
-    post.link,
-    post.contact_url,
-    post.creator_identity,
-  ];
-  for (const value of candidates) {
-    const raw = String(value || "").trim();
-    if (!raw) continue;
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (/^www\./i.test(raw)) return `https://${raw}`;
-  }
-  return "";
-}
-
 function normalizeWhatsAppNumber(value = "") {
   const raw = String(value || "").trim();
   const compact = raw.replace(/[\s().-]/g, "");
@@ -306,117 +275,6 @@ function normalizeWhatsAppNumber(value = "") {
     return compact;
   }
   return "";
-}
-const COUNTRY_DISPLAY_NAMES =
-  typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function"
-    ? new Intl.DisplayNames(["en"], { type: "region" })
-    : null;
-const TV_PUBLIC_COUNTRIES = getCountries()
-  .map((code) => ({
-    code,
-    name: COUNTRY_DISPLAY_NAMES?.of(code) || code,
-  }))
-  .sort((a, b) => a.name.localeCompare(b.name));
-function countryCodeToFlag(value = "") {
-  const code = String(value || "")
-    .trim()
-    .toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return "🌐";
-  return String.fromCodePoint(
-    ...Array.from(code).map((letter) => 127397 + letter.charCodeAt(0)),
-  );
-}
-function getInitialTvCountryCode(user = null) {
-  const suppliedCode = String(
-    user?.country_code || user?.country || "",
-  )
-    .trim()
-    .toUpperCase();
-  if (TV_PUBLIC_COUNTRIES.some(({ code }) => code === suppliedCode)) {
-    return suppliedCode;
-  }
-  try {
-    const storedCode = String(
-      localStorage.getItem(TV_PUBLIC_COUNTRY_KEY) || "",
-    ).toUpperCase();
-    if (TV_PUBLIC_COUNTRIES.some(({ code }) => code === storedCode)) {
-      return storedCode;
-    }
-  } catch {
-    // Storage can be unavailable in private browsing; continue with the phone.
-  }
-  const normalizedPhone = normalizeWhatsAppNumber(
-    user?.phone || user?.telephone || user?.creator_identity || "",
-  );
-  if (normalizedPhone) {
-    try {
-      const phoneCountry = parsePhoneNumberFromString(`+${normalizedPhone}`)
-        ?.country;
-      if (phoneCountry) return phoneCountry;
-    } catch {
-      // A malformed legacy telephone should not block the composer.
-    }
-  }
-  return "RW";
-}
-function normalizeTvPublicMessage(value = {}, expectedPostId = "") {
-  if (!value || typeof value !== "object") return null;
-  const tvPostId = String(
-    value.tv_post_id ?? value.post_id ?? expectedPostId ?? "",
-  ).trim();
-  if (expectedPostId && tvPostId !== String(expectedPostId)) return null;
-  const message = String(value.message ?? value.text ?? value.body ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, TV_PUBLIC_MESSAGE_LIMIT);
-  if (!tvPostId || !message) return null;
-  const rawCountryCode = String(value.country_code || "")
-    .trim()
-    .toUpperCase();
-  const countryCode = /^[A-Z]{2}$/.test(rawCountryCode)
-    ? rawCountryCode
-    : "RW";
-  const userId = String(
-    value.user_id ?? value.provider_id ?? value.sender_id ?? "",
-  ).trim();
-  const createdAt = String(
-    value.created_at || value.sent_at || new Date().toISOString(),
-  );
-  const id = String(
-    value.id ||
-      `${tvPostId}:${userId}:${createdAt}:${message.slice(0, 24)}`,
-  );
-  return {
-    id,
-    tvPostId,
-    userId,
-    userName: String(
-      value.user_name ||
-        value.full_name ||
-        value.sender_name ||
-        value.service_provider_name ||
-        "Gwamo member",
-    ).trim(),
-    profileImage: String(
-      value.profile_image ||
-        value.profile_image_url ||
-        value.logo_url ||
-        DEFAULT_LOGO,
-    ),
-    countryCode,
-    message,
-    createdAt,
-  };
-}
-function getTvPublicWebSocketUrl(postId) {
-  try {
-    const url = new URL(TV_PUBLIC_CONVERSATION_LIVE_PATH, API_URL);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.searchParams.set("tv_post_id", String(postId));
-    return url.toString();
-  } catch {
-    return "";
-  }
 }
 // Never compare missing provider IDs directly: "" === "" would incorrectly
 // treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
@@ -619,6 +477,15 @@ function Home() {
   const [pinResetError, setPinResetError] = useState("");
   const [pinResetLoading, setPinResetLoading] = useState(false);
   const [pendingPhoneReview, setPendingPhoneReview] = useState(null);
+  // Post-approval activation: the admin has approved the account and
+  // generated a one-time 6-digit code (see worker.js); the person enters
+  // it here to finish activating before they can log in.
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [activationCode, setActivationCode] = useState("");
+  const [activationError, setActivationError] = useState("");
+  const [activationLoading, setActivationLoading] = useState(false);
+  // Shown when a login attempt reveals the account was rejected.
+  const [rejectedAccountInfo, setRejectedAccountInfo] = useState(null);
   const [showChat, setShowChat] = useState(false);
   const [chatPartner, setChatPartner] = useState(null);
   const [showProviderProfile, setShowProviderProfile] = useState(false);
@@ -1001,6 +868,30 @@ function Home() {
       });
       const data = await readJsonSafely(response);
       if (!response.ok || !data.success) {
+        // The account was approved and a one-time activation code was
+        // generated (see worker.js) - the phone+PIN are correct, but the
+        // person still needs to enter that code before they can log in.
+        if (data.requires_activation_code) {
+          setShowAuthModal(false);
+          setActivationCode("");
+          setActivationError("");
+          setShowActivationModal(true);
+          setAuthLoading(false);
+          return;
+        }
+        // The registration was rejected - surface the specific reason
+        // rather than a generic "incorrect" error.
+        if (data.account_rejected) {
+          setShowAuthModal(false);
+          setRejectedAccountInfo({
+            message:
+              data.error ||
+              data.message ||
+              "Your registration could not be approved.",
+          });
+          setAuthLoading(false);
+          return;
+        }
         setAuthError(
           data.error ||
             data.message ||
@@ -1041,6 +932,43 @@ function Home() {
       setAuthLoading(false);
     }
   }, [authPhone, authPin, readJsonSafely, setSessionToken, setUserData]);
+  // Completes the post-approval activation step, then immediately re-runs
+  // the normal login with the phone + PIN already entered - so the person
+  // never has to re-type their credentials after entering the code.
+  const submitActivationCode = useCallback(async () => {
+    const phone = normalizeWhatsAppNumber(authPhone);
+    if (!phone) {
+      setActivationError("Missing phone number. Please login again.");
+      return;
+    }
+    if (!/^\d{6}$/.test(activationCode)) {
+      setActivationError("Enter the 6-digit activation code.");
+      return;
+    }
+    setActivationLoading(true);
+    setActivationError("");
+    try {
+      const response = await fetch(`${API_URL}/api/time-market/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: activationCode }),
+        cache: "no-store",
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Could not activate your account.",
+        );
+      }
+      setShowActivationModal(false);
+      setActivationCode("");
+      await handleLogin();
+    } catch (error) {
+      setActivationError(error.message || "Could not activate your account.");
+    } finally {
+      setActivationLoading(false);
+    }
+  }, [authPhone, activationCode, readJsonSafely, handleLogin]);
   const handleLogout = useCallback(async () => {
     const token = getSessionToken();
     try {
@@ -1072,9 +1000,6 @@ function Home() {
     setAuthLoading(false);
     setShowAuthModal(true);
   }, []);
-  const requestTvPublicLogin = useCallback(() => {
-    openAuthModal("login");
-  }, [openAuthModal]);
   const closeAuthModal = useCallback(() => {
     pendingAuthActionRef.current = null;
     setShowAuthModal(false);
@@ -2731,11 +2656,6 @@ function Home() {
                 onOpenInbox={openInboxFromRail}
                 onReact={reactToPost}
                 onZoomImage={setZoomImage}
-                showTvPublicConversation={activeCategory === "tv"}
-                isLoggedIn={isLoggedIn}
-                currentUser={user}
-                authFetch={authFetch}
-                onRequireLogin={requestTvPublicLogin}
               />
             );
           })}
@@ -2883,6 +2803,30 @@ function Home() {
         <PendingPhoneReviewModal
           review={pendingPhoneReview}
           onClose={() => setPendingPhoneReview(null)}
+        />
+      )}
+      {showActivationModal && (
+        <ActivationCodeModal
+          code={activationCode}
+          setCode={setActivationCode}
+          error={activationError}
+          loading={activationLoading}
+          onSubmit={submitActivationCode}
+          onClose={() => {
+            setShowActivationModal(false);
+            setActivationCode("");
+            setActivationError("");
+          }}
+        />
+      )}
+      {rejectedAccountInfo && (
+        <RejectedAccountModal
+          info={rejectedAccountInfo}
+          onClose={() => setRejectedAccountInfo(null)}
+          onRegisterAgain={() => {
+            setRejectedAccountInfo(null);
+            openAuthModal("register");
+          }}
         />
       )}
       {zoomImage && (
@@ -3190,424 +3134,6 @@ const ComingSoonPanel = memo(({ category, onBack }) => {
 });
 ComingSoonPanel.displayName = "ComingSoonPanel";
 // =============================================================================
-// Public TV conversation (separate from Contact me / private messaging)
-// =============================================================================
-const TvPublicConversation = memo(function TvPublicConversation({
-  postId,
-  isActive,
-  isLoggedIn,
-  user,
-  authFetch,
-  onRequireLogin,
-}) {
-  const countrySelectId = useId();
-  const [history, setHistory] = useState([]);
-  const [activeMessages, setActiveMessages] = useState([]);
-  const [overlayVisible, setOverlayVisible] = useState(true);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [countryCode, setCountryCode] = useState(() =>
-    getInitialTvCountryCode(user),
-  );
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState("");
-  const [connectionState, setConnectionState] = useState("connecting");
-  const seenMessageIdsRef = useRef(new Set());
-  const overlayVisibleRef = useRef(true);
-  const lastSendAtRef = useRef(0);
-
-  useEffect(() => {
-    overlayVisibleRef.current = overlayVisible;
-  }, [overlayVisible]);
-
-  const ingestMessages = useCallback(
-    (values, { seed = false } = {}) => {
-      const normalized = (Array.isArray(values) ? values : [values])
-        .map((value) => normalizeTvPublicMessage(value, postId))
-        .filter(Boolean);
-      const incoming = normalized.filter((message) => {
-          if (seenMessageIdsRef.current.has(message.id)) return false;
-          seenMessageIdsRef.current.add(message.id);
-          return true;
-        });
-      if (incoming.length) {
-        setHistory((current) =>
-          [...current, ...incoming]
-            .sort(
-              (a, b) =>
-                new Date(a.createdAt).getTime() -
-                new Date(b.createdAt).getTime(),
-            )
-            .slice(-TV_PUBLIC_HISTORY_LIMIT),
-        );
-      }
-      if (!overlayVisibleRef.current) return;
-      if (seed && normalized.length) {
-        setActiveMessages(normalized.slice(-4));
-        return;
-      }
-      if (!incoming.length) return;
-      setActiveMessages((current) => {
-        const next = [...current, ...incoming];
-        return next.slice(-TV_PUBLIC_ACTIVE_LIMIT);
-      });
-    },
-    [postId],
-  );
-
-  useEffect(() => {
-    if (!isActive || !postId) {
-      return undefined;
-    }
-    let stopped = false;
-    let socket = null;
-    let reconnectTimer = null;
-    let seeded = false;
-
-    const loadRecent = async () => {
-      try {
-        const params = new URLSearchParams({
-          tv_post_id: String(postId),
-          limit: String(TV_PUBLIC_HISTORY_LIMIT),
-        });
-        const response = await fetch(
-          `${API_URL}${TV_PUBLIC_CONVERSATION_PATH}?${params.toString()}`,
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw new Error("Conversation history unavailable");
-        const data = await response.json();
-        if (stopped) return;
-        const messages = Array.isArray(data)
-          ? data
-          : data.messages || data.conversations || data.data || [];
-        ingestMessages(messages, { seed: !seeded });
-        seeded = true;
-      } catch (error) {
-        if (!stopped) {
-          setConnectionState((current) =>
-            current === "live" ? current : "reconnecting",
-          );
-          devWarn("TV public conversation history failed:", error);
-        }
-      }
-    };
-
-    const connect = () => {
-      if (stopped || typeof WebSocket === "undefined") return;
-      const socketUrl = getTvPublicWebSocketUrl(postId);
-      if (!socketUrl) return;
-      setConnectionState("connecting");
-      try {
-        socket = new WebSocket(socketUrl);
-      } catch (error) {
-        setConnectionState("reconnecting");
-        devWarn("TV public conversation socket failed:", error);
-        reconnectTimer = window.setTimeout(connect, 5000);
-        return;
-      }
-      socket.onopen = () => {
-        if (!stopped) setConnectionState("live");
-      };
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const messages =
-            payload.type === "history"
-              ? payload.messages || []
-              : payload.conversation ||
-                payload.tv_message ||
-                (typeof payload.message === "object"
-                  ? payload.message
-                  : payload);
-          ingestMessages(messages);
-        } catch (error) {
-          devWarn("Invalid TV public conversation event:", error);
-        }
-      };
-      socket.onerror = () => {
-        if (!stopped) setConnectionState("reconnecting");
-      };
-      socket.onclose = () => {
-        if (stopped) return;
-        setConnectionState("reconnecting");
-        reconnectTimer = window.setTimeout(connect, 5000);
-      };
-    };
-
-    loadRecent();
-    connect();
-    const fallbackRefresh = window.setInterval(
-      loadRecent,
-      TV_PUBLIC_FALLBACK_REFRESH_MS,
-    );
-    return () => {
-      stopped = true;
-      window.clearInterval(fallbackRefresh);
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      if (socket) {
-        socket.onclose = null;
-        socket.close();
-      }
-    };
-  }, [ingestMessages, isActive, postId]);
-
-  const handleCountryChange = useCallback((event) => {
-    event.stopPropagation();
-    const nextCode = String(event.target.value || "").toUpperCase();
-    if (!TV_PUBLIC_COUNTRIES.some(({ code }) => code === nextCode)) return;
-    setCountryCode(nextCode);
-    try {
-      localStorage.setItem(TV_PUBLIC_COUNTRY_KEY, nextCode);
-    } catch {
-      // The selection still works for this session when storage is unavailable.
-    }
-  }, []);
-
-  const requestComposer = useCallback(
-    (event) => {
-      event.stopPropagation();
-      if (!isLoggedIn) {
-        onRequireLogin();
-        return;
-      }
-      setComposerOpen(true);
-      setSendError("");
-    },
-    [isLoggedIn, onRequireLogin],
-  );
-
-  const toggleOverlay = useCallback(
-    (event) => {
-      event.stopPropagation();
-      setOverlayVisible((current) => {
-        const next = !current;
-        overlayVisibleRef.current = next;
-        setActiveMessages(next ? history.slice(-4) : []);
-        return next;
-      });
-    },
-    [history],
-  );
-
-  const sendMessage = useCallback(
-    async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!isLoggedIn) {
-        onRequireLogin();
-        return;
-      }
-      const message = draft.replace(/\s+/g, " ").trim();
-      if (!message) {
-        setSendError("Write a message first.");
-        return;
-      }
-      const now = Date.now();
-      if (now - lastSendAtRef.current < TV_PUBLIC_SEND_COOLDOWN_MS) {
-        setSendError("Please wait a moment before sending again.");
-        return;
-      }
-      lastSendAtRef.current = now;
-      setSending(true);
-      setSendError("");
-      try {
-        const response = await authFetch(TV_PUBLIC_CONVERSATION_PATH, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tv_post_id: String(postId),
-            country_code: countryCode,
-            message: message.slice(0, TV_PUBLIC_MESSAGE_LIMIT),
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (response.status === 401) {
-          onRequireLogin();
-          throw new Error("Log in to say something.");
-        }
-        if (!response.ok || data.success === false) {
-          throw new Error(data.message || "Could not send your message.");
-        }
-        const serverMessage =
-          data.conversation ||
-          data.tv_message ||
-          data.data ||
-          (typeof data.message === "object" ? data.message : null);
-        ingestMessages(
-          serverMessage || {
-            id: data.id || `local-${postId}-${now}`,
-            tv_post_id: postId,
-            user_id: user?.id,
-            user_name:
-              user?.full_name ||
-              user?.service_provider_name ||
-              user?.name ||
-              "Gwamo member",
-            profile_image:
-              user?.profile_image_url ||
-              user?.profile_image ||
-              user?.logo_url ||
-              DEFAULT_LOGO,
-            country_code: countryCode,
-            message,
-            created_at: new Date(now).toISOString(),
-          },
-        );
-        setDraft("");
-      } catch (error) {
-        setSendError(error.message || "Could not send your message.");
-      } finally {
-        setSending(false);
-      }
-    },
-    [
-      authFetch,
-      countryCode,
-      draft,
-      ingestMessages,
-      isLoggedIn,
-      onRequireLogin,
-      postId,
-      user,
-    ],
-  );
-
-  const removeAnimatedMessage = useCallback((messageId) => {
-    setActiveMessages((current) =>
-      current.filter((message) => message.id !== messageId),
-    );
-  }, []);
-
-  return (
-    <div
-      className="tv-public-conversation"
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <button
-        type="button"
-        className={`tv-public-live-toggle ${connectionState === "live" ? "is-live" : ""}`}
-        onClick={toggleOverlay}
-        aria-pressed={overlayVisible}
-        aria-label={`${overlayVisible ? "Hide" : "Show"} public TV conversation`}
-      >
-        <MessageSquare size={14} aria-hidden="true" />
-        <span>{overlayVisible ? "Live" : "Off"}</span>
-      </button>
-
-      {overlayVisible && (
-        <div
-          className="tv-public-stream"
-          aria-live="polite"
-          aria-label="Public TV conversation"
-        >
-          {activeMessages.map((conversation) => (
-            <article
-              key={conversation.id}
-              className="tv-public-message"
-              onAnimationEnd={() => removeAnimatedMessage(conversation.id)}
-            >
-              <span className="tv-public-avatar-wrap" aria-hidden="true">
-                <img
-                  src={conversation.profileImage || DEFAULT_LOGO}
-                  alt=""
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = DEFAULT_LOGO;
-                  }}
-                />
-                <span className="tv-public-flag-badge">
-                  {countryCodeToFlag(conversation.countryCode)}
-                </span>
-              </span>
-              <span className="tv-public-message-copy">
-                <strong>{conversation.userName}</strong>
-                <span>{conversation.message}</span>
-              </span>
-            </article>
-          ))}
-        </div>
-      )}
-
-      {!composerOpen ? (
-        <button
-          type="button"
-          className="tv-public-say-sign"
-          onClick={requestComposer}
-          aria-label={
-            isLoggedIn
-              ? "Say something in the public TV conversation"
-              : "Log in to say something"
-          }
-        >
-          <span className="tv-public-say-icon" aria-hidden="true">+</span>
-          <span>Say something</span>
-        </button>
-      ) : (
-        <form className="tv-public-composer" onSubmit={sendMessage}>
-          <input
-            type="text"
-            value={draft}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              if (sendError) setSendError("");
-            }}
-            maxLength={TV_PUBLIC_MESSAGE_LIMIT}
-            placeholder="Say something..."
-            aria-label="Public TV message"
-            autoComplete="off"
-            autoFocus
-          />
-          <label
-            className="tv-public-country-picker"
-            htmlFor={countrySelectId}
-            title="Choose your country"
-          >
-            <span aria-hidden="true">{countryCodeToFlag(countryCode)}</span>
-            <select
-              id={countrySelectId}
-              value={countryCode}
-              onChange={handleCountryChange}
-              aria-label="Choose your country flag"
-            >
-              {TV_PUBLIC_COUNTRIES.map((country) => (
-                <option key={country.code} value={country.code}>
-                  {`${countryCodeToFlag(country.code)} ${country.name} (${country.code})`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="tv-public-send-button"
-            disabled={sending || !draft.trim()}
-          >
-            {sending ? "…" : "Send"}
-          </button>
-          <button
-            type="button"
-            className="tv-public-composer-close"
-            onClick={(event) => {
-              event.stopPropagation();
-              setComposerOpen(false);
-              setSendError("");
-            }}
-            aria-label="Close public conversation composer"
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-          {sendError && (
-            <span className="tv-public-send-error" role="status">
-              {sendError}
-            </span>
-          )}
-        </form>
-      )}
-    </div>
-  );
-});
-TvPublicConversation.displayName = "TvPublicConversation";
-// =============================================================================
 // ServicePost
 // =============================================================================
 const ServicePost = memo(function ServicePost({
@@ -3631,11 +3157,6 @@ const ServicePost = memo(function ServicePost({
   onOpenInbox,
   onReact,
   onZoomImage,
-  showTvPublicConversation,
-  isLoggedIn,
-  currentUser,
-  authFetch,
-  onRequireLogin,
 }) {
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
   const mediaType = post.media_type || "";
@@ -3673,10 +3194,6 @@ const ServicePost = memo(function ServicePost({
     fullDescription.toLowerCase() !== serviceName.toLowerCase()
       ? fullDescription
       : "";
-  const providerWebsite = getProviderWebsite(post);
-  const providerWebsiteLabel = providerWebsite
-    ? providerWebsite.replace(/^https?:\/\//i, "").replace(/\/$/, "")
-    : "";
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const descriptionNeedsToggle = tagline.length > DESCRIPTION_PREVIEW_LENGTH;
   const visibleDescription = isDescriptionExpanded
@@ -3758,7 +3275,7 @@ const ServicePost = memo(function ServicePost({
     <section
       ref={postRefCallback}
       data-index={index}
-      className={`home-post service-reel-card${showTvPublicConversation ? " is-tv-card" : ""}`}
+      className="home-post service-reel-card"
     >
       <div className="media-card">
         <div
@@ -3816,16 +3333,6 @@ const ServicePost = memo(function ServicePost({
           </div>
         </div>
       </div>
-      {showTvPublicConversation && (
-        <TvPublicConversation
-          postId={postId}
-          isActive={isActive}
-          isLoggedIn={isLoggedIn}
-          user={currentUser}
-          authFetch={authFetch}
-          onRequireLogin={onRequireLogin}
-        />
-      )}
       <div className="service-card-gradient" aria-hidden="true" />
       <div className="glass-frame-overlay" aria-hidden="true" />
       <div className="post-info-block">
@@ -3869,19 +3376,6 @@ const ServicePost = memo(function ServicePost({
               </div>
             )}
             {descriptionBlock}
-            {providerWebsite && (
-              <a
-                className="provider-detail-link"
-                href={providerWebsite}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(event) => event.stopPropagation()}
-                aria-label={`Open ${providerName}'s website`}
-              >
-                <span className="provider-detail-link-icon" aria-hidden="true">↗</span>
-                <span>{providerWebsiteLabel}</span>
-              </a>
-            )}
           </div>
         </div>
       </div>
@@ -3903,26 +3397,22 @@ const ServicePost = memo(function ServicePost({
           <span>{formatCount(reactionCount)}</span>
         </button>
       </div>
-      {!showTvPublicConversation && (
-        <>
-          <button
-            type="button"
-            className="contact-me-cta"
-            onClick={() => onContactProvider(post)}
-          >
-            <Send size={20} aria-hidden="true" />
-            <span>Contact me</span>
-          </button>
-          {callHref && (
-            <a
-              className="call-me-button"
-              href={callHref}
-              aria-label={`Call ${providerName}`}
-            >
-              <Phone size={20} aria-hidden="true" />
-            </a>
-          )}
-        </>
+      <button
+        type="button"
+        className="contact-me-cta"
+        onClick={() => onContactProvider(post)}
+      >
+        <Send size={20} aria-hidden="true" />
+        <span>Contact me</span>
+      </button>
+      {callHref && (
+        <a
+          className="call-me-button"
+          href={callHref}
+          aria-label={`Call ${providerName}`}
+        >
+          <Phone size={20} aria-hidden="true" />
+        </a>
       )}
     </section>
   );
@@ -4700,14 +4190,15 @@ const PendingPhoneReviewModal = memo(({ review, onClose }) => {
         account.
       </p>
       <p className="pin-reset-intro">
-        This usually takes about an hour, though it can take up to a day
-        during busier periods. There's nothing more for you to do right now
-        - just check back soon and your account will be ready to go.
+        We're currently working through quite a few new sign-ups, so this
+        can take anywhere from about 5 minutes up to a full day depending on
+        how many people registered just ahead of you. Hang tight - you're in
+        good hands, and we're moving through the list as quickly as we can.
       </p>
       {review?.phone && (
         <p className="auth-helper-text">
-          We'll be in touch on the number you registered with if we need
-          anything from you.
+          We'll be in touch on the number you registered with once it's
+          your turn.
         </p>
       )}
       <button type="button" className="save-button" onClick={onClose}>
@@ -4718,6 +4209,114 @@ const PendingPhoneReviewModal = memo(({ review, onClose }) => {
   );
 });
 PendingPhoneReviewModal.displayName = "PendingPhoneReviewModal";
+// =============================================================================
+// ActivationCodeModal - post-approval activation, no PIN re-entry needed.
+// The admin already confirmed identity by phone and generated this code
+// (see worker.js); once accepted, login completes automatically using the
+// phone + PIN already entered.
+// =============================================================================
+const ActivationCodeModal = memo(
+  ({ code, setCode, error, loading, onSubmit, onClose }) => {
+    useEscapeToClose(onClose);
+    return (
+      <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
+        <div
+          className="modal-card auth-modal-card pin-reset-card"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>Enter your activation code</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="modal-close"
+              aria-label="Close"
+            >
+              <X size={20} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </div>
+          <p className="pin-reset-intro">
+            Your account was approved. Enter the 6-digit code the admin gave
+            you by phone call or SMS to finish activating it.
+          </p>
+          <div className="form-section form-section-last">
+            <label htmlFor="activation-code">Activation code</label>
+            <input
+              id="activation-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              pattern="[0-9]{6}"
+              placeholder="6-digit code"
+              value={code}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") onSubmit();
+              }}
+            />
+          </div>
+          {error && <p className="auth-error">{error}</p>}
+          <button
+            type="button"
+            className="save-button"
+            onClick={onSubmit}
+            disabled={loading}
+          >
+            {loading ? "Activating..." : "Activate my account"}
+          </button>
+          <button type="button" onClick={onClose} className="cancel-button">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  },
+);
+ActivationCodeModal.displayName = "ActivationCodeModal";
+// =============================================================================
+// RejectedAccountModal - shown when a login attempt reveals the account
+// was rejected. Explains why in plain terms and offers a direct path to
+// register again with a correctly-registered number.
+// =============================================================================
+const RejectedAccountModal = memo(({ info, onClose, onRegisterAgain }) => {
+  useEscapeToClose(onClose);
+  return (
+    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card auth-modal-card pin-reset-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h2>Registration not approved</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-close"
+            aria-label="Close"
+          >
+            <X size={20} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </div>
+        <p className="pin-reset-intro">{info?.message}</p>
+        <button
+          type="button"
+          className="save-button"
+          onClick={onRegisterAgain}
+        >
+          Register again
+        </button>
+        <button type="button" onClick={onClose} className="cancel-button">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+});
+RejectedAccountModal.displayName = "RejectedAccountModal";
 // =============================================================================
 // ChatModal - real conversation-start + message contract, with polling
 // =============================================================================
@@ -6763,286 +6362,6 @@ function HomeStylesInner() {
       .embed-placeholder-icon {
         font-size: 48px;
       }
-      .tv-public-conversation {
-        position: absolute;
-        z-index: 43;
-        top: calc(var(--media-top-boundary, 0px) + 10px);
-        right: calc(var(--media-edge-gap, 0px) + 10px);
-        bottom: calc(var(--media-bottom-boundary, 0px) + 10px);
-        left: calc(var(--media-edge-gap, 0px) + 10px);
-        overflow: hidden;
-        pointer-events: none;
-        contain: layout paint;
-      }
-      .tv-public-conversation button,
-      .tv-public-conversation input,
-      .tv-public-conversation select,
-      .tv-public-conversation label,
-      .tv-public-composer {
-        pointer-events: auto;
-      }
-      .tv-public-live-toggle,
-      .tv-public-say-sign {
-        position: absolute;
-        z-index: 4;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 0;
-        color: #f5fbff;
-        background: rgba(1, 8, 20, .62);
-        box-shadow: 0 0 13px rgba(22, 139, 255, .5);
-        text-shadow: 0 0 7px rgba(76, 192, 255, .8);
-        cursor: pointer;
-      }
-      .tv-public-live-toggle {
-        top: 2px;
-        left: 2px;
-        min-height: 30px;
-        gap: 5px;
-        padding: 0 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 850;
-        letter-spacing: .2px;
-      }
-      .tv-public-live-toggle::before {
-        content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #7d8da3;
-        box-shadow: 0 0 7px rgba(125, 141, 163, .8);
-      }
-      .tv-public-live-toggle.is-live::before {
-        background: #35f39a;
-        box-shadow: 0 0 9px rgba(53, 243, 154, .95);
-      }
-      .tv-public-say-sign {
-        left: 50%;
-        bottom: 4px;
-        min-height: 35px;
-        gap: 7px;
-        padding: 0 13px 0 9px;
-        border-radius: 999px;
-        font-size: 11.5px;
-        font-weight: 800;
-        transform: translateX(-50%);
-        white-space: nowrap;
-      }
-      .tv-public-say-icon {
-        width: 22px;
-        height: 22px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        color: #ffffff;
-        background: #087cff;
-        box-shadow: 0 0 10px rgba(8, 124, 255, .95);
-        font-size: 18px;
-        font-weight: 500;
-        line-height: 1;
-      }
-      .tv-public-stream {
-        position: absolute;
-        z-index: 2;
-        top: 42px;
-        right: 64px;
-        bottom: 53px;
-        left: 5px;
-        width: min(78%, 390px);
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        gap: 9px;
-        overflow: hidden;
-        pointer-events: none;
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 100%);
-        mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 100%);
-      }
-      .tv-public-message {
-        width: min(100%, 310px);
-        display: grid;
-        grid-template-columns: 30px minmax(0, 1fr);
-        align-items: start;
-        gap: 8px;
-        color: #ffffff;
-        opacity: 0;
-        text-shadow:
-          0 1px 4px rgba(0, 0, 0, 1),
-          0 0 7px rgba(0, 0, 0, .98),
-          0 0 9px rgba(57, 188, 255, .62);
-        animation: tvPublicMessageRise 18s linear forwards;
-        will-change: transform, opacity;
-      }
-      .tv-public-avatar-wrap {
-        position: relative;
-        width: 28px;
-        height: 28px;
-        display: block;
-        filter: drop-shadow(0 0 7px rgba(56, 189, 248, .78));
-      }
-      .tv-public-avatar-wrap > img {
-        width: 28px;
-        height: 28px;
-        display: block;
-        border: 1px solid rgba(185, 233, 255, .9);
-        border-radius: 50%;
-        object-fit: cover;
-        background: #06101f;
-      }
-      .tv-public-flag-badge {
-        position: absolute;
-        right: -4px;
-        bottom: -3px;
-        width: 15px;
-        height: 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, .94);
-        border-radius: 50%;
-        background: #ffffff;
-        box-shadow: 0 0 6px rgba(255, 255, 255, .78);
-        font-size: 10px;
-        line-height: 1;
-      }
-      .tv-public-message-copy {
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
-      }
-      .tv-public-message-copy strong {
-        overflow: hidden;
-        color: #dff6ff;
-        font-size: 12px;
-        font-weight: 850;
-        line-height: 1.2;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        text-shadow:
-          0 1px 4px #000,
-          0 0 8px rgba(26, 174, 255, .88);
-      }
-      .tv-public-message-copy > span {
-        overflow: hidden;
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 560;
-        line-height: 1.28;
-        overflow-wrap: anywhere;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-      }
-      @keyframes tvPublicMessageRise {
-        0% { opacity: 0; transform: translate3d(0, 24px, 0); }
-        8% { opacity: 1; transform: translate3d(0, 5px, 0); }
-        76% { opacity: 1; transform: translate3d(0, -88px, 0); }
-        100% { opacity: 0; transform: translate3d(0, -148px, 0); }
-      }
-      .tv-public-composer {
-        position: absolute;
-        z-index: 5;
-        right: 4px;
-        bottom: 3px;
-        left: 4px;
-        width: min(calc(100% - 8px), 490px);
-        min-height: 42px;
-        margin: 0 auto;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 38px 54px 28px;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 5px 5px 10px;
-        border: 0;
-        border-radius: 999px;
-        background: rgba(1, 8, 20, .82);
-        box-shadow: 0 0 16px rgba(14, 150, 255, .62);
-      }
-      .tv-public-composer input {
-        width: 100%;
-        min-width: 0;
-        height: 32px;
-        padding: 0 3px;
-        border: 0;
-        outline: 0;
-        color: #ffffff;
-        background: transparent;
-        font-size: 12px;
-      }
-      .tv-public-composer input::placeholder {
-        color: rgba(226, 240, 255, .72);
-      }
-      .tv-public-country-picker {
-        position: relative;
-        width: 34px;
-        height: 34px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, .12);
-        box-shadow: 0 0 9px rgba(255, 255, 255, .24);
-        cursor: pointer;
-      }
-      .tv-public-country-picker > span {
-        font-size: 20px;
-        line-height: 1;
-      }
-      .tv-public-country-picker select {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        cursor: pointer;
-      }
-      .tv-public-send-button {
-        height: 32px;
-        padding: 0 9px;
-        border: 0;
-        border-radius: 999px;
-        color: #ffffff;
-        background: #087cff;
-        box-shadow: 0 0 10px rgba(8, 124, 255, .8);
-        font-size: 11px;
-        font-weight: 850;
-        cursor: pointer;
-      }
-      .tv-public-send-button:disabled {
-        opacity: .45;
-        cursor: default;
-      }
-      .tv-public-composer-close {
-        width: 27px;
-        height: 27px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
-        color: rgba(232, 244, 255, .8);
-        background: transparent;
-        cursor: pointer;
-      }
-      .tv-public-send-error {
-        position: absolute;
-        right: 12px;
-        bottom: calc(100% + 4px);
-        max-width: min(85%, 330px);
-        padding: 4px 8px;
-        border-radius: 8px;
-        color: #ffe2e7;
-        background: rgba(83, 8, 24, .88);
-        font-size: 10.5px;
-        line-height: 1.25;
-        text-shadow: 0 1px 3px #000;
-      }
       .service-card-gradient {
         position: absolute;
         inset: 0;
@@ -7182,37 +6501,6 @@ function HomeStylesInner() {
       .description-link:focus-visible {
         color: #9cd7ff;
         text-decoration-color: rgba(156, 215, 255, 0.95);
-      }
-      .provider-detail-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        max-width: 100%;
-        margin-top: 6px;
-        color: #55b6ff;
-        font-size: 12.5px;
-        font-weight: 800;
-        line-height: 1.25;
-        text-decoration: underline;
-        text-decoration-thickness: 1px;
-        text-underline-offset: 3px;
-        text-shadow: 0 0 8px rgba(22, 139, 255, .72);
-        overflow: hidden;
-      }
-      .provider-detail-link span:last-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .provider-detail-link-icon {
-        flex: 0 0 auto;
-        font-size: 13px;
-      }
-      .provider-detail-link:hover,
-      .provider-detail-link:focus-visible {
-        color: #b7e3ff;
-        outline: none;
-        text-shadow: 0 0 11px rgba(58, 174, 255, .95);
       }
       .tagline-toggle-button {
         display: inline-block;
@@ -7354,77 +6642,6 @@ function HomeStylesInner() {
       .contact-me-cta:hover {
         background: rgba(9, 44, 91, .28);
         box-shadow: inset 0 0 18px rgba(22, 139, 255, .14), 0 0 7px rgba(255,255,255,.28), 0 0 22px rgba(22, 139, 255, .96);
-      }
-
-      /* TV only: the media itself remains the visual background.
-         No Contact me/call controls are rendered on TV cards. */
-      .service-reel-card.is-tv-card .glass-frame-overlay {
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-      }
-      .service-reel-card.is-tv-card .service-card-gradient {
-        background: linear-gradient(
-          to bottom,
-          transparent 46%,
-          rgba(0, 0, 0, .06) 58%,
-          rgba(0, 0, 0, .34) 76%,
-          rgba(0, 0, 0, .68) 100%
-        );
-      }
-      .service-reel-card.is-tv-card .post-info-block {
-        left: 22px;
-        right: 84px;
-        bottom: 92px;
-        padding: 0;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-      }
-      .service-reel-card.is-tv-card .service-social-rail {
-        right: 18px;
-        bottom: 106px;
-      }
-      .service-reel-card.is-tv-card .tv-public-conversation {
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        overflow: hidden;
-      }
-      .service-reel-card.is-tv-card .tv-public-live-toggle {
-        top: 12px;
-        left: 12px;
-      }
-      .service-reel-card.is-tv-card .tv-public-say-sign {
-        left: 50%;
-        bottom: 22px;
-        min-height: 40px;
-        max-width: calc(100% - 120px);
-        padding: 0 15px 0 10px;
-        transform: translateX(-50%);
-        background: rgba(0, 7, 18, .34);
-        border: 1px solid rgba(71, 174, 255, .72);
-        box-shadow: 0 0 13px rgba(22, 139, 255, .52);
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-      }
-      .service-reel-card.is-tv-card .tv-public-stream {
-        top: 48px;
-        right: 72px;
-        bottom: 150px;
-        left: 12px;
-      }
-      .service-reel-card.is-tv-card .tv-public-composer {
-        right: 12px;
-        bottom: 18px;
-        left: 12px;
-        width: auto;
       }
       .load-more-wrap {
         display: flex;
@@ -9192,56 +8409,6 @@ function HomeStylesInner() {
           --media-edge-gap: 7px;
           --media-bottom-boundary: 74px;
         }
-        .tv-public-conversation {
-          top: calc(var(--media-top-boundary) + 7px);
-          right: calc(var(--media-edge-gap) + 6px);
-          bottom: calc(var(--media-bottom-boundary) + 7px);
-          left: calc(var(--media-edge-gap) + 6px);
-        }
-        .tv-public-stream {
-          top: 38px;
-          right: 48px;
-          bottom: 50px;
-          left: 2px;
-          width: min(82%, 310px);
-          gap: 7px;
-        }
-        .tv-public-message {
-          grid-template-columns: 29px minmax(0, 1fr);
-          gap: 7px;
-        }
-        .tv-public-avatar-wrap,
-        .tv-public-avatar-wrap > img {
-          width: 27px;
-          height: 27px;
-        }
-        .tv-public-message-copy strong,
-        .tv-public-message-copy > span {
-          font-size: 11.5px;
-        }
-        .tv-public-live-toggle {
-          min-height: 28px;
-          padding: 0 8px;
-          font-size: 10.5px;
-        }
-        .tv-public-say-sign {
-          min-height: 33px;
-          padding-right: 11px;
-          font-size: 11px;
-        }
-        .tv-public-composer {
-          grid-template-columns: minmax(0, 1fr) 36px 51px 26px;
-          gap: 3px;
-          min-height: 40px;
-          padding-left: 8px;
-        }
-        .tv-public-composer input { font-size: 11.5px; }
-        .tv-public-country-picker {
-          width: 32px;
-          height: 32px;
-        }
-        .tv-public-country-picker > span { font-size: 18px; }
-        .tv-public-send-button { padding: 0 7px; }
         .topbar-actions { gap: 2px; }
         .topbar-neon-button {
           min-width: 37px;

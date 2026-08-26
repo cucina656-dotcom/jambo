@@ -138,6 +138,15 @@ function providerNeedsPhoneApproval(provider = {}) {
     provider.account_status === "pending_phone_review"
   );
 }
+
+function formatAccountStatus(value = "active") {
+  const status = String(value || "active");
+  if (status === "pending_phone_review") return "Waiting for phone review";
+  if (status === "pending_activation_code") return "Waiting for user to enter code";
+  if (status === "active") return "Active";
+  if (status === "rejected") return "Rejected";
+  return status;
+}
  
 function isVideo(post) {
   return post.media_type === "video";
@@ -192,6 +201,9 @@ export default function Admin() {
   // modal below - never persisted to storage, cleared as soon as the admin
   // closes that modal.
   const [deliveredPin, setDeliveredPin] = useState(null);
+  // Same one-time-display pattern, for the 6-digit account activation code
+  // generated when a registration is approved.
+  const [deliveredActivationCode, setDeliveredActivationCode] = useState(null);
  
   const showStatus = useCallback((message, type = "info") => {
     setStatus(message);
@@ -298,6 +310,7 @@ export default function Admin() {
     setSearchText("");
     setActiveView("providers");
     setDeliveredPin(null);
+    setDeliveredActivationCode(null);
   }, []);
  
   const updateDraft = useCallback((postId, field, value) => {
@@ -437,8 +450,21 @@ export default function Admin() {
 
         if (nextStatus === "verified") {
           setVerificationReview(null);
+          // worker.js now returns a one-time 6-digit activation code on
+          // approval instead of activating the account immediately - the
+          // admin must relay it to the user by call or SMS before the
+          // account can log in.
+          if (result.activation_code) {
+            setDeliveredActivationCode({
+              providerId: String(provider.id),
+              code: result.activation_code,
+              phone: provider.phone || "",
+              fullName:
+                provider.full_name || provider.service_provider_name || "",
+            });
+          }
         }
- 
+
         showStatus(result.message || "Provider updated.", "success");
       } catch (error) {
         if (nextStatus === "verified") {
@@ -591,6 +617,10 @@ export default function Admin() {
 
   const closeDeliveredPin = useCallback(() => {
     setDeliveredPin(null);
+  }, []);
+
+  const closeDeliveredActivationCode = useCallback(() => {
+    setDeliveredActivationCode(null);
   }, []);
 
   const totals = useMemo(
@@ -988,6 +1018,13 @@ export default function Admin() {
       {deliveredPin ? (
         <GeneratedPinModal info={deliveredPin} close={closeDeliveredPin} />
       ) : null}
+
+      {deliveredActivationCode ? (
+        <ActivationCodeModal
+          info={deliveredActivationCode}
+          close={closeDeliveredActivationCode}
+        />
+      ) : null}
  
       <AdminStyles />
     </div>
@@ -1071,7 +1108,7 @@ function ProvidersView({
                 />
                 <Info
                   label="Account"
-                  value={provider.account_status || "active"}
+                  value={formatAccountStatus(provider.account_status)}
                 />
                 <Info
                   label="Telephone verified"
@@ -1748,7 +1785,7 @@ function ProviderVerificationModal({
 
         <div className="provider-info-grid">
           <Info label="Registered telephone" value={phone ? `+${phone}` : "None"} />
-          <Info label="Account" value={provider.account_status || "pending_phone_review"} />
+          <Info label="Account" value={formatAccountStatus(provider.account_status || "pending_phone_review")} />
           <Info label="Registered" value={formatDate(provider.created_at)} />
         </div>
 
@@ -1877,6 +1914,108 @@ function GeneratedPinModal({ info, close }) {
         <button type="button" className="approve-button full" onClick={close}>
           <CheckCircle2 size={18} />
           I've delivered this PIN
+        </button>
+      </section>
+    </div>
+  );
+}
+
+// NEW: shown immediately after an admin approves a pending registration.
+// worker.js no longer activates the account directly on approval - it
+// generates a one-time 6-digit activation code instead, which the account
+// owner must enter back in the app before they can log in. This modal is
+// the only place that code is ever displayed; it lives only in transient
+// React state (see `deliveredActivationCode` in Admin()) and is discarded
+// the moment this modal closes.
+function ActivationCodeModal({ info, close }) {
+  const [copied, setCopied] = useState(false);
+  const phone = String(info.phone || "").replace(/^\+/, "");
+  const smsBody = `Your Gwamo account was approved! Enter this activation code in the app to finish activating it: ${info.code}`;
+  const isAppleUserAgent =
+    typeof navigator !== "undefined" &&
+    /iphone|ipad|ipod|macintosh/i.test(navigator.userAgent || "");
+  const smsHref = phone
+    ? `sms:+${phone}${isAppleUserAgent ? "&" : "?"}body=${encodeURIComponent(
+        smsBody
+      )}`
+    : "";
+
+  const copyCode = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(info.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may be unavailable - the code is still fully visible
+      // on screen either way.
+    }
+  }, [info.code]);
+
+  return (
+    <div className="overlay" onMouseDown={close}>
+      <section
+        className="pin-delivery-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="modal-header">
+          <div>
+            <span>ACCOUNT APPROVED - ACTIVATION CODE</span>
+            <h2>{info.fullName || "Account owner"}</h2>
+            <small>
+              Read it out on the call, or send it by SMS, then close this
+              window once it has been delivered.
+            </small>
+          </div>
+          <button type="button" onClick={close}>
+            <X size={22} />
+          </button>
+        </header>
+
+        <div className="security-callout compact">
+          <ShieldCheck size={20} />
+          <div>
+            <strong>This code will not be shown again</strong>
+            <p>
+              The person must enter it in the app to finish activating their
+              account before they can login with the PIN they created.
+            </p>
+          </div>
+        </div>
+
+        <div className="pin-display">
+          <span>Activation code</span>
+          <strong>{info.code}</strong>
+        </div>
+
+        <div className="pin-delivery-actions">
+          <button type="button" className="secondary" onClick={copyCode}>
+            {copied ? <CheckCircle2 size={17} /> : <KeyRound size={17} />}
+            {copied ? "Copied" : "Copy code"}
+          </button>
+          {phone ? (
+            <a className="call-button" href={`tel:+${phone}`}>
+              <Phone size={17} />
+              Call +{phone}
+            </a>
+          ) : null}
+          {smsHref ? (
+            <a className="call-button" href={smsHref}>
+              <MessageCircle size={17} />
+              Send SMS
+            </a>
+          ) : null}
+        </div>
+
+        {!phone ? (
+          <div className="notice error">
+            No registered telephone on file - deliver this code by another
+            verified channel.
+          </div>
+        ) : null}
+
+        <button type="button" className="approve-button full" onClick={close}>
+          <CheckCircle2 size={18} />
+          I've delivered this code
         </button>
       </section>
     </div>
