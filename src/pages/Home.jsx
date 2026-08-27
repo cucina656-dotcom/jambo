@@ -3286,6 +3286,9 @@ const ServicePost = memo(function ServicePost({
   const priceSplit = priceText.split(/\/(.+)/);
   const priceMain = (priceSplit[0] || priceText).trim();
   const priceUnit = priceSplit[1] ? priceSplit[1].trim() : "";
+  // Moment posts store their "Song saying / Movie saying / My story" label
+  // in this same title field, not a real price - never show it here.
+  const isMomentPost = getPostType(post) === "moment";
   const explicitServiceName = String(
     post.service_name || post.service_title || "",
   ).trim();
@@ -3489,7 +3492,7 @@ const ServicePost = memo(function ServicePost({
               )}
             </button>
             {serviceName && <h2 className="service-name">{serviceName}</h2>}
-            {priceMain && (
+            {priceMain && !isMomentPost && (
               <div className="post-price">
                 <span>{priceMain}</span>
                 {priceUnit && <span className="post-price-unit"> / {priceUnit}</span>}
