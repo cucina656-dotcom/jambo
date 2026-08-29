@@ -2749,6 +2749,9 @@ function Home() {
                 onReact={reactToPost}
                 onZoomImage={setZoomImage}
                 isTvTab={activeCategory === "tv"}
+                showLiveConversation={
+                  activeCategory === "tv" || activeCategory === "social-life"
+                }
                 currentUser={isLoggedIn ? user : null}
                 getSessionToken={getSessionToken}
                 onRequireAuth={requireAuthForTv}
@@ -3263,6 +3266,7 @@ const ServicePost = memo(function ServicePost({
   onReact,
   onZoomImage,
   isTvTab,
+  showLiveConversation,
   currentUser,
   getSessionToken,
   onRequireAuth,
@@ -3447,7 +3451,7 @@ const ServicePost = memo(function ServicePost({
       </div>
       <div className="service-card-gradient" aria-hidden="true" />
       <div className="glass-frame-overlay" aria-hidden="true" />
-      {isTvTab && (
+      {showLiveConversation && (
         <TvConversationOverlay
           postId={postId}
           isActive={isActive}
@@ -9576,6 +9580,27 @@ function HomeStylesInner() {
         object-fit: cover !important;
         object-position: center;
         background: #020712 !important;
+      }
+      /* Pasted links (YouTube/Vimeo) render their own player inside a
+         cross-origin iframe - our object-fit can't reach inside it, so the
+         player always letterboxes itself to preserve the source video's
+         aspect ratio. To make it act as a true full-bleed background, we
+         oversize the iframe well beyond the card in both directions, then
+         let the card's own overflow:hidden crop it back down - the same
+         technique used for "background video" embeds anywhere on the web. */
+      .home-page.is-tv-mode .service-reel-card .media-layer {
+        overflow: hidden;
+      }
+      .home-page.is-tv-mode .media-layer > iframe.home-media {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 177.78vh;
+        height: 100svh;
+        min-width: 100%;
+        min-height: 56.25vw;
+        max-width: none;
+        transform: translate(-50%, -50%);
       }
       .home-page.is-tv-mode .glass-frame-overlay {
         display: none;
