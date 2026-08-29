@@ -307,7 +307,11 @@ const TV_VISIBLE_MESSAGE_LIMIT = 8;
 // Vertical spacing between the fixed "lanes" messages rise through - each
 // message keeps one lane for its whole life, so two messages animating at
 // the same time are always offset from one another, never overlapping.
-const TV_MESSAGE_LANE_HEIGHT = 44;
+// A message can wrap to a name line plus up to 3 text lines
+// (-webkit-line-clamp: 3 on .tv-message-text), which at this font size can
+// render close to ~65px tall - the lane height must comfortably clear that
+// worst case or a tall message spills upward into the next lane's avatar.
+const TV_MESSAGE_LANE_HEIGHT = 78;
 const TV_POLL_INTERVAL_MS = 7000;
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
 // Never compare missing provider IDs directly: "" === "" would incorrectly
@@ -3510,25 +3514,27 @@ const ServicePost = memo(function ServicePost({
           </div>
         </div>
       </div>
-      <div className="service-social-rail" aria-label="Service engagement">
-        <button
-          type="button"
-          className={`rail-action star-action${reacted ? " is-active" : ""}`}
-          onClick={() => onReact(post)}
-          disabled={reacting || reacted}
-          aria-label={`React to this service, currently ${formatCount(reactionCount)} stars`}
-          aria-pressed={reacted}
-        >
-          <Star
-            className="gold-star"
-            size={34}
-            fill="currentColor"
-            aria-hidden="true"
-          />
-          <span>{formatCount(reactionCount)}</span>
-        </button>
-      </div>
-      {isTvTab ? (
+      {!showLiveConversation && (
+        <div className="service-social-rail" aria-label="Service engagement">
+          <button
+            type="button"
+            className={`rail-action star-action${reacted ? " is-active" : ""}`}
+            onClick={() => onReact(post)}
+            disabled={reacting || reacted}
+            aria-label={`React to this service, currently ${formatCount(reactionCount)} stars`}
+            aria-pressed={reacted}
+          >
+            <Star
+              className="gold-star"
+              size={34}
+              fill="currentColor"
+              aria-hidden="true"
+            />
+            <span>{formatCount(reactionCount)}</span>
+          </button>
+        </div>
+      )}
+      {showLiveConversation ? (
         <button
           type="button"
           className="tv-private-contact-cta"
@@ -3548,7 +3554,7 @@ const ServicePost = memo(function ServicePost({
           <span>Contact me</span>
         </button>
       )}
-      {!isTvTab && callHref && (
+      {!showLiveConversation && callHref && (
         <a
           className="call-me-button"
           href={callHref}
@@ -9750,7 +9756,7 @@ function HomeStylesInner() {
         left: 16px;
       }
       .home-page.is-tv-mode .tv-conversation-column {
-        top: 176px;
+        top: 140px;
         right: 92px;
         bottom: 322px;
         left: 16px;
@@ -9793,32 +9799,36 @@ function HomeStylesInner() {
       .tv-message-item.is-paused {
         animation-play-state: paused;
       }
-      /* Rises smoothly from behind the profile badge at the bottom of the
-         column up toward the LIVE badge that anchors the column's top edge,
-         fading out as it arrives there. Each message plays this exactly
-         once (see animation-iteration-count above) using its own fixed
-         duration set once at creation - it is never restarted or resynced
-         by other messages arriving or leaving. */
+      /* Invisible while still low/behind the profile area, becomes visible
+         only once clear of it, rises smoothly, then fades out specifically
+         as it arrives at the LIVE badge - which now sits exactly at the
+         column's own top edge (see .home-page.is-tv-mode
+         .tv-conversation-column above), so "disappears entering LIVE" and
+         "gets clipped by the column" happen at the same point rather than
+         one preceding the other. Each message plays this exactly once
+         (see animation-iteration-count above) using its own fixed duration
+         set once at creation - it is never restarted or resynced by other
+         messages arriving or leaving. */
       @keyframes tvMessageRise {
         0% {
           opacity: 0;
           transform: translate3d(0, 14px, 0) scale(.97);
         }
-        6% {
+        9% {
           opacity: 1;
           transform: translate3d(0, 0, 0) scale(1);
         }
-        78% {
+        68% {
           opacity: 1;
-          transform: translate3d(0, -46svh, 0) scale(1);
+          transform: translate3d(0, -40svh, 0) scale(1);
         }
-        92% {
-          opacity: .5;
-          transform: translate3d(0, -58svh, 0) scale(.95);
+        86% {
+          opacity: .35;
+          transform: translate3d(0, -52svh, 0) scale(.94);
         }
         100% {
           opacity: 0;
-          transform: translate3d(0, -64svh, 0) scale(.9);
+          transform: translate3d(0, -58svh, 0) scale(.9);
         }
       }
       .tv-message-avatar {
@@ -10279,7 +10289,7 @@ function HomeStylesInner() {
           left: 14px;
         }
         .home-page.is-tv-mode .tv-conversation-column {
-          top: 152px;
+          top: 122px;
           right: 78px;
           bottom: 282px;
           left: 14px;
