@@ -304,6 +304,10 @@ const TV_COUNTRY_OPTIONS = TV_COUNTRY_CODES.map((code) => [
   TV_REGION_NAMES?.of(code) || (code === "XK" ? "Kosovo" : code),
 ]).sort((a, b) => a[1].localeCompare(b[1]));
 const TV_VISIBLE_MESSAGE_LIMIT = 8;
+// Vertical spacing between the fixed "lanes" messages rise through - each
+// message keeps one lane for its whole life, so two messages animating at
+// the same time are always offset from one another, never overlapping.
+const TV_MESSAGE_LANE_HEIGHT = 44;
 const TV_POLL_INTERVAL_MS = 7000;
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
 // Never compare missing provider IDs directly: "" === "" would incorrectly
@@ -3680,6 +3684,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     else setIntroStep("message");
   }, [currentUser, identityKey]);
 
+  const laneCounterRef = useRef(0);
   const appendMessages = useCallback((incoming) => {
     if (!incoming || !incoming.length) return;
     setVisibleMessages((current) => {
@@ -3690,12 +3695,34 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         const messageId = String(rawMessage.id ?? fallbackId);
         if (seenIdsRef.current.has(messageId)) continue;
         seenIdsRef.current.add(messageId);
-        merged.push({ ...rawMessage, id: messageId });
+        // Each message gets a fixed lane + duration exactly once, here, at
+        // creation - never recomputed on later renders. That stability is
+        // what keeps concurrent messages from ever landing on top of each
+        // other: earlier code derived these values from the live array
+        // length/index on every render, so every arrival or departure
+        // reset every other message's animation mid-flight.
+        const lane = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
+        laneCounterRef.current += 1;
+        merged.push({
+          ...rawMessage,
+          id: messageId,
+          _tvLane: lane,
+          _tvDuration: 11 + (lane % 4),
+        });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
         ? merged.slice(merged.length - TV_VISIBLE_MESSAGE_LIMIT)
         : merged;
     });
+  }, []);
+  // A message is removed the moment its own rise-and-fade animation
+  // actually finishes (see onAnimationEnd below) - not on a fixed timer -
+  // so a paused (tapped) message simply stays until resumed. The FIFO cap
+  // in appendMessages above remains as a safety net only.
+  const handleMessageRiseEnd = useCallback((messageId) => {
+    setVisibleMessages((current) =>
+      current.filter((message) => String(message.id) !== messageId),
+    );
   }, []);
 
   const loadRecent = useCallback(async () => {
@@ -4068,11 +4095,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     onRequireAuth,
   ]);
 
-  const renderMessage = (message, index) => {
+  const renderMessage = (message) => {
     const messageId = String(message.id);
     const paused = pausedMessageIds.has(messageId);
-    const duration = Math.max(13, circulatingMessages.length * 2.8);
-    const delay = index * 2.8;
+    const lane = Number(message._tvLane || 0);
+    const duration = Number(message._tvDuration || 12);
     const profileImage =
       message.profile_image || message.profile_image_url || DEFAULT_LOGO;
     return (
@@ -4080,8 +4107,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         className={`tv-message-item${paused ? " is-paused" : ""}`}
         key={messageId}
         style={{
+          bottom: `${lane * TV_MESSAGE_LANE_HEIGHT}px`,
           "--tv-message-duration": `${duration}s`,
-          "--tv-message-delay": `${delay}s`,
+        }}
+        onAnimationEnd={() => {
+          if (!paused) handleMessageRiseEnd(messageId);
         }}
         onClick={(event) => {
           event.stopPropagation();
@@ -9548,8 +9578,23 @@ function HomeStylesInner() {
         text-shadow: 0 1px 4px rgba(0, 0, 0, .94), 0 0 8px rgba(24, 153, 255, .35);
       }
       .home-page.is-tv-mode .category-tab.is-active {
+        position: relative;
         color: #fff;
         filter: drop-shadow(0 0 6px rgba(40, 169, 255, .9));
+      }
+      /* Small, purely decorative marker so it's obvious at a glance that
+         the TV tab is the active one - no change to nav markup, spacing,
+         or behavior, just a pseudo-element dot in its corner. */
+      .home-page.is-tv-mode .category-tab.is-active::after {
+        content: "";
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ff3855;
+        box-shadow: 0 0 6px rgba(255, 56, 85, .85);
       }
       .home-page.is-tv-mode .home-feed {
         width: min(100%, 900px);
@@ -9573,34 +9618,54 @@ function HomeStylesInner() {
         border-radius: 0 !important;
         background: transparent !important;
       }
+      /* The real media is shown at full quality with no cropping and no
+         upscaling ("contain") - it just doesn't necessarily fill every
+         pixel of a full-bleed box on its own. The frosted glass panel on
+         .media-layer below fills whatever space is left around it (for
+         every media type: photo, video, or pasted link), so the
+         background always looks intentional instead of empty bars,
+         without ever touching the real media's own quality. */
       .home-page.is-tv-mode .service-reel-card img.home-media,
       .home-page.is-tv-mode .service-reel-card video.home-media {
+        position: relative;
+        z-index: 1;
         width: 100%;
         height: 100%;
-        object-fit: cover !important;
+        object-fit: contain !important;
         object-position: center;
-        background: #020712 !important;
+        background: transparent !important;
       }
       /* Pasted links (YouTube/Vimeo) render their own player inside a
-         cross-origin iframe - our object-fit can't reach inside it, so the
-         player always letterboxes itself to preserve the source video's
-         aspect ratio. To make it act as a true full-bleed background, we
-         oversize the iframe well beyond the card in both directions, then
-         let the card's own overflow:hidden crop it back down - the same
-         technique used for "background video" embeds anywhere on the web. */
+         cross-origin iframe - we can't read its pixels to build a blurred
+         backdrop the way we do for uploaded media above, so instead the
+         embed keeps its natural aspect ratio (no cropping, no zoom) and
+         sits centered over a frosted glass panel that fills the rest of
+         the card, matching the glass styling used elsewhere in Gwamo. */
       .home-page.is-tv-mode .service-reel-card .media-layer {
-        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at 50% 42%, rgba(22, 139, 255, .16), transparent 62%),
+          rgba(6, 16, 31, .86) !important;
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
       }
       .home-page.is-tv-mode .media-layer > iframe.home-media {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 177.78vh;
-        height: 100svh;
-        min-width: 100%;
-        min-height: 56.25vw;
-        max-width: none;
-        transform: translate(-50%, -50%);
+        position: relative;
+        z-index: 1;
+        top: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        aspect-ratio: 16 / 9;
+        min-width: 0;
+        min-height: 0;
+        border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
       }
       .home-page.is-tv-mode .glass-frame-overlay {
         display: none;
@@ -9610,12 +9675,14 @@ function HomeStylesInner() {
           linear-gradient(to bottom, rgba(0, 5, 14, .18) 0%, transparent 24%, transparent 58%, rgba(0, 5, 14, .42) 82%, rgba(2, 7, 18, .82) 100%);
       }
       .home-page.is-tv-mode .post-info-block {
-        bottom: 76px;
-        right: 118px;
+        left: 16px;
+        right: 100px;
+        bottom: 134px;
+        max-height: min(22svh, 168px);
       }
       .home-page.is-tv-mode .service-social-rail {
         right: 17px;
-        bottom: 116px;
+        bottom: 134px;
       }
       .tv-private-contact-cta {
         position: absolute;
@@ -9673,6 +9740,21 @@ function HomeStylesInner() {
         0%, 100% { opacity: .52; transform: scale(.82); }
         50% { opacity: 1; transform: scale(1.15); }
       }
+      /* On the full-bleed TV background, the topbar floats transparently
+         over the media, so the LIVE badge needs real distance from it to
+         read as part of the media/conversation, not as an extension of the
+         nav bar above it. Social Life keeps the shared (unscoped) position
+         above, since its card isn't full-bleed. */
+      .home-page.is-tv-mode .tv-live-anchor {
+        top: 140px;
+        left: 16px;
+      }
+      .home-page.is-tv-mode .tv-conversation-column {
+        top: 176px;
+        right: 92px;
+        bottom: 322px;
+        left: 16px;
+      }
       .tv-conversation-column {
         position: absolute;
         z-index: 41;
@@ -9680,10 +9762,6 @@ function HomeStylesInner() {
         right: 74px;
         bottom: 108px;
         left: 17px;
-        display: flex;
-        flex-direction: column-reverse;
-        justify-content: flex-start;
-        gap: 12px;
         overflow: hidden;
         pointer-events: none;
         transition: opacity 140ms ease;
@@ -9696,9 +9774,9 @@ function HomeStylesInner() {
         animation-play-state: paused;
       }
       .tv-message-item {
-        position: relative;
+        position: absolute;
+        left: 0;
         width: min(82%, 430px);
-        flex: 0 0 auto;
         display: flex;
         align-items: flex-start;
         gap: 8px;
@@ -9706,22 +9784,41 @@ function HomeStylesInner() {
         pointer-events: auto;
         cursor: pointer;
         will-change: transform, opacity;
-        animation-name: tvMessageEnter;
-        animation-duration: 320ms;
-        animation-timing-function: ease-out;
+        animation-name: tvMessageRise;
+        animation-duration: var(--tv-message-duration, 12s);
+        animation-timing-function: linear;
+        animation-iteration-count: 1;
         animation-fill-mode: forwards;
       }
       .tv-message-item.is-paused {
         animation-play-state: paused;
       }
-      @keyframes tvMessageEnter {
+      /* Rises smoothly from behind the profile badge at the bottom of the
+         column up toward the LIVE badge that anchors the column's top edge,
+         fading out as it arrives there. Each message plays this exactly
+         once (see animation-iteration-count above) using its own fixed
+         duration set once at creation - it is never restarted or resynced
+         by other messages arriving or leaving. */
+      @keyframes tvMessageRise {
         0% {
           opacity: 0;
-          transform: translate3d(0, 10px, 0) scale(.97);
+          transform: translate3d(0, 14px, 0) scale(.97);
         }
-        100% {
+        6% {
           opacity: 1;
           transform: translate3d(0, 0, 0) scale(1);
+        }
+        78% {
+          opacity: 1;
+          transform: translate3d(0, -46svh, 0) scale(1);
+        }
+        92% {
+          opacity: .5;
+          transform: translate3d(0, -58svh, 0) scale(.95);
+        }
+        100% {
+          opacity: 0;
+          transform: translate3d(0, -64svh, 0) scale(.9);
         }
       }
       .tv-message-avatar {
@@ -10158,12 +10255,13 @@ function HomeStylesInner() {
         }
         .home-page.is-tv-mode .post-info-block {
           left: 14px;
-          right: 74px;
-          bottom: 74px;
+          right: 88px;
+          bottom: 118px;
+          max-height: min(20svh, 148px);
         }
         .home-page.is-tv-mode .service-social-rail {
           right: 11px;
-          bottom: 112px;
+          bottom: 118px;
         }
         .tv-private-contact-cta {
           right: 11px;
@@ -10175,6 +10273,16 @@ function HomeStylesInner() {
         .tv-live-anchor {
           top: 102px;
           left: 13px;
+        }
+        .home-page.is-tv-mode .tv-live-anchor {
+          top: 122px;
+          left: 14px;
+        }
+        .home-page.is-tv-mode .tv-conversation-column {
+          top: 152px;
+          right: 78px;
+          bottom: 282px;
+          left: 14px;
         }
         .tv-conversation-column {
           top: 102px;
