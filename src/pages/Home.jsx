@@ -39,7 +39,6 @@ import {
   CheckCheck,
   Phone,
   Eye,
-  EyeOff,
   ImagePlus,
   Zap,
 } from "lucide-react";
@@ -2781,8 +2780,12 @@ function Home() {
                 onReact={reactToPost}
                 onZoomImage={setZoomImage}
                 isTvTab={activeCategory === "tv"}
+                isSocialLife={activeCategory === "social-life"}
                 showLiveConversation={
                   activeCategory === "tv" || activeCategory === "social-life"
+                }
+                conversationMode={
+                  activeCategory === "social-life" ? "social-life" : "tv"
                 }
                 currentUser={isLoggedIn ? user : null}
                 getSessionToken={getSessionToken}
@@ -2807,7 +2810,11 @@ function Home() {
     );
   }
   return (
-    <div className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}`}>
+    <div
+      className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}${
+        activeCategory === "social-life" ? " is-social-life-mode" : ""
+      }`}
+    >
       <TimeMarketTopBar
         activeCategory={activeCategory}
         onCategoryChange={(category) => {
@@ -3299,7 +3306,9 @@ const ServicePost = memo(function ServicePost({
   onReact,
   onZoomImage,
   isTvTab,
+  isSocialLife,
   showLiveConversation,
+  conversationMode,
   currentUser,
   getSessionToken,
   onRequireAuth,
@@ -3349,6 +3358,14 @@ const ServicePost = memo(function ServicePost({
     ? tagline
     : makeDescriptionPreview(tagline);
   const reactionCount = Number(post.displayed_reactions || 0);
+  const viewCount = Number(
+    post.displayed_views ??
+      post.view_count ??
+      post.views ??
+      post.total_views ??
+      post.real_views ??
+      0,
+  );
   const aspectClass =
     mediaAspectRatio && mediaAspectRatio < 0.85
       ? "is-portrait"
@@ -3504,6 +3521,8 @@ const ServicePost = memo(function ServicePost({
           postId={postId}
           isActive={isActive}
           apiUrl={API_URL}
+          mode={conversationMode}
+          viewCount={isTvTab ? viewCount : null}
           currentUser={currentUser}
           getSessionToken={getSessionToken}
           onRequireAuth={onRequireAuth}
@@ -3594,12 +3613,13 @@ const ServicePost = memo(function ServicePost({
           <span>Contact me</span>
         </button>
       )}
-      {!showLiveConversation && callHref && (
+      {(isSocialLife || !showLiveConversation) && callHref && (
         <button
           type="button"
-          className="call-me-button"
+          className={isSocialLife ? "social-life-call-cta" : "call-me-button"}
           onClick={() => onCallProvider(post)}
           aria-label={`Call ${providerName}`}
+          title={isSocialLife ? "Call" : undefined}
         >
           <Phone size={20} aria-hidden="true" />
         </button>
@@ -3619,11 +3639,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   postId,
   isActive,
   apiUrl,
+  mode = "tv",
+  viewCount = null,
   currentUser,
   getSessionToken,
   onRequireAuth,
   onZoomImage,
 }) {
+  const isSocialLife = mode === "social-life";
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -3754,7 +3777,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           ...rawMessage,
           id: messageId,
           _tvLane: lane,
-          _tvDuration: 11 + (lane % 4),
+          _tvDuration: 12 + (lane % 4),
+          _tvDelay: (lane % TV_VISIBLE_MESSAGE_LIMIT) * 0.55,
         });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
@@ -3762,32 +3786,54 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         : merged;
     });
   }, []);
-  // A message is removed the moment its own rise-and-fade animation
-  // actually finishes (see onAnimationEnd below) - not on a fixed timer -
-  // so a paused (tapped) message simply stays until resumed. The FIFO cap
-  // in appendMessages above remains as a safety net only.
-  const handleMessageRiseEnd = useCallback((messageId) => {
-    setVisibleMessages((current) =>
-      current.filter((message) => String(message.id) !== messageId),
-    );
+  const normalizePublicItems = useCallback((data) => {
+    const items = Array.isArray(data?.comments)
+      ? data.comments
+      : Array.isArray(data?.messages)
+        ? data.messages
+        : [];
+    return items
+      .map((item) => ({
+        ...item,
+        message: String(item?.message ?? item?.comment ?? item?.text ?? "").trim(),
+      }))
+      .filter((item) => item.message);
   }, []);
 
-  const loadRecent = useCallback(async () => {
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/tv/conversation?post_id=${encodeURIComponent(postId)}&limit=30`,
-        { cache: "no-store" },
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) return;
-      const recent = Array.isArray(data.messages) ? data.messages : [];
-      if (isMountedRef.current) {
-        appendMessages(recent.slice(-TV_VISIBLE_MESSAGE_LIMIT));
+  const fetchPublicItems = useCallback(
+    async (limit = 10) => {
+      const encodedPostId = encodeURIComponent(postId);
+      const candidates = isSocialLife
+        ? [
+            `${apiUrl}/api/social-life/comments?post_id=${encodedPostId}&limit=${limit}`,
+            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
+          ]
+        : [
+            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
+          ];
+
+      for (const url of candidates) {
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if ([404, 405, 501].includes(response.status)) continue;
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data?.success === false) return [];
+          return normalizePublicItems(data);
+        } catch {
+          // Try the compatibility endpoint when one exists.
+        }
       }
-    } catch {
-      // The realtime/poll path below will keep the overlay alive either way.
+      return [];
+    },
+    [apiUrl, postId, isSocialLife, normalizePublicItems],
+  );
+
+  const loadRecent = useCallback(async () => {
+    const recent = await fetchPublicItems(30);
+    if (isMountedRef.current) {
+      appendMessages(recent.slice(-TV_VISIBLE_MESSAGE_LIMIT));
     }
-  }, [apiUrl, postId, appendMessages]);
+  }, [fetchPublicItems, appendMessages]);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -3800,20 +3846,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     if (pollTimerRef.current) return;
     pollTimerRef.current = setInterval(async () => {
       if (document.hidden || !isMountedRef.current) return;
-      try {
-        const response = await fetch(
-          `${apiUrl}/api/tv/conversation?post_id=${encodeURIComponent(postId)}&limit=10`,
-          { cache: "no-store" },
-        );
-        const data = await response.json().catch(() => ({}));
-        if (response.ok && data.success && isMountedRef.current) {
-          appendMessages(Array.isArray(data.messages) ? data.messages : []);
-        }
-      } catch {
-        // Try again on the next tick.
-      }
+      const items = await fetchPublicItems(10);
+      if (isMountedRef.current) appendMessages(items);
     }, TV_POLL_INTERVAL_MS);
-  }, [apiUrl, postId, appendMessages]);
+  }, [fetchPublicItems, appendMessages]);
 
   const clearRemoteTyping = useCallback((key) => {
     setRemoteTypingUsers((current) => {
@@ -3855,6 +3891,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   );
 
   const connectRealtime = useCallback(async () => {
+    if (isSocialLife) {
+      startPolling();
+      return;
+    }
     try {
       const response = await fetch(`${apiUrl}/api/tv/realtime/ticket`, {
         method: "POST",
@@ -3901,6 +3941,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     appendMessages,
     startPolling,
     receiveTypingPresence,
+    isSocialLife,
   ]);
 
   useEffect(() => {
@@ -3924,7 +3965,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, postId]);
+  }, [isActive, postId, mode]);
 
   const announceTyping = useCallback(
     (active) => {
@@ -4065,6 +4106,78 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     });
   }, []);
 
+  const sendPublicItem = useCallback(
+    async (text) => {
+      const token = getSessionToken?.() || "";
+      const commonPayload = {
+        message: text,
+        comment: text,
+        country_code: tvIdentity.countryCode,
+        user_name: tvIdentity.name,
+        display_name: tvIdentity.name,
+        profile_image: tvIdentity.photoUrl,
+        profile_image_url: tvIdentity.photoUrl,
+      };
+      const candidates = isSocialLife
+        ? [
+            {
+              url: `${apiUrl}/api/social-life/comments`,
+              body: { ...commonPayload, post_id: postId },
+            },
+            {
+              url: `${apiUrl}/api/tv/conversation`,
+              body: {
+                ...commonPayload,
+                tv_post_id: postId,
+                post_id: postId,
+              },
+            },
+          ]
+        : [
+            {
+              url: `${apiUrl}/api/tv/conversation`,
+              body: { ...commonPayload, tv_post_id: postId },
+            },
+          ];
+
+      for (const candidate of candidates) {
+        const response = await fetch(candidate.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(candidate.body),
+          cache: "no-store",
+        });
+        if ([404, 405, 501].includes(response.status)) continue;
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.success === false) {
+          throw new Error(
+            data.error ||
+              data.message ||
+              (isSocialLife
+                ? "Could not send your comment."
+                : "Could not send your message."),
+          );
+        }
+        return data;
+      }
+      throw new Error(
+        isSocialLife
+          ? "Social Life comments are not available on the server yet."
+          : "Public conversation is not available right now.",
+      );
+    },
+    [
+      getSessionToken,
+      tvIdentity,
+      isSocialLife,
+      apiUrl,
+      postId,
+    ],
+  );
+
   const sendMessage = useCallback(async () => {
     const text = composerText.trim();
     if (!text) return;
@@ -4080,39 +4193,21 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     setSending(true);
     setError("");
     try {
-      const token = getSessionToken?.() || "";
-      const response = await fetch(`${apiUrl}/api/tv/conversation`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          tv_post_id: postId,
-          message: text,
-          country_code: tvIdentity.countryCode,
-          user_name: tvIdentity.name,
-          display_name: tvIdentity.name,
-          profile_image: tvIdentity.photoUrl,
-          profile_image_url: tvIdentity.photoUrl,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error || data.message || "Could not send your message.",
-        );
-      }
+      const data = await sendPublicItem(text);
       setComposerText("");
-      const sent = data.message
+      const returnedItem = data.comment || data.message || null;
+      const sent = returnedItem
         ? {
-            ...data.message,
-            user_name: data.message.user_name || tvIdentity.name,
+            ...returnedItem,
+            message: String(
+              returnedItem.message ?? returnedItem.comment ?? text,
+            ),
+            user_name: returnedItem.user_name || tvIdentity.name,
             profile_image:
-              data.message.profile_image ||
-              data.message.profile_image_url ||
+              returnedItem.profile_image ||
+              returnedItem.profile_image_url ||
               tvIdentity.photoUrl,
-            country_code: data.message.country_code || tvIdentity.countryCode,
+            country_code: returnedItem.country_code || tvIdentity.countryCode,
           }
         : {
             id: `local-${Date.now()}`,
@@ -4124,7 +4219,12 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           };
       appendMessages([sent]);
     } catch (err) {
-      setError(err.message || "Could not send your message.");
+      setError(
+        err.message ||
+          (isSocialLife
+            ? "Could not send your comment."
+            : "Could not send your message."),
+      );
     } finally {
       setSending(false);
     }
@@ -4134,12 +4234,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     identityComplete,
     beginConversation,
     announceTyping,
-    getSessionToken,
-    apiUrl,
-    postId,
     tvIdentity,
     appendMessages,
     onRequireAuth,
+    sendPublicItem,
+    isSocialLife,
   ]);
 
   const renderMessage = (message) => {
@@ -4147,6 +4246,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     const paused = pausedMessageIds.has(messageId);
     const lane = Number(message._tvLane || 0);
     const duration = Number(message._tvDuration || 12);
+    const delay = Number(message._tvDelay || 0);
     const profileImage =
       message.profile_image || message.profile_image_url || DEFAULT_LOGO;
     return (
@@ -4156,9 +4256,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         style={{
           bottom: `${lane * TV_MESSAGE_LANE_HEIGHT}px`,
           "--tv-message-duration": `${duration}s`,
-        }}
-        onAnimationEnd={() => {
-          if (!paused) handleMessageRiseEnd(messageId);
+          "--tv-message-delay": `${delay}s`,
         }}
         onClick={(event) => {
           event.stopPropagation();
@@ -4217,10 +4315,12 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
 
   return (
     <>
-      <div className="tv-live-anchor" aria-hidden="true">
-        <span className="tv-live-dot" />
-        <span>LIVE</span>
-      </div>
+      {!isSocialLife && (
+        <div className="tv-live-anchor" aria-hidden="true">
+          <span className="tv-live-dot" />
+          <span>LIVE</span>
+        </div>
+      )}
 
       <div
         className={`tv-conversation-column${overlayVisible ? "" : " is-hidden"}`}
@@ -4269,27 +4369,69 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         )}
         <button
           type="button"
-          className="tv-public-conversation-cta"
+          className={`tv-public-conversation-cta${isSocialLife ? " is-social-life" : ""}`}
           onClick={beginConversation}
-          aria-label="Join the public TV conversation"
-          title="Public conversation"
+          aria-label={
+            isSocialLife
+              ? "Add a public Social Life comment"
+              : "Join the public TV conversation"
+          }
+          title={isSocialLife ? "Comment" : "Public conversation"}
         >
-          <Zap className="tv-public-conversation-bolt" size={26} strokeWidth={2.2} aria-hidden="true" />
+          {isSocialLife ? (
+            <MessageSquare
+              className="tv-public-conversation-bolt"
+              size={24}
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
+          ) : (
+            <Zap
+              className="tv-public-conversation-bolt"
+              size={26}
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
+          )}
         </button>
+        {!isSocialLife && viewCount !== null && (
+          <div
+            className="tv-view-count"
+            aria-label={`${formatCount(viewCount)} views`}
+            title="Views"
+          >
+            <Eye size={20} aria-hidden="true" />
+            <span>{formatCount(viewCount)}</span>
+          </div>
+        )}
         <button
           type="button"
           className="tv-visibility-toggle"
           onClick={() => setOverlayVisible((value) => !value)}
           aria-pressed={overlayVisible}
           aria-label={
-            overlayVisible ? "Hide live conversation" : "Show live conversation"
+            overlayVisible
+              ? isSocialLife
+                ? "Hide comments"
+                : "Hide public conversation"
+              : isSocialLife
+                ? "Show comments"
+                : "Show public conversation"
           }
-          title={overlayVisible ? "Hide conversation" : "Show conversation"}
+          title={
+            overlayVisible
+              ? isSocialLife
+                ? "Hide comments"
+                : "Hide conversation"
+              : isSocialLife
+                ? "Show comments"
+                : "Show conversation"
+          }
         >
           {overlayVisible ? (
-            <Eye size={20} aria-hidden="true" />
+            <X size={18} aria-hidden="true" />
           ) : (
-            <EyeOff size={20} aria-hidden="true" />
+            <Plus size={18} aria-hidden="true" />
           )}
         </button>
       </div>
@@ -4307,7 +4449,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 {introStep === "name" && "What should people call you?"}
                 {introStep === "photo" && "Add your profile picture."}
                 {introStep === "country" && "Where are you watching from?"}
-                {introStep === "message" && "You’re live. Say something ⚡"}
+                {introStep === "message" &&
+                  (isSocialLife
+                    ? "Add a public comment."
+                    : "You’re live. Say something ⚡")}
               </span>
             </div>
             <button
@@ -4333,7 +4478,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") submitName();
                 }}
-                aria-label="Your public TV name"
+                aria-label={
+                  isSocialLife ? "Your public comment name" : "Your public TV name"
+                }
               />
               <button
                 type="button"
@@ -4352,7 +4499,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 <img
                   className="tv-guide-photo-preview"
                   src={tvIdentity.photoUrl}
-                  alt="Your TV profile"
+                  alt="Your public profile"
                 />
               ) : null}
               <label
@@ -4411,7 +4558,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 type="button"
                 className="tv-guide-self-avatar"
                 onClick={() => onZoomImage?.(tvIdentity.photoUrl || DEFAULT_LOGO)}
-                aria-label="View your TV profile picture"
+                aria-label="View your public profile picture"
               >
                 <img src={tvIdentity.photoUrl || DEFAULT_LOGO} alt="" />
                 <span aria-hidden="true">
@@ -4421,7 +4568,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               <input
                 type="text"
                 className="tv-guide-input tv-guide-message-input"
-                placeholder="Say something…"
+                placeholder={isSocialLife ? "Write a comment…" : "Say something…"}
                 maxLength={220}
                 value={composerText}
                 autoFocus
@@ -4438,14 +4585,18 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                   if (event.key === "Enter") sendMessage();
                 }}
                 onBlur={() => announceTyping(false)}
-                aria-label="Public TV message"
+                aria-label={
+                  isSocialLife ? "Public Social Life comment" : "Public TV message"
+                }
               />
               <button
                 type="button"
                 className="tv-guide-symbol-button"
                 onClick={sendMessage}
                 disabled={sending || !composerText.trim()}
-                aria-label="Send public message"
+                aria-label={
+                  isSocialLife ? "Send public comment" : "Send public message"
+                }
               >
                 <Send size={17} aria-hidden="true" />
               </button>
@@ -9776,6 +9927,29 @@ function HomeStylesInner() {
         filter: drop-shadow(0 0 4px rgba(255, 255, 255, .95)) drop-shadow(0 0 14px rgba(37, 169, 255, 1));
       }
 
+      .social-life-call-cta {
+        position: absolute;
+        z-index: 44;
+        right: 17px;
+        bottom: 108px;
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        color: #fff;
+        background: transparent;
+        box-shadow: none;
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .82)) drop-shadow(0 0 10px rgba(37, 169, 255, .82));
+        cursor: pointer;
+      }
+      .social-life-call-cta:hover,
+      .social-life-call-cta:focus-visible {
+        filter: drop-shadow(0 0 4px rgba(255, 255, 255, .96)) drop-shadow(0 0 14px rgba(37, 169, 255, 1));
+      }
+
       /* Public TV conversation: separate from private Contact me. */
       .tv-live-anchor {
         position: absolute;
@@ -9855,23 +10029,18 @@ function HomeStylesInner() {
         will-change: transform, opacity;
         animation-name: tvMessageRise;
         animation-duration: var(--tv-message-duration, 12s);
+        animation-delay: var(--tv-message-delay, 0s);
         animation-timing-function: linear;
-        animation-iteration-count: 1;
-        animation-fill-mode: forwards;
+        animation-iteration-count: infinite;
+        animation-fill-mode: both;
       }
       .tv-message-item.is-paused {
         animation-play-state: paused;
       }
-      /* Invisible while still low/behind the profile area, becomes visible
-         only once clear of it, rises smoothly, then fades out specifically
-         as it arrives at the LIVE badge - which now sits exactly at the
-         column's own top edge (see .home-page.is-tv-mode
-         .tv-conversation-column above), so "disappears entering LIVE" and
-         "gets clipped by the column" happen at the same point rather than
-         one preceding the other. Each message plays this exactly once
-         (see animation-iteration-count above) using its own fixed duration
-         set once at creation - it is never restarted or resynced by other
-         messages arriving or leaving. */
+      /* Public comments/messages circulate continuously while the post is
+         visible. Every item keeps a stable lane, duration and small stagger
+         delay so new arrivals join without resetting the messages already
+         moving. The final fade flows directly back into the next loop. */
       @keyframes tvMessageRise {
         0% {
           opacity: 0;
@@ -10014,6 +10183,32 @@ function HomeStylesInner() {
       .tv-visibility-toggle:hover,
       .tv-visibility-toggle:focus-visible {
         filter: drop-shadow(0 0 4px rgba(255, 255, 255, .95)) drop-shadow(0 0 14px rgba(32, 164, 255, 1));
+      }
+      .tv-view-count {
+        min-width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        color: rgba(255, 255, 255, .96);
+        background: transparent;
+        box-shadow: none;
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, .76)) drop-shadow(0 0 10px rgba(32, 164, 255, .82));
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        pointer-events: none;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, .92);
+      }
+      .tv-view-count span {
+        min-width: 0;
+      }
+      .tv-public-conversation-cta.is-social-life {
+        filter: drop-shadow(0 0 4px rgba(255, 255, 255, .78)) drop-shadow(0 0 12px rgba(32, 164, 255, .8));
       }
       .tv-typing-presence {
         position: absolute;
@@ -10346,6 +10541,13 @@ function HomeStylesInner() {
           height: 39px;
           background: transparent !important;
         }
+        .social-life-call-cta {
+          right: 11px;
+          bottom: calc(104px + env(safe-area-inset-bottom));
+          width: 39px;
+          height: 39px;
+          background: transparent !important;
+        }
         .tv-live-anchor {
           top: 102px;
           left: 13px;
@@ -10396,6 +10598,10 @@ function HomeStylesInner() {
           width: 36px;
           height: 36px;
           background: transparent !important;
+        }
+        .tv-view-count {
+          min-width: 36px;
+          height: 36px;
         }
         .tv-chat-guide {
           left: 12px;
