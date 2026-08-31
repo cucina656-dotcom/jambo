@@ -39,12 +39,10 @@ import {
   CheckCheck,
   Phone,
   Eye,
-  EyeOff,
   ImagePlus,
   Zap,
 } from "lucide-react";
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-// GWAMO_TV_FULLSCREEN_PUBLIC_CONVERSATION_FINAL_20260831
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 const DEFAULT_MEDIA_LABEL = "Service media";
@@ -315,22 +313,6 @@ const TV_VISIBLE_MESSAGE_LIMIT = 8;
 const TV_MESSAGE_LANE_HEIGHT = 78;
 const TV_POLL_INTERVAL_MS = 7000;
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
-const TV_PUBLIC_IDENTITY_KEY = `${TV_IDENTITY_KEY_PREFIX}public-viewer`;
-const TV_PUBLIC_VIEWER_ID_KEY = "gwamo-tv-public-viewer-id:v1";
-function getOrCreateTvPublicViewerId() {
-  try {
-    const existing = localStorage.getItem(TV_PUBLIC_VIEWER_ID_KEY);
-    if (existing) return existing;
-    const created =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `viewer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    localStorage.setItem(TV_PUBLIC_VIEWER_ID_KEY, created);
-    return created;
-  } catch {
-    return `viewer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  }
-}
 // Never compare missing provider IDs directly: "" === "" would incorrectly
 // treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
 // use the registered telephone only as a safe legacy fallback.
@@ -3689,8 +3671,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const isMountedRef = useRef(true);
   const typingStopTimerRef = useRef(null);
   const remoteTypingTimersRef = useRef(new Map());
-  const identityKey = TV_PUBLIC_IDENTITY_KEY;
-  const [publicViewerId] = useState(() => getOrCreateTvPublicViewerId());
+  const identityKey = useMemo(() => {
+    const raw =
+      currentUser?.id ||
+      currentUser?.phone ||
+      currentUser?.creator_identity ||
+      "viewer";
+    return `${TV_IDENTITY_KEY_PREFIX}${String(raw)}`;
+  }, [currentUser]);
   const identityComplete = Boolean(
     tvIdentity.name && tvIdentity.photoUrl && tvIdentity.countryCode,
   );
@@ -3709,13 +3697,13 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     () =>
       localTyping && identityComplete
         ? {
-            id: `self-${publicViewerId}`,
+            id: `self-${currentUser?.id || "viewer"}`,
             user_name: tvIdentity.name,
             profile_image: tvIdentity.photoUrl,
             country_code: tvIdentity.countryCode,
           }
         : null,
-    [localTyping, identityComplete, publicViewerId, tvIdentity],
+    [localTyping, identityComplete, currentUser, tvIdentity],
   );
   const typingPresence = useMemo(() => {
     if (localTypingIdentity) return localTypingIdentity;
@@ -3729,15 +3717,24 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     (nextIdentity) => {
       setTvIdentity(nextIdentity);
       try {
-        localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
+        if (currentUser) {
+          localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
+        }
       } catch {
-        // Local persistence is a convenience only; public conversation still works.
+        // Local persistence is a convenience only; live chat still works.
       }
     },
-    [identityKey],
+    [currentUser, identityKey],
   );
 
   useEffect(() => {
+    if (!currentUser) {
+      setTvIdentity({ name: "", photoUrl: "", countryCode: "" });
+      setIntroName("");
+      setIntroStep("name");
+      setComposerOpen(false);
+      return;
+    }
     let saved = null;
     try {
       saved = JSON.parse(localStorage.getItem(identityKey) || "null");
@@ -3755,11 +3752,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     else if (!normalized.photoUrl) setIntroStep("photo");
     else if (!normalized.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [identityKey]);
+  }, [currentUser, identityKey]);
 
   const laneCounterRef = useRef(0);
-  const lastLiveLaunchRef = useRef(0);
-  const appendMessages = useCallback((incoming, { live = false } = {}) => {
+  const appendMessages = useCallback((incoming) => {
     if (!incoming || !incoming.length) return;
     setVisibleMessages((current) => {
       const merged = [...current];
@@ -3769,25 +3765,20 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         const messageId = String(rawMessage.id ?? fallbackId);
         if (seenIdsRef.current.has(messageId)) continue;
         seenIdsRef.current.add(messageId);
-
-        const slot = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
+        // Each message gets a fixed lane + duration exactly once, here, at
+        // creation - never recomputed on later renders. That stability is
+        // what keeps concurrent messages from ever landing on top of each
+        // other: earlier code derived these values from the live array
+        // length/index on every render, so every arrival or departure
+        // reset every other message's animation mid-flight.
+        const lane = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
         laneCounterRef.current += 1;
-
-        let delay = -(slot * 6);
-        if (live) {
-          const now = Date.now();
-          const earliest = lastLiveLaunchRef.current + 4200;
-          const launchAt = Math.max(now, earliest);
-          delay = Math.max(0, (launchAt - now) / 1000);
-          lastLiveLaunchRef.current = launchAt;
-        }
-
         merged.push({
           ...rawMessage,
           id: messageId,
-          _tvLane: 0,
-          _tvDuration: 48,
-          _tvDelay: delay,
+          _tvLane: lane,
+          _tvDuration: 12 + (lane % 4),
+          _tvDelay: (lane % TV_VISIBLE_MESSAGE_LIMIT) * 0.55,
         });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
@@ -3795,7 +3786,6 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         : merged;
     });
   }, []);
-
   const normalizePublicItems = useCallback((data) => {
     const items = Array.isArray(data?.comments)
       ? data.comments
@@ -3813,9 +3803,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const fetchPublicItems = useCallback(
     async (limit = 10) => {
       const encodedPostId = encodeURIComponent(postId);
-      const candidates = [
-        `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
-      ];
+      const candidates = isSocialLife
+        ? [
+            `${apiUrl}/api/social-life/comments?post_id=${encodedPostId}&limit=${limit}`,
+            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
+          ]
+        : [
+            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
+          ];
 
       for (const url of candidates) {
         try {
@@ -3852,7 +3847,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     pollTimerRef.current = setInterval(async () => {
       if (document.hidden || !isMountedRef.current) return;
       const items = await fetchPublicItems(10);
-      if (isMountedRef.current) appendMessages(items, { live: true });
+      if (isMountedRef.current) appendMessages(items);
     }, TV_POLL_INTERVAL_MS);
   }, [fetchPublicItems, appendMessages]);
 
@@ -3872,7 +3867,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     (payload) => {
       const typing = payload?.typing ?? payload?.active ?? true;
       const userId = String(payload?.user_id || payload?.viewer_id || "");
-      if (userId && String(publicViewerId) === userId) return;
+      if (userId && String(currentUser?.id || "") === userId) return;
       const key = userId || String(payload?.user_name || payload?.name || "viewer");
       if (!typing) {
         clearRemoteTyping(key);
@@ -3892,7 +3887,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       const timer = setTimeout(() => clearRemoteTyping(key), 2600);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTyping, publicViewerId],
+    [clearRemoteTyping, currentUser],
   );
 
   const connectRealtime = useCallback(async () => {
@@ -3918,7 +3913,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         try {
           const payload = JSON.parse(event.data);
           if (payload?.type === "tv_message" && payload.message) {
-            appendMessages([payload.message], { live: true });
+            appendMessages([payload.message]);
           } else if (payload?.type === "tv_typing") {
             receiveTypingPresence(payload);
           }
@@ -3985,7 +3980,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             type: "tv_typing",
             tv_post_id: postId,
             typing: Boolean(active),
-            user_id: publicViewerId,
+            user_id: currentUser?.id || "",
             user_name: tvIdentity.name,
             profile_image: tvIdentity.photoUrl,
             country_code: tvIdentity.countryCode,
@@ -3995,7 +3990,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         // Typing presence is optional; sending the actual message still works.
       }
     },
-    [identityComplete, postId, publicViewerId, tvIdentity],
+    [identityComplete, postId, currentUser, tvIdentity],
   );
 
   const scheduleTypingStop = useCallback(() => {
@@ -4005,12 +4000,16 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
 
   const beginConversation = useCallback(() => {
     setError("");
+    if (!currentUser) {
+      onRequireAuth?.();
+      return;
+    }
     setComposerOpen(true);
     if (!tvIdentity.name) setIntroStep("name");
     else if (!tvIdentity.photoUrl) setIntroStep("photo");
     else if (!tvIdentity.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [tvIdentity]);
+  }, [currentUser, onRequireAuth, tvIdentity]);
 
   const closeComposer = useCallback(() => {
     announceTyping(false);
@@ -4038,43 +4037,37 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         setError("Choose an image for your profile picture.");
         return;
       }
+      if (!currentUser) {
+        onRequireAuth?.();
+        return;
+      }
       setUploadingPhoto(true);
       setError("");
       try {
         const prepared = await compressImageFile(file, {
-          maxWidth: 180,
-          maxHeight: 180,
-          quality: 0.68,
+          maxWidth: 420,
+          maxHeight: 420,
+          quality: 0.76,
         });
-
-        let photoUrl = "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", prepared);
+        uploadForm.append("kind", "profile_image");
         const token = getSessionToken?.() || "";
-        if (token) {
-          const uploadForm = new FormData();
-          uploadForm.append("file", prepared);
-          uploadForm.append("kind", "profile_image");
-          const uploadResponse = await fetch(`${apiUrl}/api/home/upload`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: uploadForm,
-            cache: "no-store",
-          });
-          const uploadData = await uploadResponse.json().catch(() => ({}));
-          if (uploadResponse.ok && uploadData.success && uploadData.url) {
-            photoUrl = uploadData.url;
-          }
+        const uploadResponse = await fetch(`${apiUrl}/api/home/upload`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: uploadForm,
+          cache: "no-store",
+        });
+        const uploadData = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok || !uploadData.success || !uploadData.url) {
+          throw new Error(
+            uploadData.error ||
+              uploadData.message ||
+              "Could not upload your profile picture.",
+          );
         }
-
-        if (!photoUrl) {
-          photoUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result || ""));
-            reader.onerror = () => reject(new Error("Could not read your profile picture."));
-            reader.readAsDataURL(prepared);
-          });
-        }
-
-        const next = { ...tvIdentity, photoUrl };
+        const next = { ...tvIdentity, photoUrl: uploadData.url };
         saveIdentity(next);
         setIntroStep("country");
       } catch (err) {
@@ -4084,6 +4077,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       }
     },
     [
+      currentUser,
+      onRequireAuth,
       getSessionToken,
       apiUrl,
       tvIdentity,
@@ -4123,16 +4118,27 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         profile_image: tvIdentity.photoUrl,
         profile_image_url: tvIdentity.photoUrl,
       };
-      const candidates = [
-        {
-          url: `${apiUrl}/api/tv/conversation`,
-          body: {
-            ...commonPayload,
-            tv_post_id: postId,
-            post_id: postId,
-          },
-        },
-      ];
+      const candidates = isSocialLife
+        ? [
+            {
+              url: `${apiUrl}/api/social-life/comments`,
+              body: { ...commonPayload, post_id: postId },
+            },
+            {
+              url: `${apiUrl}/api/tv/conversation`,
+              body: {
+                ...commonPayload,
+                tv_post_id: postId,
+                post_id: postId,
+              },
+            },
+          ]
+        : [
+            {
+              url: `${apiUrl}/api/tv/conversation`,
+              body: { ...commonPayload, tv_post_id: postId },
+            },
+          ];
 
       for (const candidate of candidates) {
         const response = await fetch(candidate.url, {
@@ -4175,6 +4181,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const sendMessage = useCallback(async () => {
     const text = composerText.trim();
     if (!text) return;
+    if (!currentUser) {
+      onRequireAuth?.();
+      return;
+    }
     if (!identityComplete) {
       beginConversation();
       return;
@@ -4207,7 +4217,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             message: text,
             created_at: new Date().toISOString(),
           };
-      appendMessages([sent], { live: true });
+      appendMessages([sent]);
     } catch (err) {
       setError(
         err.message ||
@@ -4220,11 +4230,13 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     }
   }, [
     composerText,
+    currentUser,
     identityComplete,
     beginConversation,
     announceTyping,
     tvIdentity,
     appendMessages,
+    onRequireAuth,
     sendPublicItem,
     isSocialLife,
   ]);
@@ -4374,12 +4386,24 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               aria-hidden="true"
             />
           ) : (
-            <span className="tv-public-conversation-glyph" aria-hidden="true">
-              <MessageSquare className="tv-public-conversation-bubble" size={29} strokeWidth={1.9} />
-              <Zap className="tv-public-conversation-zap" size={15} strokeWidth={2.4} />
-            </span>
+            <Zap
+              className="tv-public-conversation-bolt"
+              size={26}
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
           )}
         </button>
+        {!isSocialLife && viewCount !== null && (
+          <div
+            className="tv-view-count"
+            aria-label={`${formatCount(viewCount)} views`}
+            title="Views"
+          >
+            <Eye size={20} aria-hidden="true" />
+            <span>{formatCount(viewCount)}</span>
+          </div>
+        )}
         <button
           type="button"
           className="tv-visibility-toggle"
@@ -4405,9 +4429,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           }
         >
           {overlayVisible ? (
-            <Eye size={21} aria-hidden="true" />
+            <X size={18} aria-hidden="true" />
           ) : (
-            <EyeOff size={21} aria-hidden="true" />
+            <Plus size={18} aria-hidden="true" />
           )}
         </button>
       </div>
@@ -10594,387 +10618,6 @@ function HomeStylesInner() {
           bottom: 50px;
         }
       }
-
-      /* =========================================================
-         FINAL TV FULLSCREEN OVERRIDE
-         TikTok is used only as the media-height reference:
-         Gwamo keeps its own neon/live identity and controls.
-      ========================================================== */
-      .home-page.is-tv-mode {
-        width: 100%;
-        min-height: 100svh;
-        min-height: 100dvh;
-        background: #000 !important;
-      }
-
-      .home-page.is-tv-mode .home-feed {
-        width: min(100%, 900px) !important;
-        max-width: 900px !important;
-        margin: 0 auto !important;
-        padding: 0 !important;
-      }
-
-      .home-page.is-tv-mode .service-reel-card {
-        position: relative !important;
-        width: 100% !important;
-        height: 100svh !important;
-        height: 100dvh !important;
-        min-height: 100svh !important;
-        min-height: 100dvh !important;
-        margin: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        overflow: hidden !important;
-        background: #000 !important;
-        box-shadow: none !important;
-        scroll-snap-align: start;
-      }
-
-      .home-page.is-tv-mode .service-reel-card .media-card,
-      .home-page.is-tv-mode .service-reel-card .media-viewport,
-      .home-page.is-tv-mode .service-reel-card .media-layer {
-        position: absolute !important;
-        inset: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        max-width: none !important;
-        max-height: none !important;
-        margin: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        overflow: hidden !important;
-        background: #000 !important;
-      }
-
-      .home-page.is-tv-mode .service-reel-card img.home-media,
-      .home-page.is-tv-mode .service-reel-card video.home-media {
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 1 !important;
-        width: 100% !important;
-        height: 100% !important;
-        min-width: 100% !important;
-        min-height: 100% !important;
-        max-width: none !important;
-        max-height: none !important;
-        object-fit: cover !important;
-        object-position: center center !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: #000 !important;
-        transform: none !important;
-      }
-
-      .home-page.is-tv-mode .tv-media-backdrop {
-        display: none !important;
-      }
-
-      .home-page.is-tv-mode .media-layer > iframe.home-media {
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 1 !important;
-        width: 100% !important;
-        height: 100% !important;
-        min-width: 100% !important;
-        min-height: 100% !important;
-        max-width: none !important;
-        max-height: none !important;
-        aspect-ratio: auto !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-      }
-
-      .home-page.is-tv-mode .feedx-topbar,
-      .feedx-topbar.is-tv-mode {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        z-index: 1000 !important;
-        background: linear-gradient(
-          180deg,
-          rgba(0, 0, 0, .38) 0%,
-          rgba(0, 0, 0, .12) 60%,
-          transparent 100%
-        ) !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-      }
-
-      .home-page.is-tv-mode .category-nav,
-      .feedx-topbar.is-tv-mode .category-nav {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-      }
-
-      .home-page.is-tv-mode .category-tab,
-      .home-page.is-tv-mode .category-tab.is-active,
-      .feedx-topbar.is-tv-mode .category-tab,
-      .feedx-topbar.is-tv-mode .category-tab.is-active {
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-        text-shadow: 0 1px 5px rgba(0,0,0,.98), 0 0 10px rgba(25,155,255,.45);
-      }
-
-      .home-page.is-tv-mode .topbar-neon-button,
-      .home-page.is-tv-mode .topbar-add-button,
-      .home-page.is-tv-mode .menu-button {
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      .home-page.is-tv-mode .service-card-gradient {
-        z-index: 20 !important;
-        background:
-          linear-gradient(
-            to bottom,
-            rgba(0,0,0,.20) 0%,
-            rgba(0,0,0,0) 24%,
-            rgba(0,0,0,0) 58%,
-            rgba(0,0,0,.18) 74%,
-            rgba(0,0,0,.56) 100%
-          ) !important;
-        pointer-events: none;
-      }
-
-      .home-page.is-tv-mode .glass-frame-overlay {
-        display: none !important;
-      }
-
-      .home-page.is-tv-mode .post-info-block {
-        z-index: 43 !important;
-        left: 16px !important;
-        right: 78px !important;
-        bottom: calc(74px + env(safe-area-inset-bottom)) !important;
-        max-height: min(24svh, 190px) !important;
-        padding: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-      }
-
-      .home-page.is-tv-mode .creator-name,
-      .home-page.is-tv-mode .service-name,
-      .home-page.is-tv-mode .post-tagline,
-      .home-page.is-tv-mode .post-price {
-        text-shadow: 0 2px 5px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,.9) !important;
-      }
-
-      .home-page.is-tv-mode .tv-live-anchor {
-        top: calc(116px + env(safe-area-inset-top)) !important;
-        left: 15px !important;
-        padding: 0 7px !important;
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        text-shadow: 0 1px 5px rgba(0,0,0,1);
-      }
-
-      .home-page.is-tv-mode .tv-conversation-column {
-        top: calc(145px + env(safe-area-inset-top)) !important;
-        right: 70px !important;
-        bottom: calc(128px + env(safe-area-inset-bottom)) !important;
-        left: 15px !important;
-        overflow: hidden !important;
-      }
-
-      .home-page.is-tv-mode .tv-message-item {
-        left: 0 !important;
-        bottom: 0 !important;
-        width: min(82%, 390px) !important;
-        animation-duration: var(--tv-message-duration, 48s) !important;
-        animation-timing-function: linear !important;
-        animation-iteration-count: infinite !important;
-        animation-fill-mode: both !important;
-      }
-
-      @keyframes tvMessageRise {
-        0% {
-          opacity: 0;
-          transform: translate3d(0, 18px, 0) scale(.98);
-        }
-        5% {
-          opacity: 1;
-          transform: translate3d(0, 0, 0) scale(1);
-        }
-        76% {
-          opacity: 1;
-          transform: translate3d(0, -50svh, 0) scale(1);
-        }
-        91% {
-          opacity: .32;
-          transform: translate3d(0, -59svh, 0) scale(.97);
-        }
-        100% {
-          opacity: 0;
-          transform: translate3d(0, -64svh, 0) scale(.95);
-        }
-      }
-
-      .home-page.is-tv-mode .tv-public-action-dock {
-        left: 14px !important;
-        bottom: calc(16px + env(safe-area-inset-bottom)) !important;
-        gap: 13px !important;
-        padding: 0 !important;
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-      }
-
-      .home-page.is-tv-mode .tv-public-conversation-cta,
-      .home-page.is-tv-mode .tv-visibility-toggle,
-      .home-page.is-tv-mode .tv-private-contact-cta {
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        width: auto !important;
-        min-width: 0 !important;
-        height: auto !important;
-        min-height: 0 !important;
-        padding: 5px !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        outline: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-      }
-
-      .home-page.is-tv-mode .tv-public-conversation-cta::before,
-      .home-page.is-tv-mode .tv-public-conversation-cta::after,
-      .home-page.is-tv-mode .tv-visibility-toggle::before,
-      .home-page.is-tv-mode .tv-visibility-toggle::after,
-      .home-page.is-tv-mode .tv-private-contact-cta::before,
-      .home-page.is-tv-mode .tv-private-contact-cta::after {
-        content: none !important;
-        display: none !important;
-      }
-
-      .home-page.is-tv-mode .tv-public-conversation-cta {
-        color: #9cecff !important;
-        filter: drop-shadow(0 0 4px rgba(255,255,255,.82))
-                drop-shadow(0 0 10px rgba(32,164,255,.92)) !important;
-      }
-
-      .tv-public-conversation-glyph {
-        position: relative;
-        width: 30px;
-        height: 30px;
-        display: inline-grid;
-        place-items: center;
-      }
-      .tv-public-conversation-bubble {
-        position: absolute;
-        inset: 0;
-        width: 30px;
-        height: 30px;
-        color: #dff8ff;
-      }
-      .tv-public-conversation-zap {
-        position: relative;
-        z-index: 1;
-        color: #83e6ff;
-        fill: rgba(131,230,255,.14);
-      }
-
-      .home-page.is-tv-mode .tv-visibility-toggle {
-        color: #fff !important;
-        filter: drop-shadow(0 0 4px rgba(255,255,255,.82))
-                drop-shadow(0 0 9px rgba(32,164,255,.82)) !important;
-      }
-
-      .home-page.is-tv-mode .tv-private-contact-cta {
-        right: 15px !important;
-        bottom: calc(18px + env(safe-area-inset-bottom)) !important;
-        color: #fff !important;
-        filter: drop-shadow(0 0 4px rgba(255,255,255,.82))
-                drop-shadow(0 0 10px rgba(37,169,255,.90)) !important;
-      }
-
-      .home-page.is-tv-mode .tv-private-contact-cta svg {
-        width: 25px !important;
-        height: 25px !important;
-      }
-
-      .home-page.is-tv-mode .tv-typing-presence {
-        bottom: 45px !important;
-        padding: 0 !important;
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-      }
-
-      @media (max-width: 700px) {
-        .home-page.is-tv-mode .service-reel-card {
-          height: 100svh !important;
-          height: 100dvh !important;
-          min-height: 100svh !important;
-          min-height: 100dvh !important;
-        }
-
-        .home-page.is-tv-mode .feedx-topbar,
-        .feedx-topbar.is-tv-mode {
-          background: linear-gradient(
-            180deg,
-            rgba(0,0,0,.34) 0%,
-            rgba(0,0,0,.08) 62%,
-            transparent 100%
-          ) !important;
-        }
-
-        .home-page.is-tv-mode .category-nav,
-        .home-page.is-tv-mode .category-tab,
-        .home-page.is-tv-mode .category-tab.is-active {
-          background: transparent !important;
-        }
-
-        .home-page.is-tv-mode .post-info-block {
-          left: 13px !important;
-          right: 68px !important;
-          bottom: calc(68px + env(safe-area-inset-bottom)) !important;
-        }
-
-        .home-page.is-tv-mode .tv-live-anchor {
-          top: calc(108px + env(safe-area-inset-top)) !important;
-          left: 13px !important;
-        }
-
-        .home-page.is-tv-mode .tv-conversation-column {
-          top: calc(136px + env(safe-area-inset-top)) !important;
-          right: 58px !important;
-          bottom: calc(118px + env(safe-area-inset-bottom)) !important;
-          left: 13px !important;
-        }
-
-        .home-page.is-tv-mode .tv-public-action-dock {
-          left: 11px !important;
-          bottom: calc(12px + env(safe-area-inset-bottom)) !important;
-          gap: 11px !important;
-        }
-
-        .home-page.is-tv-mode .tv-private-contact-cta {
-          right: 11px !important;
-          bottom: calc(14px + env(safe-area-inset-bottom)) !important;
-        }
-
-        .home-page.is-tv-mode .tv-message-item {
-          width: min(86%, 340px) !important;
-        }
-      }
-
       @media (prefers-reduced-motion: reduce) {
         .tv-message-item {
           animation-duration: .01ms !important;
