@@ -39,6 +39,7 @@ import {
   CheckCheck,
   Phone,
   Eye,
+  EyeOff,
   ImagePlus,
   Zap,
 } from "lucide-react";
@@ -313,6 +314,28 @@ const TV_VISIBLE_MESSAGE_LIMIT = 8;
 const TV_MESSAGE_LANE_HEIGHT = 78;
 const TV_POLL_INTERVAL_MS = 7000;
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
+// Public TV/Social Life conversation never requires an account: every
+// browser/device gets its own stable anonymous id (independent of
+// currentUser.id) so a guest's name/photo/country persist across visits and
+// comments without ever logging in. Logged-in viewers still just use this
+// same device identity for the public conversation - login is only required
+// for the separate, private Contact Me flow.
+const TV_DEVICE_ID_KEY = "gwamo-tv-device-id:v1";
+function getTvDeviceId() {
+  try {
+    let id = localStorage.getItem(TV_DEVICE_ID_KEY);
+    if (!id) {
+      id =
+        (typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      localStorage.setItem(TV_DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return "dev-fallback";
+  }
+}
 // Never compare missing provider IDs directly: "" === "" would incorrectly
 // treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
 // use the registered telephone only as a safe legacy fallback.
@@ -3671,14 +3694,13 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const isMountedRef = useRef(true);
   const typingStopTimerRef = useRef(null);
   const remoteTypingTimersRef = useRef(new Map());
-  const identityKey = useMemo(() => {
-    const raw =
-      currentUser?.id ||
-      currentUser?.phone ||
-      currentUser?.creator_identity ||
-      "viewer";
-    return `${TV_IDENTITY_KEY_PREFIX}${String(raw)}`;
-  }, [currentUser]);
+  // Identity is keyed by this device/browser, never by currentUser.id - the
+  // public conversation is open to logged-out viewers, so a guest's name,
+  // photo and country must persist the same way a logged-in viewer's would.
+  const identityKey = useMemo(
+    () => `${TV_IDENTITY_KEY_PREFIX}${getTvDeviceId()}`,
+    [],
+  );
   const identityComplete = Boolean(
     tvIdentity.name && tvIdentity.photoUrl && tvIdentity.countryCode,
   );
@@ -3717,24 +3739,18 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     (nextIdentity) => {
       setTvIdentity(nextIdentity);
       try {
-        if (currentUser) {
-          localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
-        }
+        localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
       } catch {
         // Local persistence is a convenience only; live chat still works.
       }
     },
-    [currentUser, identityKey],
+    [identityKey],
   );
 
+  // Runs once per device identity (logged in or not) - a guest keeps the
+  // same name/photo/country across visits and never has to re-enter them
+  // per comment.
   useEffect(() => {
-    if (!currentUser) {
-      setTvIdentity({ name: "", photoUrl: "", countryCode: "" });
-      setIntroName("");
-      setIntroStep("name");
-      setComposerOpen(false);
-      return;
-    }
     let saved = null;
     try {
       saved = JSON.parse(localStorage.getItem(identityKey) || "null");
@@ -3752,7 +3768,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     else if (!normalized.photoUrl) setIntroStep("photo");
     else if (!normalized.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [currentUser, identityKey]);
+  }, [identityKey]);
 
   const laneCounterRef = useRef(0);
   const appendMessages = useCallback((incoming) => {
@@ -3777,8 +3793,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           ...rawMessage,
           id: messageId,
           _tvLane: lane,
-          _tvDuration: 12 + (lane % 4),
-          _tvDelay: (lane % TV_VISIBLE_MESSAGE_LIMIT) * 0.55,
+          // Slow, deliberate movement (28-40s per full rise) staggered
+          // every ~5s per lane, per spec - never the fast 10-12s sweep.
+          _tvDuration: 28 + (lane % 4) * 4,
+          _tvDelay: (lane % TV_VISIBLE_MESSAGE_LIMIT) * 5,
         });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
@@ -3998,18 +4016,17 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     typingStopTimerRef.current = setTimeout(() => announceTyping(false), 1400);
   }, [announceTyping]);
 
+  // Public conversation never requires login - a logged-out viewer can tap
+  // the bolt and go straight into the name -> photo -> country -> message
+  // guide below. Only the separate, private Contact Me flow checks auth.
   const beginConversation = useCallback(() => {
     setError("");
-    if (!currentUser) {
-      onRequireAuth?.();
-      return;
-    }
     setComposerOpen(true);
     if (!tvIdentity.name) setIntroStep("name");
     else if (!tvIdentity.photoUrl) setIntroStep("photo");
     else if (!tvIdentity.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [currentUser, onRequireAuth, tvIdentity]);
+  }, [tvIdentity]);
 
   const closeComposer = useCallback(() => {
     announceTyping(false);
@@ -4035,10 +4052,6 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       if (!file) return;
       if (!file.type?.startsWith("image/")) {
         setError("Choose an image for your profile picture.");
-        return;
-      }
-      if (!currentUser) {
-        onRequireAuth?.();
         return;
       }
       setUploadingPhoto(true);
@@ -4076,14 +4089,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         setUploadingPhoto(false);
       }
     },
-    [
-      currentUser,
-      onRequireAuth,
-      getSessionToken,
-      apiUrl,
-      tvIdentity,
-      saveIdentity,
-    ],
+    [getSessionToken, apiUrl, tvIdentity, saveIdentity],
   );
 
   const chooseCountry = useCallback(
@@ -4181,10 +4187,6 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const sendMessage = useCallback(async () => {
     const text = composerText.trim();
     if (!text) return;
-    if (!currentUser) {
-      onRequireAuth?.();
-      return;
-    }
     if (!identityComplete) {
       beginConversation();
       return;
@@ -4230,13 +4232,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     }
   }, [
     composerText,
-    currentUser,
     identityComplete,
     beginConversation,
     announceTyping,
     tvIdentity,
     appendMessages,
-    onRequireAuth,
     sendPublicItem,
     isSocialLife,
   ]);
@@ -4245,7 +4245,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     const messageId = String(message.id);
     const paused = pausedMessageIds.has(messageId);
     const lane = Number(message._tvLane || 0);
-    const duration = Number(message._tvDuration || 12);
+    const duration = Number(message._tvDuration || 28);
     const delay = Number(message._tvDelay || 0);
     const profileImage =
       message.profile_image || message.profile_image_url || DEFAULT_LOGO;
@@ -4429,9 +4429,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           }
         >
           {overlayVisible ? (
-            <X size={18} aria-hidden="true" />
+            <Eye size={18} aria-hidden="true" />
           ) : (
-            <Plus size={18} aria-hidden="true" />
+            <EyeOff size={18} aria-hidden="true" />
           )}
         </button>
       </div>
@@ -9798,94 +9798,76 @@ function HomeStylesInner() {
         padding: 0;
       }
       .home-page.is-tv-mode .service-reel-card {
-        height: 100svh;
-        min-height: 560px;
-        margin-bottom: 0;
+        height: 100dvh;
+        min-height: 100dvh;
+        width: 100%;
+        overflow: hidden;
+        border-radius: 0;
+        margin: 0;
+        padding: 0;
         background: #020712 !important;
       }
-      .home-page.is-tv-mode .service-reel-card .media-card {
+      .home-page.is-tv-mode .service-reel-card .media-card,
+      .home-page.is-tv-mode .service-reel-card .media-viewport,
+      .home-page.is-tv-mode .service-reel-card .media-layer {
+        position: absolute;
         inset: 0 !important;
         width: 100% !important;
         height: 100% !important;
         border-radius: 0 !important;
-      }
-      .home-page.is-tv-mode .service-reel-card .media-viewport,
-      .home-page.is-tv-mode .service-reel-card .media-layer {
-        inset: 0 !important;
-        border-radius: 0 !important;
+        overflow: hidden;
         background: transparent !important;
       }
-      /* The real media is shown at full quality with no cropping, no
-         horizontal stretch, and no unnecessary enlargement ("contain" -
-         height-first: it fills as much height as it can while never
-         exceeding the card's width, preserving the source aspect ratio
-         exactly). A blurred, darkened copy of the SAME image/video (see
-         .tv-media-backdrop below) fills whatever space is left around it,
-         so the background always looks intentional instead of empty bars,
-         without ever touching the real media's own sharpness. */
+      /* TikTok-style full-bleed media: the image/video IS the phone
+         screen's background, edge to edge, no letterboxing and no blurred
+         backdrop standing in for real pixels. */
       .home-page.is-tv-mode .service-reel-card img.home-media,
       .home-page.is-tv-mode .service-reel-card video.home-media {
         position: relative;
         z-index: 1;
         width: 100%;
         height: 100%;
-        object-fit: contain !important;
+        object-fit: cover !important;
         object-position: center;
+        border-radius: 0;
         background: transparent !important;
       }
-      .tv-media-backdrop {
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        overflow: hidden;
-        pointer-events: none;
+      /* The full-bleed cover media above fully occludes this backdrop
+         layer, so on TV it would only be extra, hidden, wasted decode work
+         (a second video element competing for playback/audio) - switch it
+         off entirely instead of leaving it running unseen. */
+      .home-page.is-tv-mode .tv-media-backdrop {
+        display: none;
       }
-      .tv-media-backdrop img,
-      .tv-media-backdrop video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: center;
-        filter: blur(38px) saturate(1.15) brightness(.58);
-        transform: scale(1.18);
+      /* YouTube/Vimeo render their own player inside a cross-origin
+         iframe - object-fit does nothing on an iframe, so instead of
+         "contain"-style letterboxing we oversize the intrinsic 16:9 player
+         and center-crop it: height pinned to the full viewport, width
+         computed from the 16:9 ratio (100dvh * 16/9 = 177.7778dvh), then
+         centered and clipped by the card's own overflow:hidden. This
+         intentionally crops the left/right edges instead of stretching or
+         leaving empty bars. */
+      .home-page.is-tv-mode iframe.home-media {
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        height: 100dvh !important;
+        width: 177.7778dvh !important;
+        max-width: none !important;
+        max-height: none !important;
+        transform: translate(-50%, -50%) !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
       }
-      .tv-media-backdrop::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: rgba(4, 12, 26, .3);
-      }
-      /* Pasted links (YouTube/Vimeo) render their own player inside a
-         cross-origin iframe - we can't read its pixels to build a blurred
-         backdrop the way we do for uploaded media above, so instead the
-         embed keeps its natural aspect ratio (no cropping, no zoom) and
-         sits centered over a frosted glass panel that fills the rest of
-         the card, matching the glass styling used elsewhere in Gwamo. */
-      .home-page.is-tv-mode .service-reel-card .media-layer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background:
-          radial-gradient(circle at 50% 42%, rgba(22, 139, 255, .16), transparent 62%),
-          rgba(6, 16, 31, .86) !important;
-        -webkit-backdrop-filter: blur(18px);
-        backdrop-filter: blur(18px);
-      }
-      .home-page.is-tv-mode .media-layer > iframe.home-media {
-        position: relative;
-        z-index: 1;
-        top: auto;
-        left: auto;
-        transform: none;
-        width: 100%;
-        height: auto;
-        max-width: 100%;
-        max-height: 100%;
-        aspect-ratio: 16 / 9;
-        min-width: 0;
-        min-height: 0;
-        border-radius: 14px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+      /* On a wide/landscape screen the portrait math above would leave the
+         video far too wide - use the reverse cover calculation so it fills
+         the width and crops top/bottom instead. */
+      @media (orientation: landscape) {
+        .home-page.is-tv-mode iframe.home-media {
+          width: 100vw !important;
+          height: 56.25vw !important;
+        }
       }
       .home-page.is-tv-mode .glass-frame-overlay {
         display: none;
@@ -10028,7 +10010,7 @@ function HomeStylesInner() {
         cursor: pointer;
         will-change: transform, opacity;
         animation-name: tvMessageRise;
-        animation-duration: var(--tv-message-duration, 12s);
+        animation-duration: var(--tv-message-duration, 28s);
         animation-delay: var(--tv-message-delay, 0s);
         animation-timing-function: linear;
         animation-iteration-count: infinite;
@@ -10520,9 +10502,6 @@ function HomeStylesInner() {
         .home-page.is-tv-mode .category-tab,
         .home-page.is-tv-mode .category-tab.is-active {
           background: transparent !important;
-        }
-        .home-page.is-tv-mode .service-reel-card {
-          min-height: 520px;
         }
         .home-page.is-tv-mode .post-info-block {
           left: 14px;
