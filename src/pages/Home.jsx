@@ -1,3 +1,5 @@
+import TvMedia from "../components/tv/TvMedia";
+
 import {
   useCallback,
   useEffect,
@@ -3424,77 +3426,28 @@ const ServicePost = memo(function ServicePost({
       data-index={index}
       className="home-post service-reel-card"
     >
-      <div className="media-card">
-        <div
-          className={`media-viewport ${aspectClass}`}
-          style={{ "--media-aspect-ratio": mediaAspectRatio || 16 / 9 }}
-        >
-          <div className="media-layer">
-            {isTvTab && (isImage || isVideo) && (
-              <div className="tv-media-backdrop" aria-hidden="true">
-                {isImage ? (
-                  <img src={mediaUrl} alt="" />
-                ) : (
-                  <video
-                    src={mediaUrl}
-                    muted
-                    playsInline
-                    preload="auto"
-                    tabIndex={-1}
-                  />
-                )}
-              </div>
-            )}
-            {isImage && (
-              <img
-                src={mediaUrl}
-                alt={serviceName || tagline || DEFAULT_MEDIA_LABEL}
-                className="home-media"
-                loading={index === 0 ? "eager" : "lazy"}
-                decoding="async"
-                fetchPriority={index === 0 ? "high" : "auto"}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-              />
-            )}
-            {isVideo && (
-              <video
-                ref={videoRefCallback}
-                src={mediaUrl}
-                loop
-                playsInline
-                muted={false}
-                controls
-                preload="metadata"
-                className="home-media"
-                onPlay={() => onVideoPlay(postId)}
-                onPause={() => onVideoPause(postId)}
-                onLoadedMetadata={handleVideoLoadedMetadata}
-                onClick={handleVideoTap}
-              />
-            )}
-            {isEmbed &&
-              (isActive ? (
-                <iframe
-                  src={getEmbedUrl(mediaUrl)}
-                  title={serviceName || tagline || "Time Market media"}
-                  className="home-media"
-                  frameBorder="0"
-                  allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
-                  allowFullScreen
-                  loading="lazy"
-                />
-              ) : (
-                <div className="embed-placeholder">
-                  <span className="embed-placeholder-icon">{"\u25B6"}</span>
-                  {(serviceName || tagline) && (
-                    <span>{serviceName || tagline}</span>
-                  )}
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>
+      <TvMedia
+        mediaUrl={mediaUrl}
+        embedUrl={getEmbedUrl(mediaUrl)}
+        isTvTab={isTvTab}
+        isImage={isImage}
+        isVideo={isVideo}
+        isEmbed={isEmbed}
+        isActive={isActive}
+        aspectClass={aspectClass}
+        mediaAspectRatio={mediaAspectRatio}
+        serviceName={serviceName}
+        tagline={tagline}
+        index={index}
+        postId={postId}
+        videoRefCallback={videoRefCallback}
+        onImageLoad={handleImageLoad}
+        onImageError={handleImageError}
+        onVideoPlay={onVideoPlay}
+        onVideoPause={onVideoPause}
+        onVideoLoadedMetadata={handleVideoLoadedMetadata}
+        onVideoTap={handleVideoTap}
+      />
       <div className="service-card-gradient" aria-hidden="true" />
       <div className="glass-frame-overlay" aria-hidden="true" />
       {showLiveConversation && (
