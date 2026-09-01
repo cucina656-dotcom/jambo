@@ -1,4 +1,5 @@
 import TvMedia from "../components/tv/TvMedia";
+// GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 
 import {
   useCallback,
@@ -41,6 +42,7 @@ import {
   CheckCheck,
   Phone,
   Eye,
+  EyeOff,
   ImagePlus,
   Zap,
 } from "lucide-react";
@@ -135,14 +137,18 @@ const CATEGORY_TABS = [
     icon: Users,
   },
   {
-    key: "market",
-    label: "Market",
-    icon: ShoppingBasket,
-    href: "https://market.com/",
+    key: "connect",
+    label: "Connect",
+    icon: Users,
   },
   { key: "tv", label: "TV", icon: Tv },
 ];
 const CATEGORY_META = {
+  connect: {
+    label: "Connect",
+    blurb:
+      "Find a friend for life, a relationship, a sponsor or supporter, a mentor, or another meaningful connection.",
+  },
   "social-news": {
     label: "Social News",
     blurb: "Open Social News at social.com.",
@@ -296,6 +302,23 @@ const TV_VISIBLE_MESSAGE_LIMIT = 8;
 const TV_MESSAGE_LANE_HEIGHT = 78;
 const TV_POLL_INTERVAL_MS = 7000;
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
+const TV_PUBLIC_IDENTITY_KEY = `${TV_IDENTITY_KEY_PREFIX}public-viewer`;
+const TV_PUBLIC_VIEWER_ID_KEY = "gwamo-tv-public-viewer-id:v1";
+
+function getOrCreateTvPublicViewerId() {
+  try {
+    const existing = localStorage.getItem(TV_PUBLIC_VIEWER_ID_KEY);
+    if (existing) return existing;
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? `viewer-${crypto.randomUUID()}`
+        : `viewer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(TV_PUBLIC_VIEWER_ID_KEY, generated);
+    return generated;
+  } catch {
+    return `viewer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
 // Never compare missing provider IDs directly: "" === "" would incorrectly
 // treat an ordinary viewer as the owner of a legacy post. Prefer real IDs and
 // use the registered telephone only as a safe legacy fallback.
@@ -2707,7 +2730,17 @@ function Home() {
         ? { label: "Share your moment", postType: "moment" }
         : { label: "Offer work or trade skills", postType: "offer" };
   let mainContent;
-  if (loading) {
+  if (activeCategory === "connect") {
+    mainContent = (
+      <ComingSoonPanel
+        category="connect"
+        onBack={() => {
+          setActivePostIndex(0);
+          setActiveCategory("time-market");
+        }}
+      />
+    );
+  } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
     mainContent = (
@@ -3177,16 +3210,20 @@ const TimeMarketTopBar = memo(
             )}
             {showHamburgerMenu && (
               <div className="dropdown-menu hamburger-dropdown">
-                {CATEGORY_TABS.filter((tab) => tab.href).map((tab) => (
-                  <button
-                    key={tab.key}
-                    className="dropdown-item"
-                    onClick={() => openCategory(tab)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-                <div className="dropdown-divider" />
+                {CATEGORY_TABS.some((tab) => tab.href) && (
+                  <>
+                    {CATEGORY_TABS.filter((tab) => tab.href).map((tab) => (
+                      <button
+                        key={tab.key}
+                        className="dropdown-item"
+                        onClick={() => openCategory(tab)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                    <div className="dropdown-divider" />
+                  </>
+                )}
                 <button
                   className="dropdown-item"
                   onClick={() => {
@@ -3565,7 +3602,7 @@ ServicePost.displayName = "ServicePost";
 // =============================================================================
 // TvConversationOverlay - public, animated conversation floating over TV
 // media. Entirely separate from private "Contact me" messaging. Reading is
-// public; only sending requires login. Only the currently active/in-view
+// public; sending uses a lightweight viewer identity and does not require login.
 // TV card keeps a live connection (WebSocket, falling back to modest
 // polling) - off-screen cards stay idle to save resources and battery.
 // =============================================================================
@@ -3605,14 +3642,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const isMountedRef = useRef(true);
   const typingStopTimerRef = useRef(null);
   const remoteTypingTimersRef = useRef(new Map());
-  const identityKey = useMemo(() => {
-    const raw =
-      currentUser?.id ||
-      currentUser?.phone ||
-      currentUser?.creator_identity ||
-      "viewer";
-    return `${TV_IDENTITY_KEY_PREFIX}${String(raw)}`;
-  }, [currentUser]);
+  const publicViewerId = useMemo(() => getOrCreateTvPublicViewerId(), []);
+  const identityKey = TV_PUBLIC_IDENTITY_KEY;
   const identityComplete = Boolean(
     tvIdentity.name && tvIdentity.photoUrl && tvIdentity.countryCode,
   );
@@ -3631,13 +3662,13 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     () =>
       localTyping && identityComplete
         ? {
-            id: `self-${currentUser?.id || "viewer"}`,
+            id: publicViewerId,
             user_name: tvIdentity.name,
             profile_image: tvIdentity.photoUrl,
             country_code: tvIdentity.countryCode,
           }
         : null,
-    [localTyping, identityComplete, currentUser, tvIdentity],
+    [localTyping, identityComplete, publicViewerId, tvIdentity],
   );
   const typingPresence = useMemo(() => {
     if (localTypingIdentity) return localTypingIdentity;
@@ -3651,24 +3682,15 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     (nextIdentity) => {
       setTvIdentity(nextIdentity);
       try {
-        if (currentUser) {
-          localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
-        }
+        localStorage.setItem(identityKey, JSON.stringify(nextIdentity));
       } catch {
         // Local persistence is a convenience only; live chat still works.
       }
     },
-    [currentUser, identityKey],
+    [identityKey],
   );
 
   useEffect(() => {
-    if (!currentUser) {
-      setTvIdentity({ name: "", photoUrl: "", countryCode: "" });
-      setIntroName("");
-      setIntroStep("name");
-      setComposerOpen(false);
-      return;
-    }
     let saved = null;
     try {
       saved = JSON.parse(localStorage.getItem(identityKey) || "null");
@@ -3686,10 +3708,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     else if (!normalized.photoUrl) setIntroStep("photo");
     else if (!normalized.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [currentUser, identityKey]);
+  }, [identityKey]);
 
   const laneCounterRef = useRef(0);
-  const appendMessages = useCallback((incoming) => {
+  const lastLiveLaunchRef = useRef(0);
+  const appendMessages = useCallback((incoming, { live = false } = {}) => {
     if (!incoming || !incoming.length) return;
     setVisibleMessages((current) => {
       const merged = [...current];
@@ -3699,20 +3722,27 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         const messageId = String(rawMessage.id ?? fallbackId);
         if (seenIdsRef.current.has(messageId)) continue;
         seenIdsRef.current.add(messageId);
-        // Each message gets a fixed lane + duration exactly once, here, at
-        // creation - never recomputed on later renders. That stability is
-        // what keeps concurrent messages from ever landing on top of each
-        // other: earlier code derived these values from the live array
-        // length/index on every render, so every arrival or departure
-        // reset every other message's animation mid-flight.
-        const lane = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
+
+        const slot = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
         laneCounterRef.current += 1;
+
+        let delay = -(slot * 4.5);
+        if (live) {
+          const nowSeconds = Date.now() / 1000;
+          const nextLaunch = Math.max(
+            nowSeconds,
+            Number(lastLiveLaunchRef.current || 0) + 4.5,
+          );
+          delay = Math.max(0, nextLaunch - nowSeconds);
+          lastLiveLaunchRef.current = nextLaunch;
+        }
+
         merged.push({
           ...rawMessage,
           id: messageId,
-          _tvLane: lane,
-          _tvDuration: 12 + (lane % 4),
-          _tvDelay: (lane % TV_VISIBLE_MESSAGE_LIMIT) * 0.55,
+          _tvLane: 0,
+          _tvDuration: 36,
+          _tvDelay: delay,
         });
       }
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
@@ -3737,27 +3767,15 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const fetchPublicItems = useCallback(
     async (limit = 10) => {
       const encodedPostId = encodeURIComponent(postId);
-      const candidates = isSocialLife
-        ? [
-            `${apiUrl}/api/social-life/comments?post_id=${encodedPostId}&limit=${limit}`,
-            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
-          ]
-        : [
-            `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`,
-          ];
-
-      for (const url of candidates) {
-        try {
-          const response = await fetch(url, { cache: "no-store" });
-          if ([404, 405, 501].includes(response.status)) continue;
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok || data?.success === false) return [];
-          return normalizePublicItems(data);
-        } catch {
-          // Try the compatibility endpoint when one exists.
-        }
+      const url = `${apiUrl}/api/tv/conversation?post_id=${encodedPostId}&limit=${limit}`;
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.success === false) return [];
+        return normalizePublicItems(data);
+      } catch {
+        return [];
       }
-      return [];
     },
     [apiUrl, postId, isSocialLife, normalizePublicItems],
   );
@@ -3781,7 +3799,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     pollTimerRef.current = setInterval(async () => {
       if (document.hidden || !isMountedRef.current) return;
       const items = await fetchPublicItems(10);
-      if (isMountedRef.current) appendMessages(items);
+      if (isMountedRef.current) appendMessages(items, { live: true });
     }, TV_POLL_INTERVAL_MS);
   }, [fetchPublicItems, appendMessages]);
 
@@ -3800,8 +3818,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const receiveTypingPresence = useCallback(
     (payload) => {
       const typing = payload?.typing ?? payload?.active ?? true;
-      const userId = String(payload?.user_id || payload?.viewer_id || "");
-      if (userId && String(currentUser?.id || "") === userId) return;
+      const userId = String(payload?.viewer_id || payload?.user_id || "");
+      if (userId && publicViewerId === userId) return;
       const key = userId || String(payload?.user_name || payload?.name || "viewer");
       if (!typing) {
         clearRemoteTyping(key);
@@ -3821,7 +3839,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       const timer = setTimeout(() => clearRemoteTyping(key), 2600);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTyping, currentUser],
+    [clearRemoteTyping, publicViewerId],
   );
 
   const connectRealtime = useCallback(async () => {
@@ -3847,7 +3865,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         try {
           const payload = JSON.parse(event.data);
           if (payload?.type === "tv_message" && payload.message) {
-            appendMessages([payload.message]);
+            appendMessages([payload.message], { live: true });
           } else if (payload?.type === "tv_typing") {
             receiveTypingPresence(payload);
           }
@@ -3914,7 +3932,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             type: "tv_typing",
             tv_post_id: postId,
             typing: Boolean(active),
-            user_id: currentUser?.id || "",
+            user_id: publicViewerId,
+            viewer_id: publicViewerId,
             user_name: tvIdentity.name,
             profile_image: tvIdentity.photoUrl,
             country_code: tvIdentity.countryCode,
@@ -3924,7 +3943,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         // Typing presence is optional; sending the actual message still works.
       }
     },
-    [identityComplete, postId, currentUser, tvIdentity],
+    [identityComplete, postId, publicViewerId, tvIdentity],
   );
 
   const scheduleTypingStop = useCallback(() => {
@@ -3934,16 +3953,12 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
 
   const beginConversation = useCallback(() => {
     setError("");
-    if (!currentUser) {
-      onRequireAuth?.();
-      return;
-    }
     setComposerOpen(true);
     if (!tvIdentity.name) setIntroStep("name");
     else if (!tvIdentity.photoUrl) setIntroStep("photo");
     else if (!tvIdentity.countryCode) setIntroStep("country");
     else setIntroStep("message");
-  }, [currentUser, onRequireAuth, tvIdentity]);
+  }, [tvIdentity]);
 
   const closeComposer = useCallback(() => {
     announceTyping(false);
@@ -3971,53 +3986,63 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         setError("Choose an image for your profile picture.");
         return;
       }
-      if (!currentUser) {
-        onRequireAuth?.();
-        return;
-      }
+
       setUploadingPhoto(true);
       setError("");
       try {
         const prepared = await compressImageFile(file, {
-          maxWidth: 420,
-          maxHeight: 420,
-          quality: 0.76,
+          maxWidth: 180,
+          maxHeight: 180,
+          quality: 0.72,
         });
-        const uploadForm = new FormData();
-        uploadForm.append("file", prepared);
-        uploadForm.append("kind", "profile_image");
+
         const token = getSessionToken?.() || "";
-        const uploadResponse = await fetch(`${apiUrl}/api/home/upload`, {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: uploadForm,
-          cache: "no-store",
-        });
-        const uploadData = await uploadResponse.json().catch(() => ({}));
-        if (!uploadResponse.ok || !uploadData.success || !uploadData.url) {
-          throw new Error(
-            uploadData.error ||
-              uploadData.message ||
-              "Could not upload your profile picture.",
-          );
+        let photoUrl = "";
+
+        if (token) {
+          try {
+            const uploadForm = new FormData();
+            uploadForm.append("file", prepared);
+            uploadForm.append("kind", "profile_image");
+            const uploadResponse = await fetch(`${apiUrl}/api/home/upload`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              body: uploadForm,
+              cache: "no-store",
+            });
+            const uploadData = await uploadResponse.json().catch(() => ({}));
+            if (uploadResponse.ok && uploadData.success && uploadData.url) {
+              photoUrl = uploadData.url;
+            }
+          } catch {
+            // A public viewer can still use a lightweight local image below.
+          }
         }
-        const next = { ...tvIdentity, photoUrl: uploadData.url };
+
+        if (!photoUrl) {
+          photoUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () =>
+              reject(new Error("Could not read your profile picture."));
+            reader.readAsDataURL(prepared);
+          });
+        }
+
+        if (!photoUrl) {
+          throw new Error("Could not prepare your profile picture.");
+        }
+
+        const next = { ...tvIdentity, photoUrl };
         saveIdentity(next);
         setIntroStep("country");
       } catch (err) {
-        setError(err.message || "Could not upload your profile picture.");
+        setError(err.message || "Could not prepare your profile picture.");
       } finally {
         setUploadingPhoto(false);
       }
     },
-    [
-      currentUser,
-      onRequireAuth,
-      getSessionToken,
-      apiUrl,
-      tvIdentity,
-      saveIdentity,
-    ],
+    [getSessionToken, apiUrl, tvIdentity, saveIdentity],
   );
 
   const chooseCountry = useCallback(
@@ -4043,7 +4068,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const sendPublicItem = useCallback(
     async (text) => {
       const token = getSessionToken?.() || "";
-      const commonPayload = {
+      const payload = {
+        tv_post_id: postId,
+        post_id: postId,
+        mode,
         message: text,
         comment: text,
         country_code: tvIdentity.countryCode,
@@ -4051,74 +4079,44 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         display_name: tvIdentity.name,
         profile_image: tvIdentity.photoUrl,
         profile_image_url: tvIdentity.photoUrl,
+        viewer_id: publicViewerId,
       };
-      const candidates = isSocialLife
-        ? [
-            {
-              url: `${apiUrl}/api/social-life/comments`,
-              body: { ...commonPayload, post_id: postId },
-            },
-            {
-              url: `${apiUrl}/api/tv/conversation`,
-              body: {
-                ...commonPayload,
-                tv_post_id: postId,
-                post_id: postId,
-              },
-            },
-          ]
-        : [
-            {
-              url: `${apiUrl}/api/tv/conversation`,
-              body: { ...commonPayload, tv_post_id: postId },
-            },
-          ];
 
-      for (const candidate of candidates) {
-        const response = await fetch(candidate.url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify(candidate.body),
-          cache: "no-store",
-        });
-        if ([404, 405, 501].includes(response.status)) continue;
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || data?.success === false) {
-          throw new Error(
-            data.error ||
-              data.message ||
-              (isSocialLife
-                ? "Could not send your comment."
-                : "Could not send your message."),
-          );
-        }
-        return data;
+      const response = await fetch(`${apiUrl}/api/tv/conversation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success === false) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            (isSocialLife
+              ? "Could not send your comment."
+              : "Could not send your message."),
+        );
       }
-      throw new Error(
-        isSocialLife
-          ? "Social Life comments are not available on the server yet."
-          : "Public conversation is not available right now.",
-      );
+      return data;
     },
     [
       getSessionToken,
       tvIdentity,
-      isSocialLife,
       apiUrl,
       postId,
+      mode,
+      publicViewerId,
+      isSocialLife,
     ],
   );
 
   const sendMessage = useCallback(async () => {
     const text = composerText.trim();
     if (!text) return;
-    if (!currentUser) {
-      onRequireAuth?.();
-      return;
-    }
     if (!identityComplete) {
       beginConversation();
       return;
@@ -4151,7 +4149,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             message: text,
             created_at: new Date().toISOString(),
           };
-      appendMessages([sent]);
+      appendMessages([sent], { live: true });
     } catch (err) {
       setError(
         err.message ||
@@ -4164,13 +4162,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     }
   }, [
     composerText,
-    currentUser,
     identityComplete,
     beginConversation,
     announceTyping,
     tvIdentity,
     appendMessages,
-    onRequireAuth,
     sendPublicItem,
     isSocialLife,
   ]);
@@ -4179,7 +4175,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     const messageId = String(message.id);
     const paused = pausedMessageIds.has(messageId);
     const lane = Number(message._tvLane || 0);
-    const duration = Number(message._tvDuration || 12);
+    const duration = Number(message._tvDuration || 36);
     const delay = Number(message._tvDelay || 0);
     const profileImage =
       message.profile_image || message.profile_image_url || DEFAULT_LOGO;
@@ -4328,16 +4324,6 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             />
           )}
         </button>
-        {!isSocialLife && viewCount !== null && (
-          <div
-            className="tv-view-count"
-            aria-label={`${formatCount(viewCount)} views`}
-            title="Views"
-          >
-            <Eye size={20} aria-hidden="true" />
-            <span>{formatCount(viewCount)}</span>
-          </div>
-        )}
         <button
           type="button"
           className="tv-visibility-toggle"
@@ -4363,9 +4349,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           }
         >
           {overlayVisible ? (
-            <X size={18} aria-hidden="true" />
+            <Eye size={20} aria-hidden="true" />
           ) : (
-            <Plus size={18} aria-hidden="true" />
+            <EyeOff size={20} aria-hidden="true" />
           )}
         </button>
       </div>
@@ -9732,21 +9718,33 @@ function HomeStylesInner() {
         padding: 0;
       }
       .home-page.is-tv-mode .service-reel-card {
+        width: 100%;
         height: 100svh;
-        min-height: 560px;
-        margin-bottom: 0;
+        height: 100dvh;
+        min-height: 100svh;
+        min-height: 100dvh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 0;
         background: #020712 !important;
       }
       .home-page.is-tv-mode .service-reel-card .media-card {
+        position: absolute !important;
         inset: 0 !important;
         width: 100% !important;
         height: 100% !important;
         border-radius: 0 !important;
+        overflow: hidden !important;
       }
       .home-page.is-tv-mode .service-reel-card .media-viewport,
       .home-page.is-tv-mode .service-reel-card .media-layer {
+        position: absolute !important;
         inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
         border-radius: 0 !important;
+        overflow: hidden !important;
         background: transparent !important;
       }
       /* The real media is shown at full quality with no cropping, no
@@ -9759,13 +9757,17 @@ function HomeStylesInner() {
          without ever touching the real media's own sharpness. */
       .home-page.is-tv-mode .service-reel-card img.home-media,
       .home-page.is-tv-mode .service-reel-card video.home-media {
-        position: relative;
+        position: absolute !important;
+        inset: 0 !important;
         z-index: 1;
-        width: 100%;
-        height: 100%;
-        object-fit: contain !important;
-        object-position: center;
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 100% !important;
+        min-height: 100% !important;
+        object-fit: cover !important;
+        object-position: center center !important;
         background: transparent !important;
+        border-radius: 0 !important;
       }
       .tv-media-backdrop {
         position: absolute;
@@ -9796,9 +9798,11 @@ function HomeStylesInner() {
          sits centered over a frosted glass panel that fills the rest of
          the card, matching the glass styling used elsewhere in Gwamo. */
       .home-page.is-tv-mode .service-reel-card .media-layer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
         background:
           radial-gradient(circle at 50% 42%, rgba(22, 139, 255, .16), transparent 62%),
           rgba(6, 16, 31, .86) !important;
@@ -9806,20 +9810,30 @@ function HomeStylesInner() {
         backdrop-filter: blur(18px);
       }
       .home-page.is-tv-mode .media-layer > iframe.home-media {
-        position: relative;
+        position: absolute !important;
         z-index: 1;
-        top: auto;
-        left: auto;
-        transform: none;
-        width: 100%;
-        height: auto;
-        max-width: 100%;
-        max-height: 100%;
-        aspect-ratio: 16 / 9;
-        min-width: 0;
-        min-height: 0;
-        border-radius: 14px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+        top: 50% !important;
+        left: 50% !important;
+
+        height: 100dvh !important;
+        width: 177.7778dvh !important;
+
+        min-width: 100% !important;
+        min-height: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+
+        transform: translate(-50%, -50%) !important;
+
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+      @media (orientation: landscape) {
+        .home-page.is-tv-mode .media-layer > iframe.home-media {
+          width: 100vw !important;
+          height: 56.25vw !important;
+        }
       }
       .home-page.is-tv-mode .glass-frame-overlay {
         display: none;
@@ -9954,15 +9968,16 @@ function HomeStylesInner() {
         position: absolute;
         left: 0;
         width: min(82%, 430px);
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
+        display: grid;
+        grid-template-columns: 29px minmax(0, 1fr);
+        align-items: start;
+        column-gap: 6px;
         opacity: 0;
         pointer-events: auto;
         cursor: pointer;
         will-change: transform, opacity;
         animation-name: tvMessageRise;
-        animation-duration: var(--tv-message-duration, 12s);
+        animation-duration: var(--tv-message-duration, 36s);
         animation-delay: var(--tv-message-delay, 0s);
         animation-timing-function: linear;
         animation-iteration-count: infinite;
@@ -9978,23 +9993,23 @@ function HomeStylesInner() {
       @keyframes tvMessageRise {
         0% {
           opacity: 0;
-          transform: translate3d(0, 14px, 0) scale(.97);
+          transform: translate3d(0, 18px, 0) scale(.98);
         }
-        9% {
+        5% {
           opacity: 1;
           transform: translate3d(0, 0, 0) scale(1);
         }
-        68% {
+        72% {
           opacity: 1;
-          transform: translate3d(0, -40svh, 0) scale(1);
+          transform: translate3d(0, -43svh, 0) scale(1);
         }
-        86% {
-          opacity: .35;
-          transform: translate3d(0, -52svh, 0) scale(.94);
+        90% {
+          opacity: .28;
+          transform: translate3d(0, -54svh, 0) scale(.96);
         }
         100% {
           opacity: 0;
-          transform: translate3d(0, -58svh, 0) scale(.9);
+          transform: translate3d(0, -60svh, 0) scale(.92);
         }
       }
       .tv-message-avatar {
@@ -10037,8 +10052,8 @@ function HomeStylesInner() {
         max-width: 100%;
         display: flex;
         flex-direction: column;
-        gap: 1px;
-        padding-top: 1px;
+        gap: 2px;
+        padding-top: 0;
       }
       .tv-message-name {
         max-width: 230px;
@@ -10456,7 +10471,8 @@ function HomeStylesInner() {
           background: transparent !important;
         }
         .home-page.is-tv-mode .service-reel-card {
-          min-height: 520px;
+          height: 100dvh;
+          min-height: 100dvh;
         }
         .home-page.is-tv-mode .post-info-block {
           left: 14px;
@@ -10508,7 +10524,6 @@ function HomeStylesInner() {
         .tv-message-avatar {
           width: 26px;
           height: 26px;
-          flex-basis: 26px;
         }
         .tv-message-flag {
           width: 13px;
@@ -10554,7 +10569,7 @@ function HomeStylesInner() {
       }
       @media (prefers-reduced-motion: reduce) {
         .tv-message-item {
-          animation-duration: .01ms !important;
+          animation-duration: 48s !important;
         }
       }
     `}</style>
