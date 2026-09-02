@@ -80,6 +80,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   getSessionToken,
   onRequireAuth,
   onZoomImage,
+  compressImageFile,
+  defaultLogo,
 }) {
   const isSocialLife = mode === "social-life";
   const [visibleMessages, setVisibleMessages] = useState([]);
@@ -293,7 +295,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         id: key,
         user_name: payload?.user_name || payload?.name || "Someone",
         profile_image:
-          payload?.profile_image || payload?.profile_image_url || DEFAULT_LOGO,
+          payload?.profile_image || payload?.profile_image_url || defaultLogo,
         country_code: payload?.country_code || "",
         updatedAt: Date.now(),
       };
@@ -303,7 +305,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       const timer = setTimeout(() => clearRemoteTyping(key), 2600);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTyping, publicViewerId],
+    [clearRemoteTyping, publicViewerId, defaultLogo],
   );
 
   const connectRealtime = useCallback(async () => {
@@ -506,7 +508,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         setUploadingPhoto(false);
       }
     },
-    [getSessionToken, apiUrl, tvIdentity, saveIdentity],
+    [getSessionToken, apiUrl, tvIdentity, saveIdentity, compressImageFile],
   );
 
   const chooseCountry = useCallback(
@@ -658,7 +660,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               message={message}
               paused={pausedMessageIds.has(messageId)}
               laneHeight={TV_MESSAGE_LANE_HEIGHT}
-              defaultLogo={DEFAULT_LOGO}
+              defaultLogo={defaultLogo}
               onTogglePause={toggleMessagePause}
               onZoomImage={onZoomImage}
             />
@@ -676,7 +678,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 onZoomImage?.(
                   typingPresence.profile_image ||
                     typingPresence.profile_image_url ||
-                    DEFAULT_LOGO,
+                    defaultLogo,
                 )
               }
               aria-label={`View ${typingPresence.user_name || "viewer"}'s profile picture`}
@@ -685,12 +687,12 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 src={
                   typingPresence.profile_image ||
                   typingPresence.profile_image_url ||
-                  DEFAULT_LOGO
+                  defaultLogo
                 }
                 alt=""
                 onError={(event) => {
                   event.currentTarget.onerror = null;
-                  event.currentTarget.src = DEFAULT_LOGO;
+                  event.currentTarget.src = defaultLogo;
                 }}
               />
               <span>{countryCodeToFlagEmoji(typingPresence.country_code)}</span>
@@ -883,10 +885,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               <button
                 type="button"
                 className="tv-guide-self-avatar"
-                onClick={() => onZoomImage?.(tvIdentity.photoUrl || DEFAULT_LOGO)}
+                onClick={() => onZoomImage?.(tvIdentity.photoUrl || defaultLogo)}
                 aria-label="View your public profile picture"
               >
-                <img src={tvIdentity.photoUrl || DEFAULT_LOGO} alt="" />
+                <img src={tvIdentity.photoUrl || defaultLogo} alt="" />
                 <span aria-hidden="true">
                   {countryCodeToFlagEmoji(tvIdentity.countryCode)}
                 </span>
@@ -935,3 +937,5 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   );
 });
 TvConversationOverlay.displayName = "TvConversationOverlay";
+
+export default TvConversationOverlay;
