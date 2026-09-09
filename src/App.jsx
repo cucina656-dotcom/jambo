@@ -5,6 +5,7 @@ import Kitchen from "./pages/Kitchen";
 import TV from "./pages/TV";
 import Admin from "./pages/Admin";
 import Delivery from "./pages/Delivery";
+import King from "./pages/King";
 
 function App() {
 return ( <BrowserRouter> <Routes>
@@ -12,7 +13,8 @@ return ( <BrowserRouter> <Routes>
 <Route path="/kitchen" element={<Kitchen />} />
 <Route path="/tv" element={<TV />} />
 <Route path="/delivery" element={<Delivery />} />
-<Route path="/admin" element={<Admin />} /> </Routes> </BrowserRouter>
+<Route path="/admin" element={<Admin />} />
+<Route path="/king" element={<King />} /> </Routes> </BrowserRouter>
 );
 }
 

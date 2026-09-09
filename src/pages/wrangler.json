@@ -1,5 +1,5 @@
 {
-  "name": "ruhuha-kitchen-tv-api",
+  "name": "kitchenbrain",
   "main": "worker.js",
   "compatibility_date": "2026-06-17",
   "d1_databases": [
@@ -7,6 +7,12 @@
       "binding": "DB",
       "database_name": "ruhuha_db",
       "database_id": "b9329439-091e-4e8a-893e-2501efbdf97d"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "ruhuha-media"
     }
   ]
 }

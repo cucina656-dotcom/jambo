@@ -1,3 +1,77 @@
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  Eye,
+  EyeOff,
+  ImagePlus,
+  MessageSquare,
+  Send,
+  X,
+  Zap,
+} from "lucide-react";
+
+import {
+  countryCodeToFlagEmoji,
+  TV_COUNTRY_OPTIONS,
+} from "../../utils/countries";
+
+import TvConversationMessage from "./TvConversationMessage";
+
+const TV_VISIBLE_MESSAGE_LIMIT = 8;
+const TV_MESSAGE_LANE_HEIGHT = 78;
+const TV_POLL_INTERVAL_MS = 7000;
+const TV_MESSAGE_DURATION_SECONDS = 30;
+const TV_MESSAGE_STAGGER_SECONDS = 3.75;
+
+const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
+const TV_PUBLIC_IDENTITY_KEY =
+  `${TV_IDENTITY_KEY_PREFIX}public-viewer`;
+
+const TV_PUBLIC_VIEWER_ID_KEY =
+  "gwamo-tv-public-viewer-id:v1";
+
+function getOrCreateTvPublicViewerId() {
+  try {
+    const existing =
+      localStorage.getItem(TV_PUBLIC_VIEWER_ID_KEY);
+
+    if (existing) return existing;
+
+    const generated =
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+        ? `viewer-${crypto.randomUUID()}`
+        : `viewer-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 10)}`;
+
+    localStorage.setItem(
+      TV_PUBLIC_VIEWER_ID_KEY,
+      generated,
+    );
+
+    return generated;
+  } catch {
+    return `viewer-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+  }
+}
+
+// =============================================================================
+// TvConversationOverlay - public, animated conversation floating over TV
+// media. Entirely separate from private "Contact me" messaging. Reading is
+// public; sending uses a lightweight viewer identity and does not require login.
+// TV card keeps a live connection (WebSocket, falling back to modest
+// polling) - off-screen cards stay idle to save resources and battery.
+// =============================================================================
 const TvConversationOverlay = memo(function TvConversationOverlay({
   postId,
   isActive,
@@ -8,6 +82,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   getSessionToken,
   onRequireAuth,
   onZoomImage,
+  compressImageFile,
+  defaultLogo,
 }) {
   const isSocialLife = mode === "social-life";
   const [visibleMessages, setVisibleMessages] = useState([]);
@@ -47,7 +123,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     );
   }, [countrySearch]);
   const circulatingMessages = useMemo(
-    () => [...visibleMessages].reverse(),
+    () => visibleMessages,
     [visibleMessages],
   );
   const localTypingIdentity = useMemo(
@@ -106,39 +182,63 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const lastLiveLaunchRef = useRef(0);
   const appendMessages = useCallback((incoming, { live = false } = {}) => {
     if (!incoming || !incoming.length) return;
-    setVisibleMessages((current) => {
-      const merged = [...current];
-      for (const rawMessage of incoming) {
-        if (!rawMessage) continue;
-        const fallbackId = `${rawMessage.created_at || "now"}-${rawMessage.user_name || "viewer"}-${rawMessage.message || ""}`;
-        const messageId = String(rawMessage.id ?? fallbackId);
-        if (seenIdsRef.current.has(messageId)) continue;
-        seenIdsRef.current.add(messageId);
 
-        const slot = laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
-        laneCounterRef.current += 1;
+    const additions = [];
 
-        let delay = -(slot * 4.5);
-        if (live) {
-          const nowSeconds = Date.now() / 1000;
-          const nextLaunch = Math.max(
-            nowSeconds,
-            Number(lastLiveLaunchRef.current || 0) + 4.5,
-          );
-          delay = Math.max(0, nextLaunch - nowSeconds);
-          lastLiveLaunchRef.current = nextLaunch;
-        }
+    for (const rawMessage of incoming) {
+      if (!rawMessage) continue;
 
-        merged.push({
-          ...rawMessage,
-          id: messageId,
-          _tvLane: 0,
-          _tvDuration: 36,
-          _tvDelay: delay,
-        });
+      const fallbackId =
+        `${rawMessage.created_at || "now"}-` +
+        `${rawMessage.user_name || "viewer"}-` +
+        `${rawMessage.message || ""}`;
+
+      const messageId = String(rawMessage.id ?? fallbackId);
+
+      if (seenIdsRef.current.has(messageId)) continue;
+
+      seenIdsRef.current.add(messageId);
+
+      const slot =
+        laneCounterRef.current % TV_VISIBLE_MESSAGE_LIMIT;
+
+      laneCounterRef.current += 1;
+
+      let delay = -(slot * TV_MESSAGE_STAGGER_SECONDS);
+
+      if (live) {
+        const nowSeconds = Date.now() / 1000;
+        const previousLaunch = Number(lastLiveLaunchRef.current || 0);
+        const secondsSincePrevious = previousLaunch
+          ? Math.max(0, nowSeconds - previousLaunch)
+          : TV_MESSAGE_STAGGER_SECONDS;
+
+        // Never make a new message wait invisibly. If messages arrive close
+        // together, start the newer one slightly farther along the same path
+        // so it appears above the older one without sideways drift.
+        delay = -Math.max(
+          0,
+          TV_MESSAGE_STAGGER_SECONDS - secondsSincePrevious,
+        );
+        lastLiveLaunchRef.current = nowSeconds;
       }
+
+      additions.push({
+        ...rawMessage,
+        id: messageId,
+        _tvLane: 0,
+        _tvDuration: TV_MESSAGE_DURATION_SECONDS,
+        _tvDelay: delay,
+      });
+    }
+
+    if (!additions.length) return;
+
+    setVisibleMessages((current) => {
+      const merged = [...current, ...additions];
+
       return merged.length > TV_VISIBLE_MESSAGE_LIMIT
-        ? merged.slice(merged.length - TV_VISIBLE_MESSAGE_LIMIT)
+        ? merged.slice(-TV_VISIBLE_MESSAGE_LIMIT)
         : merged;
     });
   }, []);
@@ -221,7 +321,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         id: key,
         user_name: payload?.user_name || payload?.name || "Someone",
         profile_image:
-          payload?.profile_image || payload?.profile_image_url || DEFAULT_LOGO,
+          payload?.profile_image || payload?.profile_image_url || defaultLogo,
         country_code: payload?.country_code || "",
         updatedAt: Date.now(),
       };
@@ -231,7 +331,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       const timer = setTimeout(() => clearRemoteTyping(key), 2600);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTyping, publicViewerId],
+    [clearRemoteTyping, publicViewerId, defaultLogo],
   );
 
   const connectRealtime = useCallback(async () => {
@@ -434,7 +534,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         setUploadingPhoto(false);
       }
     },
-    [getSessionToken, apiUrl, tvIdentity, saveIdentity],
+    [getSessionToken, apiUrl, tvIdentity, saveIdentity, compressImageFile],
   );
 
   const chooseCountry = useCallback(
@@ -519,10 +619,24 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     try {
       const data = await sendPublicItem(text);
       setComposerText("");
-      const returnedItem = data.comment || data.message || null;
+      setOverlayVisible(true);
+
+      const returnedItem =
+        data?.comment && typeof data.comment === "object"
+          ? data.comment
+          : data?.message && typeof data.message === "object"
+            ? data.message
+            : data?.item && typeof data.item === "object"
+              ? data.item
+              : null;
+
       const sent = returnedItem
         ? {
             ...returnedItem,
+            id:
+              returnedItem.id ||
+              data?.id ||
+              `local-${Date.now()}`,
             message: String(
               returnedItem.message ?? returnedItem.comment ?? text,
             ),
@@ -534,13 +648,14 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             country_code: returnedItem.country_code || tvIdentity.countryCode,
           }
         : {
-            id: `local-${Date.now()}`,
+            id: data?.id || `local-${Date.now()}`,
             user_name: tvIdentity.name,
             profile_image: tvIdentity.photoUrl,
             country_code: tvIdentity.countryCode,
             message: text,
             created_at: new Date().toISOString(),
           };
+
       appendMessages([sent], { live: true });
     } catch (err) {
       setError(
@@ -586,7 +701,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               message={message}
               paused={pausedMessageIds.has(messageId)}
               laneHeight={TV_MESSAGE_LANE_HEIGHT}
-              defaultLogo={DEFAULT_LOGO}
+              defaultLogo={defaultLogo}
               onTogglePause={toggleMessagePause}
               onZoomImage={onZoomImage}
             />
@@ -604,7 +719,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 onZoomImage?.(
                   typingPresence.profile_image ||
                     typingPresence.profile_image_url ||
-                    DEFAULT_LOGO,
+                    defaultLogo,
                 )
               }
               aria-label={`View ${typingPresence.user_name || "viewer"}'s profile picture`}
@@ -613,12 +728,12 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
                 src={
                   typingPresence.profile_image ||
                   typingPresence.profile_image_url ||
-                  DEFAULT_LOGO
+                  defaultLogo
                 }
                 alt=""
                 onError={(event) => {
                   event.currentTarget.onerror = null;
-                  event.currentTarget.src = DEFAULT_LOGO;
+                  event.currentTarget.src = defaultLogo;
                 }}
               />
               <span>{countryCodeToFlagEmoji(typingPresence.country_code)}</span>
@@ -811,10 +926,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
               <button
                 type="button"
                 className="tv-guide-self-avatar"
-                onClick={() => onZoomImage?.(tvIdentity.photoUrl || DEFAULT_LOGO)}
+                onClick={() => onZoomImage?.(tvIdentity.photoUrl || defaultLogo)}
                 aria-label="View your public profile picture"
               >
-                <img src={tvIdentity.photoUrl || DEFAULT_LOGO} alt="" />
+                <img src={tvIdentity.photoUrl || defaultLogo} alt="" />
                 <span aria-hidden="true">
                   {countryCodeToFlagEmoji(tvIdentity.countryCode)}
                 </span>
@@ -863,5 +978,5 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   );
 });
 TvConversationOverlay.displayName = "TvConversationOverlay";
- 
+
 export default TvConversationOverlay;

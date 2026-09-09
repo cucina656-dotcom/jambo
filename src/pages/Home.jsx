@@ -1,5 +1,6 @@
 import TvMedia from "../components/tv/TvMedia";
 import TvConversationOverlay from "../components/tv/TvConversationOverlay";
+import ConnectExperience from "../components/connect/ConnectExperience";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 
 import {
@@ -123,7 +124,7 @@ const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 // reference for every card in the feed is exactly right.
 const noop = () => {};
 const CATEGORY_TABS = [
-  { key: "time-market", label: "Time Market", icon: Clock },
+  { key: "time-market", label: "Market", icon: Clock },
   {
     key: "social-life",
     label: "Social Life",
@@ -162,7 +163,22 @@ const CATEGORY_META = {
 const INFO_CONTENT = {
   about: {
     title: "About Gwamo",
-    body: "Every person has time, and that time can have economic value. Gwamo is a market for human time: show who you are, what you can do and how much your time costs, then let people discover you through the feed. Verified providers receive the blue verified badge shown beside their name.",
+    eyebrow: "Your time has value.",
+    body: "Gwamo is a marketplace built around the value of human time. It helps people turn skills, experience, availability and useful abilities into real connections and opportunities.",
+    sections: [
+      {
+        title: "Show your value",
+        body: "Create a clear presence that shows who you are, what you can do and the value of your time.",
+      },
+      {
+        title: "Get discovered",
+        body: "Use the Gwamo feed to reach people looking for skills, services, support, collaboration or meaningful opportunities.",
+      },
+      {
+        title: "Build trust",
+        body: "Connect with real people and build confidence through Gwamo verification. Verified members are identified by a blue verification badge.",
+      },
+    ],
   },
   help: {
     title: "Help",
@@ -170,7 +186,8 @@ const INFO_CONTENT = {
   },
   privacy: {
     title: "Privacy Policy",
-    body: 'Messages marked "Private conversation" are not public and are intended for the conversation participants. However, authorized Gwamo administrators can access and read any conversation, including one labeled "Private conversation", for moderation, user safety, fraud investigation, support or legal compliance. Gwamo therefore does not describe these chats as end-to-end encrypted. Your telephone number is used for account identity and verification calls. Your personal PIN must be stored by the server only as a secure one-way hash; Gwamo staff should never ask you to reveal the PIN. By using messaging, you acknowledge this administrator-access policy.',
+    eyebrow: "Your safety and trust matter.",
+    body: "Gwamo may verify your phone number and identity to help confirm that accounts belong to real people. We take strong measures to prevent fraud, impersonation, fake accounts, scams and other misuse of the platform. Accounts that fail verification or are found to be fraudulent may be restricted or removed. Your phone number is used for account identification and verification purposes, and your personal PIN should never be shared with anyone.",
   },
 };
 function isDirectVideoUrl(url = "") {
@@ -1348,7 +1365,10 @@ function Home() {
         if (error?.name === "AbortError") return;
         devError("Failed to fetch services:", error);
       } finally {
-        fetchInFlightRef.current = false;
+        if (fetchAbortRef.current === controller) {
+          fetchAbortRef.current = null;
+          fetchInFlightRef.current = false;
+        }
         if (isMountedRef.current) {
           setLoading(false);
           setLoadingMore(false);
@@ -1386,7 +1406,10 @@ function Home() {
     init();
     return () => {
       isMountedRef.current = false;
-      if (fetchAbortRef.current) fetchAbortRef.current.abort();
+      const controller = fetchAbortRef.current;
+      fetchAbortRef.current = null;
+      fetchInFlightRef.current = false;
+      if (controller) controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2669,7 +2692,7 @@ function Home() {
   // WhatsApp Share
   // =============================================================================
   const sharePost = useCallback((post) => {
-    const title = String(post?.title || "Time Market service").trim();
+    const title = String(post?.title || "Market service").trim();
     const message = String(post?.subtitle || "").trim();
     const shareText = [title, message, window.location.href]
       .filter(Boolean)
@@ -2696,15 +2719,7 @@ function Home() {
         : { label: "Offer work or trade skills", postType: "offer" };
   let mainContent;
   if (activeCategory === "connect") {
-    mainContent = (
-      <ComingSoonPanel
-        category="connect"
-        onBack={() => {
-          setActivePostIndex(0);
-          setActiveCategory("time-market");
-        }}
-      />
-    );
+    mainContent = <ConnectExperience />;
   } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
@@ -3259,7 +3274,7 @@ const ComingSoonPanel = memo(({ category, onBack }) => {
       <h2>{meta.label}</h2>
       <p>{meta.blurb}</p>
       <button type="button" className="empty-button" onClick={onBack}>
-        Back to Time Market
+        Back to Market
       </button>
     </div>
   );
@@ -5072,7 +5087,7 @@ const ChatModal = memo(
                 <small>{partner.serviceName || partner.headline}</small>
               ) : null}
               <small className="chat-privacy-note">
-                Private to participants; authorized Gwamo admins may review under the Privacy Policy.
+                Private conversation · Privacy Policy applies
               </small>
             </div>
           </div>
@@ -6185,7 +6200,22 @@ const InfoModal = memo(({ topic, onClose }) => {
             <X size={20} strokeWidth={2.4} aria-hidden="true" />
           </button>
         </div>
-        <p className="info-modal-body">{content.body}</p>
+        <div className="info-modal-content">
+          {content.eyebrow ? (
+            <p className="info-modal-lead">{content.eyebrow}</p>
+          ) : null}
+          <p className="info-modal-body">{content.body}</p>
+          {content.sections?.length ? (
+            <div className="info-modal-sections">
+              {content.sections.map((section) => (
+                <div className="info-modal-section" key={section.title}>
+                  <h3>{section.title}</h3>
+                  <p>{section.body}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <button type="button" className="cancel-button" onClick={onClose}>
           Close
         </button>
@@ -6282,7 +6312,7 @@ function HomeStylesInner() {
         margin: 0;
         overflow: hidden;
         color: #ffffff;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: Inter, Segoe UI, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: clamp(34px, 6vw, 48px);
         font-weight: 900;
         line-height: 1;
@@ -7513,11 +7543,47 @@ function HomeStylesInner() {
         font-size: 12px;
         font-weight: 800;
       }
+      .info-modal-content {
+        text-align: left;
+      }
+      .info-modal-lead {
+        margin: 2px 0 8px;
+        color: #ffffff;
+        font-size: 19px;
+        font-weight: 850;
+        line-height: 1.25;
+        letter-spacing: -0.02em;
+      }
       .info-modal-body {
-        margin: 0 0 18px;
-        color: rgba(226, 232, 240, 0.86);
+        margin: 0 0 16px;
+        color: rgba(226, 232, 240, 0.82);
         font-size: 14px;
-        line-height: 1.6;
+        line-height: 1.65;
+        text-align: left;
+      }
+      .info-modal-sections {
+        display: grid;
+        gap: 10px;
+        margin: 4px 0 20px;
+      }
+      .info-modal-section {
+        padding: 14px 15px;
+        border: 1px solid rgba(22, 139, 255, 0.20);
+        border-radius: 16px;
+        background: rgba(8, 124, 255, 0.055);
+      }
+      .info-modal-section h3 {
+        margin: 0 0 5px;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.3;
+      }
+      .info-modal-section p {
+        margin: 0;
+        color: rgba(226, 232, 240, 0.72);
+        font-size: 13px;
+        line-height: 1.55;
       }
       .profile-sheet-card {
         max-width: 460px;
@@ -8258,7 +8324,7 @@ function HomeStylesInner() {
       }
       .topbar-neon-button:hover { color: #ffffff; filter: drop-shadow(0 0 12px rgba(45, 186, 255, 1)); }
       .topbar-action-text { font-size: 11px; font-weight: 700; }
-      .topbar-add-button { color: #ffffff; border: 1px solid rgba(255, 255, 255, .24); background: rgba(5, 17, 34, .26); }
+      .topbar-add-button { color: #f4fbff; border: 0 !important; background: transparent !important; box-shadow: none !important; border-radius: 10px; }
       .category-nav { position: absolute; left: 0; right: 0; bottom: -55px; width: 100%; padding: 0 18px; gap: 7px; }
       .category-tab { min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 11px; background: rgba(3, 12, 27, .38); backdrop-filter: blur(12px); }
       .category-tab svg { width: 13px; height: 13px; }
@@ -8697,6 +8763,90 @@ function HomeStylesInner() {
           contain: paint;
         }
       }
+      /* GWAMO MARKET POLISH */
+      .home-page:has(.category-tab:first-child.is-active) {
+        font-family: Inter, Segoe UI, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .feedx-logo {
+        font-weight: 800;
+        letter-spacing: 4px;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .category-nav {
+        gap: 13px;
+        padding: 6px 16px 9px;
+        background: linear-gradient(180deg, rgba(2,7,15,.96), rgba(2,7,15,.82)) !important;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .category-tab {
+        min-height: 30px;
+        padding: 0 7px;
+        border: 0 !important;
+        border-radius: 8px;
+        background: transparent !important;
+        color: rgba(225,238,250,.68);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: -.01em;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .category-tab.is-active {
+        color: #ffffff;
+        background: transparent !important;
+        box-shadow: inset 0 -2px 0 #2dbaff;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .service-reel-card img.home-media,
+      .home-page:has(.category-tab:first-child.is-active) .service-reel-card video.home-media {
+        object-fit: cover !important;
+        object-position: center;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .service-card-gradient {
+        background: linear-gradient(to bottom, rgba(0,4,11,.18), transparent 35%, transparent 50%, rgba(0,5,13,.35) 68%, rgba(1,7,16,.96) 96%, #020712 100%);
+      }
+      .home-page:has(.category-tab:first-child.is-active) .post-provider-row {
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .creator-name {
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.18;
+        letter-spacing: -.015em;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .service-name {
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #f4f9ff;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .post-price {
+        margin-top: 3px !important;
+        color: #55efa0;
+        font-size: 13px !important;
+        font-weight: 800;
+        text-shadow: none;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .post-price-unit {
+        color: rgba(170,255,206,.74);
+      }
+      .home-page:has(.category-tab:first-child.is-active) .post-tagline {
+        margin-top: 4px;
+        max-width: min(74vw, 430px);
+        color: rgba(235,244,252,.82);
+        font-size: 12px;
+        font-weight: 450;
+        line-height: 1.38;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .contact-me-cta {
+        border-radius: 14px;
+        font-weight: 750;
+        letter-spacing: -.01em;
+      }
+      .topbar-add-button:hover,
+      .topbar-add-button:focus-visible {
+        background: transparent !important;
+        border: 0 !important;
+        filter: drop-shadow(0 0 9px rgba(45,186,255,.9));
+      }
+
       /* =========================================================
          GWAMO TV mode: media becomes the visual background while
          controls stay light, transparent and symbol-first.
@@ -8893,7 +9043,7 @@ function HomeStylesInner() {
         position: absolute;
         z-index: 44;
         right: 17px;
-        bottom: 61px;
+        bottom: 19px;
         width: 42px;
         height: 42px;
         display: grid;
@@ -8980,7 +9130,7 @@ function HomeStylesInner() {
       .home-page.is-tv-mode .tv-conversation-column {
         top: 140px;
         right: 92px;
-        bottom: 322px;
+        bottom: 168px;
         left: 16px;
       }
       .tv-conversation-column {
@@ -9007,14 +9157,14 @@ function HomeStylesInner() {
         width: min(82%, 430px);
         display: grid;
         grid-template-columns: 29px minmax(0, 1fr);
-        align-items: start;
-        column-gap: 6px;
+        align-items: center;
+        column-gap: 5px;
         opacity: 0;
         pointer-events: auto;
         cursor: pointer;
         will-change: transform, opacity;
         animation-name: tvMessageRise;
-        animation-duration: var(--tv-message-duration, 36s);
+        animation-duration: var(--tv-message-duration, 30s);
         animation-delay: var(--tv-message-delay, 0s);
         animation-timing-function: linear;
         animation-iteration-count: infinite;
@@ -9030,23 +9180,17 @@ function HomeStylesInner() {
       @keyframes tvMessageRise {
         0% {
           opacity: 0;
-          transform: translate3d(0, 18px, 0) scale(.98);
+          transform: translate3d(0, 18px, 0);
         }
-        5% {
+        6% {
           opacity: 1;
-          transform: translate3d(0, 0, 0) scale(1);
         }
-        72% {
+        88% {
           opacity: 1;
-          transform: translate3d(0, -43svh, 0) scale(1);
-        }
-        90% {
-          opacity: .28;
-          transform: translate3d(0, -54svh, 0) scale(.96);
         }
         100% {
           opacity: 0;
-          transform: translate3d(0, -60svh, 0) scale(.92);
+          transform: translate3d(0, -72svh, 0);
         }
       }
       .tv-message-avatar {
@@ -9086,24 +9230,33 @@ function HomeStylesInner() {
       .tv-message-body {
         position: relative;
         min-width: 0;
-        max-width: 100%;
+        width: fit-content;
+        max-width: min(78vw, 330px);
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        align-items: flex-start;
+        justify-content: center;
+        justify-self: start;
+        gap: 1px;
         padding-top: 0;
+        transform: translateY(18px);
+        text-align: left;
       }
       .tv-message-name {
+        order: 1;
         max-width: 230px;
         overflow: hidden;
-        color: #fff;
-        font-size: 11.5px;
-        font-weight: 850;
-        line-height: 1.2;
+        margin-top: 1px;
+        color: rgba(255, 255, 255, .78);
+        font-size: 10px;
+        font-weight: 720;
+        line-height: 1.1;
         text-overflow: ellipsis;
-        text-shadow: 0 1px 4px rgba(0, 0, 0, .98), 0 0 8px rgba(22, 139, 255, .65);
+        text-shadow: 0 1px 4px rgba(0, 0, 0, .98), 0 0 6px rgba(22, 139, 255, .45);
         white-space: nowrap;
       }
       .tv-message-text {
+        order: 2;
         max-width: 100%;
         color: rgba(255, 255, 255, .96);
         font-size: 11.5px;
@@ -9523,7 +9676,7 @@ function HomeStylesInner() {
         }
         .tv-private-contact-cta {
           right: 11px;
-          bottom: calc(58px + env(safe-area-inset-bottom));
+          bottom: calc(15px + env(safe-area-inset-bottom));
           width: 39px;
           height: 39px;
           background: transparent !important;
@@ -9546,7 +9699,7 @@ function HomeStylesInner() {
         .home-page.is-tv-mode .tv-conversation-column {
           top: 122px;
           right: 78px;
-          bottom: 282px;
+          bottom: 150px;
           left: 14px;
         }
         .tv-conversation-column {
@@ -9567,9 +9720,11 @@ function HomeStylesInner() {
           height: 13px;
           font-size: 9px;
         }
-        .tv-message-name,
         .tv-message-text {
           font-size: 10.8px;
+        }
+        .tv-message-name {
+          font-size: 9.6px;
         }
         .tv-public-action-dock {
           left: 12px;

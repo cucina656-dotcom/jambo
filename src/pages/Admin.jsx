@@ -29,6 +29,11 @@ import {
   X,
 } from "lucide-react";
  
+import {
+  TV_COUNTRY_OPTIONS,
+  countryCodeToFlagEmoji,
+} from "../utils/countries";
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
  
 async function readJson(response) {
@@ -179,6 +184,17 @@ export default function Admin() {
   const [report, setReport] = useState([]);
   const [providers, setProviders] = useState([]);
   const [conversations, setConversations] = useState([]);
+  const [tvConversations, setTvConversations] = useState([]);
+  const [tvDraft, setTvDraft] = useState({
+    tv_post_id: "",
+    user_name: "",
+    profile_image: "",
+    country_code: "RW",
+    message: "",
+  });
+  const [tvPhotoUploading, setTvPhotoUploading] = useState(false);
+  const [tvSaving, setTvSaving] = useState(false);
+  const [tvDeletingId, setTvDeletingId] = useState("");
   const [pinResets, setPinResets] = useState([]);
   const [draftStats, setDraftStats] = useState({});
   const [resetCodes, setResetCodes] = useState({});
@@ -224,12 +240,14 @@ export default function Admin() {
           reportResult,
           providerResult,
           conversationResult,
+          tvConversationResult,
           pinResetResult,
         ] =
           await Promise.all([
             adminApi("/api/admin/feedx-report", cleanPin),
             adminApi("/api/admin/time-market/providers", cleanPin),
             adminApi("/api/admin/time-market/conversations", cleanPin),
+            adminApi("/api/admin/tv-conversations", cleanPin),
             adminApi("/api/admin/time-market/pin-resets", cleanPin),
           ]);
  
@@ -244,6 +262,11 @@ export default function Admin() {
         )
           ? conversationResult.conversations
           : [];
+        const nextTvConversations = Array.isArray(
+          tvConversationResult.conversations
+        )
+          ? tvConversationResult.conversations
+          : [];
         const nextPinResets = Array.isArray(pinResetResult.requests)
           ? pinResetResult.requests
           : [];
@@ -252,6 +275,7 @@ export default function Admin() {
         setReport(nextReport);
         setProviders(nextProviders);
         setConversations(nextConversations);
+        setTvConversations(nextTvConversations);
         setPinResets(nextPinResets);
         setPrivacyNotice(
           conversationResult.privacy_notice ||
@@ -268,7 +292,7 @@ export default function Admin() {
         setDraftStats(nextDrafts);
  
         showStatus(
-          `${nextProviders.length} providers, ${nextReport.length} services, ${nextConversations.length} conversations and ${nextPinResets.length} PIN reset requests loaded.`,
+          `${nextProviders.length} providers, ${nextReport.length} services, ${nextConversations.length} private conversations, ${nextTvConversations.length} TV conversations and ${nextPinResets.length} PIN reset requests loaded.`,
           "success"
         );
         return true;
@@ -298,6 +322,17 @@ export default function Admin() {
     setReport([]);
     setProviders([]);
     setConversations([]);
+    setTvConversations([]);
+    setTvDraft({
+      tv_post_id: "",
+      user_name: "",
+      profile_image: "",
+      country_code: "RW",
+      message: "",
+    });
+    setTvPhotoUploading(false);
+    setTvSaving(false);
+    setTvDeletingId("");
     setPinResets([]);
     setResetCodes({});
     setSelectedPost(null);
@@ -623,6 +658,125 @@ export default function Admin() {
     setDeliveredActivationCode(null);
   }, []);
 
+  const uploadTvProfilePhoto = useCallback(
+    async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      if (!file) return;
+
+      if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+        showStatus("TV profile photo must be JPG, PNG, WebP, or GIF.", "error");
+        input.value = "";
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        showStatus("TV profile photo must be smaller than 2 MB.", "error");
+        input.value = "";
+        return;
+      }
+
+      setTvPhotoUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const result = await adminApi(
+          "/api/admin/tv-conversation-photo",
+          adminPin,
+          { method: "POST", body: formData }
+        );
+
+        setTvDraft((current) => ({
+          ...current,
+          profile_image: String(result.url || ""),
+        }));
+        showStatus("TV profile picture uploaded.", "success");
+      } catch (error) {
+        showStatus(error.message || "Could not upload TV profile picture.", "error");
+      } finally {
+        setTvPhotoUploading(false);
+        input.value = "";
+      }
+    },
+    [adminPin, showStatus]
+  );
+
+  const createTvConversation = useCallback(
+    async (event) => {
+      event.preventDefault();
+
+      const payload = {
+        tv_post_id: String(tvDraft.tv_post_id || "").trim(),
+        user_name: String(tvDraft.user_name || "").trim(),
+        profile_image: String(tvDraft.profile_image || "").trim(),
+        country_code: String(tvDraft.country_code || "").trim(),
+        message: String(tvDraft.message || "").trim(),
+      };
+
+      if (!payload.tv_post_id) return showStatus("Choose the TV post first.", "error");
+      if (!payload.user_name) return showStatus("Enter the name that should appear on TV.", "error");
+      if (!payload.profile_image) return showStatus("Upload the profile picture first.", "error");
+      if (!payload.country_code) return showStatus("Choose the country.", "error");
+      if (!payload.message) return showStatus("Write the TV conversation message.", "error");
+
+      setTvSaving(true);
+      try {
+        const result = await adminApi("/api/admin/tv-conversations", adminPin, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (result.message) {
+          setTvConversations((current) => [result.message, ...current]);
+        }
+
+        setTvDraft((current) => ({ ...current, message: "" }));
+        showStatus(
+          "TV conversation added. It appears like a normal viewer conversation.",
+          "success"
+        );
+      } catch (error) {
+        showStatus(error.message || "Could not add TV conversation.", "error");
+      } finally {
+        setTvSaving(false);
+      }
+    },
+    [adminPin, showStatus, tvDraft]
+  );
+
+  const deleteTvConversation = useCallback(
+    async (conversation) => {
+      const id = String(conversation?.id || "").trim();
+      if (!id || tvDeletingId) return;
+
+      setTvDeletingId(id);
+      try {
+        const result = await adminApi("/api/admin/tv-conversations", adminPin, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: id }),
+        });
+
+        setTvConversations((current) =>
+          current.filter((item) => String(item.id) !== id)
+        );
+
+        showStatus(
+          result.message ||
+            "TV conversation, displayed name and profile picture were removed.",
+          "success"
+        );
+      } catch (error) {
+        showStatus(error.message || "Could not delete TV conversation.", "error");
+      } finally {
+        setTvDeletingId("");
+      }
+    },
+    [adminPin, showStatus, tvDeletingId]
+  );
+
   const totals = useMemo(
     () =>
       report.reduce(
@@ -711,6 +865,38 @@ export default function Admin() {
     );
   }, [conversations, searchText]);
 
+  const tvPosts = useMemo(
+    () =>
+      report.filter(
+        (post) => String(post.post_type || "").trim().toLowerCase() === "moment"
+      ),
+    [report]
+  );
+
+  const filteredTvConversations = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return tvConversations;
+
+    const postById = new Map(tvPosts.map((post) => [String(post.id), post]));
+
+    return tvConversations.filter((conversation) => {
+      const post = postById.get(String(conversation.tv_post_id)) || {};
+      return [
+        conversation.id,
+        conversation.tv_post_id,
+        conversation.user_name,
+        conversation.country_code,
+        conversation.message,
+        post.creator_name,
+        post.title,
+        post.subtitle,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [searchText, tvConversations, tvPosts]);
+
   const filteredPinResets = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     if (!query) return pinResets;
@@ -790,6 +976,8 @@ export default function Admin() {
       ? filteredPinResets.length
       : activeView === "conversations"
       ? filteredConversations.length
+      : activeView === "tv-conversations"
+      ? filteredTvConversations.length
       : filteredPosts.length;
  
   return (
@@ -896,6 +1084,13 @@ export default function Admin() {
               label="Conversations"
             />
             <Tab
+              active={activeView === "tv-conversations"}
+              onClick={() => setActiveView("tv-conversations")}
+              icon={<Video size={18} />}
+              label="TV Conversations"
+              count={tvConversations.length}
+            />
+            <Tab
               active={activeView === "analytics"}
               onClick={() => setActiveView("analytics")}
               icon={<BarChart3 size={18} />}
@@ -923,6 +1118,8 @@ export default function Admin() {
                     ? "Search PIN reset, name or telephone..."
                     : activeView === "conversations"
                     ? "Search provider or customer..."
+                    : activeView === "tv-conversations"
+                    ? "Search TV name, message, country or post..."
                     : "Search service, provider or ID..."
                 }
               />
@@ -969,6 +1166,21 @@ export default function Admin() {
             />
           ) : null}
  
+          {activeView === "tv-conversations" ? (
+            <TvConversationsView
+              conversations={filteredTvConversations}
+              tvPosts={tvPosts}
+              draft={tvDraft}
+              setDraft={setTvDraft}
+              uploadPhoto={uploadTvProfilePhoto}
+              photoUploading={tvPhotoUploading}
+              saveConversation={createTvConversation}
+              saving={tvSaving}
+              deleteConversation={deleteTvConversation}
+              deletingId={tvDeletingId}
+            />
+          ) : null}
+
           {activeView === "analytics" ? (
             <AnalyticsView posts={filteredPosts} />
           ) : null}
@@ -1509,6 +1721,294 @@ function ConversationsView({ conversations, openConversation }) {
   );
 }
  
+function TvConversationsView({
+  conversations,
+  tvPosts,
+  draft,
+  setDraft,
+  uploadPhoto,
+  photoUploading,
+  saveConversation,
+  saving,
+  deleteConversation,
+  deletingId,
+}) {
+  const postById = useMemo(
+    () => new Map(tvPosts.map((post) => [String(post.id), post])),
+    [tvPosts]
+  );
+
+  const selectedPost = postById.get(String(draft.tv_post_id)) || null;
+
+  return (
+    <div className="tv-admin-grid">
+      <section className="tv-admin-create">
+        <div className="tv-admin-heading">
+          <div>
+            <span className="eyebrow">PUBLIC TV</span>
+            <h2>Add TV conversation</h2>
+            <p>
+              Appears like a normal viewer: picture, name, country flag and
+              message. No Admin label is shown.
+            </p>
+          </div>
+          <Video size={24} />
+        </div>
+
+        <form className="tv-admin-form" onSubmit={saveConversation}>
+          <label>
+            TV post
+            <select
+              value={draft.tv_post_id}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  tv_post_id: event.target.value,
+                }))
+              }
+            >
+              <option value="">Choose TV post</option>
+              {tvPosts.map((post) => (
+                <option key={post.id} value={post.id}>
+                  {post.creator_name || "TV"} —{" "}
+                  {post.title || post.subtitle || `Post ${post.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {!tvPosts.length ? (
+            <div className="tv-admin-hint">
+              No TV posts are available yet.
+            </div>
+          ) : null}
+
+          {selectedPost ? (
+            <div className="tv-admin-selected-post">
+              <Video size={16} />
+              <span>
+                <strong>{selectedPost.creator_name || "TV post"}</strong>
+                <small>
+                  {selectedPost.title ||
+                    selectedPost.subtitle ||
+                    selectedPost.id}
+                </small>
+              </span>
+            </div>
+          ) : null}
+
+          <div className="tv-admin-two">
+            <label>
+              Display name
+              <input
+                type="text"
+                maxLength={50}
+                value={draft.user_name}
+                placeholder="Name viewers will see"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    user_name: event.target.value,
+                  }))
+                }
+              />
+            </label>
+
+            <label>
+              Country
+              <select
+                value={draft.country_code}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    country_code: event.target.value,
+                  }))
+                }
+              >
+                {TV_COUNTRY_OPTIONS.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {countryCodeToFlagEmoji(code)} {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="tv-admin-photo-row">
+            <div className="tv-admin-photo-preview">
+              {draft.profile_image ? (
+                <img src={draft.profile_image} alt="" />
+              ) : (
+                <UserRound size={24} />
+              )}
+            </div>
+
+            <label className="tv-admin-upload">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={uploadPhoto}
+                disabled={photoUploading}
+              />
+              {photoUploading ? (
+                <Loader2 className="spin" size={17} />
+              ) : (
+                <ImageIcon size={17} />
+              )}
+              {photoUploading ? "Uploading..." : "Upload profile picture"}
+            </label>
+
+            {draft.profile_image ? (
+              <button
+                type="button"
+                className="tv-admin-clear-photo"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    profile_image: "",
+                  }))
+                }
+              >
+                <X size={16} />
+                Clear
+              </button>
+            ) : null}
+          </div>
+
+          <label>
+            Conversation
+            <textarea
+              maxLength={220}
+              rows={4}
+              value={draft.message}
+              placeholder="Write what should appear in the public TV conversation..."
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  message: event.target.value,
+                }))
+              }
+            />
+            <small className="tv-admin-character-count">
+              {String(draft.message || "").length}/220
+            </small>
+          </label>
+
+          <div className="tv-admin-preview">
+            <span className="tv-admin-preview-label">TV preview</span>
+            <div className="tv-admin-preview-message">
+              <div className="tv-admin-photo-preview small">
+                {draft.profile_image ? (
+                  <img src={draft.profile_image} alt="" />
+                ) : (
+                  <UserRound size={18} />
+                )}
+              </div>
+              <div>
+                <strong>
+                  {countryCodeToFlagEmoji(draft.country_code)}{" "}
+                  {draft.user_name.trim() || "Viewer name"}
+                </strong>
+                <p>{draft.message.trim() || "Conversation will appear here."}</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="tv-admin-send"
+            disabled={
+              saving ||
+              photoUploading ||
+              !draft.tv_post_id ||
+              !draft.user_name.trim() ||
+              !draft.profile_image ||
+              !draft.country_code ||
+              !draft.message.trim()
+            }
+          >
+            {saving ? (
+              <Loader2 className="spin" size={18} />
+            ) : (
+              <MessageCircle size={18} />
+            )}
+            {saving ? "Sending..." : "Send to TV"}
+          </button>
+        </form>
+      </section>
+
+      <section className="tv-admin-manage">
+        <div className="tv-admin-heading">
+          <div>
+            <span className="eyebrow">LIVE RECORDS</span>
+            <h2>Manage TV conversations</h2>
+            <p>
+              Delete removes the conversation, displayed name and picture
+              reference in one click.
+            </p>
+          </div>
+          <span className="tv-admin-count">{conversations.length}</span>
+        </div>
+
+        {!conversations.length ? (
+          <EmptyState message="No TV conversations match this view." />
+        ) : (
+          <div className="tv-admin-message-list">
+            {conversations.map((conversation) => {
+              const post =
+                postById.get(String(conversation.tv_post_id)) || null;
+
+              return (
+                <article className="tv-admin-message-row" key={conversation.id}>
+                  <div className="tv-admin-avatar">
+                    {conversation.profile_image ? (
+                      <img src={conversation.profile_image} alt="" />
+                    ) : (
+                      <UserRound size={20} />
+                    )}
+                  </div>
+
+                  <div className="tv-admin-message-copy">
+                    <div className="tv-admin-message-name">
+                      <strong>{conversation.user_name || "Someone"}</strong>
+                      <span>
+                        {countryCodeToFlagEmoji(conversation.country_code)}
+                      </span>
+                    </div>
+                    <p>{conversation.message}</p>
+                    <small>
+                      {post
+                        ? post.title || post.subtitle || `TV post ${post.id}`
+                        : `TV post ${conversation.tv_post_id}`}
+                      {" · "}
+                      {formatDate(conversation.created_at)}
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="tv-admin-delete"
+                    disabled={Boolean(deletingId)}
+                    onClick={() => deleteConversation(conversation)}
+                    title="Delete conversation, displayed name and profile picture"
+                  >
+                    {deletingId === String(conversation.id) ? (
+                      <Loader2 className="spin" size={17} />
+                    ) : (
+                      <Trash2 size={17} />
+                    )}
+                    Delete
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function AnalyticsView({ posts }) {
   if (!posts.length) {
     return <EmptyState message="No analytics available." />;
@@ -2893,6 +3393,338 @@ function AdminStyles() {
         font-size: 9px;
       }
  
+      .tv-admin-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, .9fr) minmax(420px, 1.35fr);
+        gap: 18px;
+        padding: 18px;
+        background: #f8fafc;
+      }
+
+      .tv-admin-create,
+      .tv-admin-manage {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: white;
+        box-shadow: 0 8px 26px rgba(29,42,68,.05);
+      }
+
+      .tv-admin-create { padding: 18px; }
+
+      .tv-admin-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px;
+      }
+
+      .tv-admin-create > .tv-admin-heading { padding: 0 0 16px; }
+
+      .tv-admin-heading h2 {
+        margin: 3px 0 4px;
+        font-size: 18px;
+      }
+
+      .tv-admin-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .tv-admin-count {
+        min-width: 34px;
+        height: 34px;
+        padding: 0 9px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--blue);
+        background: #eaf4ff;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .tv-admin-form {
+        display: grid;
+        gap: 14px;
+      }
+
+      .tv-admin-form label {
+        display: grid;
+        gap: 7px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .tv-admin-form input[type="text"],
+      .tv-admin-form select,
+      .tv-admin-form textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: white;
+        color: var(--text);
+        outline: none;
+        font: inherit;
+      }
+
+      .tv-admin-form input[type="text"],
+      .tv-admin-form select {
+        min-height: 44px;
+        padding: 0 12px;
+      }
+
+      .tv-admin-form textarea {
+        resize: vertical;
+        min-height: 94px;
+        padding: 11px 12px;
+        line-height: 1.45;
+      }
+
+      .tv-admin-form input[type="text"]:focus,
+      .tv-admin-form select:focus,
+      .tv-admin-form textarea:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(8,124,255,.09);
+      }
+
+      .tv-admin-two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .tv-admin-selected-post {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 11px;
+        border-radius: 11px;
+        color: var(--blue-dark);
+        background: #f0f7ff;
+      }
+
+      .tv-admin-selected-post span,
+      .tv-admin-selected-post strong,
+      .tv-admin-selected-post small {
+        min-width: 0;
+        display: block;
+      }
+
+      .tv-admin-selected-post small {
+        margin-top: 2px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--muted);
+      }
+
+      .tv-admin-hint {
+        padding: 10px 11px;
+        border-radius: 10px;
+        color: #8a5c00;
+        background: #fff7df;
+        font-size: 11px;
+      }
+
+      .tv-admin-photo-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tv-admin-photo-preview,
+      .tv-admin-avatar {
+        overflow: hidden;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: var(--blue);
+        background: #eaf4ff;
+      }
+
+      .tv-admin-photo-preview {
+        width: 52px;
+        height: 52px;
+      }
+
+      .tv-admin-photo-preview.small {
+        width: 38px;
+        height: 38px;
+      }
+
+      .tv-admin-avatar {
+        width: 44px;
+        height: 44px;
+      }
+
+      .tv-admin-photo-preview img,
+      .tv-admin-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .tv-admin-upload {
+        min-height: 42px;
+        padding: 0 13px;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 7px !important;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        color: var(--blue);
+        background: #f8fbff;
+        cursor: pointer;
+      }
+
+      .tv-admin-upload input { display: none; }
+
+      .tv-admin-clear-photo,
+      .tv-admin-delete {
+        border: 1px solid #ffd5d9;
+        border-radius: 10px;
+        color: var(--red);
+        background: #fff7f8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-weight: 800;
+      }
+
+      .tv-admin-clear-photo {
+        min-height: 40px;
+        padding: 0 11px;
+        font-size: 11px;
+      }
+
+      .tv-admin-character-count {
+        justify-self: end;
+        margin-top: -3px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .tv-admin-preview {
+        padding: 12px;
+        border: 1px solid #dbe9fa;
+        border-radius: 14px;
+        background: linear-gradient(145deg,#f8fbff,#eef6ff);
+      }
+
+      .tv-admin-preview-label {
+        display: block;
+        margin-bottom: 9px;
+        color: var(--blue);
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .8px;
+        text-transform: uppercase;
+      }
+
+      .tv-admin-preview-message {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+
+      .tv-admin-preview-message strong { font-size: 12px; }
+
+      .tv-admin-preview-message p {
+        margin: 3px 0 0;
+        color: #334155;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .tv-admin-send {
+        min-height: 46px;
+        border: 0;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: white;
+        background: var(--blue);
+        font-weight: 900;
+      }
+
+      .tv-admin-message-list { border-top: 1px solid var(--line); }
+
+      .tv-admin-message-row {
+        display: grid;
+        grid-template-columns: 44px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 11px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .tv-admin-message-row:last-child { border-bottom: 0; }
+
+      .tv-admin-message-copy { min-width: 0; }
+
+      .tv-admin-message-name {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .tv-admin-message-name strong {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 13px;
+      }
+
+      .tv-admin-message-copy p {
+        margin: 4px 0;
+        color: #334155;
+        font-size: 12px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+
+      .tv-admin-message-copy small {
+        display: block;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .tv-admin-delete {
+        min-height: 38px;
+        padding: 0 10px;
+        font-size: 11px;
+      }
+
+      @media (max-width: 980px) {
+        .tv-admin-grid { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 640px) {
+        .tv-admin-grid { padding: 10px; gap: 10px; }
+        .tv-admin-two { grid-template-columns: 1fr; }
+        .tv-admin-message-row {
+          grid-template-columns: 40px minmax(0,1fr);
+        }
+        .tv-admin-delete {
+          grid-column: 2;
+          justify-self: start;
+        }
+      }
+
       .analytics-row {
         display: grid;
         grid-template-columns: 44px minmax(170px,1fr) repeat(3,minmax(110px,.7fr));
