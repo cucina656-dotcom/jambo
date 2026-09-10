@@ -32,6 +32,15 @@ function rememberLoveOwner(profileId, ownerToken) {
   try { localStorage.setItem(LOVE_OWNER_KEY, JSON.stringify({ profile_id: profileId, owner_token: ownerToken })); } catch {}
 }
 
+function readLoveOwner() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOVE_OWNER_KEY) || "null");
+    return saved?.profile_id ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 function adminWhatsAppUrl(profile) {
   const text = `Hello Gwamo Admin,\nI want to view my heart match.\nProfile: ${profile?.creator_name || "Meet Someone"}\nProfile ID: ${profile?.id || ""}`;
   return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
@@ -191,6 +200,98 @@ function BrowseLove({ onBack, onJoin }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [owner] = useState(() => readLoveOwner());
+  const [editingVideoId, setEditingVideoId] = useState("");
+  const [videoPin, setVideoPin] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoError, setVideoError] = useState("");
+  const [showAskPin, setShowAskPin] = useState(false);
+
+  async function saveVideo(profile) {
+    if (videoBusy) return;
+    const pin = videoPin.trim();
+    if (!pin) {
+      setVideoError("Enter the Connect video PIN.");
+      return;
+    }
+    if (!videoFile && !videoUrl.trim()) {
+      setVideoError("Upload a video or paste a video link.");
+      return;
+    }
+
+    setVideoBusy(true);
+    setVideoError("");
+    setShowAskPin(false);
+
+    try {
+      let nextVideoUrl = videoUrl.trim();
+      let nextVideoKey = "";
+
+      if (videoFile) {
+        const form = new FormData();
+        form.append("kind", "video");
+        form.append("file", videoFile);
+        form.append("pin", pin);
+
+        const uploadResponse = await fetch(`${CONNECT_API_URL}/api/connect/upload`, {
+          method: "POST",
+          body: form,
+        });
+        const uploaded = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok || uploaded.success === false) {
+          const err = new Error(uploaded.error || uploaded.message || "Video upload failed.");
+          err.status = uploadResponse.status;
+          throw err;
+        }
+        nextVideoUrl = uploaded.url || "";
+        nextVideoKey = uploaded.key || "";
+      }
+
+      const response = await fetch(`${CONNECT_API_URL}/api/connect/video`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Connect-Video-Pin": pin,
+        },
+        body: JSON.stringify({
+          item_id: profile.id,
+          video_url: nextVideoUrl,
+          video_key: nextVideoKey,
+        }),
+      });
+      const updated = await response.json().catch(() => ({}));
+      if (!response.ok || updated.success === false) {
+        const err = new Error(updated.error || updated.message || "Could not change video.");
+        err.status = response.status;
+        throw err;
+      }
+
+      setItems((current) =>
+        current.map((item) => item.id === profile.id ? { ...item, ...updated.item } : item)
+      );
+      setEditingVideoId("");
+      setVideoPin("");
+      setVideoUrl("");
+      setVideoFile(null);
+      setShowAskPin(false);
+    } catch (err) {
+      setVideoError(err.message || "Could not change video.");
+      if (err.status === 403 || /pin/i.test(err.message || "")) setShowAskPin(true);
+    } finally {
+      setVideoBusy(false);
+    }
+  }
+
+  function openVideoEditor(profile) {
+    setEditingVideoId((current) => current === profile.id ? "" : profile.id);
+    setVideoPin("");
+    setVideoUrl("");
+    setVideoFile(null);
+    setVideoError("");
+    setShowAskPin(false);
+  }
 
   useEffect(() => {
     let live = true;
@@ -218,19 +319,54 @@ function BrowseLove({ onBack, onJoin }) {
         {items.map((profile) => {
           const freeDay = profile.public_data?.perfect_free_day || profile.public_data?.answers?.perfect_free_day || "Not added";
           const hasMatch = profile.match_status === "View heart match";
+          const isOwner = owner?.profile_id === profile.id;
+          const editingVideo = editingVideoId === profile.id;
+          const isPaused = isOwner && editingVideo;
           return (
             <article className="love-connection-card" key={profile.id}>
-              <div className="love-card-video">
-                {profile.video_url ? <video src={profile.video_url} controls playsInline preload="metadata" /> : <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>}
+              <div className={`love-card-stage${isPaused ? " is-editing" : ""}`}>
+                <div className="love-card-video-section">
+                  {profile.video_url ? <video src={profile.video_url} controls playsInline preload="metadata" /> : <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>}
+                  {isOwner && (
+                    <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
+                      🎥 {editingVideo ? "Close video" : "Change video"}
+                    </button>
+                  )}
+                </div>
+                <div className="love-card-profile-section">
+                  <img className="love-card-profile-photo" src={profile.creator_photo_url || "/favicon.ico"} alt="" />
+                  <div className="love-card-photo-overlay" />
+                  <div className="love-card-photo-info">
+                    <h2>{profile.creator_name || "Gwamo member"}</h2>
+                    <span className="love-card-area">📍 {profile.location || "Location not added"}</span>
+                    <span className="love-card-freeday">{freeDay}</span>
+                    <div className="love-card-status-row">
+                      {hasMatch ? <a className="heart-match-status found" href={adminWhatsAppUrl(profile)} target="_blank" rel="noreferrer">View heart match</a> : <span className="heart-match-status">Waiting</span>}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="love-card-profile">
-                <img src={profile.creator_photo_url || "/favicon.ico"} alt="" />
-                <div className="love-card-person"><h2>{profile.creator_name || "Gwamo member"}</h2><span>📍 {profile.location || "Location not added"}</span></div>
-              </div>
-              <div className="love-card-info">
-                <div><small>Perfect free day</small><strong>{freeDay}</strong></div>
-                <div><small>Status</small>{hasMatch ? <a className="heart-match-status found" href={adminWhatsAppUrl(profile)} target="_blank" rel="noreferrer">View heart match</a> : <span className="heart-match-status">Waiting</span>}</div>
-              </div>
+              {isOwner && editingVideo && (
+                <div className="love-video-editor">
+                  <div className="love-video-editor-title"><strong>Change your card video</strong><small>Use a video file or paste a video link.</small></div>
+                  <label className="love-video-file">
+                    <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
+                    <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+                  </label>
+                  <div className="love-video-or">OR</div>
+                  <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video link" />
+                  <input className="connect-input" type="password" value={videoPin} onChange={(e) => { setVideoPin(e.target.value); setShowAskPin(false); }} placeholder="Connect video PIN" inputMode="numeric" />
+                  {videoError && <div className="connect-error video-error">{videoError}</div>}
+                  <button type="button" className="connect-primary love-button love-save-video" onClick={() => saveVideo(profile)} disabled={videoBusy}>
+                    {videoBusy ? "Changing video..." : "Save video"}
+                  </button>
+                  {showAskPin && (
+                    <a className="love-ask-pin" href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for my Meet Someone card. Profile: ${profile.creator_name || ""}. Profile ID: ${profile.id}`)}`} target="_blank" rel="noreferrer">
+                      Ask for PIN
+                    </a>
+                  )}
+                </div>
+              )}
             </article>
           );
         })}
@@ -330,16 +466,47 @@ export default function ConnectExperience() {
         .browse-love-panel{width:min(100%,720px)}.browse-love-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}.browse-love-heading h1{margin-bottom:0}
         .browse-join-button{flex:0 0 auto;min-height:42px;padding:0 13px;border:1px solid rgba(255,105,151,.38);border-radius:999px;color:#ffd9e5;background:rgba(84,20,45,.48);font-size:11px;font-weight:850}
         .browse-empty{min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;border:1px dashed rgba(255,255,255,.12);border-radius:22px;color:rgba(255,255,255,.52);background:rgba(255,255,255,.025);text-align:center;font-size:12px}.browse-empty strong{color:#fff;font-size:15px}
-        .love-card-list{display:grid;gap:18px}.love-connection-card{overflow:hidden;border:1px solid rgba(255,109,153,.22);border-radius:26px;background:linear-gradient(160deg,rgba(35,12,28,.96),rgba(5,12,27,.98));box-shadow:0 20px 46px rgba(0,0,0,.32)}
-        .love-card-video{width:100%;aspect-ratio:16/9;overflow:hidden;background:#05070d}.love-card-video video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
-        .love-video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:rgba(255,255,255,.42);background:#070a11}.love-video-placeholder span{font-size:30px}.love-video-placeholder small{font-size:10px;font-weight:800}
-        .love-card-profile{display:flex;align-items:center;gap:12px;padding:15px 16px 11px}.love-card-profile img{width:62px;height:62px;flex:0 0 auto;object-fit:cover;border:3px solid rgba(255,255,255,.88);border-radius:50%}.love-card-person{min-width:0}.love-card-person h2{margin:0 0 4px!important;color:#fff;font-size:20px!important}.love-card-person span{color:rgba(255,233,241,.62);font-size:12px}
-        .love-card-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 16px}.love-card-info>div{min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 12px;border:1px solid rgba(255,255,255,.07);border-radius:16px;background:rgba(255,255,255,.035)}.love-card-info small{color:rgba(255,255,255,.42);font-size:9px;font-weight:850;text-transform:uppercase}.love-card-info strong{color:#fff;font-size:12px}
-        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.66);background:rgba(255,255,255,.06);font-size:10px;font-weight:900;text-decoration:none}.heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c)}
-                @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } }
-        @media (prefers-reduced-motion: reduce) { .love-float { animation: none; } }
+
+        .love-card-list{display:grid;gap:18px}
+        .love-connection-card{overflow:hidden;border:1px solid rgba(255,109,153,.22);border-radius:26px;background:linear-gradient(160deg,rgba(35,12,28,.96),rgba(5,12,27,.98));box-shadow:0 20px 46px rgba(0,0,0,.32)}
+
+        /* --- Meet Someone connection card: two trading panels (video / profile photo) --- */
+        .love-card-stage{position:relative;width:100%;aspect-ratio:3/4;min-height:360px;max-height:640px;overflow:hidden;background:#05070d}
+
+        .love-card-video-section{position:absolute;top:0;left:0;right:0;height:55%;overflow:hidden;z-index:1;background:#05070d;animation:loveVideoTrade 9s ease-in-out infinite;transition:height .4s ease}
+        .love-card-video-section video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+        .love-video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:rgba(255,255,255,.42);background:#070a11}
+        .love-video-placeholder span{font-size:30px}
+        .love-video-placeholder small{font-size:10px;font-weight:800}
+        .love-change-video{position:absolute;right:10px;bottom:10px;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.20);border-radius:999px;color:#fff;background:rgba(3,7,15,.78);backdrop-filter:blur(10px);font-size:10px;font-weight:900;z-index:3}
+
+        .love-card-profile-section{position:absolute;left:0;right:0;bottom:0;height:45%;overflow:hidden;z-index:2;animation:loveProfileTrade 9s ease-in-out infinite;transition:height .4s ease}
+        .love-card-profile-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+        .love-card-photo-overlay{position:absolute;inset:0;background:linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.62) 34%, rgba(4,3,9,.08) 64%, rgba(4,3,9,0) 80%);pointer-events:none}
+        .love-card-photo-info{position:absolute;left:0;right:0;bottom:0;padding:18px 16px 15px;display:flex;flex-direction:column;gap:4px;z-index:2}
+        .love-card-photo-info h2{margin:0 0 2px!important;color:#fff;font-size:21px!important;text-shadow:0 2px 12px rgba(0,0,0,.55)}
+        .love-card-area,.love-card-freeday{color:rgba(255,240,245,.90);font-size:12.5px;text-shadow:0 1px 8px rgba(0,0,0,.55)}
+        .love-card-status-row{margin-top:7px}
+
+        @keyframes loveVideoTrade{0%,66.67%{height:55%}72.22%,94.44%{height:0%}100%{height:55%}}
+        @keyframes loveProfileTrade{0%,66.67%{height:45%}72.22%,94.44%{height:100%}100%{height:45%}}
+
+        /* Pause the takeover while the owner is editing the video (upload/link/PIN) */
+        .love-card-stage.is-editing .love-card-video-section{animation:none;height:55%}
+        .love-card-stage.is-editing .love-card-profile-section{animation:none;height:45%}
+
+        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.86);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);font-size:10px;font-weight:900;text-decoration:none}
+        .heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c)}
+
+        .love-video-editor{margin:0 14px 4px;padding:14px;border:1px solid rgba(255,108,153,.22);border-radius:18px;background:rgba(20,8,19,.78)}.love-video-editor-title{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}.love-video-editor-title strong{font-size:13px}.love-video-editor-title small{color:rgba(255,255,255,.48);font-size:10px}
+        .love-video-file{min-height:48px;display:flex;align-items:center;padding:0 13px;border:1px dashed rgba(255,118,160,.42);border-radius:14px;color:#ffe4ec;background:rgba(70,17,39,.38);font-size:11px;font-weight:850;cursor:pointer}.love-video-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.love-video-or{margin:8px 0;color:rgba(255,255,255,.30);font-size:9px;font-weight:900;text-align:center}
+        .love-video-editor .connect-input{min-height:48px;margin-bottom:8px}.love-save-video{min-height:48px;margin-top:4px}.love-ask-pin{min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.32);font-size:11px;font-weight:900;text-decoration:none}.video-error{margin-top:3px;margin-bottom:8px}
+        @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } }
+        @media (prefers-reduced-motion: reduce) {
+          .love-float { animation: none; }
+          .love-card-video-section, .love-card-profile-section { animation: none !important; }
+        }
       `}</style>
     </div>
   );
 }
-
