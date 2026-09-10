@@ -329,7 +329,7 @@ function BrowseLove({ onBack, onJoin }) {
                   {profile.video_url ? <video src={profile.video_url} controls playsInline preload="metadata" /> : <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>}
                   {isOwner && (
                     <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
-                      🎥 {editingVideo ? "Close video" : "Change video"}
+                      🎥 {editingVideo ? "Close video" : (profile.video_url ? "Change video" : "Add video")}
                     </button>
                   )}
                 </div>
@@ -348,7 +348,7 @@ function BrowseLove({ onBack, onJoin }) {
               </div>
               {isOwner && editingVideo && (
                 <div className="love-video-editor">
-                  <div className="love-video-editor-title"><strong>Change your card video</strong><small>Use a video file or paste a video link.</small></div>
+                  <div className="love-video-editor-title"><strong>{profile.video_url ? "Change your card video" : "Add your card video"}</strong><small>Use a video file or paste a video link.</small></div>
                   <label className="love-video-file">
                     <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
                     <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
