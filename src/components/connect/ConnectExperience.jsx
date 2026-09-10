@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import WalkTogetherGame from "./WalkTogetherGame";
 import MoneyTogetherGame from "./MoneyTogetherGame";
 
@@ -46,6 +46,67 @@ function adminWhatsAppUrl(profile) {
   return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
 }
 
+// --- Meet Someone video helpers: detect YouTube links and lazily load the YouTube IFrame API. ---
+function getYouTubeId(url) {
+  if (!url) return "";
+  const str = String(url);
+  const patterns = [
+    /youtube\.com\/watch\?[^#]*\bv=([A-Za-z0-9_-]{6,})/,
+    /youtu\.be\/([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/,
+  ];
+  for (const pattern of patterns) {
+    const match = str.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+let youTubeApiPromise = null;
+function loadYouTubeApi() {
+  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (youTubeApiPromise) return youTubeApiPromise;
+
+  youTubeApiPromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("YouTube API timed out")), 12000);
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      clearTimeout(timeout);
+      if (typeof previousReady === "function") previousReady();
+      resolve(window.YT);
+    };
+    if (!document.getElementById("gwamo-youtube-iframe-api")) {
+      const tag = document.createElement("script");
+      tag.id = "gwamo-youtube-iframe-api";
+      tag.src = "https://www.youtube.com/iframe_api";
+      tag.async = true;
+      tag.onerror = () => { clearTimeout(timeout); reject(new Error("Could not load YouTube API")); };
+      document.head.appendChild(tag);
+    }
+  }).catch((err) => { youTubeApiPromise = null; throw err; });
+
+  return youTubeApiPromise;
+}
+
+// --- Generic helpers for rendering "public_data" fields we don't have a fixed schema for (Money Teams). ---
+function flattenPublicData(obj, prefix = "") {
+  const out = [];
+  Object.entries(obj || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === "") return;
+    if (typeof value === "object" && !Array.isArray(value)) {
+      out.push(...flattenPublicData(value, `${prefix}${key}.`));
+    } else if (!Array.isArray(value)) {
+      out.push([`${prefix}${key}`, value]);
+    }
+  });
+  return out;
+}
+
+function formatFieldLabel(key) {
+  return key.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function Choice({ emoji, label, active, onClick }) {
   return (
@@ -72,24 +133,20 @@ function ConnectHome({ setScreen }) {
   return (
     <section className="connect-panel">
       <div className="connect-kicker">GWAMO CONNECT</div>
-      <h1>Browse Gwamo Connections</h1>
-      <p className="connect-lead">See people already connecting, or choose what you want to do.</p>
+      <h1>Find your people.</h1>
+      <p className="connect-lead">For love or earning together.</p>
 
-      <button type="button" className="browse-love-entry" onClick={() => setScreen("browse-love")}>
-        <span className="browse-love-entry-icon">❤️</span>
-        <span><strong>Browse Meet Someone</strong><small>See connection cards and heart-match status</small></span>
-        <b>›</b>
-      </button>
-
-      <h3 className="connect-home-subtitle">What do you want to do?</h3>
+      <h3 className="connect-home-subtitle">Explore</h3>
       <div className="connect-grid">
-        <Choice emoji="💰" label="Make Money Together" onClick={() => setScreen("money")} />
-        <Choice emoji="❤️" label="Meet Someone" onClick={() => setScreen("love")} />
-        <Choice emoji="🚶" label="Walk Together" onClick={() => setScreen("walk")} />
+        <Choice emoji="💰" label="Browse Money Teams" onClick={() => setScreen("browse-money")} />
+        <Choice emoji="🤍" label="Browse People" onClick={() => setScreen("browse-love")} />
       </div>
 
-      <button type="button" className="connect-start" onClick={() => setScreen("start")}>＋ Start Something</button>
-      <p className="connect-bottom-line">Find people to do something meaningful with.</p>
+      <h3 className="connect-home-subtitle">Join in</h3>
+      <div className="connect-grid">
+        <Choice emoji="💰" label="Earn Together" onClick={() => setScreen("money")} />
+        <Choice emoji="🤍" label="Meet Someone" onClick={() => setScreen("love")} />
+      </div>
     </section>
   );
 }
@@ -208,6 +265,72 @@ function BrowseLove({ onBack, onJoin }) {
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoError, setVideoError] = useState("");
   const [showAskPin, setShowAskPin] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState({});
+  const [mediaErrors, setMediaErrors] = useState({});
+  const [ytApiError, setYtApiError] = useState("");
+
+  // Playback plumbing for the auto-playing, one-at-a-time card feed.
+  const videoRefs = useRef({});
+  const ytPlayers = useRef({});
+  const ytVideoIds = useRef({});
+  const ytPending = useRef({});
+  const stageRefs = useRef({});
+  const visibilityRatios = useRef({});
+  const activeIdRef = useRef("");
+
+  function pauseMedia(id) {
+    if (!id) return;
+    const video = videoRefs.current[id];
+    if (video) { try { video.pause(); } catch {} }
+    const player = ytPlayers.current[id];
+    if (player && typeof player.pauseVideo === "function") { try { player.pauseVideo(); } catch {} }
+    ytPending.current[id] = false;
+  }
+
+  function playMedia(id) {
+    if (!id) return;
+    const video = videoRefs.current[id];
+    if (video) {
+      video.muted = true;
+      const attempt = video.play();
+      if (attempt && typeof attempt.then === "function") {
+        attempt
+          .then(() => setAutoplayBlocked((current) => ({ ...current, [id]: false })))
+          .catch(() => setAutoplayBlocked((current) => ({ ...current, [id]: true })));
+      } else {
+        setAutoplayBlocked((current) => ({ ...current, [id]: false }));
+      }
+      return;
+    }
+
+    const player = ytPlayers.current[id];
+    if (player && typeof player.playVideo === "function") {
+      try {
+        if (typeof player.mute === "function") player.mute();
+        player.playVideo();
+        window.setTimeout(() => {
+          try {
+            const state = typeof player.getPlayerState === "function" ? player.getPlayerState() : null;
+            const playing = state === 1 || state === 3; // 1 = PLAYING, 3 = BUFFERING
+            setAutoplayBlocked((current) => ({ ...current, [id]: !playing }));
+          } catch {}
+        }, 700);
+      } catch {
+        setAutoplayBlocked((current) => ({ ...current, [id]: true }));
+      }
+      return;
+    }
+
+    // The YouTube player for this card isn't ready yet — play as soon as it is.
+    ytPending.current[id] = true;
+  }
+
+  function activateCard(id) {
+    if (activeIdRef.current === id) return;
+    if (activeIdRef.current) pauseMedia(activeIdRef.current);
+    activeIdRef.current = id;
+    if (id) playMedia(id);
+  }
 
   async function saveVideo(profile) {
     if (videoBusy) return;
@@ -271,11 +394,18 @@ function BrowseLove({ onBack, onJoin }) {
       setItems((current) =>
         current.map((item) => item.id === profile.id ? { ...item, ...updated.item } : item)
       );
+      setMediaErrors((current) => { const next = { ...current }; delete next[profile.id]; return next; });
       setEditingVideoId("");
       setVideoPin("");
       setVideoUrl("");
       setVideoFile(null);
       setShowAskPin(false);
+
+      // If this card is already the active one, resume playback on the freshly saved video
+      // once the item update above has propagated through the native <video>/YouTube setup.
+      if (activeIdRef.current === profile.id) {
+        window.setTimeout(() => playMedia(profile.id), 50);
+      }
     } catch (err) {
       setVideoError(err.message || "Could not change video.");
       if (err.status === 403 || /pin/i.test(err.message || "")) setShowAskPin(true);
@@ -302,6 +432,121 @@ function BrowseLove({ onBack, onJoin }) {
     return () => { live = false; };
   }, []);
 
+  // Create/update/tear down YouTube IFrame players as the video on each card changes.
+  useEffect(() => {
+    let cancelled = false;
+    const currentYouTubeIds = new Set();
+    items.forEach((profile) => {
+      if (getYouTubeId(profile.video_url)) currentYouTubeIds.add(profile.id);
+    });
+
+    Object.keys(ytPlayers.current).forEach((id) => {
+      if (!currentYouTubeIds.has(id)) {
+        try { ytPlayers.current[id].destroy(); } catch {}
+        delete ytPlayers.current[id];
+        delete ytVideoIds.current[id];
+      }
+    });
+
+    const toUpdate = items.filter((profile) => {
+      const ytId = getYouTubeId(profile.video_url);
+      return ytId && ytPlayers.current[profile.id] && ytVideoIds.current[profile.id] !== ytId;
+    });
+    toUpdate.forEach((profile) => {
+      const ytId = getYouTubeId(profile.video_url);
+      try {
+        ytPlayers.current[profile.id].cueVideoById(ytId);
+        ytVideoIds.current[profile.id] = ytId;
+      } catch {}
+    });
+
+    const toCreate = items.filter((profile) => getYouTubeId(profile.video_url) && !ytPlayers.current[profile.id]);
+    if (!toCreate.length) return () => { cancelled = true; };
+
+    loadYouTubeApi()
+      .then((YT) => {
+        if (cancelled) return;
+        toCreate.forEach((profile) => {
+          const id = profile.id;
+          const elementId = `love-yt-${id}`;
+          const mount = document.getElementById(elementId);
+          if (!mount || ytPlayers.current[id]) return;
+          const ytId = getYouTubeId(profile.video_url);
+          ytVideoIds.current[id] = ytId;
+          ytPlayers.current[id] = new YT.Player(elementId, {
+            videoId: ytId,
+            playerVars: { mute: 1, playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
+            events: {
+              onReady: () => {
+                if (ytPending.current[id]) {
+                  ytPending.current[id] = false;
+                  playMedia(id);
+                }
+              },
+              onError: () => {
+                setMediaErrors((current) => ({ ...current, [id]: "This video can't be played here. It may be private or embedding may be disabled." }));
+              },
+            },
+          });
+        });
+      })
+      .catch(() => setYtApiError("YouTube playback isn't available right now."));
+
+    return () => { cancelled = true; };
+  }, [items]);
+
+  // Auto-play the most visible card's video (muted) and pause every other card.
+  useEffect(() => {
+    if (!items.length) return undefined;
+    const ratios = visibilityRatios.current;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const id = entry.target.dataset.profileId;
+        if (id) ratios[id] = entry.isIntersecting ? entry.intersectionRatio : 0;
+      });
+
+      let bestId = "";
+      let bestRatio = 0;
+      Object.keys(ratios).forEach((id) => {
+        if (ratios[id] > bestRatio) { bestRatio = ratios[id]; bestId = id; }
+      });
+
+      if (bestId && bestRatio >= 0.5) {
+        activateCard(bestId);
+      } else if (activeIdRef.current && (ratios[activeIdRef.current] || 0) < 0.25) {
+        pauseMedia(activeIdRef.current);
+        activeIdRef.current = "";
+      }
+    }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+
+    Object.values(stageRefs.current).forEach((el) => { if (el) observer.observe(el); });
+
+    return () => observer.disconnect();
+  }, [items]);
+
+  // Pause the playing card whenever the browser tab is hidden; resume it when it's shown again.
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) {
+        if (activeIdRef.current) pauseMedia(activeIdRef.current);
+      } else if (activeIdRef.current) {
+        playMedia(activeIdRef.current);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  // Leaving Meet Someone entirely: stop everything and free the YouTube players.
+  useEffect(() => {
+    return () => {
+      Object.values(ytPlayers.current).forEach((player) => { try { player.destroy(); } catch {} });
+      ytPlayers.current = {};
+      Object.values(videoRefs.current).forEach((video) => { try { video.pause(); } catch {} });
+      activeIdRef.current = "";
+    };
+  }, []);
+
   return (
     <section className="connect-panel browse-love-panel">
       <Back onClick={onBack} />
@@ -312,6 +557,7 @@ function BrowseLove({ onBack, onJoin }) {
       <p className="connect-lead">Public cards show the person, area, perfect free day and heart-match status.</p>
 
       {error && <div className="connect-error">{error}</div>}
+      {ytApiError && <div className="connect-error">{ytApiError}</div>}
       {busy && <div className="browse-empty">Loading connections...</div>}
       {!busy && !error && !items.length && <div className="browse-empty"><strong>No connection cards yet.</strong><span>Be the first person to join Meet Someone.</span></div>}
 
@@ -319,19 +565,46 @@ function BrowseLove({ onBack, onJoin }) {
         {items.map((profile) => {
           const freeDay = profile.public_data?.perfect_free_day || profile.public_data?.answers?.perfect_free_day || "Not added";
           const hasMatch = profile.match_status === "View heart match";
-          const isOwner = owner?.profile_id === profile.id;
           const editingVideo = editingVideoId === profile.id;
-          const isPaused = isOwner && editingVideo;
+          const hasVideo = Boolean(profile.video_url);
+          const ytId = getYouTubeId(profile.video_url);
+          const mediaError = mediaErrors[profile.id];
+          const blocked = autoplayBlocked[profile.id];
           return (
             <article className="love-connection-card" key={profile.id}>
-              <div className={`love-card-stage${isPaused ? " is-editing" : ""}`}>
+              <div
+                className={`love-card-stage${editingVideo ? " is-editing" : ""}`}
+                data-profile-id={profile.id}
+                ref={(el) => { if (el) stageRefs.current[profile.id] = el; else delete stageRefs.current[profile.id]; }}
+              >
                 <div className="love-card-video-section">
-                  {profile.video_url ? <video src={profile.video_url} controls playsInline preload="metadata" /> : <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>}
-                  {isOwner && (
-                    <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
-                      🎥 {editingVideo ? "Close video" : (profile.video_url ? "Change video" : "Add video")}
-                    </button>
+                  {hasVideo ? (
+                    ytId ? (
+                      <div className="love-yt-wrap">
+                        <div id={`love-yt-${profile.id}`} className="love-yt-player" />
+                      </div>
+                    ) : (
+                      <video
+                        ref={(el) => { if (el) videoRefs.current[profile.id] = el; else delete videoRefs.current[profile.id]; }}
+                        src={profile.video_url}
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                        controls
+                        onError={() => setMediaErrors((current) => ({ ...current, [profile.id]: "This video couldn't be played." }))}
+                      />
+                    )
+                  ) : (
+                    <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>
                   )}
+                  {mediaError && <div className="love-media-error">⚠️ {mediaError}</div>}
+                  {!mediaError && blocked && hasVideo && (
+                    <button type="button" className="love-media-playbtn" onClick={() => playMedia(profile.id)}>▶ Play</button>
+                  )}
+                  <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
+                    🎥 {editingVideo ? "Close video" : (hasVideo ? "Change video" : "Add video")}
+                  </button>
                 </div>
                 <div className="love-card-profile-section">
                   <img className="love-card-profile-photo" src={profile.creator_photo_url || "/favicon.ico"} alt="" />
@@ -346,27 +619,87 @@ function BrowseLove({ onBack, onJoin }) {
                   </div>
                 </div>
               </div>
-              {isOwner && editingVideo && (
+              {editingVideo && (
                 <div className="love-video-editor">
-                  <div className="love-video-editor-title"><strong>{profile.video_url ? "Change your card video" : "Add your card video"}</strong><small>Use a video file or paste a video link.</small></div>
+                  <div className="love-video-editor-title">
+                    <strong>{hasVideo ? "Change this card's video" : "Add this card's video"}</strong>
+                    <small>Anyone with the Connect video PIN can add or replace this video. Paste a YouTube link, a direct video link, or upload a file.</small>
+                  </div>
                   <label className="love-video-file">
                     <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
                     <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
                   </label>
                   <div className="love-video-or">OR</div>
-                  <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video link" />
+                  <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video or YouTube link" />
                   <input className="connect-input" type="password" value={videoPin} onChange={(e) => { setVideoPin(e.target.value); setShowAskPin(false); }} placeholder="Connect video PIN" inputMode="numeric" />
                   {videoError && <div className="connect-error video-error">{videoError}</div>}
                   <button type="button" className="connect-primary love-button love-save-video" onClick={() => saveVideo(profile)} disabled={videoBusy}>
-                    {videoBusy ? "Changing video..." : "Save video"}
+                    {videoBusy ? "Saving video..." : "Save video"}
                   </button>
                   {showAskPin && (
-                    <a className="love-ask-pin" href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for my Meet Someone card. Profile: ${profile.creator_name || ""}. Profile ID: ${profile.id}`)}`} target="_blank" rel="noreferrer">
+                    <a className="love-ask-pin" href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for a Meet Someone card. Profile: ${profile.creator_name || ""}. Profile ID: ${profile.id}`)}`} target="_blank" rel="noreferrer">
                       Ask for PIN
                     </a>
                   )}
                 </div>
               )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function BrowseMoney({ onBack, onJoin }) {
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    connectApi("/api/connect/money?limit=50")
+      .then((data) => { if (live) setItems(data.items || []); })
+      .catch((err) => { if (live) setError(err.message || "Could not load Money Teams."); })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, []);
+
+  return (
+    <section className="connect-panel browse-love-panel">
+      <Back onClick={onBack} />
+      <div className="browse-love-heading">
+        <div><div className="connect-kicker">💰 MONEY TEAMS</div><h1>Browse Money Teams</h1></div>
+        <button type="button" className="browse-join-button" onClick={onJoin}>＋ Add yours</button>
+      </div>
+      <p className="connect-lead">See people already earning together and what they're building.</p>
+
+      {error && <div className="connect-error">{error}</div>}
+      {busy && <div className="browse-empty">Loading money teams...</div>}
+      {!busy && !error && !items.length && <div className="browse-empty"><strong>No money teams yet.</strong><span>Be the first to start one.</span></div>}
+
+      <div className="money-card-list">
+        {items.map((item) => {
+          const details = flattenPublicData(item.public_data);
+          return (
+            <article className="money-card" key={item.id}>
+              <div className="money-card-media">
+                {item.creator_photo_url ? <img src={item.creator_photo_url} alt="" /> : <div className="money-card-media-fallback">💰</div>}
+              </div>
+              <div className="money-card-body">
+                <h2>{item.creator_name || "Gwamo team"}</h2>
+                {item.location && <span className="money-card-location">📍 {item.location}</span>}
+                {details.length > 0 && (
+                  <div className="chip-row">
+                    {details.map(([key, value]) => (
+                      <span className="chip" key={key}>{formatFieldLabel(key)}: {String(value)}</span>
+                    ))}
+                  </div>
+                )}
+                {item.video_url && (
+                  <video className="money-card-video" src={item.video_url} controls playsInline preload="metadata" />
+                )}
+              </div>
             </article>
           );
         })}
@@ -400,6 +733,7 @@ export default function ConnectExperience() {
       {screen === "home" && <ConnectHome setScreen={setScreen} />}
       {screen === "love" && <LoveGame onBack={home} onBrowse={() => setScreen("browse-love")} />}
       {screen === "browse-love" && <BrowseLove onBack={home} onJoin={() => setScreen("love")} />}
+      {screen === "browse-money" && <BrowseMoney onBack={home} onJoin={() => setScreen("money")} />}
       {screen === "walk" && <WalkTogetherGame onBack={home} />}
       {screen === "money" && <MoneyTogetherGame onBack={home} />}
       {screen === "start" && <StartSomething onBack={home} setScreen={setScreen} />}
@@ -448,7 +782,7 @@ export default function ConnectExperience() {
         .heart-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); }
         .heart-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(255,90,145,.12); }
         .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-        .chip { min-height: 39px; padding: 0 13px; border: 1px solid rgba(155,196,235,.15); border-radius: 999px; color: rgba(244,249,255,.78); background: rgba(7,20,40,.70); font-size: 12px; font-weight: 750; }
+        .chip { min-height: 39px; padding: 0 13px; display: inline-flex; align-items: center; border: 1px solid rgba(155,196,235,.15); border-radius: 999px; color: rgba(244,249,255,.78); background: rgba(7,20,40,.70); font-size: 12px; font-weight: 750; }
         .chip.is-active { border-color: rgba(78,183,255,.70); color: #fff; background: rgba(13,62,106,.78); }
         .trigger-card, .result-card { margin-top: 18px; padding: 18px; border: 1px solid rgba(97,187,255,.18); border-radius: 20px; background: linear-gradient(145deg, rgba(10,36,67,.78), rgba(4,13,29,.90)); }
         .trigger-card { display: flex; flex-direction: column; gap: 7px; }
@@ -480,6 +814,11 @@ export default function ConnectExperience() {
         .love-video-placeholder small{font-size:10px;font-weight:800}
         .love-change-video{position:absolute;right:10px;bottom:10px;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.20);border-radius:999px;color:#fff;background:rgba(3,7,15,.78);backdrop-filter:blur(10px);font-size:10px;font-weight:900;z-index:3}
 
+        .love-yt-wrap{position:absolute;inset:0}
+        .love-yt-wrap [id^="love-yt-"]{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:0}
+        .love-media-error{position:absolute;left:10px;right:10px;top:10px;z-index:4;padding:8px 12px;border-radius:12px;color:#ffd6dd;background:rgba(93,16,34,.82);backdrop-filter:blur(6px);font-size:11px;font-weight:750}
+        .love-media-playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;display:flex;align-items:center;gap:6px;padding:10px 16px;border:1px solid rgba(255,255,255,.35);border-radius:999px;color:#fff;background:rgba(3,7,15,.72);backdrop-filter:blur(8px);font-size:12px;font-weight:900}
+
         .love-card-profile-section{position:absolute;left:0;right:0;bottom:0;height:45%;overflow:hidden;z-index:2;animation:loveProfileTrade 9s ease-in-out infinite;transition:height .4s ease}
         .love-card-profile-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
         .love-card-photo-overlay{position:absolute;inset:0;background:linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.62) 34%, rgba(4,3,9,.08) 64%, rgba(4,3,9,0) 80%);pointer-events:none}
@@ -491,7 +830,7 @@ export default function ConnectExperience() {
         @keyframes loveVideoTrade{0%,66.67%{height:55%}72.22%,94.44%{height:0%}100%{height:55%}}
         @keyframes loveProfileTrade{0%,66.67%{height:45%}72.22%,94.44%{height:100%}100%{height:45%}}
 
-        /* Pause the takeover while the owner is editing the video (upload/link/PIN) */
+        /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
         .love-card-stage.is-editing .love-card-video-section{animation:none;height:55%}
         .love-card-stage.is-editing .love-card-profile-section{animation:none;height:45%}
 
@@ -501,6 +840,17 @@ export default function ConnectExperience() {
         .love-video-editor{margin:0 14px 4px;padding:14px;border:1px solid rgba(255,108,153,.22);border-radius:18px;background:rgba(20,8,19,.78)}.love-video-editor-title{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}.love-video-editor-title strong{font-size:13px}.love-video-editor-title small{color:rgba(255,255,255,.48);font-size:10px}
         .love-video-file{min-height:48px;display:flex;align-items:center;padding:0 13px;border:1px dashed rgba(255,118,160,.42);border-radius:14px;color:#ffe4ec;background:rgba(70,17,39,.38);font-size:11px;font-weight:850;cursor:pointer}.love-video-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.love-video-or{margin:8px 0;color:rgba(255,255,255,.30);font-size:9px;font-weight:900;text-align:center}
         .love-video-editor .connect-input{min-height:48px;margin-bottom:8px}.love-save-video{min-height:48px;margin-top:4px}.love-ask-pin{min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.32);font-size:11px;font-weight:900;text-decoration:none}.video-error{margin-top:3px;margin-bottom:8px}
+
+        .money-card-list{display:grid;gap:14px}
+        .money-card{display:flex;gap:14px;padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:22px;background:linear-gradient(160deg,rgba(14,34,24,.92),rgba(5,12,27,.97));box-shadow:0 16px 36px rgba(0,0,0,.28)}
+        .money-card-media{width:74px;height:74px;flex:0 0 auto;border-radius:18px;overflow:hidden;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center}
+        .money-card-media img{width:100%;height:100%;object-fit:cover}
+        .money-card-media-fallback{font-size:28px}
+        .money-card-body{min-width:0;display:flex;flex-direction:column;gap:6px}
+        .money-card-body h2{margin:0!important;color:#fff;font-size:17px!important}
+        .money-card-location{color:rgba(230,239,249,.62);font-size:12px}
+        .money-card-video{margin-top:6px;width:100%;max-height:180px;border-radius:14px;background:#000}
+
         @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } }
         @media (prefers-reduced-motion: reduce) {
           .love-float { animation: none; }
