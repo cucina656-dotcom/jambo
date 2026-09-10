@@ -27,6 +27,33 @@ async function uploadProfilePhoto(file) {
   return data;
 }
 
+// Uploads a file with real progress (0-100) via XMLHttpRequest — plain fetch() has no
+// upload-progress event, so the video-save percentage bar needs this instead.
+function uploadWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && typeof onProgress === "function") {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.success !== false) {
+        resolve(data);
+      } else {
+        const err = new Error(data.error || data.message || `Upload failed (${xhr.status})`);
+        err.status = xhr.status;
+        reject(err);
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload."));
+    xhr.send(formData);
+  });
+}
+
 function rememberLoveOwner(profileId, ownerToken) {
   if (!profileId || !ownerToken) return;
   try { localStorage.setItem(LOVE_OWNER_KEY, JSON.stringify({ profile_id: profileId, owner_token: ownerToken })); } catch {}
@@ -268,6 +295,8 @@ function BrowseLove({ onBack, onJoin }) {
   const [autoplayBlocked, setAutoplayBlocked] = useState({});
   const [mediaErrors, setMediaErrors] = useState({});
   const [ytApiError, setYtApiError] = useState("");
+  const [mutedMap, setMutedMap] = useState({});
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Playback plumbing for the auto-playing, one-at-a-time card feed.
   const videoRefs = useRef({});
@@ -277,6 +306,9 @@ function BrowseLove({ onBack, onJoin }) {
   const stageRefs = useRef({});
   const visibilityRatios = useRef({});
   const activeIdRef = useRef("");
+  // Mirrors mutedMap synchronously so playback callbacks (set up once per items change)
+  // never read a stale mute preference from an old render's closure.
+  const mutedMapRef = useRef({});
 
   function pauseMedia(id) {
     if (!id) return;
@@ -289,9 +321,10 @@ function BrowseLove({ onBack, onJoin }) {
 
   function playMedia(id) {
     if (!id) return;
+    const shouldMute = mutedMapRef.current[id] !== false; // muted by default — browsers require it for autoplay
     const video = videoRefs.current[id];
     if (video) {
-      video.muted = true;
+      video.muted = shouldMute;
       const attempt = video.play();
       if (attempt && typeof attempt.then === "function") {
         attempt
@@ -306,7 +339,8 @@ function BrowseLove({ onBack, onJoin }) {
     const player = ytPlayers.current[id];
     if (player && typeof player.playVideo === "function") {
       try {
-        if (typeof player.mute === "function") player.mute();
+        if (shouldMute) { if (typeof player.mute === "function") player.mute(); }
+        else if (typeof player.unMute === "function") player.unMute();
         player.playVideo();
         window.setTimeout(() => {
           try {
@@ -332,6 +366,24 @@ function BrowseLove({ onBack, onJoin }) {
     if (id) playMedia(id);
   }
 
+  // Browsers require muted playback for autoplay, so every card starts muted with a
+  // neon mute badge over it; tapping the badge lets that one viewer turn its sound on.
+  function toggleMute(id) {
+    const wasMuted = mutedMapRef.current[id] !== false;
+    const nextMuted = !wasMuted;
+    mutedMapRef.current[id] = nextMuted;
+    const video = videoRefs.current[id];
+    if (video) video.muted = nextMuted;
+    const player = ytPlayers.current[id];
+    if (player) {
+      try {
+        if (nextMuted) { if (typeof player.mute === "function") player.mute(); }
+        else if (typeof player.unMute === "function") player.unMute();
+      } catch {}
+    }
+    setMutedMap((current) => ({ ...current, [id]: nextMuted }));
+  }
+
   async function saveVideo(profile) {
     if (videoBusy) return;
     const pin = videoPin.trim();
@@ -347,6 +399,7 @@ function BrowseLove({ onBack, onJoin }) {
     setVideoBusy(true);
     setVideoError("");
     setShowAskPin(false);
+    setUploadProgress(0);
 
     try {
       let nextVideoUrl = videoUrl.trim();
@@ -358,16 +411,12 @@ function BrowseLove({ onBack, onJoin }) {
         form.append("file", videoFile);
         form.append("pin", pin);
 
-        const uploadResponse = await fetch(`${CONNECT_API_URL}/api/connect/upload`, {
-          method: "POST",
-          body: form,
-        });
-        const uploaded = await uploadResponse.json().catch(() => ({}));
-        if (!uploadResponse.ok || uploaded.success === false) {
-          const err = new Error(uploaded.error || uploaded.message || "Video upload failed.");
-          err.status = uploadResponse.status;
-          throw err;
-        }
+        const uploaded = await uploadWithProgress(
+          `${CONNECT_API_URL}/api/connect/upload`,
+          form,
+          (pct) => setUploadProgress(pct)
+        );
+        setUploadProgress(100);
         nextVideoUrl = uploaded.url || "";
         nextVideoKey = uploaded.key || "";
       }
@@ -411,6 +460,7 @@ function BrowseLove({ onBack, onJoin }) {
       if (err.status === 403 || /pin/i.test(err.message || "")) setShowAskPin(true);
     } finally {
       setVideoBusy(false);
+      setUploadProgress(0);
     }
   }
 
@@ -421,6 +471,7 @@ function BrowseLove({ onBack, onJoin }) {
     setVideoFile(null);
     setVideoError("");
     setShowAskPin(false);
+    setUploadProgress(0);
   }
 
   useEffect(() => {
@@ -433,6 +484,9 @@ function BrowseLove({ onBack, onJoin }) {
   }, []);
 
   // Create/update/tear down YouTube IFrame players as the video on each card changes.
+  // For page-load speed, only the first couple of YouTube cards mount immediately — the
+  // rest mount lazily as they scroll near the viewport, so a long feed doesn't pay the
+  // cost (network + JS) of every YouTube embed up front.
   useEffect(() => {
     let cancelled = false;
     const currentYouTubeIds = new Set();
@@ -460,19 +514,16 @@ function BrowseLove({ onBack, onJoin }) {
       } catch {}
     });
 
-    const toCreate = items.filter((profile) => getYouTubeId(profile.video_url) && !ytPlayers.current[profile.id]);
-    if (!toCreate.length) return () => { cancelled = true; };
-
-    loadYouTubeApi()
-      .then((YT) => {
-        if (cancelled) return;
-        toCreate.forEach((profile) => {
-          const id = profile.id;
-          const elementId = `love-yt-${id}`;
-          const mount = document.getElementById(elementId);
-          if (!mount || ytPlayers.current[id]) return;
-          const ytId = getYouTubeId(profile.video_url);
-          ytVideoIds.current[id] = ytId;
+    function createPlayer(profile) {
+      const id = profile.id;
+      if (ytPlayers.current[id]) return;
+      const elementId = `love-yt-${id}`;
+      const ytId = getYouTubeId(profile.video_url);
+      if (!ytId || !document.getElementById(elementId)) return;
+      ytVideoIds.current[id] = ytId;
+      loadYouTubeApi()
+        .then((YT) => {
+          if (cancelled || ytPlayers.current[id] || !document.getElementById(elementId)) return;
           ytPlayers.current[id] = new YT.Player(elementId, {
             videoId: ytId,
             playerVars: { mute: 1, playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
@@ -488,11 +539,44 @@ function BrowseLove({ onBack, onJoin }) {
               },
             },
           });
-        });
-      })
-      .catch(() => setYtApiError("YouTube playback isn't available right now."));
+        })
+        .catch(() => setYtApiError("YouTube playback isn't available right now."));
+    }
 
-    return () => { cancelled = true; };
+    const stillNeeded = items.filter((profile) => getYouTubeId(profile.video_url) && !ytPlayers.current[profile.id]);
+    if (!stillNeeded.length) return () => { cancelled = true; };
+
+    // Mount the first two right away (likely above the fold on first load) so the feed
+    // feels instant; everything else mounts only once it scrolls near the viewport.
+    stillNeeded.slice(0, 2).forEach(createPlayer);
+    const lazyTargets = stillNeeded.slice(2);
+
+    let mountObserver = null;
+    if (lazyTargets.length) {
+      const byId = {};
+      lazyTargets.forEach((profile) => { byId[profile.id] = profile; });
+      mountObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.profileId;
+          const profile = byId[id];
+          if (profile) {
+            createPlayer(profile);
+            mountObserver.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: "150% 0px", threshold: 0 });
+
+      lazyTargets.forEach((profile) => {
+        const el = stageRefs.current[profile.id];
+        if (el) mountObserver.observe(el);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      if (mountObserver) mountObserver.disconnect();
+    };
   }, [items]);
 
   // Auto-play the most visible card's video (muted) and pause every other card.
@@ -602,12 +686,23 @@ function BrowseLove({ onBack, onJoin }) {
                   {!mediaError && blocked && hasVideo && (
                     <button type="button" className="love-media-playbtn" onClick={() => playMedia(profile.id)}>▶ Play</button>
                   )}
+                  {!mediaError && !blocked && hasVideo && (
+                    <button
+                      type="button"
+                      className="love-mute-badge"
+                      onClick={() => toggleMute(profile.id)}
+                      aria-label={mutedMap[profile.id] === false ? "Mute video" : "Unmute video"}
+                      title={mutedMap[profile.id] === false ? "Sound on — tap to mute" : "Muted for autoplay — tap to unmute"}
+                    >
+                      {mutedMap[profile.id] === false ? "🔊" : "🔇"}
+                    </button>
+                  )}
                   <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
                     🎥 {editingVideo ? "Close video" : (hasVideo ? "Change video" : "Add video")}
                   </button>
                 </div>
                 <div className="love-card-profile-section">
-                  <img className="love-card-profile-photo" src={profile.creator_photo_url || "/favicon.ico"} alt="" />
+                  <img className="love-card-profile-photo" src={profile.creator_photo_url || "/favicon.ico"} alt="" loading="lazy" decoding="async" />
                   <div className="love-card-photo-overlay" />
                   <div className="love-card-photo-info">
                     <h2>{profile.creator_name || "Gwamo member"}</h2>
@@ -633,8 +728,16 @@ function BrowseLove({ onBack, onJoin }) {
                   <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video or YouTube link" />
                   <input className="connect-input" type="password" value={videoPin} onChange={(e) => { setVideoPin(e.target.value); setShowAskPin(false); }} placeholder="Connect video PIN" inputMode="numeric" />
                   {videoError && <div className="connect-error video-error">{videoError}</div>}
+                  {videoBusy && videoFile && (
+                    <div className="love-upload-progress" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="love-upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+                      <span className="love-upload-progress-label">{uploadProgress}%</span>
+                    </div>
+                  )}
                   <button type="button" className="connect-primary love-button love-save-video" onClick={() => saveVideo(profile)} disabled={videoBusy}>
-                    {videoBusy ? "Saving video..." : "Save video"}
+                    {videoBusy
+                      ? (videoFile ? (uploadProgress < 100 ? `Saving video... ${uploadProgress}%` : "Finishing...") : "Saving video...")
+                      : "Save video"}
                   </button>
                   {showAskPin && (
                     <a className="love-ask-pin" href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for a Meet Someone card. Profile: ${profile.creator_name || ""}. Profile ID: ${profile.id}`)}`} target="_blank" rel="noreferrer">
@@ -684,7 +787,7 @@ function BrowseMoney({ onBack, onJoin }) {
           return (
             <article className="money-card" key={item.id}>
               <div className="money-card-media">
-                {item.creator_photo_url ? <img src={item.creator_photo_url} alt="" /> : <div className="money-card-media-fallback">💰</div>}
+                {item.creator_photo_url ? <img src={item.creator_photo_url} alt="" loading="lazy" decoding="async" /> : <div className="money-card-media-fallback">💰</div>}
               </div>
               <div className="money-card-body">
                 <h2>{item.creator_name || "Gwamo team"}</h2>
@@ -819,27 +922,35 @@ export default function ConnectExperience() {
         .love-media-error{position:absolute;left:10px;right:10px;top:10px;z-index:4;padding:8px 12px;border-radius:12px;color:#ffd6dd;background:rgba(93,16,34,.82);backdrop-filter:blur(6px);font-size:11px;font-weight:750}
         .love-media-playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;display:flex;align-items:center;gap:6px;padding:10px 16px;border:1px solid rgba(255,255,255,.35);border-radius:999px;color:#fff;background:rgba(3,7,15,.72);backdrop-filter:blur(8px);font-size:12px;font-weight:900}
 
+        /* Sound is muted for autoplay (browsers require it) — a centered neon badge makes that obvious and lets a tap unmute. */
+        .love-mute-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;width:54px;height:54px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid rgba(120,240,255,.55);background:rgba(4,10,20,.40);backdrop-filter:blur(3px);font-size:23px;line-height:1;color:#fff;box-shadow:0 0 8px rgba(95,242,255,.85),0 0 20px rgba(95,242,255,.55),0 0 42px rgba(95,242,255,.30);animation:loveNeonMutePulse 2.2s ease-in-out infinite}
+        @keyframes loveNeonMutePulse{0%,100%{box-shadow:0 0 8px rgba(95,242,255,.85),0 0 20px rgba(95,242,255,.55),0 0 42px rgba(95,242,255,.30)}50%{box-shadow:0 0 14px rgba(95,242,255,1),0 0 32px rgba(95,242,255,.85),0 0 60px rgba(95,242,255,.5)}}
+
         .love-card-profile-section{position:absolute;left:0;right:0;bottom:0;height:45%;overflow:hidden;z-index:2;animation:loveProfileTrade 9s ease-in-out infinite;transition:height .4s ease}
         .love-card-profile-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
         .love-card-photo-overlay{position:absolute;inset:0;background:linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.62) 34%, rgba(4,3,9,.08) 64%, rgba(4,3,9,0) 80%);pointer-events:none}
         .love-card-photo-info{position:absolute;left:0;right:0;bottom:0;padding:18px 16px 15px;display:flex;flex-direction:column;gap:4px;z-index:2}
-        .love-card-photo-info h2{margin:0 0 2px!important;color:#fff;font-size:21px!important;text-shadow:0 2px 12px rgba(0,0,0,.55)}
-        .love-card-area,.love-card-freeday{color:rgba(255,240,245,.90);font-size:12.5px;text-shadow:0 1px 8px rgba(0,0,0,.55)}
+        .love-card-photo-info h2{margin:0 0 2px!important;color:#fff;font-size:21px!important;text-shadow:0 0 4px #fff,0 0 11px #ff6fb0,0 0 22px #ff2d95,0 0 40px rgba(255,45,149,.65);animation:loveNeonText 2.6s ease-in-out infinite}
+        .love-card-area,.love-card-freeday{color:#eaf7ff;font-size:12.5px;text-shadow:0 0 3px #fff,0 0 8px #7fd7ff,0 0 16px rgba(71,178,255,.85),0 0 30px rgba(71,178,255,.4);animation:loveNeonText 2.6s ease-in-out infinite}
         .love-card-status-row{margin-top:7px}
 
         @keyframes loveVideoTrade{0%,66.67%{height:55%}72.22%,94.44%{height:0%}100%{height:55%}}
         @keyframes loveProfileTrade{0%,66.67%{height:45%}72.22%,94.44%{height:100%}100%{height:45%}}
+        @keyframes loveNeonText{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
 
         /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
         .love-card-stage.is-editing .love-card-video-section{animation:none;height:55%}
         .love-card-stage.is-editing .love-card-profile-section{animation:none;height:45%}
 
-        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.86);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);font-size:10px;font-weight:900;text-decoration:none}
-        .heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c)}
+        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.92);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);font-size:10px;font-weight:900;text-decoration:none;text-shadow:0 0 6px rgba(255,255,255,.85);box-shadow:0 0 10px rgba(255,255,255,.22),inset 0 0 0 1px rgba(255,255,255,.25)}
+        .heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c);text-shadow:0 0 8px #fff,0 0 16px rgba(255,255,255,.7);box-shadow:0 0 18px rgba(238,62,121,.65),0 0 34px rgba(238,62,121,.35)}
 
         .love-video-editor{margin:0 14px 4px;padding:14px;border:1px solid rgba(255,108,153,.22);border-radius:18px;background:rgba(20,8,19,.78)}.love-video-editor-title{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}.love-video-editor-title strong{font-size:13px}.love-video-editor-title small{color:rgba(255,255,255,.48);font-size:10px}
         .love-video-file{min-height:48px;display:flex;align-items:center;padding:0 13px;border:1px dashed rgba(255,118,160,.42);border-radius:14px;color:#ffe4ec;background:rgba(70,17,39,.38);font-size:11px;font-weight:850;cursor:pointer}.love-video-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.love-video-or{margin:8px 0;color:rgba(255,255,255,.30);font-size:9px;font-weight:900;text-align:center}
         .love-video-editor .connect-input{min-height:48px;margin-bottom:8px}.love-save-video{min-height:48px;margin-top:4px}.love-ask-pin{min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.32);font-size:11px;font-weight:900;text-decoration:none}.video-error{margin-top:3px;margin-bottom:8px}
+        .love-upload-progress{position:relative;height:22px;margin-top:6px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}
+        .love-upload-progress-bar{height:100%;border-radius:999px;background:linear-gradient(135deg,#087cff,#e83670);transition:width .2s ease}
+        .love-upload-progress-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 
         .money-card-list{display:grid;gap:14px}
         .money-card{display:flex;gap:14px;padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:22px;background:linear-gradient(160deg,rgba(14,34,24,.92),rgba(5,12,27,.97));box-shadow:0 16px 36px rgba(0,0,0,.28)}
@@ -855,6 +966,7 @@ export default function ConnectExperience() {
         @media (prefers-reduced-motion: reduce) {
           .love-float { animation: none; }
           .love-card-video-section, .love-card-profile-section { animation: none !important; }
+          .love-mute-badge, .love-card-photo-info h2, .love-card-area, .love-card-freeday { animation: none !important; }
         }
       `}</style>
     </div>
