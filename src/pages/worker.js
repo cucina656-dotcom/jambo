@@ -7678,6 +7678,33 @@ async function handleConnectList(request, env, connectType) {
       `)
       .bind(limit)
       .all();
+  } else if (connectType === "love") {
+    result = await env.DB
+      .prepare(`
+        SELECT
+          i.*,
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM connect_items other
+              WHERE other.connect_type = 'love'
+                AND other.status = 'active'
+                AND other.id != i.id
+                AND COALESCE(json_extract(other.private_data_json, '$.heart'), '') =
+                    COALESCE(json_extract(i.private_data_json, '$.heart'), '')
+                AND COALESCE(json_extract(i.private_data_json, '$.heart'), '') != ''
+            )
+            THEN 1
+            ELSE 0
+          END AS has_heart_match
+        FROM connect_items i
+        WHERE i.connect_type = 'love'
+          AND i.status = 'active'
+        ORDER BY datetime(i.created_at) DESC
+        LIMIT ?
+      `)
+      .bind(limit)
+      .all();
   } else {
     result = await env.DB
       .prepare(`
@@ -7700,6 +7727,11 @@ async function handleConnectList(request, env, connectType) {
     }
     if (connectType === "walk") {
       mapped.interest_count = Number(row.interest_count || 0);
+    }
+    if (connectType === "love") {
+      mapped.match_status = Number(row.has_heart_match || 0)
+        ? "View heart match"
+        : "Waiting";
     }
     return mapped;
   });

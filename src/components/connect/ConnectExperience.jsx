@@ -1,8 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import WalkTogetherGame from "./WalkTogetherGame";
 import MoneyTogetherGame from "./MoneyTogetherGame";
 
 const HEARTS = ["💛", "🧡", "💚", "💙", "💜"];
+
+const CONNECT_API_URL = "https://kitchenbrain.cucina656.workers.dev";
+const ADMIN_WHATSAPP = "250788484446";
+const LOVE_OWNER_KEY = "gwamo_connect_love_owner";
+
+async function connectApi(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (typeof options.body === "string") headers.set("Content-Type", "application/json");
+  const response = await fetch(`${CONNECT_API_URL}${path}`, { cache: "no-store", ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) throw new Error(data.error || data.message || `Request failed (${response.status})`);
+  return data;
+}
+
+async function uploadProfilePhoto(file) {
+  const body = new FormData();
+  body.append("kind", "profile_image");
+  body.append("file", file);
+  const response = await fetch(`${CONNECT_API_URL}/api/connect/upload`, { method: "POST", body });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) throw new Error(data.error || data.message || "Photo upload failed.");
+  return data;
+}
+
+function rememberLoveOwner(profileId, ownerToken) {
+  if (!profileId || !ownerToken) return;
+  try { localStorage.setItem(LOVE_OWNER_KEY, JSON.stringify({ profile_id: profileId, owner_token: ownerToken })); } catch {}
+}
+
+function adminWhatsAppUrl(profile) {
+  const text = `Hello Gwamo Admin,\nI want to view my heart match.\nProfile: ${profile?.creator_name || "Meet Someone"}\nProfile ID: ${profile?.id || ""}`;
+  return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
+}
+
 
 function Choice({ emoji, label, active, onClick }) {
   return (
@@ -29,27 +63,29 @@ function ConnectHome({ setScreen }) {
   return (
     <section className="connect-panel">
       <div className="connect-kicker">GWAMO CONNECT</div>
-      <h1>What do you want to do?</h1>
-      <p className="connect-lead">
-        Pick one. Gwamo changes the experience around what you choose.
-      </p>
+      <h1>Browse Gwamo Connections</h1>
+      <p className="connect-lead">See people already connecting, or choose what you want to do.</p>
 
+      <button type="button" className="browse-love-entry" onClick={() => setScreen("browse-love")}>
+        <span className="browse-love-entry-icon">❤️</span>
+        <span><strong>Browse Meet Someone</strong><small>See connection cards and heart-match status</small></span>
+        <b>›</b>
+      </button>
+
+      <h3 className="connect-home-subtitle">What do you want to do?</h3>
       <div className="connect-grid">
         <Choice emoji="💰" label="Make Money Together" onClick={() => setScreen("money")} />
         <Choice emoji="❤️" label="Meet Someone" onClick={() => setScreen("love")} />
         <Choice emoji="🚶" label="Walk Together" onClick={() => setScreen("walk")} />
       </div>
 
-      <button type="button" className="connect-start" onClick={() => setScreen("start")}>
-        ＋ Start Something
-      </button>
-
+      <button type="button" className="connect-start" onClick={() => setScreen("start")}>＋ Start Something</button>
       <p className="connect-bottom-line">Find people to do something meaningful with.</p>
     </section>
   );
 }
 
-function LoveGame({ onBack }) {
+function LoveGame({ onBack, onBrowse }) {
   const [step, setStep] = useState(0);
   const [adult, setAdult] = useState(false);
   const [location, setLocation] = useState("");
@@ -60,171 +96,145 @@ function LoveGame({ onBack }) {
   const [profileName, setProfileName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
+  const [createdProfile, setCreatedProfile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function finishProfile() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const photo = await uploadProfilePhoto(photoFile);
+      const data = await connectApi("/api/connect/love", {
+        method: "POST",
+        body: JSON.stringify({
+          adult_confirmed: true, name: profileName.trim(), whatsapp: whatsapp.trim(),
+          location: location.trim(), preference, heart, photo_url: photo.url, photo_key: photo.key,
+          answers: { perfect_free_day: freeDay, matters_most: matters },
+        }),
+      });
+      rememberLoveOwner(data.profile?.id, data.owner_token);
+      setCreatedProfile(data.profile || null);
+      setStep(7);
+    } catch (err) {
+      setError(err.message || "Could not create your connection card.");
+    } finally { setBusy(false); }
+  }
 
   return (
     <section className="connect-panel love-panel">
       <Back onClick={onBack} />
+      {error && <div className="connect-error">{error}</div>}
 
-      {step === 0 && (
-        <>
-          <div className="connect-kicker love">❤️ MEET SOMEONE</div>
-          <h1>Maybe somebody is looking for someone like you.</h1>
-          <div className="love-story-box">
-            <span className="love-float one">❤️</span>
-            <span className="love-float two">✨</span>
-            <strong>Love Stories</strong>
-            <small>Real Gwamo couples can appear here after both people choose to share their story.</small>
-          </div>
-          <label className="adult-check">
-            <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
-            <span>I am 18 or older.</span>
-          </label>
-          <button className="connect-primary love-button" disabled={!adult} onClick={() => setStep(1)}>
-            Play the Match Game
-          </button>
-          <p className="connect-fine">The heart choice is a fun part of the game. It does not scientifically guarantee compatibility.</p>
-        </>
-      )}
+      {step === 0 && (<>
+        <div className="connect-kicker love">❤️ MEET SOMEONE</div>
+        <h1>Maybe somebody is looking for someone like you.</h1>
+        <div className="love-story-box"><span className="love-float one">❤️</span><span className="love-float two">✨</span><strong>Love Stories</strong><small>Real Gwamo couples can appear here after both people choose to share their story.</small></div>
+        <label className="adult-check"><input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} /><span>I am 18 or older.</span></label>
+        <button className="connect-primary love-button" disabled={!adult} onClick={() => setStep(1)}>Play the Match Game</button>
+        <p className="connect-fine">Your heart choice is the only thing Gwamo uses to find a heart match.</p>
+      </>)}
 
-      {step === 1 && (
-        <>
-          <div className="connect-step">Step 1</div>
-          <h2>📍 Where are you?</h2>
-          <input className="connect-input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, district or area" />
-          <button className="connect-primary love-button" disabled={!location.trim()} onClick={() => setStep(2)}>Next</button>
-        </>
-      )}
+      {step === 1 && (<>
+        <div className="connect-step">Step 1</div><h2>📍 Where are you?</h2>
+        <input className="connect-input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, district or area" />
+        <button className="connect-primary love-button" disabled={!location.trim()} onClick={() => setStep(2)}>Next</button>
+      </>)}
 
-      {step === 2 && (
-        <>
-          <div className="connect-step">Step 2</div>
-          <h2>❤️ Who would you like to meet?</h2>
-          <div className="option-stack">
-            {["A woman", "A man", "Open to either"].map((item) => (
-              <button key={item} className={`line-option${preference === item ? " is-active" : ""}`} onClick={() => setPreference(item)}>{item}</button>
-            ))}
-          </div>
-          <button className="connect-primary love-button" disabled={!preference} onClick={() => setStep(3)}>Next</button>
-        </>
-      )}
+      {step === 2 && (<>
+        <div className="connect-step">Step 2</div><h2>❤️ Who would you like to meet?</h2>
+        <div className="option-stack">{["A woman","A man","Open to either"].map((item) => <button type="button" key={item} className={`line-option${preference===item?" is-active":""}`} onClick={() => setPreference(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!preference} onClick={() => setStep(3)}>Next</button>
+      </>)}
 
-      {step === 3 && (
-        <>
-          <div className="connect-step">Step 3</div>
-          <h2>Choose the heart that feels like you today.</h2>
-          <p className="connect-lead">Do not overthink it. Pick the one you feel first.</p>
-          <div className="heart-row">
-            {HEARTS.map((item) => (
-              <button key={item} className={`heart-button${heart === item ? " is-active" : ""}`} onClick={() => setHeart(item)}>{item}</button>
-            ))}
-          </div>
-          <button className="connect-primary love-button" disabled={!heart} onClick={() => setStep(4)}>Continue</button>
-        </>
-      )}
+      {step === 3 && (<>
+        <div className="connect-step">Step 3</div><h2>Choose the heart that feels like you today.</h2>
+        <p className="connect-lead">This heart alone decides your heart match.</p>
+        <div className="heart-row">{HEARTS.map((item) => <button type="button" key={item} className={`heart-button${heart===item?" is-active":""}`} onClick={() => setHeart(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!heart} onClick={() => setStep(4)}>Continue</button>
+      </>)}
 
-      {step === 4 && (
-        <>
-          <div className="connect-step">Quick question 1 of 2</div>
-          <h2>Your perfect free day?</h2>
-          <div className="option-stack">
-            {["🌳 Outside", "🎵 Music", "🍽️ Food together", "🎬 Relaxing", "🚶 Walking"].map((item) => (
-              <button key={item} className={`line-option${freeDay === item ? " is-active" : ""}`} onClick={() => setFreeDay(item)}>{item}</button>
-            ))}
-          </div>
-          <button className="connect-primary love-button" disabled={!freeDay} onClick={() => setStep(5)}>Next</button>
-        </>
-      )}
+      {step === 4 && (<>
+        <div className="connect-step">Quick question 1 of 2</div><h2>Your perfect free day?</h2>
+        <div className="option-stack">{["🌳 Outside","🎵 Music","🍽️ Food together","🎬 Relaxing","🚶 Walking"].map((item) => <button type="button" key={item} className={`line-option${freeDay===item?" is-active":""}`} onClick={() => setFreeDay(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!freeDay} onClick={() => setStep(5)}>Next</button>
+      </>)}
 
-      {step === 5 && (
-        <>
-          <div className="connect-step">Quick question 2 of 2</div>
-          <h2>What matters most to you?</h2>
-          <div className="option-stack">
-            {["❤️ Love", "🤝 Trust", "😂 Fun", "💬 Good conversation", "🏠 Building a future"].map((item) => (
-              <button key={item} className={`line-option${matters === item ? " is-active" : ""}`} onClick={() => setMatters(item)}>{item}</button>
-            ))}
-          </div>
-          <button className="connect-primary love-button" disabled={!matters} onClick={() => setStep(6)}>Next</button>
-        </>
-      )}
+      {step === 5 && (<>
+        <div className="connect-step">Quick question 2 of 2</div><h2>What matters most to you?</h2>
+        <div className="option-stack">{["❤️ Love","🤝 Trust","😂 Fun","💬 Good conversation","🏠 Building a future"].map((item) => <button type="button" key={item} className={`line-option${matters===item?" is-active":""}`} onClick={() => setMatters(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!matters} onClick={() => setStep(6)}>Next</button>
+      </>)}
 
-      {step === 6 && (
-        <>
-          <div className="connect-step">Your profile</div>
-          <h2>Let your match know who you are.</h2>
-          <p className="connect-lead">Add the same basic details your original matching game collects.</p>
-
-          <input
-            className="connect-input"
-            value={profileName}
-            onChange={(e) => setProfileName(e.target.value)}
-            placeholder="Your name"
-            autoComplete="name"
-          />
-
-          <input
-            className="connect-input"
-            value={whatsapp}
-            onChange={(e) => setWhatsapp(e.target.value)}
-            placeholder="WhatsApp number"
-            inputMode="tel"
-            autoComplete="tel"
-          />
-
-          <label className="connect-photo-field">
-            <span>{photoFile ? `📷 ${photoFile.name}` : "📷 Add your photo"}</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-            />
-          </label>
-
-          <button
-            className="connect-primary love-button"
-            disabled={!profileName.trim() || !whatsapp.trim() || !photoFile}
-            onClick={() => setStep(7)}
-          >
-            Finish the Match Game
-          </button>
-        </>
-      )}
+      {step === 6 && (<>
+        <div className="connect-step">Your profile</div><h2>Create your connection card.</h2>
+        <p className="connect-lead">Your WhatsApp number and heart stay private. They are not shown on the public card.</p>
+        <input className="connect-input" value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Your name" autoComplete="name" />
+        <input className="connect-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp number" inputMode="tel" autoComplete="tel" />
+        <label className="connect-photo-field"><span>{photoFile ? `📷 ${photoFile.name}` : "📷 Add your profile photo"}</span><input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} /></label>
+        <button className="connect-primary love-button" disabled={busy || !profileName.trim() || !whatsapp.trim() || !photoFile} onClick={finishProfile}>{busy ? "Creating..." : "Create My Connection Card"}</button>
+      </>)}
 
       {step === 7 && (
         <div className="result-card love-result">
-          <div className="result-symbol">{heart}</div>
-          <div className="connect-kicker love">YOUR GAME IS READY</div>
-          <h2>Gwamo can now look for people you may enjoy meeting.</h2>
-          <p>Your heart choice and short answers give the game something interesting to compare.</p>
-          <div className="summary-chips">
-            <span>👤 {profileName}</span>
-            <span>📍 {location}</span>
-            <span>{heart} Heart</span>
-            <span>❤️ {preference}</span>
-          </div>
-          <button
-            className="connect-primary love-button"
-            onClick={() => setStep(8)}
-          >
-            Find Possible Matches
-          </button>
+          <div className="result-symbol">❤️</div><div className="connect-kicker love">YOUR CARD IS LIVE</div>
+          <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Connections.</h2>
+          <p>Your heart stays hidden. Your public status changes from Waiting to View heart match when another active profile has the same heart.</p>
+          <button className="connect-primary love-button" onClick={onBrowse}>Browse Gwamo Connections</button>
         </div>
       )}
+    </section>
+  );
+}
 
-      {step === 8 && (
-        <div className="result-card love-result">
-          <div className="result-symbol">❤️</div>
-          <div className="connect-kicker love">POSSIBLE MATCHES</div>
-          <h2>Your match results will appear here.</h2>
-          <p>
-            The game is ready. The next backend step will connect this screen to real
-            Gwamo members who submitted compatible choices.
-          </p>
-          <button className="connect-secondary" onClick={() => setStep(7)}>
-            Back
-          </button>
-        </div>
-      )}
+function BrowseLove({ onBack, onJoin }) {
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    connectApi("/api/connect/love?limit=50")
+      .then((data) => { if (live) setItems(data.items || []); })
+      .catch((err) => { if (live) setError(err.message || "Could not load Gwamo Connections."); })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, []);
+
+  return (
+    <section className="connect-panel browse-love-panel">
+      <Back onClick={onBack} />
+      <div className="browse-love-heading">
+        <div><div className="connect-kicker love">❤️ GWAMO CONNECTIONS</div><h1>Browse Meet Someone</h1></div>
+        <button type="button" className="browse-join-button" onClick={onJoin}>＋ Add yours</button>
+      </div>
+      <p className="connect-lead">Public cards show the person, area, perfect free day and heart-match status.</p>
+
+      {error && <div className="connect-error">{error}</div>}
+      {busy && <div className="browse-empty">Loading connections...</div>}
+      {!busy && !error && !items.length && <div className="browse-empty"><strong>No connection cards yet.</strong><span>Be the first person to join Meet Someone.</span></div>}
+
+      <div className="love-card-list">
+        {items.map((profile) => {
+          const freeDay = profile.public_data?.perfect_free_day || profile.public_data?.answers?.perfect_free_day || "Not added";
+          const hasMatch = profile.match_status === "View heart match";
+          return (
+            <article className="love-connection-card" key={profile.id}>
+              <div className="love-card-video">
+                {profile.video_url ? <video src={profile.video_url} controls playsInline preload="metadata" /> : <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>}
+              </div>
+              <div className="love-card-profile">
+                <img src={profile.creator_photo_url || "/favicon.ico"} alt="" />
+                <div className="love-card-person"><h2>{profile.creator_name || "Gwamo member"}</h2><span>📍 {profile.location || "Location not added"}</span></div>
+              </div>
+              <div className="love-card-info">
+                <div><small>Perfect free day</small><strong>{freeDay}</strong></div>
+                <div><small>Status</small>{hasMatch ? <a className="heart-match-status found" href={adminWhatsAppUrl(profile)} target="_blank" rel="noreferrer">View heart match</a> : <span className="heart-match-status">Waiting</span>}</div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -252,7 +262,8 @@ export default function ConnectExperience() {
   return (
     <div className="gwamo-connect-root">
       {screen === "home" && <ConnectHome setScreen={setScreen} />}
-      {screen === "love" && <LoveGame onBack={home} />}
+      {screen === "love" && <LoveGame onBack={home} onBrowse={() => setScreen("browse-love")} />}
+      {screen === "browse-love" && <BrowseLove onBack={home} onJoin={() => setScreen("love")} />}
       {screen === "walk" && <WalkTogetherGame onBack={home} />}
       {screen === "money" && <MoneyTogetherGame onBack={home} />}
       {screen === "start" && <StartSomething onBack={home} setScreen={setScreen} />}
@@ -310,7 +321,22 @@ export default function ConnectExperience() {
         .love-result { border-color: rgba(255,106,151,.22); background: radial-gradient(circle at top right, rgba(255,78,137,.18), transparent 34%), linear-gradient(145deg, rgba(43,13,31,.86), rgba(9,9,23,.94)); }
         .summary-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
         .summary-chips span { padding: 7px 10px; border-radius: 999px; color: rgba(255,255,255,.76); background: rgba(255,255,255,.05); font-size: 11px; }
-        @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } }
+
+        .connect-home-subtitle{margin:24px 0 12px!important;color:rgba(255,255,255,.72);font-size:13px!important}
+        .browse-love-entry{width:100%;min-height:92px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:15px 16px;border:1px solid rgba(255,107,153,.30);border-radius:22px;color:#fff;background:linear-gradient(145deg,rgba(46,14,34,.92),rgba(8,14,30,.94));text-align:left;box-shadow:0 16px 36px rgba(0,0,0,.28)}
+        .browse-love-entry-icon{width:50px;height:50px;display:grid;place-items:center;border-radius:17px;background:rgba(255,255,255,.06);font-size:27px}
+        .browse-love-entry span:nth-child(2){display:flex;flex-direction:column;gap:4px}.browse-love-entry small{color:rgba(255,232,241,.58);font-size:11px}.browse-love-entry b{color:#ff8eae;font-size:30px;font-weight:400}
+        .connect-error{margin:0 0 14px;padding:11px 13px;border:1px solid rgba(255,95,115,.35);border-radius:13px;color:#ffd6dd;background:rgba(93,16,34,.46);font-size:12px}
+        .browse-love-panel{width:min(100%,720px)}.browse-love-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}.browse-love-heading h1{margin-bottom:0}
+        .browse-join-button{flex:0 0 auto;min-height:42px;padding:0 13px;border:1px solid rgba(255,105,151,.38);border-radius:999px;color:#ffd9e5;background:rgba(84,20,45,.48);font-size:11px;font-weight:850}
+        .browse-empty{min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;border:1px dashed rgba(255,255,255,.12);border-radius:22px;color:rgba(255,255,255,.52);background:rgba(255,255,255,.025);text-align:center;font-size:12px}.browse-empty strong{color:#fff;font-size:15px}
+        .love-card-list{display:grid;gap:18px}.love-connection-card{overflow:hidden;border:1px solid rgba(255,109,153,.22);border-radius:26px;background:linear-gradient(160deg,rgba(35,12,28,.96),rgba(5,12,27,.98));box-shadow:0 20px 46px rgba(0,0,0,.32)}
+        .love-card-video{width:100%;aspect-ratio:16/9;overflow:hidden;background:#05070d}.love-card-video video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+        .love-video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:rgba(255,255,255,.42);background:#070a11}.love-video-placeholder span{font-size:30px}.love-video-placeholder small{font-size:10px;font-weight:800}
+        .love-card-profile{display:flex;align-items:center;gap:12px;padding:15px 16px 11px}.love-card-profile img{width:62px;height:62px;flex:0 0 auto;object-fit:cover;border:3px solid rgba(255,255,255,.88);border-radius:50%}.love-card-person{min-width:0}.love-card-person h2{margin:0 0 4px!important;color:#fff;font-size:20px!important}.love-card-person span{color:rgba(255,233,241,.62);font-size:12px}
+        .love-card-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 16px}.love-card-info>div{min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 12px;border:1px solid rgba(255,255,255,.07);border-radius:16px;background:rgba(255,255,255,.035)}.love-card-info small{color:rgba(255,255,255,.42);font-size:9px;font-weight:850;text-transform:uppercase}.love-card-info strong{color:#fff;font-size:12px}
+        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.66);background:rgba(255,255,255,.06);font-size:10px;font-weight:900;text-decoration:none}.heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c)}
+                @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } }
         @media (prefers-reduced-motion: reduce) { .love-float { animation: none; } }
       `}</style>
     </div>
