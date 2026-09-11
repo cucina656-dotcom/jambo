@@ -411,6 +411,12 @@ export default function MoneyTogetherGame({ onBack }) {
           whatsapp: whatsapp.trim(),
           mission,
           contribution,
+          // The server's shared connect-profile schema requires a non-empty `location`
+          // (confirmed live: omitting it returns "Location is required."). There's no
+          // location field in this UI anymore, so we satisfy that requirement with the
+          // mission type itself rather than reintroducing a field the redesign removed —
+          // this also reads sensibly if `location` is ever shown elsewhere (e.g. a 📍 tag).
+          location: mission,
           photo_url: uploaded.url,
           photo_key: uploaded.key,
           answers: { about_mission: aboutMission.trim() },
