@@ -1,30 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import WalkTogetherGame from "./WalkTogetherGame";
+import MoneyTogetherGame from "./MoneyTogetherGame";
 
-const ADMIN_WHATSAPP = "250788484446";
+const HEARTS = ["💛", "🧡", "💚", "💙", "💜"];
+
 const CONNECT_API_URL = "https://kitchenbrain.cucina656.workers.dev";
+const ADMIN_WHATSAPP = "250788484446";
+const LOVE_OWNER_KEY = "gwamo_connect_love_owner";
 
-const MISSIONS = [
-  ["🛍️", "Sell Something", "Find something and sell it together"],
-  ["🧹", "Offer a Service", "Cleaning, repair, farming, helping and more"],
-  ["🔄", "Buy & Resell", "Buy something and sell it for more"],
-  ["🛠️", "Make Something", "Create a small product together"],
-  ["🚚", "Delivery / Errands", "Move or deliver things for people"],
-  ["📣", "Find Customers", "Promote something and earn together"],
-  ["💡", "My Own Idea", "Start a different small money idea"],
-];
-
-const CONTRIBUTIONS = [
-  ["⏰", "Time"],
-  ["🛠️", "Skill"],
-  ["💵", "Small contribution"],
-  ["🚲", "Transport"],
-  ["📣", "Customers"],
-  ["🧠", "Idea"],
-];
-
-// --- Backend helpers (mirrors the verified Meet Someone / kitchenbrain.cucina656.workers.dev contract). ---
-// This file is standalone, so these are duplicated rather than imported — same pattern already
-// used for ADMIN_WHATSAPP in the original version of this file.
 async function connectApi(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (typeof options.body === "string") headers.set("Content-Type", "application/json");
@@ -34,7 +17,7 @@ async function connectApi(path, options = {}) {
   return data;
 }
 
-async function uploadImage(file) {
+async function uploadProfilePhoto(file) {
   const body = new FormData();
   body.append("kind", "profile_image");
   body.append("file", file);
@@ -71,6 +54,26 @@ function uploadWithProgress(url, formData, onProgress) {
   });
 }
 
+function rememberLoveOwner(profileId, ownerToken) {
+  if (!profileId || !ownerToken) return;
+  try { localStorage.setItem(LOVE_OWNER_KEY, JSON.stringify({ profile_id: profileId, owner_token: ownerToken })); } catch {}
+}
+
+function readLoveOwner() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOVE_OWNER_KEY) || "null");
+    return saved?.profile_id ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function adminWhatsAppUrl(profile) {
+  const text = `Hello Gwamo Admin,\nI want to view my heart match.\nProfile: ${profile?.creator_name || "Meet Someone"}\nProfile ID: ${profile?.id || ""}`;
+  return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
+}
+
+// --- Meet Someone video helpers: detect YouTube links and lazily load the YouTube IFrame API. ---
 function getYouTubeId(url) {
   if (!url) return "";
   const str = String(url);
@@ -114,113 +117,226 @@ function loadYouTubeApi() {
   return youTubeApiPromise;
 }
 
-function MissionCard({ emoji, title, description, active, onClick }) {
+// --- Generic helpers for rendering "public_data" fields we don't have a fixed schema for (Money Teams). ---
+function flattenPublicData(obj, prefix = "") {
+  const out = [];
+  Object.entries(obj || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === "") return;
+    if (typeof value === "object" && !Array.isArray(value)) {
+      out.push(...flattenPublicData(value, `${prefix}${key}.`));
+    } else if (!Array.isArray(value)) {
+      out.push([`${prefix}${key}`, value]);
+    }
+  });
+  return out;
+}
+
+function formatFieldLabel(key) {
+  return key.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function Choice({ emoji, label, active, onClick }) {
   return (
     <button
       type="button"
-      className={`money-mission-card${active ? " is-active" : ""}`}
+      className={`connect-choice${active ? " is-active" : ""}`}
       onClick={onClick}
     >
-      <span>{emoji}</span>
-      <strong>{title}</strong>
-      <small>{description}</small>
+      <span className="connect-choice-emoji">{emoji}</span>
+      <span>{label}</span>
     </button>
   );
 }
 
-export default function MoneyTogetherGame({ onBack }) {
-  const [stage, setStage] = useState("mission");
-  const [mission, setMission] = useState("");
-  const [contribution, setContribution] = useState("");
-  const [aboutMission, setAboutMission] = useState("");
-  const [name, setName] = useState("");
+function Back({ onClick }) {
+  return (
+    <button type="button" className="connect-back" onClick={onClick}>
+      ← Back
+    </button>
+  );
+}
+
+function ConnectHome({ setScreen }) {
+  return (
+    <section className="connect-panel">
+      <div className="connect-kicker">GWAMO CONNECT</div>
+      <h1>Find your people.</h1>
+      <p className="connect-lead">For love or earning together.</p>
+
+      <h3 className="connect-home-subtitle">Explore</h3>
+      <div className="connect-grid">
+        <Choice emoji="💰" label="Browse Money Teams" onClick={() => setScreen("browse-money")} />
+        <Choice emoji="🤍" label="Browse People" onClick={() => setScreen("browse-love")} />
+      </div>
+
+      <h3 className="connect-home-subtitle">Join in</h3>
+      <div className="connect-grid">
+        <Choice emoji="💰" label="Earn Together" onClick={() => setScreen("money")} />
+        <Choice emoji="🤍" label="Meet Someone" onClick={() => setScreen("love")} />
+      </div>
+    </section>
+  );
+}
+
+function LoveGame({ onBack, onBrowse }) {
+  const [step, setStep] = useState(0);
+  const [adult, setAdult] = useState(false);
+  const [location, setLocation] = useState("");
+  const [preference, setPreference] = useState("");
+  const [heart, setHeart] = useState("");
+  const [freeDay, setFreeDay] = useState("");
+  const [matters, setMatters] = useState("");
+  const [profileName, setProfileName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState("");
+  const [photoFile, setPhotoFile] = useState(null);
+  const [createdProfile, setCreatedProfile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  // Creating the mission on the real backend (needed so the video-PIN system below has a
-  // real item id to attach to, exactly like a Meet Someone profile).
-  const [missionSaving, setMissionSaving] = useState(false);
-  const [missionError, setMissionError] = useState("");
-  const [serverMission, setServerMission] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]); // [{ name, photo_url }] — creator first, never fabricated
+  async function finishProfile() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const photo = await uploadProfilePhoto(photoFile);
+      const data = await connectApi("/api/connect/love", {
+        method: "POST",
+        body: JSON.stringify({
+          adult_confirmed: true, name: profileName.trim(), whatsapp: whatsapp.trim(),
+          location: location.trim(), preference, heart, photo_url: photo.url, photo_key: photo.key,
+          answers: { perfect_free_day: freeDay, matters_most: matters },
+        }),
+      });
+      rememberLoveOwner(data.profile?.id, data.owner_token);
+      setCreatedProfile(data.profile || null);
+      setStep(7);
+    } catch (err) {
+      setError(err.message || "Could not create your connection card.");
+    } finally { setBusy(false); }
+  }
 
-  // Video editor state (mirrors Meet Someone's Add/Change video flow exactly).
-  const [editingVideo, setEditingVideo] = useState(false);
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoUrlInput, setVideoUrlInput] = useState("");
+  return (
+    <section className="connect-panel love-panel">
+      <Back onClick={onBack} />
+      {error && <div className="connect-error">{error}</div>}
+
+      {step === 0 && (<>
+        <div className="connect-kicker love">❤️ MEET SOMEONE</div>
+        <h1>Maybe somebody is looking for someone like you.</h1>
+        <div className="love-story-box"><span className="love-float one">❤️</span><span className="love-float two">✨</span><strong>Love Stories</strong><small>Real Gwamo couples can appear here after both people choose to share their story.</small></div>
+        <label className="adult-check"><input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} /><span>I am 18 or older.</span></label>
+        <button className="connect-primary love-button" disabled={!adult} onClick={() => setStep(1)}>Play the Match Game</button>
+        <p className="connect-fine">Your heart choice is the only thing Gwamo uses to find a heart match.</p>
+      </>)}
+
+      {step === 1 && (<>
+        <div className="connect-step">Step 1</div><h2>📍 Where are you?</h2>
+        <input className="connect-input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, district or area" />
+        <button className="connect-primary love-button" disabled={!location.trim()} onClick={() => setStep(2)}>Next</button>
+      </>)}
+
+      {step === 2 && (<>
+        <div className="connect-step">Step 2</div><h2>❤️ Who would you like to meet?</h2>
+        <div className="option-stack">{["A woman","A man","Open to either"].map((item) => <button type="button" key={item} className={`line-option${preference===item?" is-active":""}`} onClick={() => setPreference(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!preference} onClick={() => setStep(3)}>Next</button>
+      </>)}
+
+      {step === 3 && (<>
+        <div className="connect-step">Step 3</div><h2>Choose the heart that feels like you today.</h2>
+        <p className="connect-lead">This heart alone decides your heart match.</p>
+        <div className="heart-row">{HEARTS.map((item) => <button type="button" key={item} className={`heart-button${heart===item?" is-active":""}`} onClick={() => setHeart(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!heart} onClick={() => setStep(4)}>Continue</button>
+      </>)}
+
+      {step === 4 && (<>
+        <div className="connect-step">Quick question 1 of 2</div><h2>Your perfect free day?</h2>
+        <div className="option-stack">{["🌳 Outside","🎵 Music","🍽️ Food together","🎬 Relaxing","🚶 Walking"].map((item) => <button type="button" key={item} className={`line-option${freeDay===item?" is-active":""}`} onClick={() => setFreeDay(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!freeDay} onClick={() => setStep(5)}>Next</button>
+      </>)}
+
+      {step === 5 && (<>
+        <div className="connect-step">Quick question 2 of 2</div><h2>What matters most to you?</h2>
+        <div className="option-stack">{["❤️ Love","🤝 Trust","😂 Fun","💬 Good conversation","🏠 Building a future"].map((item) => <button type="button" key={item} className={`line-option${matters===item?" is-active":""}`} onClick={() => setMatters(item)}>{item}</button>)}</div>
+        <button className="connect-primary love-button" disabled={!matters} onClick={() => setStep(6)}>Next</button>
+      </>)}
+
+      {step === 6 && (<>
+        <div className="connect-step">Your profile</div><h2>Create your connection card.</h2>
+        <p className="connect-lead">Your WhatsApp number and heart stay private. They are not shown on the public card.</p>
+        <input className="connect-input" value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Your name" autoComplete="name" />
+        <input className="connect-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp number" inputMode="tel" autoComplete="tel" />
+        <label className="connect-photo-field"><span>{photoFile ? `📷 ${photoFile.name}` : "📷 Add your profile photo"}</span><input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} /></label>
+        <button className="connect-primary love-button" disabled={busy || !profileName.trim() || !whatsapp.trim() || !photoFile} onClick={finishProfile}>{busy ? "Creating..." : "Create My Connection Card"}</button>
+      </>)}
+
+      {step === 7 && (
+        <div className="result-card love-result">
+          <div className="result-symbol">❤️</div><div className="connect-kicker love">YOUR CARD IS LIVE</div>
+          <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Connections.</h2>
+          <p>Your heart stays hidden. Your public status changes from Waiting to View heart match when another active profile has the same heart.</p>
+          <button className="connect-primary love-button" onClick={onBrowse}>Browse Gwamo Connections</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BrowseLove({ onBack, onJoin }) {
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+  const [owner] = useState(() => readLoveOwner());
+  const [editingVideoId, setEditingVideoId] = useState("");
   const [videoPin, setVideoPin] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFile, setVideoFile] = useState(null);
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoError, setVideoError] = useState("");
   const [showAskPin, setShowAskPin] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
-  const [mediaError, setMediaError] = useState("");
-  const [muted, setMuted] = useState(true);
+  const [autoplayBlocked, setAutoplayBlocked] = useState({});
+  const [mediaErrors, setMediaErrors] = useState({});
   const [ytApiError, setYtApiError] = useState("");
+  const [mutedMap, setMutedMap] = useState({});
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Join-this-mission flow.
-  const [joinedMission, setJoinedMission] = useState(false);
-  const [missionRoomOpen, setMissionRoomOpen] = useState(false);
-  const [joinIdentityOpen, setJoinIdentityOpen] = useState(false);
-  const [viewerName, setViewerName] = useState("");
-  const [viewerWhatsapp, setViewerWhatsapp] = useState("");
-  const [viewerPhoto, setViewerPhoto] = useState(null);
-  const [viewerPhotoPreview, setViewerPhotoPreview] = useState("");
-  const [joinBusy, setJoinBusy] = useState(false);
-  const [joinError, setJoinError] = useState("");
+  // Playback plumbing for the auto-playing, one-at-a-time card feed.
+  const videoRefs = useRef({});
+  const ytPlayers = useRef({});
+  const ytVideoIds = useRef({});
+  const ytPending = useRef({});
+  const stageRefs = useRef({});
+  const visibilityRatios = useRef({});
+  const activeIdRef = useRef("");
+  // Mirrors mutedMap synchronously so playback callbacks (set up once per items change)
+  // never read a stale mute preference from an old render's closure.
+  const mutedMapRef = useRef({});
 
-  const videoRef = useRef(null);
-  const ytPlayerRef = useRef(null);
-  const ytPending = useRef(false);
-  const stageRef = useRef(null);
-  const activeRef = useRef(false);
-  const mutedRef = useRef(true);
-
-  const missionData = MISSIONS.find(([, title]) => title === mission);
-  const missionEmoji = missionData?.[0] || "💰";
-  const missionReady = Boolean(mission);
-  const teamReady = Boolean(contribution && aboutMission.trim());
-  const profileReady = Boolean(name.trim() && whatsapp.trim() && photo);
-
-  const handlePhoto = (event) => {
-    const file = event.target.files?.[0] || null;
-    setPhoto(file);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(file ? URL.createObjectURL(file) : "");
-  };
-
-  const handleViewerPhoto = (event) => {
-    const file = event.target.files?.[0] || null;
-    setViewerPhoto(file);
-    if (viewerPhotoPreview) URL.revokeObjectURL(viewerPhotoPreview);
-    setViewerPhotoPreview(file ? URL.createObjectURL(file) : "");
-  };
-
-  // --- Video playback (single book card, same architecture as Meet Someone's feed) ---
-  function pauseVideo() {
-    if (videoRef.current) { try { videoRef.current.pause(); } catch {} }
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
-      try { ytPlayerRef.current.pauseVideo(); } catch {}
-    }
-    ytPending.current = false;
-    activeRef.current = false;
+  function pauseMedia(id) {
+    if (!id) return;
+    const video = videoRefs.current[id];
+    if (video) { try { video.pause(); } catch {} }
+    const player = ytPlayers.current[id];
+    if (player && typeof player.pauseVideo === "function") { try { player.pauseVideo(); } catch {} }
+    ytPending.current[id] = false;
   }
 
-  function playVideo() {
-    activeRef.current = true;
-    const shouldMute = mutedRef.current;
-    if (videoRef.current) {
-      videoRef.current.muted = shouldMute;
-      const attempt = videoRef.current.play();
+  function playMedia(id) {
+    if (!id) return;
+    const shouldMute = mutedMapRef.current[id] !== false; // muted by default — browsers require it for autoplay
+    const video = videoRefs.current[id];
+    if (video) {
+      video.muted = shouldMute;
+      const attempt = video.play();
       if (attempt && typeof attempt.then === "function") {
-        attempt.then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+        attempt
+          .then(() => setAutoplayBlocked((current) => ({ ...current, [id]: false })))
+          .catch(() => setAutoplayBlocked((current) => ({ ...current, [id]: true })));
       } else {
-        setAutoplayBlocked(false);
+        setAutoplayBlocked((current) => ({ ...current, [id]: false }));
       }
       return;
     }
-    const player = ytPlayerRef.current;
+
+    const player = ytPlayers.current[id];
     if (player && typeof player.playVideo === "function") {
       try {
         if (shouldMute) { if (typeof player.mute === "function") player.mute(); }
@@ -229,112 +345,56 @@ export default function MoneyTogetherGame({ onBack }) {
         window.setTimeout(() => {
           try {
             const state = typeof player.getPlayerState === "function" ? player.getPlayerState() : null;
-            setAutoplayBlocked(!(state === 1 || state === 3));
+            const playing = state === 1 || state === 3; // 1 = PLAYING, 3 = BUFFERING
+            setAutoplayBlocked((current) => ({ ...current, [id]: !playing }));
           } catch {}
         }, 700);
       } catch {
-        setAutoplayBlocked(true);
+        setAutoplayBlocked((current) => ({ ...current, [id]: true }));
       }
       return;
     }
-    ytPending.current = true;
+
+    // The YouTube player for this card isn't ready yet — play as soon as it is.
+    ytPending.current[id] = true;
   }
 
-  function toggleMute() {
-    const next = !mutedRef.current;
-    mutedRef.current = next;
-    if (videoRef.current) videoRef.current.muted = next;
-    const player = ytPlayerRef.current;
+  function activateCard(id) {
+    if (activeIdRef.current === id) return;
+    if (activeIdRef.current) pauseMedia(activeIdRef.current);
+    activeIdRef.current = id;
+    if (id) playMedia(id);
+  }
+
+  // Browsers require muted playback for autoplay, so every card starts muted with a
+  // neon mute badge over it; tapping the badge lets that one viewer turn its sound on.
+  function toggleMute(id) {
+    const wasMuted = mutedMapRef.current[id] !== false;
+    const nextMuted = !wasMuted;
+    mutedMapRef.current[id] = nextMuted;
+    const video = videoRefs.current[id];
+    if (video) video.muted = nextMuted;
+    const player = ytPlayers.current[id];
     if (player) {
       try {
-        if (next) { if (typeof player.mute === "function") player.mute(); }
+        if (nextMuted) { if (typeof player.mute === "function") player.mute(); }
         else if (typeof player.unMute === "function") player.unMute();
       } catch {}
     }
-    setMuted(next);
+    setMutedMap((current) => ({ ...current, [id]: nextMuted }));
   }
 
-  // Create/refresh the YouTube player when the mission video is a YouTube link.
-  useEffect(() => {
-    if (!serverMission) return undefined;
-    const ytId = getYouTubeId(serverMission.video_url);
-    if (!ytId) {
-      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
-      return undefined;
+  async function saveVideo(profile) {
+    if (videoBusy) return;
+    const pin = videoPin.trim();
+    if (!pin) {
+      setVideoError("Enter the Connect video PIN.");
+      return;
     }
-    let cancelled = false;
-    const elementId = `money-yt-${serverMission.id}`;
-    loadYouTubeApi()
-      .then((YT) => {
-        if (cancelled) return;
-        if (ytPlayerRef.current) {
-          try { ytPlayerRef.current.cueVideoById(ytId); } catch {}
-          return;
-        }
-        if (!document.getElementById(elementId)) return;
-        ytPlayerRef.current = new YT.Player(elementId, {
-          videoId: ytId,
-          playerVars: { mute: 1, playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
-          events: {
-            onReady: () => { if (ytPending.current) { ytPending.current = false; playVideo(); } },
-            onError: () => setMediaError("This video can't be played here. It may be private or embedding may be disabled."),
-          },
-        });
-      })
-      .catch(() => setYtApiError("YouTube playback isn't available right now."));
-    return () => { cancelled = true; };
-  }, [serverMission?.id, serverMission?.video_url]);
-
-  // Auto-play/pause based on visibility of the WHOLE book card (stable-size container —
-  // the flip transform on its children never changes this box, so page turns can't
-  // accidentally look like a visibility change).
-  useEffect(() => {
-    if (!serverMission || !stageRef.current) return undefined;
-    const el = stageRef.current;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-          if (!activeRef.current) playVideo();
-        } else if (entry.intersectionRatio < 0.25 && activeRef.current) {
-          pauseVideo();
-        }
-      });
-    }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [serverMission?.id]);
-
-  useEffect(() => {
-    function handleVisibility() {
-      if (document.hidden) { if (activeRef.current) pauseVideo(); }
-      else if (activeRef.current) playVideo();
+    if (!videoFile && !videoUrl.trim()) {
+      setVideoError("Upload a video or paste a video link.");
+      return;
     }
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} }
-      if (videoRef.current) { try { videoRef.current.pause(); } catch {} }
-    };
-  }, []);
-
-  function openVideoEditor() {
-    setEditingVideo((current) => !current);
-    setVideoPin("");
-    setVideoUrlInput("");
-    setVideoFile(null);
-    setVideoError("");
-    setShowAskPin(false);
-    setUploadProgress(0);
-  }
-
-  async function saveMissionVideo() {
-    if (videoBusy || !serverMission) return;
-    const pinValue = videoPin.trim();
-    if (!pinValue) { setVideoError("Enter the Connect video PIN."); return; }
-    if (!videoFile && !videoUrlInput.trim()) { setVideoError("Upload a video or paste a video link."); return; }
 
     setVideoBusy(true);
     setVideoError("");
@@ -342,15 +402,20 @@ export default function MoneyTogetherGame({ onBack }) {
     setUploadProgress(0);
 
     try {
-      let nextVideoUrl = videoUrlInput.trim();
+      let nextVideoUrl = videoUrl.trim();
       let nextVideoKey = "";
 
       if (videoFile) {
         const form = new FormData();
         form.append("kind", "video");
         form.append("file", videoFile);
-        form.append("pin", pinValue);
-        const uploaded = await uploadWithProgress(`${CONNECT_API_URL}/api/connect/upload`, form, setUploadProgress);
+        form.append("pin", pin);
+
+        const uploaded = await uploadWithProgress(
+          `${CONNECT_API_URL}/api/connect/upload`,
+          form,
+          (pct) => setUploadProgress(pct)
+        );
         setUploadProgress(100);
         nextVideoUrl = uploaded.url || "";
         nextVideoKey = uploaded.key || "";
@@ -358,8 +423,15 @@ export default function MoneyTogetherGame({ onBack }) {
 
       const response = await fetch(`${CONNECT_API_URL}/api/connect/video`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Connect-Video-Pin": pinValue },
-        body: JSON.stringify({ item_id: serverMission.id, video_url: nextVideoUrl, video_key: nextVideoKey }),
+        headers: {
+          "Content-Type": "application/json",
+          "X-Connect-Video-Pin": pin,
+        },
+        body: JSON.stringify({
+          item_id: profile.id,
+          video_url: nextVideoUrl,
+          video_key: nextVideoKey,
+        }),
       });
       const updated = await response.json().catch(() => ({}));
       if (!response.ok || updated.success === false) {
@@ -368,14 +440,21 @@ export default function MoneyTogetherGame({ onBack }) {
         throw err;
       }
 
-      setServerMission((current) => ({ ...current, ...updated.item }));
-      setMediaError("");
-      setEditingVideo(false);
+      setItems((current) =>
+        current.map((item) => item.id === profile.id ? { ...item, ...updated.item } : item)
+      );
+      setMediaErrors((current) => { const next = { ...current }; delete next[profile.id]; return next; });
+      setEditingVideoId("");
       setVideoPin("");
-      setVideoUrlInput("");
+      setVideoUrl("");
       setVideoFile(null);
       setShowAskPin(false);
-      if (activeRef.current) window.setTimeout(() => playVideo(), 50);
+
+      // If this card is already the active one, resume playback on the freshly saved video
+      // once the item update above has propagated through the native <video>/YouTube setup.
+      if (activeIdRef.current === profile.id) {
+        window.setTimeout(() => playMedia(profile.id), 50);
+      }
     } catch (err) {
       setVideoError(err.message || "Could not change video.");
       if (err.status === 403 || /pin/i.test(err.message || "")) setShowAskPin(true);
@@ -385,96 +464,543 @@ export default function MoneyTogetherGame({ onBack }) {
     }
   }
 
-  const askAdminForPin = () => {
-    const message = [
-      "Hello Gwamo Admin,",
-      "Please send me the Connect video PIN to add or change my Make Money Together mission video.",
-      `Mission: ${mission || "Not selected yet"}`,
-      `Mission ID: ${serverMission?.id || "Not created yet"}`,
-    ].join("\n");
-    window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-  };
+  function openVideoEditor(profile) {
+    setEditingVideoId((current) => current === profile.id ? "" : profile.id);
+    setVideoPin("");
+    setVideoUrl("");
+    setVideoFile(null);
+    setVideoError("");
+    setShowAskPin(false);
+    setUploadProgress(0);
+  }
 
-  // Creates the mission as a real backend record (connect_type "money"), mirroring the
-  // verified Meet Someone profile-creation call. Only once this succeeds do we have a real
-  // item id, which is what the video-PIN endpoint above needs to attach a video securely.
-  async function createMission() {
-    if (missionSaving) return;
-    setMissionSaving(true);
-    setMissionError("");
-    try {
-      const uploaded = await uploadImage(photo);
-      const data = await connectApi("/api/connect/money", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          whatsapp: whatsapp.trim(),
-          mission,
-          contribution,
-          // The server's shared connect-profile schema requires a non-empty `location`
-          // (confirmed live: omitting it returns "Location is required."). There's no
-          // location field in this UI anymore, so we satisfy that requirement with the
-          // mission type itself rather than reintroducing a field the redesign removed —
-          // this also reads sensibly if `location` is ever shown elsewhere (e.g. a 📍 tag).
-          location: mission,
-          photo_url: uploaded.url,
-          photo_key: uploaded.key,
-          answers: { about_mission: aboutMission.trim() },
-        }),
+  useEffect(() => {
+    let live = true;
+    connectApi("/api/connect/love?limit=50")
+      .then((data) => { if (live) setItems(data.items || []); })
+      .catch((err) => { if (live) setError(err.message || "Could not load Gwamo Connections."); })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, []);
+
+  // Create/update/tear down YouTube IFrame players as the video on each card changes.
+  // For page-load speed, only the first couple of YouTube cards mount immediately — the
+  // rest mount lazily as they scroll near the viewport, so a long feed doesn't pay the
+  // cost (network + JS) of every YouTube embed up front.
+  useEffect(() => {
+    let cancelled = false;
+    const currentYouTubeIds = new Set();
+    items.forEach((profile) => {
+      if (getYouTubeId(profile.video_url)) currentYouTubeIds.add(profile.id);
+    });
+
+    Object.keys(ytPlayers.current).forEach((id) => {
+      if (!currentYouTubeIds.has(id)) {
+        try { ytPlayers.current[id].destroy(); } catch {}
+        delete ytPlayers.current[id];
+        delete ytVideoIds.current[id];
+      }
+    });
+
+    const toUpdate = items.filter((profile) => {
+      const ytId = getYouTubeId(profile.video_url);
+      return ytId && ytPlayers.current[profile.id] && ytVideoIds.current[profile.id] !== ytId;
+    });
+    toUpdate.forEach((profile) => {
+      const ytId = getYouTubeId(profile.video_url);
+      try {
+        ytPlayers.current[profile.id].cueVideoById(ytId);
+        ytVideoIds.current[profile.id] = ytId;
+      } catch {}
+    });
+
+    function createPlayer(profile) {
+      const id = profile.id;
+      if (ytPlayers.current[id]) return;
+      const elementId = `love-yt-${id}`;
+      const ytId = getYouTubeId(profile.video_url);
+      if (!ytId || !document.getElementById(elementId)) return;
+      ytVideoIds.current[id] = ytId;
+      loadYouTubeApi()
+        .then((YT) => {
+          if (cancelled || ytPlayers.current[id] || !document.getElementById(elementId)) return;
+          ytPlayers.current[id] = new YT.Player(elementId, {
+            videoId: ytId,
+            playerVars: { mute: 1, playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
+            events: {
+              onReady: () => {
+                if (ytPending.current[id]) {
+                  ytPending.current[id] = false;
+                  playMedia(id);
+                }
+              },
+              onError: () => {
+                setMediaErrors((current) => ({ ...current, [id]: "This video can't be played here. It may be private or embedding may be disabled." }));
+              },
+            },
+          });
+        })
+        .catch(() => setYtApiError("YouTube playback isn't available right now."));
+    }
+
+    const stillNeeded = items.filter((profile) => getYouTubeId(profile.video_url) && !ytPlayers.current[profile.id]);
+    if (!stillNeeded.length) return () => { cancelled = true; };
+
+    // Mount the first two right away (likely above the fold on first load) so the feed
+    // feels instant; everything else mounts only once it scrolls near the viewport.
+    stillNeeded.slice(0, 2).forEach(createPlayer);
+    const lazyTargets = stillNeeded.slice(2);
+
+    let mountObserver = null;
+    if (lazyTargets.length) {
+      const byId = {};
+      lazyTargets.forEach((profile) => { byId[profile.id] = profile; });
+      mountObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.profileId;
+          const profile = byId[id];
+          if (profile) {
+            createPlayer(profile);
+            mountObserver.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: "150% 0px", threshold: 0 });
+
+      lazyTargets.forEach((profile) => {
+        const el = stageRefs.current[profile.id];
+        if (el) mountObserver.observe(el);
       });
-      const item = data.item || data.profile || null;
-      if (!item || !item.id) throw new Error("The mission was created, but no mission ID was returned.");
-      setServerMission(item);
-      setTeamMembers([{ name: name.trim(), photo_url: item.creator_photo_url || uploaded.url }]);
-      setStage("result");
+    }
+
+    return () => {
+      cancelled = true;
+      if (mountObserver) mountObserver.disconnect();
+    };
+  }, [items]);
+
+  // Auto-play the most visible card's video (muted) and pause every other card.
+  useEffect(() => {
+    if (!items.length) return undefined;
+    const ratios = visibilityRatios.current;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const id = entry.target.dataset.profileId;
+        if (id) ratios[id] = entry.isIntersecting ? entry.intersectionRatio : 0;
+      });
+
+      let bestId = "";
+      let bestRatio = 0;
+      Object.keys(ratios).forEach((id) => {
+        if (ratios[id] > bestRatio) { bestRatio = ratios[id]; bestId = id; }
+      });
+
+      if (bestId && bestRatio >= 0.5) {
+        activateCard(bestId);
+      } else if (activeIdRef.current && (ratios[activeIdRef.current] || 0) < 0.25) {
+        pauseMedia(activeIdRef.current);
+        activeIdRef.current = "";
+      }
+    }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+
+    Object.values(stageRefs.current).forEach((el) => { if (el) observer.observe(el); });
+
+    return () => observer.disconnect();
+  }, [items]);
+
+  // Pause the playing card whenever the browser tab is hidden; resume it when it's shown again.
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) {
+        if (activeIdRef.current) pauseMedia(activeIdRef.current);
+      } else if (activeIdRef.current) {
+        playMedia(activeIdRef.current);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  // Leaving Meet Someone entirely: stop everything and free the YouTube players.
+  useEffect(() => {
+    return () => {
+      Object.values(ytPlayers.current).forEach((player) => { try { player.destroy(); } catch {} });
+      ytPlayers.current = {};
+      Object.values(videoRefs.current).forEach((video) => { try { video.pause(); } catch {} });
+      activeIdRef.current = "";
+    };
+  }, []);
+
+  return (
+    <section className="connect-panel browse-love-panel">
+      <Back onClick={onBack} />
+      <div className="browse-love-heading">
+        <div><div className="connect-kicker love">❤️ GWAMO CONNECTIONS</div><h1>Browse Meet Someone</h1></div>
+        <button type="button" className="browse-join-button" onClick={onJoin}>＋ Add yours</button>
+      </div>
+      <p className="connect-lead">Public cards show the person, area, perfect free day and heart-match status.</p>
+
+      {error && <div className="connect-error">{error}</div>}
+      {ytApiError && <div className="connect-error">{ytApiError}</div>}
+      {busy && <div className="browse-empty">Loading connections...</div>}
+      {!busy && !error && !items.length && <div className="browse-empty"><strong>No connection cards yet.</strong><span>Be the first person to join Meet Someone.</span></div>}
+
+      <div className="love-card-list">
+        {items.map((profile) => {
+          const freeDay = profile.public_data?.perfect_free_day || profile.public_data?.answers?.perfect_free_day || "Not added";
+          const hasMatch = profile.match_status === "View heart match";
+          const editingVideo = editingVideoId === profile.id;
+          const hasVideo = Boolean(profile.video_url);
+          const ytId = getYouTubeId(profile.video_url);
+          const mediaError = mediaErrors[profile.id];
+          const blocked = autoplayBlocked[profile.id];
+          return (
+            <article className="love-connection-card" key={profile.id}>
+              <div
+                className={`love-card-stage${editingVideo ? " is-editing" : ""}`}
+                data-profile-id={profile.id}
+                ref={(el) => { if (el) stageRefs.current[profile.id] = el; else delete stageRefs.current[profile.id]; }}
+              >
+                <div className="love-card-video-section">
+                  {hasVideo ? (
+                    ytId ? (
+                      <div className="love-yt-wrap">
+                        <div id={`love-yt-${profile.id}`} className="love-yt-player" />
+                      </div>
+                    ) : (
+                      <video
+                        ref={(el) => { if (el) videoRefs.current[profile.id] = el; else delete videoRefs.current[profile.id]; }}
+                        src={profile.video_url}
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                        controls
+                        onError={() => setMediaErrors((current) => ({ ...current, [profile.id]: "This video couldn't be played." }))}
+                      />
+                    )
+                  ) : (
+                    <div className="love-video-placeholder"><span>🎬</span><small>No video yet</small></div>
+                  )}
+                  {mediaError && <div className="love-media-error">⚠️ {mediaError}</div>}
+                  {!mediaError && blocked && hasVideo && (
+                    <button type="button" className="love-media-playbtn" onClick={() => playMedia(profile.id)}>▶ Play</button>
+                  )}
+                  {!mediaError && !blocked && hasVideo && (
+                    <button
+                      type="button"
+                      className="love-mute-badge"
+                      onClick={() => toggleMute(profile.id)}
+                      aria-label={mutedMap[profile.id] === false ? "Mute video" : "Unmute video"}
+                      title={mutedMap[profile.id] === false ? "Sound on — tap to mute" : "Muted for autoplay — tap to unmute"}
+                    >
+                      {mutedMap[profile.id] === false ? "🔊" : "🔇"}
+                    </button>
+                  )}
+                  <button type="button" className="love-change-video" onClick={() => openVideoEditor(profile)}>
+                    🎥 {editingVideo ? "Close video" : (hasVideo ? "Change video" : "Add video")}
+                  </button>
+                </div>
+                <div className="love-card-profile-section">
+                  <img className="love-card-profile-photo" src={profile.creator_photo_url || "/favicon.ico"} alt="" loading="lazy" decoding="async" />
+                  <div className="love-card-photo-overlay" />
+                  <div className="love-card-photo-info">
+                    <h2>{profile.creator_name || "Gwamo member"}</h2>
+                    <span className="love-card-area">📍 {profile.location || "Location not added"}</span>
+                    <span className="love-card-freeday">{freeDay}</span>
+                    <div className="love-card-status-row">
+                      {hasMatch ? <a className="heart-match-status found" href={adminWhatsAppUrl(profile)} target="_blank" rel="noreferrer">View heart match</a> : <span className="heart-match-status">Waiting</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {editingVideo && (
+                <div className="love-video-editor">
+                  <div className="love-video-editor-title">
+                    <strong>{hasVideo ? "Change this card's video" : "Add this card's video"}</strong>
+                    <small>Anyone with the Connect video PIN can add or replace this video. Paste a YouTube link, a direct video link, or upload a file.</small>
+                  </div>
+                  <label className="love-video-file">
+                    <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
+                    <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+                  </label>
+                  <div className="love-video-or">OR</div>
+                  <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video or YouTube link" />
+                  <input className="connect-input" type="password" value={videoPin} onChange={(e) => { setVideoPin(e.target.value); setShowAskPin(false); }} placeholder="Connect video PIN" inputMode="numeric" />
+                  {videoError && <div className="connect-error video-error">{videoError}</div>}
+                  {videoBusy && videoFile && (
+                    <div className="love-upload-progress" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="love-upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+                      <span className="love-upload-progress-label">{uploadProgress}%</span>
+                    </div>
+                  )}
+                  <button type="button" className="connect-primary love-button love-save-video" onClick={() => saveVideo(profile)} disabled={videoBusy}>
+                    {videoBusy
+                      ? (videoFile ? (uploadProgress < 100 ? `Saving video... ${uploadProgress}%` : "Finishing...") : "Saving video...")
+                      : "Save video"}
+                  </button>
+                  {showAskPin && (
+                    <a className="love-ask-pin" href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for a Meet Someone card. Profile: ${profile.creator_name || ""}. Profile ID: ${profile.id}`)}`} target="_blank" rel="noreferrer">
+                      Ask for PIN
+                    </a>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const MONEY_JOINED_KEY = "gwamo_connect_money_joined";
+
+function readJoinedMissions() {
+  try { return JSON.parse(localStorage.getItem(MONEY_JOINED_KEY) || "[]"); } catch { return []; }
+}
+
+function rememberJoinedMission(missionId) {
+  if (!missionId) return;
+  try {
+    const current = readJoinedMissions();
+    if (!current.includes(missionId)) {
+      localStorage.setItem(MONEY_JOINED_KEY, JSON.stringify([...current, missionId]));
+    }
+  } catch {}
+}
+
+// Mirrors the MISSIONS list in MoneyTogetherGame.jsx so mission book covers in the browse feed
+// show the same emoji as the mission-creation flow. Kept as a small local lookup rather than a
+// shared import, matching this file's existing convention of duplicating small constants.
+const MONEY_MISSION_EMOJI = {
+  "Sell Something": "🛍️",
+  "Offer a Service": "🧹",
+  "Buy & Resell": "🔄",
+  "Make Something": "🛠️",
+  "Delivery / Errands": "🚚",
+  "Find Customers": "📣",
+  "My Own Idea": "💡",
+};
+
+function adminMoneyVideoPinUrl(item, missionTitle) {
+  const text = `Hello Gwamo Admin, I need the Connect video PIN for a Make Money Together mission. Mission: ${missionTitle || ""}. Mission ID: ${item?.id || ""}`;
+  return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
+}
+
+function BrowseMoney({ onBack, onJoin }) {
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+
+  // Video system state — identical architecture to BrowseLove's Meet Someone feed: one
+  // playing card at a time, YouTube + native video support, PIN-gated Add/Change video open
+  // to every viewer, real upload-progress percentage.
+  const [editingVideoId, setEditingVideoId] = useState("");
+  const [videoPin, setVideoPin] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoError, setVideoError] = useState("");
+  const [showAskPin, setShowAskPin] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState({});
+  const [mediaErrors, setMediaErrors] = useState({});
+  const [ytApiError, setYtApiError] = useState("");
+  const [mutedMap, setMutedMap] = useState({});
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Join-this-mission flow (one mission's join form open at a time).
+  const [joiningId, setJoiningId] = useState("");
+  const [joinedIds, setJoinedIds] = useState(() => readJoinedMissions());
+  const [joinedConfirmId, setJoinedConfirmId] = useState("");
+  const [viewerName, setViewerName] = useState("");
+  const [viewerWhatsapp, setViewerWhatsapp] = useState("");
+  const [viewerPhoto, setViewerPhoto] = useState(null);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [joinError, setJoinError] = useState("");
+
+  const videoRefs = useRef({});
+  const ytPlayers = useRef({});
+  const ytVideoIds = useRef({});
+  const ytPending = useRef({});
+  const stageRefs = useRef({});
+  const visibilityRatios = useRef({});
+  const activeIdRef = useRef("");
+  const mutedMapRef = useRef({});
+
+  function pauseMedia(id) {
+    if (!id) return;
+    const video = videoRefs.current[id];
+    if (video) { try { video.pause(); } catch {} }
+    const player = ytPlayers.current[id];
+    if (player && typeof player.pauseVideo === "function") { try { player.pauseVideo(); } catch {} }
+    ytPending.current[id] = false;
+  }
+
+  function playMedia(id) {
+    if (!id) return;
+    const shouldMute = mutedMapRef.current[id] !== false; // muted by default — browsers require it for autoplay
+    const video = videoRefs.current[id];
+    if (video) {
+      video.muted = shouldMute;
+      const attempt = video.play();
+      if (attempt && typeof attempt.then === "function") {
+        attempt
+          .then(() => setAutoplayBlocked((current) => ({ ...current, [id]: false })))
+          .catch(() => setAutoplayBlocked((current) => ({ ...current, [id]: true })));
+      } else {
+        setAutoplayBlocked((current) => ({ ...current, [id]: false }));
+      }
+      return;
+    }
+
+    const player = ytPlayers.current[id];
+    if (player && typeof player.playVideo === "function") {
+      try {
+        if (shouldMute) { if (typeof player.mute === "function") player.mute(); }
+        else if (typeof player.unMute === "function") player.unMute();
+        player.playVideo();
+        window.setTimeout(() => {
+          try {
+            const state = typeof player.getPlayerState === "function" ? player.getPlayerState() : null;
+            const playing = state === 1 || state === 3;
+            setAutoplayBlocked((current) => ({ ...current, [id]: !playing }));
+          } catch {}
+        }, 700);
+      } catch {
+        setAutoplayBlocked((current) => ({ ...current, [id]: true }));
+      }
+      return;
+    }
+
+    ytPending.current[id] = true;
+  }
+
+  function activateCard(id) {
+    if (activeIdRef.current === id) return;
+    if (activeIdRef.current) pauseMedia(activeIdRef.current);
+    activeIdRef.current = id;
+    if (id) playMedia(id);
+  }
+
+  function toggleMute(id) {
+    const wasMuted = mutedMapRef.current[id] !== false;
+    const nextMuted = !wasMuted;
+    mutedMapRef.current[id] = nextMuted;
+    const video = videoRefs.current[id];
+    if (video) video.muted = nextMuted;
+    const player = ytPlayers.current[id];
+    if (player) {
+      try {
+        if (nextMuted) { if (typeof player.mute === "function") player.mute(); }
+        else if (typeof player.unMute === "function") player.unMute();
+      } catch {}
+    }
+    setMutedMap((current) => ({ ...current, [id]: nextMuted }));
+  }
+
+  async function saveVideo(item) {
+    if (videoBusy) return;
+    const pin = videoPin.trim();
+    if (!pin) { setVideoError("Enter the Connect video PIN."); return; }
+    if (!videoFile && !videoUrl.trim()) { setVideoError("Upload a video or paste a video link."); return; }
+
+    setVideoBusy(true);
+    setVideoError("");
+    setShowAskPin(false);
+    setUploadProgress(0);
+
+    try {
+      let nextVideoUrl = videoUrl.trim();
+      let nextVideoKey = "";
+
+      if (videoFile) {
+        const form = new FormData();
+        form.append("kind", "video");
+        form.append("file", videoFile);
+        form.append("pin", pin);
+        const uploaded = await uploadWithProgress(
+          `${CONNECT_API_URL}/api/connect/upload`,
+          form,
+          (pct) => setUploadProgress(pct)
+        );
+        setUploadProgress(100);
+        nextVideoUrl = uploaded.url || "";
+        nextVideoKey = uploaded.key || "";
+      }
+
+      const response = await fetch(`${CONNECT_API_URL}/api/connect/video`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Connect-Video-Pin": pin },
+        body: JSON.stringify({ item_id: item.id, video_url: nextVideoUrl, video_key: nextVideoKey }),
+      });
+      const updated = await response.json().catch(() => ({}));
+      if (!response.ok || updated.success === false) {
+        const err = new Error(updated.error || updated.message || "Could not change video.");
+        err.status = response.status;
+        throw err;
+      }
+
+      setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...updated.item } : row));
+      setMediaErrors((current) => { const next = { ...current }; delete next[item.id]; return next; });
+      setEditingVideoId("");
+      setVideoPin("");
+      setVideoUrl("");
+      setVideoFile(null);
+      setShowAskPin(false);
+
+      if (activeIdRef.current === item.id) {
+        window.setTimeout(() => playMedia(item.id), 50);
+      }
     } catch (err) {
-      setMissionError(err.message || "Could not create your mission. Please try again.");
+      setVideoError(err.message || "Could not change video.");
+      if (err.status === 403 || /pin/i.test(err.message || "")) setShowAskPin(true);
     } finally {
-      setMissionSaving(false);
+      setVideoBusy(false);
+      setUploadProgress(0);
     }
   }
 
-  function joinMission() {
-    if (joinedMission) {
-      setMissionRoomOpen(true);
-      return;
-    }
+  function openVideoEditor(item) {
+    setEditingVideoId((current) => current === item.id ? "" : item.id);
+    setVideoPin("");
+    setVideoUrl("");
+    setVideoFile(null);
+    setVideoError("");
+    setShowAskPin(false);
+    setUploadProgress(0);
+  }
+
+  function openJoinForm(item) {
+    if (joinedIds.includes(item.id)) return;
+    setJoiningId(item.id);
+    setViewerName("");
+    setViewerWhatsapp("");
+    setViewerPhoto(null);
     setJoinError("");
-    setJoinIdentityOpen(true);
   }
 
-  // NOTE ON BACKEND VERIFICATION: /api/connect/money and /api/connect/upload + /api/connect/video
-  // are the same generic endpoints already verified working for Meet Someone, so mission creation
-  // and the video-PIN system above are on solid ground. /api/connect/money/members below is NOT
-  // verified — I found no evidence it exists (a probe returned 404) and have no way to confirm its
-  // real shape without the Worker's source. It's wired here so the join form is fully functional
-  // and will surface a clear error if the route is missing, rather than silently pretending to
-  // save a WhatsApp number somewhere. This is the one piece of this request that needs a real
-  // backend endpoint before "Join This Mission" can truly persist members and protect their numbers.
-  async function confirmJoinMission() {
+  async function confirmJoin(item) {
     if (!viewerName.trim() || !viewerWhatsapp.trim() || !viewerPhoto || joinBusy) return;
-    if (!serverMission?.id) {
-      setJoinError("This mission hasn't finished saving yet. Please wait a moment and try again.");
-      return;
-    }
     setJoinBusy(true);
     setJoinError("");
     try {
-      const uploaded = await uploadImage(viewerPhoto);
+      const uploaded = await uploadProfilePhoto(viewerPhoto);
       await connectApi("/api/connect/money/members", {
         method: "POST",
         body: JSON.stringify({
-          item_id: serverMission.id,
+          item_id: item.id,
           name: viewerName.trim(),
           whatsapp: viewerWhatsapp.trim(),
           photo_url: uploaded.url,
           photo_key: uploaded.key,
         }),
       });
-      setTeamMembers((current) => [...current, { name: viewerName.trim(), photo_url: uploaded.url }]);
-      setJoinedMission(true);
-      setJoinIdentityOpen(false);
-      setMissionRoomOpen(true);
+      rememberJoinedMission(item.id);
+      setJoinedIds((current) => current.includes(item.id) ? current : [...current, item.id]);
+      setJoiningId("");
+      setJoinedConfirmId(item.id);
+      window.setTimeout(() => setJoinedConfirmId((current) => current === item.id ? "" : current), 4000);
     } catch (err) {
       setJoinError(err.message || "Could not save your join request. Please try again.");
     } finally {
@@ -482,651 +1008,542 @@ export default function MoneyTogetherGame({ onBack }) {
     }
   }
 
-  const restart = () => {
-    setStage("mission");
-    setMission("");
-    setContribution("");
-    setAboutMission("");
-    setName("");
-    setWhatsapp("");
-    setPhoto(null);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview("");
+  useEffect(() => {
+    let live = true;
+    connectApi("/api/connect/money?limit=50")
+      .then((data) => { if (live) setItems(data.items || []); })
+      .catch((err) => { if (live) setError(err.message || "Could not load Money Teams."); })
+      .finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, []);
 
-    setMissionSaving(false);
-    setMissionError("");
-    setServerMission(null);
-    setTeamMembers([]);
+  // Create/update/tear down YouTube IFrame players as the video on each mission card changes.
+  // Same lazy-mount strategy as Meet Someone: first two YouTube cards mount immediately,
+  // the rest mount as they scroll near the viewport.
+  useEffect(() => {
+    let cancelled = false;
+    const currentYouTubeIds = new Set();
+    items.forEach((item) => { if (getYouTubeId(item.video_url)) currentYouTubeIds.add(item.id); });
 
-    setEditingVideo(false);
-    setVideoFile(null);
-    setVideoUrlInput("");
-    setVideoPin("");
-    setVideoBusy(false);
-    setVideoError("");
-    setShowAskPin(false);
-    setUploadProgress(0);
-    setAutoplayBlocked(false);
-    setMediaError("");
-    setMuted(true);
-    mutedRef.current = true;
-    setYtApiError("");
+    Object.keys(ytPlayers.current).forEach((id) => {
+      if (!currentYouTubeIds.has(id)) {
+        try { ytPlayers.current[id].destroy(); } catch {}
+        delete ytPlayers.current[id];
+        delete ytVideoIds.current[id];
+      }
+    });
 
-    setJoinedMission(false);
-    setMissionRoomOpen(false);
-    setJoinIdentityOpen(false);
-    setViewerName("");
-    setViewerWhatsapp("");
-    setViewerPhoto(null);
-    if (viewerPhotoPreview) URL.revokeObjectURL(viewerPhotoPreview);
-    setViewerPhotoPreview("");
-    setJoinBusy(false);
-    setJoinError("");
-  };
+    const toUpdate = items.filter((item) => {
+      const ytId = getYouTubeId(item.video_url);
+      return ytId && ytPlayers.current[item.id] && ytVideoIds.current[item.id] !== ytId;
+    });
+    toUpdate.forEach((item) => {
+      const ytId = getYouTubeId(item.video_url);
+      try { ytPlayers.current[item.id].cueVideoById(ytId); ytVideoIds.current[item.id] = ytId; } catch {}
+    });
+
+    function createPlayer(item) {
+      const id = item.id;
+      if (ytPlayers.current[id]) return;
+      const elementId = `money-yt-${id}`;
+      const ytId = getYouTubeId(item.video_url);
+      if (!ytId || !document.getElementById(elementId)) return;
+      ytVideoIds.current[id] = ytId;
+      loadYouTubeApi()
+        .then((YT) => {
+          if (cancelled || ytPlayers.current[id] || !document.getElementById(elementId)) return;
+          ytPlayers.current[id] = new YT.Player(elementId, {
+            videoId: ytId,
+            playerVars: { mute: 1, playsinline: 1, controls: 1, modestbranding: 1, rel: 0 },
+            events: {
+              onReady: () => { if (ytPending.current[id]) { ytPending.current[id] = false; playMedia(id); } },
+              onError: () => setMediaErrors((current) => ({ ...current, [id]: "This video can't be played here. It may be private or embedding may be disabled." })),
+            },
+          });
+        })
+        .catch(() => setYtApiError("YouTube playback isn't available right now."));
+    }
+
+    const stillNeeded = items.filter((item) => getYouTubeId(item.video_url) && !ytPlayers.current[item.id]);
+    if (!stillNeeded.length) return () => { cancelled = true; };
+
+    stillNeeded.slice(0, 2).forEach(createPlayer);
+    const lazyTargets = stillNeeded.slice(2);
+
+    let mountObserver = null;
+    if (lazyTargets.length) {
+      const byId = {};
+      lazyTargets.forEach((item) => { byId[item.id] = item; });
+      mountObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.dataset.itemId;
+          const item = byId[id];
+          if (item) { createPlayer(item); mountObserver.unobserve(entry.target); }
+        });
+      }, { rootMargin: "150% 0px", threshold: 0 });
+      lazyTargets.forEach((item) => { const el = stageRefs.current[item.id]; if (el) mountObserver.observe(el); });
+    }
+
+    return () => { cancelled = true; if (mountObserver) mountObserver.disconnect(); };
+  }, [items]);
+
+  // Auto-play the most visible mission's video (muted) and pause every other one. Observes
+  // the whole book-card stage (a stable-size box) so the cover/page-flip animation inside it
+  // never looks like a visibility change.
+  useEffect(() => {
+    if (!items.length) return undefined;
+    const ratios = visibilityRatios.current;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const id = entry.target.dataset.itemId;
+        if (id) ratios[id] = entry.isIntersecting ? entry.intersectionRatio : 0;
+      });
+
+      let bestId = "";
+      let bestRatio = 0;
+      Object.keys(ratios).forEach((id) => { if (ratios[id] > bestRatio) { bestRatio = ratios[id]; bestId = id; } });
+
+      if (bestId && bestRatio >= 0.5) {
+        activateCard(bestId);
+      } else if (activeIdRef.current && (ratios[activeIdRef.current] || 0) < 0.25) {
+        pauseMedia(activeIdRef.current);
+        activeIdRef.current = "";
+      }
+    }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+
+    Object.values(stageRefs.current).forEach((el) => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [items]);
+
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) { if (activeIdRef.current) pauseMedia(activeIdRef.current); }
+      else if (activeIdRef.current) playMedia(activeIdRef.current);
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(ytPlayers.current).forEach((player) => { try { player.destroy(); } catch {} });
+      ytPlayers.current = {};
+      Object.values(videoRefs.current).forEach((video) => { try { video.pause(); } catch {} });
+      activeIdRef.current = "";
+    };
+  }, []);
 
   return (
-    <section className="money-root">
-      {stage === "mission" && (
-        <>
-          <button className="money-back" type="button" onClick={onBack}>← Back</button>
+    <section className="connect-panel browse-love-panel">
+      <Back onClick={onBack} />
+      <div className="browse-love-heading">
+        <div><div className="connect-kicker">💰 MONEY TEAMS</div><h1>Browse Money Teams</h1></div>
+        <button type="button" className="browse-join-button" onClick={onJoin}>＋ Add yours</button>
+      </div>
+      <p className="connect-lead">Watch real mission books, then join the ones you want in on.</p>
 
-          <div className="money-kicker">💰 MAKE MONEY TOGETHER</div>
-          <h1>How do you want to make money together?</h1>
-          <p className="money-lead">
-            Pick one small mission people can actually do together.
-          </p>
+      {error && <div className="connect-error">{error}</div>}
+      {ytApiError && <div className="connect-error">{ytApiError}</div>}
+      {busy && <div className="browse-empty">Loading money teams...</div>}
+      {!busy && !error && !items.length && <div className="browse-empty"><strong>No money teams yet.</strong><span>Be the first to start one.</span></div>}
 
-          <div className="money-mission-grid">
-            {MISSIONS.map(([emoji, title, description]) => (
-              <MissionCard
-                key={title}
-                emoji={emoji}
-                title={title}
-                description={description}
-                active={mission === title}
-                onClick={() => setMission(title)}
-              />
-            ))}
-          </div>
+      <div className="mission-book-list">
+        {items.map((item) => {
+          const missionTitle = item.public_data?.mission || item.location || "Mission";
+          const missionEmoji = MONEY_MISSION_EMOJI[missionTitle] || "💰";
+          const contribution = item.public_data?.contribution || "";
+          const aboutMission = item.public_data?.answers?.about_mission || item.public_data?.about_mission || "";
+          const extraDetails = flattenPublicData(item.public_data).filter(([key]) => !["mission", "contribution", "location"].includes(key) && !key.startsWith("answers"));
+          const editingVideo = editingVideoId === item.id;
+          const hasVideo = Boolean(item.video_url);
+          const ytId = getYouTubeId(item.video_url);
+          const mediaError = mediaErrors[item.id];
+          const blocked = autoplayBlocked[item.id];
+          const joining = joiningId === item.id;
+          const joined = joinedIds.includes(item.id);
+          const justJoined = joinedConfirmId === item.id;
 
-          <button
-            className="money-primary"
-            type="button"
-            disabled={!missionReady}
-            onClick={() => setStage("bring")}
-          >
-            Continue
-          </button>
-        </>
-      )}
-
-      {stage === "bring" && (
-        <>
-          <button className="money-back" type="button" onClick={() => setStage("mission")}>← Back</button>
-
-          <div className="money-kicker">{missionEmoji} {mission || "MISSION"}</div>
-          <h1>What can you bring to this?</h1>
-          <p className="money-lead">
-            You do not need to bring everything. Pick the one thing you can help with.
-          </p>
-
-          <div className="money-contribution-grid">
-            {CONTRIBUTIONS.map(([emoji, label]) => (
-              <button
-                key={label}
-                type="button"
-                className={`money-contribution${contribution === label ? " is-active" : ""}`}
-                onClick={() => setContribution(label)}
-              >
-                <span>{emoji}</span>
-                <strong>{label}</strong>
-              </button>
-            ))}
-          </div>
-
-          <div className="money-kicker money-about-kicker">ABOUT MISSION</div>
-          <textarea
-            className="money-input money-textarea"
-            value={aboutMission}
-            onChange={(event) => setAboutMission(event.target.value)}
-            placeholder="Describe your mission — what will the team actually do, and why does it matter?"
-          />
-
-          <button
-            className="money-primary"
-            type="button"
-            disabled={!teamReady}
-            onClick={() => setStage("profile")}
-          >
-            Continue to My Mission Profile
-          </button>
-        </>
-      )}
-
-      {stage === "profile" && (
-        <>
-          <button className="money-back" type="button" onClick={() => setStage("bring")}>← Back</button>
-
-          <div className="money-kicker">YOUR MISSION PROFILE</div>
-          <h1>Who wants to build this?</h1>
-          <p className="money-lead">Your photo and mission will appear on the finished mission book.</p>
-
-          <input
-            className="money-input"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Your name"
-            autoComplete="name"
-          />
-
-          <input
-            className="money-input"
-            value={whatsapp}
-            onChange={(event) => setWhatsapp(event.target.value)}
-            placeholder="Your WhatsApp number"
-            inputMode="tel"
-            autoComplete="tel"
-          />
-
-          <label className="money-photo">
-            <span>{photo ? `📷 ${photo.name}` : "📷 Add your profile photo"}</span>
-            <input type="file" accept="image/*" onChange={handlePhoto} />
-          </label>
-
-          <div className="money-summary">
-            <span>{missionEmoji} {mission}</span>
-            <span>🤝 {contribution}</span>
-          </div>
-
-          {missionError && <div className="money-error">{missionError}</div>}
-
-          <button
-            className="money-primary"
-            type="button"
-            disabled={!profileReady || missionSaving}
-            onClick={createMission}
-          >
-            {missionSaving ? "Creating your mission..." : "Show My Mission Book"}
-          </button>
-        </>
-      )}
-
-      {stage === "result" && (
-        <>
-          <button className="money-back" type="button" onClick={() => setStage("profile")}>← Back</button>
-
-          {ytApiError && <div className="money-error">{ytApiError}</div>}
-
-          {serverMission && (
-            <div className="money-book-row">
-              <div
-                className={`money-book-stage${(editingVideo || joinIdentityOpen) ? " is-paused" : ""}`}
-                ref={stageRef}
-              >
-                <div className="money-book">
-                  <div className="money-book-inside">
-                    {serverMission.video_url ? (
-                      getYouTubeId(serverMission.video_url) ? (
-                        <div className="money-yt-wrap">
-                          <div id={`money-yt-${serverMission.id}`} className="money-yt-player" />
-                        </div>
+          return (
+            <article className="mission-book-card" key={item.id}>
+              <div className="mission-book-row">
+                <div
+                  className={`mission-book-stage${(editingVideo || joining) ? " is-paused" : ""}`}
+                  data-item-id={item.id}
+                  ref={(el) => { if (el) stageRefs.current[item.id] = el; else delete stageRefs.current[item.id]; }}
+                >
+                  <div className="mission-book">
+                    <div className="mission-book-inside">
+                      {hasVideo ? (
+                        ytId ? (
+                          <div className="mission-yt-wrap"><div id={`money-yt-${item.id}`} className="mission-yt-player" /></div>
+                        ) : (
+                          <video
+                            ref={(el) => { if (el) videoRefs.current[item.id] = el; else delete videoRefs.current[item.id]; }}
+                            src={item.video_url}
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            controls
+                            onError={() => setMediaErrors((current) => ({ ...current, [item.id]: "This video couldn't be played." }))}
+                          />
+                        )
                       ) : (
-                        <video
-                          ref={videoRef}
-                          src={serverMission.video_url}
-                          muted
-                          loop
-                          playsInline
-                          preload="metadata"
-                          controls
-                          onError={() => setMediaError("This video couldn't be played.")}
-                        />
-                      )
-                    ) : (
-                      <div className="money-video-placeholder">
-                        <span>🎬</span>
-                        <small>No mission video yet</small>
-                      </div>
-                    )}
-                    <div className="money-inside-overlay" />
-
-                    {mediaError && <div className="money-media-error">⚠️ {mediaError}</div>}
-                    {!mediaError && autoplayBlocked && serverMission.video_url && (
-                      <button type="button" className="money-media-playbtn" onClick={playVideo}>▶ Play</button>
-                    )}
-                    {!mediaError && !autoplayBlocked && serverMission.video_url && (
-                      <button
-                        type="button"
-                        className="money-mute-badge"
-                        onClick={toggleMute}
-                        aria-label={muted ? "Unmute video" : "Mute video"}
-                        title={muted ? "Muted for autoplay — tap to unmute" : "Sound on — tap to mute"}
-                      >
-                        {muted ? "🔇" : "🔊"}
+                        <div className="mission-video-placeholder"><span>🎬</span><small>No mission video yet</small></div>
+                      )}
+                      <div className="mission-inside-overlay" />
+                      {mediaError && <div className="mission-media-error">⚠️ {mediaError}</div>}
+                      {!mediaError && blocked && hasVideo && (
+                        <button type="button" className="mission-media-playbtn" onClick={() => playMedia(item.id)}>▶ Play</button>
+                      )}
+                      {!mediaError && !blocked && hasVideo && (
+                        <button
+                          type="button"
+                          className="mission-mute-badge"
+                          onClick={() => toggleMute(item.id)}
+                          aria-label={mutedMap[item.id] === false ? "Mute video" : "Unmute video"}
+                          title={mutedMap[item.id] === false ? "Sound on — tap to mute" : "Muted for autoplay — tap to unmute"}
+                        >
+                          {mutedMap[item.id] === false ? "🔊" : "🔇"}
+                        </button>
+                      )}
+                      <button type="button" className="mission-change-video" onClick={() => openVideoEditor(item)}>
+                        🎥 {editingVideo ? "Close video" : (hasVideo ? "Change video" : "Add video")}
                       </button>
-                    )}
-
-                    <button
-                      type="button"
-                      className="money-change-video"
-                      onClick={openVideoEditor}
-                      aria-label={serverMission.video_url ? "Change mission video" : "Add mission video"}
-                    >
-                      🎥 {editingVideo ? "Close video" : (serverMission.video_url ? "Change video" : "Add video")}
-                    </button>
-
-                    <div className="money-inside-text">
-                      <div className="money-inside-text-kicker">ABOUT THIS MISSION</div>
-                      <p>{aboutMission || "No description added yet."}</p>
-                    </div>
-                  </div>
-
-                  <div className="money-book-cover">
-                    <div className="money-book-cover-shade" />
-
-                    <div className="money-book-creator-badge">
-                      {photoPreview ? <img src={photoPreview} alt={`${name} profile`} /> : <span>👤</span>}
-                    </div>
-
-                    {teamMembers.length > 1 && (
-                      <div className="money-book-team-wall">
-                        {teamMembers.slice(1).map((member, index) => (
-                          <div className="money-book-team-photo" key={`${member.name}-${index}`}>
-                            {member.photo_url ? <img src={member.photo_url} alt={`${member.name} profile`} /> : <span>👤</span>}
+                      <div className="mission-inside-text">
+                        <div className="mission-inside-text-kicker">ABOUT THIS MISSION</div>
+                        <p>{aboutMission || "No description added yet."}</p>
+                        {extraDetails.length > 0 && (
+                          <div className="mission-inside-chips">
+                            {extraDetails.map(([key, value]) => (
+                              <span key={key}>{formatFieldLabel(key)}: {String(value)}</span>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
+                    </div>
 
-                    <div className="money-book-cover-info">
-                      <div className="money-book-cover-emoji">{missionEmoji}</div>
-                      <h2>{mission}</h2>
-                      <span className="money-book-cover-chip">🤝 {contribution}</span>
+                    <div className="mission-book-cover">
+                      <div className="mission-book-cover-shade" />
+                      <div className="mission-book-creator-badge">
+                        {item.creator_photo_url ? <img src={item.creator_photo_url} alt="" loading="lazy" decoding="async" /> : <span>👤</span>}
+                      </div>
+                      <div className="mission-book-cover-info">
+                        <div className="mission-book-cover-emoji">{missionEmoji}</div>
+                        <h2>{missionTitle}</h2>
+                        <div className="mission-book-cover-sub">
+                          <span className="mission-book-cover-chip">{item.creator_name || "Gwamo member"}</span>
+                          {contribution && <span className="mission-book-cover-chip">🤝 {contribution}</span>}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                <button type="button" className="mission-join-tab" onClick={() => openJoinForm(item)} disabled={joined}>
+                  <span>{joined ? "✓" : "🤝"}</span>
+                  <small>{joined ? "Joined" : "Join This Mission"}</small>
+                </button>
               </div>
 
-              <button type="button" className="money-join-tab" onClick={joinMission}>
-                <span>{joinedMission ? "✓" : "🤝"}</span>
-                <small>{joinedMission ? "Open Mission Room" : "Join This Mission"}</small>
-              </button>
-            </div>
-          )}
+              {editingVideo && (
+                <div className="mission-video-editor">
+                  <div className="mission-video-editor-title">
+                    <strong>{hasVideo ? "Change this mission's video" : "Add this mission's video"}</strong>
+                    <small>Anyone with the Connect video PIN can add or replace this video. Paste a YouTube link, a direct video link, or upload a file.</small>
+                  </div>
+                  <label className="mission-video-file">
+                    <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
+                    <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+                  </label>
+                  <div className="mission-video-or">OR</div>
+                  <input className="connect-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste video or YouTube link" />
+                  <input className="connect-input" type="password" value={videoPin} onChange={(e) => { setVideoPin(e.target.value); setShowAskPin(false); }} placeholder="Connect video PIN" inputMode="numeric" />
+                  {videoError && <div className="connect-error video-error">{videoError}</div>}
+                  {videoBusy && videoFile && (
+                    <div className="mission-upload-progress" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="mission-upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+                      <span className="mission-upload-progress-label">{uploadProgress}%</span>
+                    </div>
+                  )}
+                  <button type="button" className="connect-primary mission-save-video" onClick={() => saveVideo(item)} disabled={videoBusy}>
+                    {videoBusy
+                      ? (videoFile ? (uploadProgress < 100 ? `Saving video... ${uploadProgress}%` : "Finishing...") : "Saving video...")
+                      : "Save video"}
+                  </button>
+                  {showAskPin && (
+                    <a className="mission-ask-pin" href={adminMoneyVideoPinUrl(item, missionTitle)} target="_blank" rel="noreferrer">Ask for PIN</a>
+                  )}
+                </div>
+              )}
 
-          {editingVideo && serverMission && (
-            <div className="money-video-editor">
-              <div className="money-video-editor-title">
-                <strong>{serverMission.video_url ? "Change this mission's video" : "Add this mission's video"}</strong>
-                <small>Anyone with the Connect video PIN can add or replace this video. Paste a YouTube link, a direct video link, or upload a file.</small>
-              </div>
-              <label className="money-video-file">
-                <span>{videoFile ? `🎬 ${videoFile.name}` : "🎬 Upload video"}</span>
-                <input type="file" accept="video/*" onChange={(event) => setVideoFile(event.target.files?.[0] || null)} />
+              {justJoined && (
+                <div className="mission-joined-note">✓ You joined this mission. The creator can now reach you to organize next steps.</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      {joiningId && (() => {
+        const item = items.find((row) => row.id === joiningId);
+        if (!item) return null;
+        const missionTitle = item.public_data?.mission || item.location || "this";
+        return (
+          <div className="mission-join-layer">
+            <div className="mission-join-card">
+              <button type="button" className="mission-join-close" onClick={() => setJoiningId("")} aria-label="Close join form">×</button>
+              <div className="mission-join-icon">👋</div>
+              <div className="connect-kicker">JOIN THIS MISSION</div>
+              <h2>Join {item.creator_name || "this"}'s {missionTitle} mission</h2>
+              <p className="connect-lead">
+                Add your name, WhatsApp number, and photo so the creator can create a group where you can
+                learn how to do the mission in practice. Your WhatsApp number will not be shown publicly.
+              </p>
+              <input className="connect-input" value={viewerName} onChange={(e) => setViewerName(e.target.value)} placeholder="Your name" autoComplete="name" />
+              <input className="connect-input" value={viewerWhatsapp} onChange={(e) => setViewerWhatsapp(e.target.value)} placeholder="WhatsApp number, including country code" inputMode="tel" autoComplete="tel" />
+              <label className="connect-photo-field mission-join-photo">
+                <span>{viewerPhoto ? `📷 ${viewerPhoto.name}` : "📷 Add your profile photo"}</span>
+                <input type="file" accept="image/*" onChange={(e) => setViewerPhoto(e.target.files?.[0] || null)} />
               </label>
-              <div className="money-video-or">OR</div>
-              <input
-                className="money-input"
-                value={videoUrlInput}
-                onChange={(event) => setVideoUrlInput(event.target.value)}
-                placeholder="Paste video or YouTube link"
-              />
-              <input
-                className="money-input"
-                type="password"
-                value={videoPin}
-                onChange={(event) => { setVideoPin(event.target.value); setShowAskPin(false); }}
-                placeholder="Connect video PIN"
-                inputMode="numeric"
-              />
-              {videoError && <div className="money-error">{videoError}</div>}
-              {videoBusy && videoFile && (
-                <div className="money-upload-progress" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin={0} aria-valuemax={100}>
-                  <div className="money-upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
-                  <span className="money-upload-progress-label">{uploadProgress}%</span>
-                </div>
-              )}
-              <button type="button" className="money-primary" onClick={saveMissionVideo} disabled={videoBusy}>
-                {videoBusy
-                  ? (videoFile ? (uploadProgress < 100 ? `Saving video... ${uploadProgress}%` : "Finishing...") : "Saving video...")
-                  : "Save video"}
+              {joinError && <div className="connect-error">{joinError}</div>}
+              <button type="button" className="connect-primary" disabled={!viewerName.trim() || !viewerWhatsapp.trim() || !viewerPhoto || joinBusy} onClick={() => confirmJoin(item)}>
+                {joinBusy ? "Joining..." : "Join This Mission"}
               </button>
-              {showAskPin && (
-                <a
-                  className="money-ask-admin"
-                  href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(`Hello Gwamo Admin, I need the Connect video PIN for a Make Money Together mission. Mission: ${mission}. Mission ID: ${serverMission.id}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  💬 Ask Admin on WhatsApp
-                </a>
-              )}
-              <button type="button" className="money-cancel" onClick={openVideoEditor}>Close</button>
             </div>
-          )}
+          </div>
+        );
+      })()}
+    </section>
+  );
+}
 
-          {joinIdentityOpen && (
-            <div className="money-room-layer">
-              <div className="money-room-card money-join-card">
-                <button
-                  type="button"
-                  className="money-room-close"
-                  onClick={() => setJoinIdentityOpen(false)}
-                  aria-label="Close join form"
-                >
-                  ×
-                </button>
+function StartSomething({ onBack, setScreen }) {
+  return (
+    <section className="connect-panel">
+      <Back onClick={onBack} />
+      <div className="connect-kicker">＋ START SOMETHING</div>
+      <h1>What kind of thing do you want to start?</h1>
+      <p className="connect-lead">Choose the experience first. Gwamo can ask the details step by step after that.</p>
+      <div className="connect-grid">
+        <Choice emoji="💰" label="Money Team" onClick={() => setScreen("money")} />
+        <Choice emoji="🚶" label="Walk" onClick={() => setScreen("walk")} />
+        <Choice emoji="❤️" label="Meet Someone" onClick={() => setScreen("love")} />
+      </div>
+    </section>
+  );
+}
 
-                <div className="money-room-icon">👋</div>
-                <div className="money-room-kicker">JOIN THIS MISSION</div>
-                <h2>Who is joining?</h2>
-                <p className="money-room-lead">
-                  Add your name, WhatsApp number, and photo so the creator can create a group where you can
-                  learn how to do the mission in practice. Your WhatsApp number will not be shown publicly.
-                </p>
+export default function ConnectExperience() {
+  const [screen, setScreen] = useState("home");
+  const home = () => setScreen("home");
 
-                <input
-                  className="money-input"
-                  value={viewerName}
-                  onChange={(event) => setViewerName(event.target.value)}
-                  placeholder="Your name"
-                  autoComplete="name"
-                />
-
-                <input
-                  className="money-input"
-                  value={viewerWhatsapp}
-                  onChange={(event) => setViewerWhatsapp(event.target.value)}
-                  placeholder="WhatsApp number, including country code"
-                  inputMode="tel"
-                  autoComplete="tel"
-                />
-
-                <label className="money-photo money-viewer-photo">
-                  <span>{viewerPhoto ? `📷 ${viewerPhoto.name}` : "📷 Add your profile photo"}</span>
-                  <input type="file" accept="image/*" onChange={handleViewerPhoto} />
-                </label>
-
-                {joinError && <div className="money-error">{joinError}</div>}
-
-                <button
-                  type="button"
-                  className="money-room-back"
-                  disabled={!viewerName.trim() || !viewerWhatsapp.trim() || !viewerPhoto || joinBusy}
-                  onClick={confirmJoinMission}
-                >
-                  {joinBusy ? "Joining..." : "Join This Mission"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {missionRoomOpen && (
-            <div className="money-room-layer">
-              <div className="money-room-card">
-                <button
-                  type="button"
-                  className="money-room-close"
-                  onClick={() => setMissionRoomOpen(false)}
-                  aria-label="Close Mission Room"
-                >
-                  ×
-                </button>
-
-                <div className="money-room-icon">🤝</div>
-                <div className="money-room-kicker">MISSION ROOM</div>
-                <h2>{teamMembers.length} {teamMembers.length === 1 ? "person" : "people"} in this mission</h2>
-
-                <p className="money-room-lead">
-                  Gwamo connected everyone who joined so far. More people can still join as the team forms.
-                </p>
-
-                <div className="money-room-members">
-                  {teamMembers.map((member, index) => (
-                    <div className="money-room-member" key={`${member.name}-${index}`}>
-                      <div className="money-room-avatar">
-                        {member.photo_url ? <img src={member.photo_url} alt={`${member.name} profile`} /> : <span>👤</span>}
-                      </div>
-                      <div>
-                        <small>{index === 0 ? "CREATOR" : "MEMBER"}</small>
-                        <strong>{member.name}</strong>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="money-room-status">
-                  <span className="money-status-dot" />
-                  <div>
-                    <small>STATUS</small>
-                    <strong>Team forming</strong>
-                  </div>
-                </div>
-
-                <div className="money-room-progress">
-                  <div className="is-active"><span>1</span><strong>Team forming</strong></div>
-                  <div><span>2</span><strong>Talking</strong></div>
-                  <div><span>3</span><strong>Ready to meet</strong></div>
-                  <div><span>4</span><strong>Meeting planned</strong></div>
-                </div>
-
-                <div className="money-room-message">
-                  <strong>Gwamo connected this team.</strong>
-                  <p>
-                    More interested people can still join. When someone new arrives,
-                    this room will show it so everyone can follow the mission as it grows.
-                  </p>
-                </div>
-
-                <div className="money-room-hope">
-                  Stay close. This mission is still moving.
-                </div>
-
-                <button
-                  type="button"
-                  className="money-room-back"
-                  onClick={() => setMissionRoomOpen(false)}
-                >
-                  Back to Mission
-                </button>
-              </div>
-            </div>
-          )}
-
-          <button className="money-restart" type="button" onClick={restart}>Start Another Mission</button>
-
-          <p className="money-fine">
-            Gwamo helps people find each other, discuss and organize. Earnings are not guaranteed.
-          </p>
-        </>
-      )}
+  return (
+    <div className="gwamo-connect-root">
+      {screen === "home" && <ConnectHome setScreen={setScreen} />}
+      {screen === "love" && <LoveGame onBack={home} onBrowse={() => setScreen("browse-love")} />}
+      {screen === "browse-love" && <BrowseLove onBack={home} onJoin={() => setScreen("love")} />}
+      {screen === "browse-money" && <BrowseMoney onBack={home} onJoin={() => setScreen("money")} />}
+      {screen === "walk" && <WalkTogetherGame onBack={home} />}
+      {screen === "money" && <MoneyTogetherGame onBack={home} />}
+      {screen === "start" && <StartSomething onBack={home} setScreen={setScreen} />}
 
       <style>{`
-        .money-root { width:min(100%,560px); margin:0 auto; color:#f8fbff; }
-        .money-back { margin:0 0 24px; padding:8px 0; border:0; color:rgba(220,236,250,.68); background:transparent; font-weight:750; }
-        .money-kicker { margin-bottom:9px; color:#76d5ff; font-size:11px; font-weight:950; letter-spacing:.14em; }
-        .money-about-kicker { margin-top:18px; }
-        .money-root h1 { margin:0 0 10px; font-size:clamp(28px,8vw,42px); line-height:1.05; }
-        .money-lead { margin:0 0 20px; color:rgba(230,239,249,.70); font-size:14px; line-height:1.5; }
-
-        .money-mission-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-        .money-mission-card { min-height:146px; padding:15px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:7px; border:1px solid rgba(82,180,255,.18); border-radius:20px; color:white; background:linear-gradient(145deg,rgba(9,39,73,.90),rgba(3,15,31,.94)); text-align:left; }
-        .money-mission-card>span { font-size:31px; }
-        .money-mission-card>strong { font-size:14px; }
-        .money-mission-card>small { min-height:30px; color:rgba(231,243,255,.58); font-size:10px; line-height:1.35; }
-        .money-mission-card.is-active { border-color:rgba(67,190,255,.94); box-shadow:0 0 0 1px rgba(67,190,255,.16),0 0 28px rgba(22,139,255,.19); }
-
-        .money-contribution-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-        .money-contribution { min-height:92px; padding:14px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:8px; border:1px solid rgba(96,183,255,.16); border-radius:18px; color:white; background:linear-gradient(145deg,rgba(12,43,76,.78),rgba(4,16,31,.92)); text-align:left; }
-        .money-contribution span { font-size:27px; }
-        .money-contribution strong { font-size:13px; }
-        .money-contribution.is-active { border-color:rgba(74,190,255,.86); box-shadow:0 0 25px rgba(38,151,255,.17); }
-
-        .money-input { width:100%; min-height:54px; margin:12px 0 0; padding:0 15px; border:1px solid rgba(118,197,255,.20); border-radius:15px; outline:none; color:white; background:rgba(3,19,37,.86); font-size:14px; box-sizing:border-box; }
-        .money-textarea { min-height:112px; padding:14px 15px; line-height:1.5; resize:vertical; font-family:inherit; }
-        .money-primary { width:100%; min-height:54px; margin-top:15px; border:1px solid rgba(74,181,255,.48); border-radius:16px; color:white; background:linear-gradient(135deg,#087cff,#1269e9); box-shadow:0 12px 30px rgba(8,124,255,.24); font-weight:900; }
-        .money-primary.secondary { background:linear-gradient(135deg,#0c9f67,#087c89); border-color:rgba(74,232,170,.48); }
-        .money-primary:disabled { opacity:.35; box-shadow:none; }
-
-        .money-photo { width:100%; min-height:54px; margin-top:10px; padding:0 15px; display:flex; align-items:center; border:1px dashed rgba(82,184,255,.40); border-radius:15px; background:rgba(5,42,75,.44); box-sizing:border-box; font-size:13px; font-weight:800; position:relative; }
-        .money-photo input { position:absolute; width:1px; height:1px; opacity:0; }
-
-        .money-summary { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
-        .money-summary span { padding:7px 9px; border-radius:999px; color:rgba(239,249,255,.84); background:rgba(255,255,255,.08); font-size:10px; }
-
-        .money-error { margin:12px 0 0; padding:11px 13px; border:1px solid rgba(255,95,115,.35); border-radius:13px; color:#ffd6dd; background:rgba(93,16,34,.46); font-size:12px; }
-
-        /* --- The finished mission: a book with a cover and a video "inside page" that trade places --- */
-        .money-book-row { display:flex; align-items:stretch; gap:10px; }
-        .money-book-stage { flex:1; min-width:0; perspective:1800px; }
-        .money-book { position:relative; width:100%; aspect-ratio:3/4; min-height:420px; max-height:680px; }
-        .money-book-inside, .money-book-cover { position:absolute; inset:0; border-radius:24px; overflow:hidden; border:1px solid rgba(74,183,255,.28); box-sizing:border-box; }
-        .money-book-inside { background:#03101d; z-index:1; }
-        .money-book-cover {
-          z-index:2;
-          transform-origin:left center;
-          backface-visibility:hidden;
-          box-shadow:10px 0 26px rgba(0,0,0,.42), inset 1px 0 0 rgba(255,255,255,.06);
-          background:linear-gradient(160deg, rgba(9,39,73,.96), rgba(3,15,31,.98));
-          animation: moneyBookFlip 12s ease-in-out infinite;
+        .gwamo-connect-root {
+          width: 100%; min-height: 100svh;
+          padding: calc(154px + env(safe-area-inset-top)) 16px 40px;
+          color: #f8fbff;
+          background: radial-gradient(circle at 50% -10%, rgba(22,139,255,.20), transparent 34%), radial-gradient(circle at 90% 15%, rgba(123,64,255,.12), transparent 28%), #020712;
         }
-        .money-book-stage.is-paused .money-book-cover,
-        .money-book-stage.is-paused .money-inside-text { animation-play-state:paused; }
+        .connect-panel { width: min(100%, 560px); margin: 0 auto; }
+        .connect-kicker { margin-bottom: 10px; color: #73c5ff; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
+        .connect-kicker.love { color: #ff86a6; }
+        .connect-panel h1 { margin: 0 0 10px; font-size: clamp(28px, 8vw, 42px); line-height: 1.05; letter-spacing: -.03em; }
+        .connect-panel h2 { margin: 0 0 18px; font-size: clamp(24px, 7vw, 34px); line-height: 1.12; }
+        .connect-panel h3 { margin: 24px 0 12px; font-size: 16px; }
+        .connect-lead { margin: 0 0 22px; color: rgba(230,239,249,.70); font-size: 14px; line-height: 1.55; }
+        .connect-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+        .connect-choice { min-height: 110px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 12px; padding: 16px; border: 1px solid rgba(148,191,255,.16); border-radius: 20px; color: #f8fbff; background: linear-gradient(145deg, rgba(16,37,69,.86), rgba(4,12,27,.88)); box-shadow: 0 12px 34px rgba(0,0,0,.28); text-align: left; font-size: 14px; font-weight: 800; cursor: pointer; }
+        .connect-choice.is-active { border-color: rgba(71,178,255,.92); box-shadow: 0 0 0 1px rgba(71,178,255,.18), 0 0 26px rgba(22,139,255,.18); }
+        .connect-choice-emoji { font-size: 31px; }
+        .connect-start { width: 100%; min-height: 54px; margin-top: 12px; border: 1px dashed rgba(116,194,255,.36); border-radius: 16px; color: #b9e3ff; background: rgba(5,19,39,.56); font-weight: 850; }
+        .connect-bottom-line, .connect-fine { color: rgba(255,255,255,.42); font-size: 11px; line-height: 1.45; text-align: center; }
+        .connect-bottom-line { margin-top: 28px; }
+        .connect-back { margin: 0 0 24px; padding: 8px 0; border: 0; color: rgba(220,236,250,.68); background: transparent; font-weight: 750; }
+        .connect-primary { width: 100%; min-height: 54px; margin-top: 16px; border: 1px solid rgba(70,181,255,.48); border-radius: 16px; color: #fff; background: linear-gradient(135deg, #087cff, #1269e9); box-shadow: 0 12px 30px rgba(8,124,255,.24); font-weight: 900; }
+        .connect-primary:disabled { opacity: .36; cursor: not-allowed; box-shadow: none; }
+        .love-button { border-color: rgba(255,95,147,.50); background: linear-gradient(135deg, #e83670, #b62358); box-shadow: 0 12px 30px rgba(232,54,112,.22); }
+        .love-story-box { min-height: 150px; margin: 20px 0; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 18px; border: 1px solid rgba(255,109,154,.18); border-radius: 24px; background: radial-gradient(circle at 20% 20%, rgba(255,91,143,.24), transparent 30%), radial-gradient(circle at 80% 80%, rgba(106,71,255,.20), transparent 34%), rgba(15,8,24,.86); }
+        .love-story-box strong { font-size: 20px; }
+        .love-story-box small { max-width: 360px; color: rgba(255,236,243,.68); line-height: 1.45; }
+        .love-float { position: absolute; right: 22px; top: 20px; font-size: 38px; opacity: .55; animation: connectFloat 6s ease-in-out infinite alternate; }
+        .love-float.two { right: 78px; top: 62px; font-size: 24px; animation-delay: -2s; }
+        @keyframes connectFloat { from { transform: translateY(0) scale(.95); } to { transform: translateY(8px) scale(1.08); } }
+        .adult-check { display: flex; align-items: center; gap: 10px; margin: 16px 2px 4px; color: rgba(255,255,255,.76); font-size: 13px; }
+        .adult-check input { width: 18px; height: 18px; accent-color: #e83670; }
+        .connect-step { margin-bottom: 8px; color: rgba(124,201,255,.72); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+        .connect-input { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; border: 1px solid rgba(145,188,235,.20); border-radius: 16px; outline: none; color: #fff; background: rgba(3,12,27,.80); font-size: 15px; }
+        .connect-photo-field { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; display: flex; align-items: center; border: 1px dashed rgba(255,119,160,.42); border-radius: 16px; color: rgba(255,255,255,.82); background: rgba(30,8,21,.58); font-size: 14px; font-weight: 750; cursor: pointer; }
+        .connect-photo-field input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .option-stack { display: flex; flex-direction: column; gap: 9px; }
+        .line-option { width: 100%; min-height: 52px; padding: 0 16px; border: 1px solid rgba(153,190,229,.14); border-radius: 16px; color: rgba(255,255,255,.90); background: rgba(8,22,44,.72); text-align: left; font-weight: 750; }
+        .line-option.is-active { border-color: rgba(75,182,255,.82); background: rgba(15,58,98,.78); }
+        .heart-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; margin: 16px 0 6px; }
+        .heart-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); }
+        .heart-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(255,90,145,.12); }
+        .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .chip { min-height: 39px; padding: 0 13px; display: inline-flex; align-items: center; border: 1px solid rgba(155,196,235,.15); border-radius: 999px; color: rgba(244,249,255,.78); background: rgba(7,20,40,.70); font-size: 12px; font-weight: 750; }
+        .chip.is-active { border-color: rgba(78,183,255,.70); color: #fff; background: rgba(13,62,106,.78); }
+        .trigger-card, .result-card { margin-top: 18px; padding: 18px; border: 1px solid rgba(97,187,255,.18); border-radius: 20px; background: linear-gradient(145deg, rgba(10,36,67,.78), rgba(4,13,29,.90)); }
+        .trigger-card { display: flex; flex-direction: column; gap: 7px; }
+        .trigger-card small { color: #75c9ff; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+        .result-symbol { margin-bottom: 10px; font-size: 52px; }
+        .love-result { border-color: rgba(255,106,151,.22); background: radial-gradient(circle at top right, rgba(255,78,137,.18), transparent 34%), linear-gradient(145deg, rgba(43,13,31,.86), rgba(9,9,23,.94)); }
+        .summary-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+        .summary-chips span { padding: 7px 10px; border-radius: 999px; color: rgba(255,255,255,.76); background: rgba(255,255,255,.05); font-size: 11px; }
 
-        @keyframes moneyBookFlip {
-          0%, 25% { transform: rotateY(0deg); }
-          33.33%, 91.67% { transform: rotateY(-165deg); }
-          100% { transform: rotateY(0deg); }
+        .connect-home-subtitle{margin:24px 0 12px!important;color:rgba(255,255,255,.72);font-size:13px!important}
+        .browse-love-entry{width:100%;min-height:92px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:15px 16px;border:1px solid rgba(255,107,153,.30);border-radius:22px;color:#fff;background:linear-gradient(145deg,rgba(46,14,34,.92),rgba(8,14,30,.94));text-align:left;box-shadow:0 16px 36px rgba(0,0,0,.28)}
+        .browse-love-entry-icon{width:50px;height:50px;display:grid;place-items:center;border-radius:17px;background:rgba(255,255,255,.06);font-size:27px}
+        .browse-love-entry span:nth-child(2){display:flex;flex-direction:column;gap:4px}.browse-love-entry small{color:rgba(255,232,241,.58);font-size:11px}.browse-love-entry b{color:#ff8eae;font-size:30px;font-weight:400}
+        .connect-error{margin:0 0 14px;padding:11px 13px;border:1px solid rgba(255,95,115,.35);border-radius:13px;color:#ffd6dd;background:rgba(93,16,34,.46);font-size:12px}
+        .browse-love-panel{width:min(100%,720px)}.browse-love-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}.browse-love-heading h1{margin-bottom:0}
+        .browse-join-button{flex:0 0 auto;min-height:42px;padding:0 13px;border:1px solid rgba(255,105,151,.38);border-radius:999px;color:#ffd9e5;background:rgba(84,20,45,.48);font-size:11px;font-weight:850}
+        .browse-empty{min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;border:1px dashed rgba(255,255,255,.12);border-radius:22px;color:rgba(255,255,255,.52);background:rgba(255,255,255,.025);text-align:center;font-size:12px}.browse-empty strong{color:#fff;font-size:15px}
+
+        .love-card-list{display:grid;gap:18px}
+        .love-connection-card{overflow:hidden;border:1px solid rgba(255,109,153,.22);border-radius:26px;background:linear-gradient(160deg,rgba(35,12,28,.96),rgba(5,12,27,.98));box-shadow:0 20px 46px rgba(0,0,0,.32)}
+
+        /* --- Meet Someone connection card: two trading panels (video / profile photo) --- */
+        .love-card-stage{position:relative;width:100%;aspect-ratio:3/4;min-height:360px;max-height:640px;overflow:hidden;background:#05070d}
+
+        .love-card-video-section{position:absolute;top:0;left:0;right:0;height:55%;overflow:hidden;z-index:1;background:#05070d;animation:loveVideoTrade 9s ease-in-out infinite;transition:height .4s ease}
+        .love-card-video-section video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+        .love-video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:rgba(255,255,255,.42);background:#070a11}
+        .love-video-placeholder span{font-size:30px}
+        .love-video-placeholder small{font-size:10px;font-weight:800}
+        .love-change-video{position:absolute;right:10px;bottom:10px;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.20);border-radius:999px;color:#fff;background:rgba(3,7,15,.78);backdrop-filter:blur(10px);font-size:10px;font-weight:900;z-index:3}
+
+        .love-yt-wrap{position:absolute;inset:0}
+        .love-yt-wrap [id^="love-yt-"]{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:0}
+        .love-media-error{position:absolute;left:10px;right:10px;top:10px;z-index:4;padding:8px 12px;border-radius:12px;color:#ffd6dd;background:rgba(93,16,34,.82);backdrop-filter:blur(6px);font-size:11px;font-weight:750}
+        .love-media-playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;display:flex;align-items:center;gap:6px;padding:10px 16px;border:1px solid rgba(255,255,255,.35);border-radius:999px;color:#fff;background:rgba(3,7,15,.72);backdrop-filter:blur(8px);font-size:12px;font-weight:900}
+
+        /* Sound is muted for autoplay (browsers require it) — a centered neon badge makes that obvious and lets a tap unmute. */
+        .love-mute-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;width:54px;height:54px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid rgba(120,240,255,.55);background:rgba(4,10,20,.40);backdrop-filter:blur(3px);font-size:23px;line-height:1;color:#fff;box-shadow:0 0 8px rgba(95,242,255,.85),0 0 20px rgba(95,242,255,.55),0 0 42px rgba(95,242,255,.30);animation:loveNeonMutePulse 2.2s ease-in-out infinite}
+        @keyframes loveNeonMutePulse{0%,100%{box-shadow:0 0 8px rgba(95,242,255,.85),0 0 20px rgba(95,242,255,.55),0 0 42px rgba(95,242,255,.30)}50%{box-shadow:0 0 14px rgba(95,242,255,1),0 0 32px rgba(95,242,255,.85),0 0 60px rgba(95,242,255,.5)}}
+
+        .love-card-profile-section{position:absolute;left:0;right:0;bottom:0;height:45%;overflow:hidden;z-index:2;animation:loveProfileTrade 9s ease-in-out infinite;transition:height .4s ease}
+        .love-card-profile-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+        .love-card-photo-overlay{position:absolute;inset:0;background:linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.62) 34%, rgba(4,3,9,.08) 64%, rgba(4,3,9,0) 80%);pointer-events:none}
+        .love-card-photo-info{position:absolute;left:0;right:0;bottom:0;padding:18px 16px 15px;display:flex;flex-direction:column;gap:4px;z-index:2}
+        .love-card-photo-info h2{margin:0 0 2px!important;color:#fff;font-size:21px!important;text-shadow:0 0 4px #fff,0 0 11px #ff6fb0,0 0 22px #ff2d95,0 0 40px rgba(255,45,149,.65);animation:loveNeonText 2.6s ease-in-out infinite}
+        .love-card-area,.love-card-freeday{color:#eaf7ff;font-size:12.5px;text-shadow:0 0 3px #fff,0 0 8px #7fd7ff,0 0 16px rgba(71,178,255,.85),0 0 30px rgba(71,178,255,.4);animation:loveNeonText 2.6s ease-in-out infinite}
+        .love-card-status-row{margin-top:7px}
+
+        @keyframes loveVideoTrade{0%,66.67%{height:55%}72.22%,94.44%{height:0%}100%{height:55%}}
+        @keyframes loveProfileTrade{0%,66.67%{height:45%}72.22%,94.44%{height:100%}100%{height:45%}}
+        @keyframes loveNeonText{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
+
+        /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
+        .love-card-stage.is-editing .love-card-video-section{animation:none;height:55%}
+        .love-card-stage.is-editing .love-card-profile-section{animation:none;height:45%}
+
+        .heart-match-status{width:fit-content;display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;color:rgba(255,255,255,.92);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);font-size:10px;font-weight:900;text-decoration:none;text-shadow:0 0 6px rgba(255,255,255,.85);box-shadow:0 0 10px rgba(255,255,255,.22),inset 0 0 0 1px rgba(255,255,255,.25)}
+        .heart-match-status.found{color:#fff;background:linear-gradient(135deg,#ee3e79,#b9285c);text-shadow:0 0 8px #fff,0 0 16px rgba(255,255,255,.7);box-shadow:0 0 18px rgba(238,62,121,.65),0 0 34px rgba(238,62,121,.35)}
+
+        .love-video-editor{margin:0 14px 4px;padding:14px;border:1px solid rgba(255,108,153,.22);border-radius:18px;background:rgba(20,8,19,.78)}.love-video-editor-title{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}.love-video-editor-title strong{font-size:13px}.love-video-editor-title small{color:rgba(255,255,255,.48);font-size:10px}
+        .love-video-file{min-height:48px;display:flex;align-items:center;padding:0 13px;border:1px dashed rgba(255,118,160,.42);border-radius:14px;color:#ffe4ec;background:rgba(70,17,39,.38);font-size:11px;font-weight:850;cursor:pointer}.love-video-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.love-video-or{margin:8px 0;color:rgba(255,255,255,.30);font-size:9px;font-weight:900;text-align:center}
+        .love-video-editor .connect-input{min-height:48px;margin-bottom:8px}.love-save-video{min-height:48px;margin-top:4px}.love-ask-pin{min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.32);font-size:11px;font-weight:900;text-decoration:none}.video-error{margin-top:3px;margin-bottom:8px}
+        .love-upload-progress{position:relative;height:22px;margin-top:6px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}
+        .love-upload-progress-bar{height:100%;border-radius:999px;background:linear-gradient(135deg,#087cff,#e83670);transition:width .2s ease}
+        .love-upload-progress-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+
+        /* --- Browse Money Teams: each mission is the same "book" as the single mission-creation flow --- */
+        .mission-book-list{display:grid;gap:26px}
+        .mission-book-card{display:flex;flex-direction:column;gap:0}
+
+        .mission-book-row{display:flex;align-items:stretch;gap:10px}
+        .mission-book-stage{flex:1;min-width:0;perspective:1800px}
+        .mission-book{position:relative;width:100%;aspect-ratio:3/4;min-height:380px;max-height:640px}
+        .mission-book-inside,.mission-book-cover{position:absolute;inset:0;border-radius:24px;overflow:hidden;border:1px solid rgba(74,183,255,.22);box-sizing:border-box}
+        .mission-book-inside{background:#03101d;z-index:1}
+        .mission-book-cover{
+          z-index:2;transform-origin:left center;backface-visibility:hidden;
+          box-shadow:10px 0 26px rgba(0,0,0,.42),inset 1px 0 0 rgba(255,255,255,.06);
+          background:linear-gradient(160deg,rgba(9,39,73,.96),rgba(3,15,31,.98));
+          animation:missionBookFlip 12s ease-in-out infinite;
         }
+        .mission-book-stage.is-paused .mission-book-cover,
+        .mission-book-stage.is-paused .mission-inside-text{animation-play-state:paused}
+        @keyframes missionBookFlip{0%,25%{transform:rotateY(0deg)}33.33%,91.67%{transform:rotateY(-165deg)}100%{transform:rotateY(0deg)}}
 
-        .money-book-cover-shade { position:absolute; inset:0; background:linear-gradient(100deg, rgba(0,0,0,0) 58%, rgba(0,0,0,.55) 100%); pointer-events:none; }
+        .mission-book-cover-shade{position:absolute;inset:0;background:linear-gradient(100deg,rgba(0,0,0,0) 58%,rgba(0,0,0,.55) 100%);pointer-events:none}
+        .mission-book-creator-badge{position:absolute;top:16px;left:16px;z-index:3;width:54px;height:54px;border-radius:50%;overflow:hidden;border:2px solid rgba(120,220,255,.75);box-shadow:0 0 16px rgba(80,200,255,.55);display:flex;align-items:center;justify-content:center;background:#102233;font-size:24px}
+        .mission-book-creator-badge img{width:100%;height:100%;object-fit:cover}
+        .mission-book-cover-info{position:absolute;left:16px;right:16px;bottom:20px;z-index:3}
+        .mission-book-cover-emoji{font-size:36px;margin-bottom:4px;text-shadow:0 0 20px rgba(120,220,255,.6)}
+        .mission-book-cover-info h2{margin:0 0 8px!important;font-size:23px!important;color:#fff;text-shadow:0 0 4px #fff,0 0 12px #6fd8ff,0 0 24px rgba(71,178,255,.7),0 0 42px rgba(71,178,255,.4)}
+        .mission-book-cover-sub{display:flex;flex-wrap:wrap;gap:7px}
+        .mission-book-cover-chip{display:inline-flex;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.12);color:#eafcff;font-size:11px;font-weight:800;text-shadow:0 0 6px rgba(120,220,255,.7)}
 
-        .money-book-creator-badge {
-          position:absolute; top:16px; left:16px; z-index:3;
-          width:58px; height:58px; border-radius:50%; overflow:hidden;
-          border:2px solid rgba(120,220,255,.75); box-shadow:0 0 16px rgba(80,200,255,.55);
-          display:flex; align-items:center; justify-content:center; background:#102233; font-size:26px;
-        }
-        .money-book-creator-badge img { width:100%; height:100%; object-fit:cover; }
+        .mission-book-inside video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+        .mission-video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:rgba(255,255,255,.42);background:#070f1a}
+        .mission-inside-overlay{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(2,10,20,.92) 0%,rgba(2,10,20,.5) 40%,rgba(2,10,20,.05) 66%,rgba(2,10,20,0) 80%)}
 
-        .money-book-team-wall { position:absolute; top:82px; left:16px; z-index:3; display:flex; flex-direction:column; gap:8px; }
-        .money-book-team-photo {
-          width:34px; height:42px; border-radius:4px; overflow:hidden;
-          border:2px solid rgba(255,255,255,.85); box-shadow:0 3px 8px rgba(0,0,0,.4);
-          background:#1b2c3f; display:flex; align-items:center; justify-content:center;
-          transform:rotate(-3deg); font-size:16px;
-        }
-        .money-book-team-photo:nth-child(even) { transform:rotate(3deg); }
-        .money-book-team-photo img { width:100%; height:100%; object-fit:cover; }
+        .mission-inside-text{position:absolute;left:16px;right:16px;bottom:16px;z-index:2;max-height:48%;overflow:hidden;animation:missionScroll 12s ease-in-out infinite}
+        .mission-inside-text-kicker{color:#8fe0ff;font-size:9px;font-weight:950;letter-spacing:.12em;margin-bottom:4px;text-shadow:0 0 8px rgba(120,220,255,.6)}
+        .mission-inside-text p{margin:0;color:#eafcff;font-size:13px;line-height:1.5;text-shadow:0 0 3px #fff,0 0 10px rgba(120,220,255,.55)}
+        .mission-inside-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+        .mission-inside-chips span{padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.10);color:rgba(234,252,255,.8);font-size:10px}
+        @keyframes missionScroll{0%,33.33%{transform:translateY(0%)}91.67%{transform:translateY(-140%)}100%{transform:translateY(0%)}}
 
-        .money-book-cover-info { position:absolute; left:16px; right:16px; bottom:20px; z-index:3; }
-        .money-book-cover-emoji { font-size:40px; margin-bottom:4px; text-shadow:0 0 20px rgba(120,220,255,.6); }
-        .money-book-cover-info h2 { margin:0 0 8px!important; font-size:26px!important; color:#fff; text-shadow:0 0 4px #fff, 0 0 12px #6fd8ff, 0 0 24px rgba(71,178,255,.7), 0 0 42px rgba(71,178,255,.4); }
-        .money-book-cover-chip { display:inline-flex; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.12); color:#eafcff; font-size:11px; font-weight:800; text-shadow:0 0 6px rgba(120,220,255,.7); }
+        .mission-mute-badge,.mission-media-playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4}
+        .mission-mute-badge{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(120,220,255,.55);background:rgba(3,10,20,.4);backdrop-filter:blur(3px);font-size:22px;color:#fff;box-shadow:0 0 8px rgba(95,213,255,.85),0 0 20px rgba(95,213,255,.5),0 0 42px rgba(95,213,255,.3);animation:missionMutePulse 2.2s ease-in-out infinite}
+        @keyframes missionMutePulse{0%,100%{box-shadow:0 0 8px rgba(95,213,255,.85),0 0 20px rgba(95,213,255,.5),0 0 42px rgba(95,213,255,.3)}50%{box-shadow:0 0 14px rgba(95,213,255,1),0 0 32px rgba(95,213,255,.8),0 0 60px rgba(95,213,255,.5)}}
+        .mission-media-playbtn{display:flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.35);color:#fff;background:rgba(3,10,20,.72);backdrop-filter:blur(8px);font-size:12px;font-weight:900}
+        .mission-media-error{position:absolute;left:10px;right:10px;top:10px;z-index:4;padding:8px 12px;border-radius:12px;color:#ffd6dd;background:rgba(93,16,34,.82);backdrop-filter:blur(6px);font-size:11px;font-weight:750}
+        .mission-change-video{position:absolute;right:10px;bottom:10px;z-index:3;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.20);border-radius:999px;color:#fff;background:rgba(3,10,20,.78);backdrop-filter:blur(10px);font-size:10px;font-weight:900}
 
-        .money-book-inside video { width:100%; height:100%; object-fit:cover; display:block; background:#000; }
-        .money-video-placeholder { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:rgba(255,255,255,.42); background:#070f1a; }
-        .money-inside-overlay { position:absolute; inset:0; pointer-events:none; background:linear-gradient(to top, rgba(2,10,20,.92) 0%, rgba(2,10,20,.5) 40%, rgba(2,10,20,.05) 66%, rgba(2,10,20,0) 80%); }
+        .mission-yt-wrap{position:absolute;inset:0}
+        .mission-yt-wrap [id^="money-yt-"]{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:0}
 
-        .money-inside-text { position:absolute; left:16px; right:16px; bottom:16px; z-index:2; max-height:46%; overflow:hidden; animation:moneyMissionScroll 12s ease-in-out infinite; }
-        .money-inside-text-kicker { color:#8fe0ff; font-size:9px; font-weight:950; letter-spacing:.12em; margin-bottom:4px; text-shadow:0 0 8px rgba(120,220,255,.6); }
-        .money-inside-text p { margin:0; color:#eafcff; font-size:13px; line-height:1.5; text-shadow:0 0 3px #fff, 0 0 10px rgba(120,220,255,.55); }
-        @keyframes moneyMissionScroll {
-          0%, 33.33% { transform: translateY(0%); }
-          91.67% { transform: translateY(-140%); }
-          100% { transform: translateY(0%); }
-        }
+        .mission-join-tab{flex:0 0 60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px 4px;border:1px solid rgba(92,211,255,.54);border-radius:18px;color:#fff;background:linear-gradient(160deg,rgba(20,125,230,.96),rgba(7,94,190,.98));box-shadow:0 10px 24px rgba(17,111,220,.28)}
+        .mission-join-tab:disabled{opacity:.6}
+        .mission-join-tab span{font-size:20px}
+        .mission-join-tab small{writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);font-size:11px;font-weight:900;letter-spacing:.02em}
 
-        .money-mute-badge, .money-media-playbtn { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:4; }
-        .money-mute-badge {
-          width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-          border:1px solid rgba(120,220,255,.55); background:rgba(3,10,20,.4); backdrop-filter:blur(3px);
-          font-size:22px; color:#fff;
-          box-shadow:0 0 8px rgba(95,213,255,.85),0 0 20px rgba(95,213,255,.5),0 0 42px rgba(95,213,255,.3);
-          animation:moneyMutePulse 2.2s ease-in-out infinite;
-        }
-        @keyframes moneyMutePulse { 0%,100%{box-shadow:0 0 8px rgba(95,213,255,.85),0 0 20px rgba(95,213,255,.5),0 0 42px rgba(95,213,255,.3);} 50%{box-shadow:0 0 14px rgba(95,213,255,1),0 0 32px rgba(95,213,255,.8),0 0 60px rgba(95,213,255,.5);} }
-        .money-media-playbtn { display:flex; align-items:center; gap:6px; padding:10px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.35); color:#fff; background:rgba(3,10,20,.72); backdrop-filter:blur(8px); font-size:12px; font-weight:900; }
-        .money-media-error { position:absolute; left:10px; right:10px; top:10px; z-index:4; padding:8px 12px; border-radius:12px; color:#ffd6dd; background:rgba(93,16,34,.82); backdrop-filter:blur(6px); font-size:11px; font-weight:750; }
-        .money-change-video { position:absolute; right:10px; bottom:10px; z-index:3; min-height:36px; padding:0 12px; border:1px solid rgba(255,255,255,.20); border-radius:999px; color:#fff; background:rgba(3,10,20,.78); backdrop-filter:blur(10px); font-size:10px; font-weight:900; }
+        .mission-video-editor{margin:10px 0 4px;padding:14px;border:1px solid rgba(74,183,255,.28);border-radius:18px;background:rgba(6,25,44,.8)}
+        .mission-video-editor-title{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}
+        .mission-video-editor-title strong{font-size:13px}
+        .mission-video-editor-title small{color:rgba(255,255,255,.5);font-size:10px}
+        .mission-video-file{min-height:48px;display:flex;align-items:center;padding:0 13px;border:1px dashed rgba(96,183,255,.42);border-radius:14px;color:#d7f2ff;background:rgba(10,50,80,.38);font-size:11px;font-weight:850;cursor:pointer;position:relative}
+        .mission-video-file input{position:absolute;width:1px;height:1px;opacity:0}
+        .mission-video-or{margin:8px 0;color:rgba(255,255,255,.3);font-size:9px;font-weight:900;text-align:center}
+        .mission-save-video{min-height:48px;margin-top:4px}
+        .mission-ask-pin{min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.32);font-size:11px;font-weight:900;text-decoration:none}
+        .mission-upload-progress{position:relative;height:22px;margin-top:6px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}
+        .mission-upload-progress-bar{height:100%;border-radius:999px;background:linear-gradient(135deg,#087cff,#0c9f67);transition:width .2s ease}
+        .mission-upload-progress-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 
-        .money-yt-wrap { position:absolute; inset:0; }
-        .money-yt-wrap [id^="money-yt-"] { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; border:0; }
+        .mission-joined-note{margin-top:8px;padding:10px 13px;border:1px solid rgba(80,215,126,.35);border-radius:14px;color:#bff5cf;background:rgba(24,92,50,.28);font-size:12px;font-weight:750}
 
-        .money-join-tab {
-          flex:0 0 60px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-          padding:10px 4px; border:1px solid rgba(92,211,255,.54); border-radius:18px; color:#fff;
-          background:linear-gradient(160deg, rgba(20,125,230,.96), rgba(7,94,190,.98));
-          box-shadow:0 10px 24px rgba(17,111,220,.28);
-        }
-        .money-join-tab span { font-size:20px; }
-        .money-join-tab small { writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg); font-size:11px; font-weight:900; letter-spacing:.02em; }
+        .mission-join-layer{position:fixed;z-index:9999;inset:0;width:100vw;height:100dvh;display:grid;place-items:center;padding:16px;box-sizing:border-box;background:rgba(0,8,15,.82);backdrop-filter:blur(10px)}
+        .mission-join-card{position:relative;width:min(100%,390px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px;border:1px solid rgba(99,206,255,.28);border-radius:25px;background:linear-gradient(155deg,rgba(7,35,58,.99),rgba(3,15,28,.99));box-shadow:0 24px 70px rgba(0,0,0,.48);box-sizing:border-box}
+        .mission-join-close{position:absolute;top:12px;right:12px;width:32px;height:32px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.13);border-radius:50%;color:rgba(255,255,255,.85);background:rgba(0,0,0,.24);font-size:20px}
+        .mission-join-icon{width:54px;height:54px;margin-bottom:12px;display:grid;place-items:center;border:1px solid rgba(95,210,255,.46);border-radius:50%;background:rgba(16,93,148,.26);box-shadow:0 0 22px rgba(57,183,255,.24);font-size:24px}
+        .mission-join-card h2{margin:5px 34px 8px 0;font-size:24px;line-height:1.1}
+        .mission-join-photo{margin-top:10px}
 
-        .money-video-editor { margin-top:14px; padding:14px; border:1px solid rgba(74,183,255,.28); border-radius:18px; background:rgba(6,25,44,.8); }
-        .money-video-editor-title { display:flex; flex-direction:column; gap:3px; margin-bottom:11px; }
-        .money-video-editor-title strong { font-size:13px; }
-        .money-video-editor-title small { color:rgba(255,255,255,.5); font-size:10px; }
-        .money-video-file { min-height:48px; display:flex; align-items:center; padding:0 13px; border:1px dashed rgba(96,183,255,.42); border-radius:14px; color:#d7f2ff; background:rgba(10,50,80,.38); font-size:11px; font-weight:850; cursor:pointer; position:relative; }
-        .money-video-file input { position:absolute; width:1px; height:1px; opacity:0; }
-        .money-video-or { margin:8px 0; color:rgba(255,255,255,.3); font-size:9px; font-weight:900; text-align:center; }
-        .money-upload-progress { position:relative; height:22px; margin-top:6px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); }
-        .money-upload-progress-bar { height:100%; border-radius:999px; background:linear-gradient(135deg,#087cff,#0c9f67); transition:width .2s ease; }
-        .money-upload-progress-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:900; text-shadow:0 1px 3px rgba(0,0,0,.6); }
-        .money-ask-admin { width:100%; min-height:48px; margin-top:9px; display:flex; align-items:center; justify-content:center; border:1px solid rgba(72,192,255,.34); border-radius:15px; color:#cdefff; background:rgba(11,74,116,.42); font-weight:850; text-decoration:none; }
-        .money-cancel { width:100%; min-height:42px; margin-top:5px; border:0; color:rgba(255,255,255,.56); background:transparent; }
-
-        .money-room-layer { position:fixed; z-index:9999; inset:0; width:100vw; height:100dvh; display:grid; place-items:center; padding:16px; box-sizing:border-box; background:rgba(0,8,15,.82); backdrop-filter:blur(10px); }
-        .money-room-card { position:relative; width:min(100%,390px); max-height:calc(100dvh - 32px); overflow:auto; padding:22px; border:1px solid rgba(99,206,255,.28); border-radius:25px; background:linear-gradient(155deg,rgba(7,35,58,.99),rgba(3,15,28,.99)); box-shadow:0 24px 70px rgba(0,0,0,.48); box-sizing:border-box; }
-        .money-room-close { position:absolute; top:12px; right:12px; width:32px; height:32px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.13); border-radius:50%; color:rgba(255,255,255,.85); background:rgba(0,0,0,.24); font-size:20px; }
-        .money-room-icon { width:54px; height:54px; margin-bottom:12px; display:grid; place-items:center; border:1px solid rgba(95,210,255,.46); border-radius:50%; background:rgba(16,93,148,.26); box-shadow:0 0 22px rgba(57,183,255,.24); font-size:24px; }
-        .money-room-kicker { color:#7fd5ff; font-size:10px; font-weight:950; letter-spacing:.14em; }
-        .money-room-card h2 { margin:5px 34px 8px 0; font-size:27px; line-height:1.08; }
-        .money-room-lead { margin:0; color:rgba(235,246,255,.70); font-size:12px; line-height:1.5; }
-
-        .money-join-card .money-room-back:disabled { opacity:.35; box-shadow:none; }
-        .money-viewer-photo { margin-top:10px; }
-        .money-room-members { margin-top:16px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; max-height:220px; overflow:auto; }
-        .money-room-member { min-width:0; padding:11px; display:flex; align-items:center; gap:9px; border:1px solid rgba(106,205,255,.16); border-radius:16px; background:rgba(255,255,255,.045); }
-        .money-room-avatar { width:46px; height:46px; flex:0 0 46px; overflow:hidden; display:grid; place-items:center; border:2px solid rgba(104,213,255,.42); border-radius:50%; background:#102233; }
-        .money-room-avatar img { width:100%; height:100%; object-fit:cover; }
-        .money-room-avatar span { font-size:21px; }
-        .money-room-member>div:last-child { min-width:0; display:flex; flex-direction:column; gap:2px; }
-        .money-room-member small { color:#7fd5ff; font-size:7px; font-weight:950; letter-spacing:.10em; }
-        .money-room-member strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
-
-        .money-room-status { margin-top:16px; padding:12px; display:flex; align-items:center; gap:10px; border:1px solid rgba(79,238,177,.20); border-radius:15px; background:rgba(16,114,79,.18); }
-        .money-status-dot { width:11px; height:11px; flex:0 0 auto; border-radius:50%; background:#61efb6; box-shadow:0 0 14px rgba(97,239,182,.75); }
-        .money-room-status div { display:flex; flex-direction:column; gap:2px; }
-        .money-room-status small { color:rgba(194,255,228,.62); font-size:8px; font-weight:900; letter-spacing:.12em; }
-        .money-room-status strong { font-size:13px; }
-
-        .money-room-progress { margin-top:14px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
-        .money-room-progress div { min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; color:rgba(255,255,255,.35); text-align:center; }
-        .money-room-progress span { width:27px; height:27px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.12); border-radius:50%; background:rgba(255,255,255,.05); font-size:9px; font-weight:900; }
-        .money-room-progress strong { font-size:8px; line-height:1.2; }
-        .money-room-progress .is-active { color:#bfffe5; }
-        .money-room-progress .is-active span { border-color:rgba(82,239,180,.50); background:rgba(17,145,94,.38); box-shadow:0 0 15px rgba(82,239,180,.20); }
-
-        .money-room-message { margin-top:16px; padding:13px; border-left:2px solid #62caff; border-radius:11px; background:rgba(18,91,140,.18); }
-        .money-room-message strong { font-size:12px; }
-        .money-room-message p { margin:5px 0 0; color:rgba(235,246,255,.66); font-size:10px; line-height:1.45; }
-        .money-room-hope { margin-top:12px; color:#a9e6ff; font-size:11px; font-weight:850; text-align:center; }
-
-        .money-room-back { width:100%; min-height:48px; margin-top:13px; border:1px solid rgba(89,196,255,.34); border-radius:15px; color:white; background:linear-gradient(135deg,#087cff,#1269e9); font-weight:900; }
-
-        .money-restart { width:100%; min-height:48px; margin-top:12px; border:1px solid rgba(82,186,255,.20); border-radius:15px; color:#cceeff; background:rgba(6,42,70,.52); font-weight:850; }
-        .money-fine { margin-top:12px; color:rgba(255,255,255,.42); font-size:10px; line-height:1.45; text-align:center; }
-
-        @media (max-width:390px) {
-          .money-mission-grid,.money-contribution-grid { gap:8px; }
-          .money-mission-card { min-height:138px; padding:13px; }
-          .money-book { min-height:380px; }
-          .money-join-tab { flex-basis:52px; }
-        }
-        @media (prefers-reduced-motion:reduce) {
-          .money-book-cover, .money-inside-text, .money-mute-badge { animation:none!important; }
+        @media (max-width: 390px) { .gwamo-connect-root { padding-left: 12px; padding-right: 12px; } .connect-choice { min-height: 104px; padding: 14px; } .mission-book { min-height: 340px; } .mission-join-tab { flex-basis: 52px; } }
+        @media (prefers-reduced-motion: reduce) {
+          .love-float { animation: none; }
+          .love-card-video-section, .love-card-profile-section { animation: none !important; }
+          .love-mute-badge, .love-card-photo-info h2, .love-card-area, .love-card-freeday { animation: none !important; }
+          .mission-book-cover, .mission-inside-text, .mission-mute-badge { animation: none !important; }
         }
       `}</style>
-    </section>
+    </div>
   );
 }
