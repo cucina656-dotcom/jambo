@@ -2723,12 +2723,15 @@ function Home() {
       : activeCategory === "tv"
         ? { label: "Share your moment", postType: "moment" }
         : { label: "Offer work or trade skills", postType: "offer" };
-let mainContent;
-if (activeCategory === "social-life") {
-  mainContent = <SocialLifeLanding />;
-} else if (activeCategory === "connect") {
-  mainContent = (
-    <ConnectExperience
+  let mainContent;
+  if (activeCategory === "social-life") {
+    mainContent = <SocialLifeLanding />;
+  } else if (activeCategory === "connect") {
+    mainContent = (
+      <ConnectExperience
+        user={user}
+        isLoggedIn={isLoggedIn}
+        onRequireAuth={requireAuthForConnect}
       />
     );
   } else if (loading) {
