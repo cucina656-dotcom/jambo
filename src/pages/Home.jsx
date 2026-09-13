@@ -1087,6 +1087,11 @@ function Home() {
   const requireAuthForTv = useCallback(() => {
     openAuthModal("login");
   }, [openAuthModal]);
+  // Connect uses the exact same Gwamo account/login flow as Market.
+  // After login succeeds, user/isLoggedIn update and Connect continues in place.
+  const requireAuthForConnect = useCallback(() => {
+    openAuthModal("login");
+  }, [openAuthModal]);
   const closeAuthModal = useCallback(() => {
     pendingAuthActionRef.current = null;
     setShowAuthModal(false);
@@ -2719,7 +2724,13 @@ function Home() {
         : { label: "Offer work or trade skills", postType: "offer" };
   let mainContent;
   if (activeCategory === "connect") {
-    mainContent = <ConnectExperience />;
+    mainContent = (
+      <ConnectExperience
+        user={user}
+        isLoggedIn={isLoggedIn}
+        onRequireAuth={requireAuthForConnect}
+      />
+    );
   } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
