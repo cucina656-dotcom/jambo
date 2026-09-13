@@ -1,6 +1,7 @@
 import TvMedia from "../components/tv/TvMedia";
 import TvConversationOverlay from "../components/tv/TvConversationOverlay";
 import ConnectExperience from "../components/connect/ConnectExperience";
+import SocialLifeLanding from "../components/social/SocialLifeLanding";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 
 import {
