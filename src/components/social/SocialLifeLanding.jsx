@@ -1,25 +1,27 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 
 // Meet Someone — adapted from the original Connect "LoveGame" flow, wired in under
 // Social Life > Meet Someone. Modifications in this version:
-//   1. The preference/gender buttons show no visible text label — icon only
-//      (aria-label/title kept for screen readers and hover).
-//   2. Gender is labeled "Mr" (was "Man") and "Miss" (was "Woman") throughout.
-//   3. "Open to Neither" has been removed — there are only three preference
-//      choices again: Mr, Miss, and Open to either.
-//   4. A "Your gender" step captures the profile owner's own gender so the
+//   1. "Your gender" and "Who would you like to meet" are now plain, visible
+//      text buttons — "Mr" and "Miss" — matching the original reference
+//      design (it used plain words like "A woman"/"A man", never symbols).
+//      There is no third "other" choice on either step anymore: each is a
+//      straight Mr/Miss pick.
+//   2. A "Your gender" step captures the profile owner's own gender so the
 //      backend can enforce "never match two profiles of the same gender" —
-//      see the MATCHING NOTE further down. With "Open to Neither" gone, this
-//      is now an unconditional rule with no opt-out.
-//   5. The Back button is pinned in a fixed bar above the scrolling content,
+//      see the MATCHING NOTE further down. With no "other" choice left on
+//      either step, this is an unconditional rule with no opt-out or bypass.
+//   3. The Back button is pinned in a fixed bar above the scrolling content,
 //      consistent with the Connect screen's fixed CTA bar.
-//   6. This screen now forces a dark background and dark native controls
+//   4. This screen forces a dark background and dark native controls
 //      (color-scheme: dark) instead of following the device's light/dark
-//      setting. Every heading/label here already used a hardcoded light
-//      color, but the page background behind them only turned dark under
-//      prefers-color-scheme: dark — so a viewer whose device is in light
-//      mode saw light text on a light background. Forcing dark here (same
-//      approach the Connect screen already uses) fixes that for everyone.
+//      setting, so it stays readable no matter what the viewer's phone is
+//      set to.
+//   5. Browse cards bring back the original background-video treatment:
+//      when a profile has a video, it autoplays muted and loops behind the
+//      card's info instead of a plain photo, with a sound on/off badge over
+//      it. This matches the original Connect "BrowseLove" card design —
+//      see the video-playback section below.
 
 const CONNECT_API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const LOVE_OWNER_KEY = "gwamo_connect_love_owner";
@@ -51,39 +53,43 @@ function rememberLoveOwner(profileId, ownerToken) {
   } catch {}
 }
 
-// Own-gender choices. Kept separate from the "who would you like to meet" choices
-// below because they answer a different question.
-// The internal `key` stays "woman"/"man" — that's the value sent to the backend
-// (see the MATCHING NOTE below and the Worker's LOVE_GENDERS set) — only the
-// display label changed to "Miss"/"Mr".
-const GENDER_CHOICES = [
-  { key: "woman", icon: "♀", label: "Miss" },
-  { key: "man", icon: "♂", label: "Mr" },
-  { key: "prefer-not-to-say", icon: "❓", label: "Prefer not to say" },
-];
-
-// "Who would you like to meet" choices.
-// "Open to Neither" has been removed — only three choices now.
-// Icon-only, no visible text label — see <PreferenceChoice />.
-const PREFERENCE_CHOICES = [
-  { key: "woman", icon: "♀", label: "Miss" },
-  { key: "man", icon: "♂", label: "Mr" },
-  { key: "either", icon: "⚥", label: "Open to either" },
-];
-
-function PreferenceChoice({ icon, label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`meet-pref-choice${active ? " is-active" : ""}`}
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-    >
-      <span aria-hidden="true">{icon}</span>
-    </button>
-  );
+// --- Background-video helpers, brought back from the original Connect design. ---
+// A profile's video can be a direct file (uploaded, played with a native <video>
+// tag) or a YouTube link (played in an embedded, muted, looping iframe). This
+// detects which one a given URL is.
+function getYouTubeId(url) {
+  if (!url) return "";
+  const str = String(url);
+  const patterns = [
+    /youtube\.com\/watch\?[^#]*\bv=([A-Za-z0-9_-]{6,})/,
+    /youtu\.be\/([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/,
+  ];
+  for (const pattern of patterns) {
+    const match = str.match(pattern);
+    if (match) return match[1];
+  }
+  return "";
 }
+
+function youTubeEmbedSrc(id) {
+  return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1`;
+}
+
+// Own gender / preference choices — plain text now, exactly two each, no
+// "other" catch-all. The internal `key` stays "woman"/"man" (that's the
+// value sent to the backend — see the Worker's LOVE_GENDERS set); only the
+// visible label changed to "Miss"/"Mr".
+const GENDER_CHOICES = [
+  { key: "woman", label: "Miss" },
+  { key: "man", label: "Mr" },
+];
+
+const PREFERENCE_CHOICES = [
+  { key: "woman", label: "Miss" },
+  { key: "man", label: "Mr" },
+];
 
 // The Back control, fixed above the scrolling background instead of scrolling
 // away with the page — same treatment as the Connect screen's CTA bar. The
@@ -115,6 +121,7 @@ export default function MeetSomeoneGame({ onBack }) {
   const [profileName, setProfileName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
+  const [videoLink, setVideoLink] = useState("");
   const [createdProfile, setCreatedProfile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -122,6 +129,21 @@ export default function MeetSomeoneGame({ onBack }) {
   const [items, setItems] = useState([]);
   const [browseBusy, setBrowseBusy] = useState(false);
   const [browseError, setBrowseError] = useState("");
+
+  // --- Background-video playback state for the browse list. Kept at this
+  // level (not per-card) so only one card plays with sound/motion at a time,
+  // matching the original design: scrolling a new card into view pauses the
+  // previous one and starts the new one, muted, automatically.
+  const videoRefs = useRef({});
+  const iframeRefs = useRef({});
+  const cardRefs = useRef({});
+  const mutedMapRef = useRef({});
+  const activeIdRef = useRef("");
+  const observerRef = useRef(null);
+  const ratioMapRef = useRef({});
+  const [mutedMap, setMutedMap] = useState({});
+  const [blockedMap, setBlockedMap] = useState({});
+  const [mediaErrors, setMediaErrors] = useState({});
 
   useEffect(() => {
     if (screen !== "browse") return undefined;
@@ -142,6 +164,125 @@ export default function MeetSomeoneGame({ onBack }) {
     };
   }, [screen]);
 
+  function isMuted(id) {
+    return mutedMapRef.current[id] !== false; // muted by default — browsers require this for autoplay
+  }
+
+  function postYouTubeCommand(id, func) {
+    const frame = iframeRefs.current[id];
+    if (!frame || !frame.contentWindow) return;
+    try {
+      frame.contentWindow.postMessage(JSON.stringify({ event: "command", func, args: [] }), "*");
+    } catch {}
+  }
+
+  function playMedia(id) {
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return;
+    const ytId = getYouTubeId(item.video_url);
+    if (ytId) {
+      postYouTubeCommand(id, isMuted(id) ? "mute" : "unMute");
+      postYouTubeCommand(id, "playVideo");
+      return;
+    }
+    const video = videoRefs.current[id];
+    if (!video) return;
+    video.muted = isMuted(id);
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => setBlockedMap((current) => ({ ...current, [id]: true })));
+    }
+  }
+
+  function pauseMedia(id) {
+    const item = items.find((entry) => entry.id === id);
+    const ytId = getYouTubeId(item?.video_url);
+    if (ytId) {
+      postYouTubeCommand(id, "pauseVideo");
+      return;
+    }
+    const video = videoRefs.current[id];
+    if (video) {
+      try {
+        video.pause();
+      } catch {}
+    }
+  }
+
+  function activateCard(id) {
+    if (activeIdRef.current === id) return;
+    if (activeIdRef.current) pauseMedia(activeIdRef.current);
+    activeIdRef.current = id;
+    if (id) playMedia(id);
+  }
+
+  // Sound on/off badge — the "mic sign" toggle. Every card starts muted (that's
+  // what lets it autoplay at all); tapping the badge lets that one viewer turn
+  // that one card's sound on.
+  function toggleMute(id) {
+    const nextMuted = !isMuted(id);
+    mutedMapRef.current[id] = nextMuted;
+    setMutedMap((current) => ({ ...current, [id]: nextMuted }));
+    const video = videoRefs.current[id];
+    if (video) video.muted = nextMuted;
+    postYouTubeCommand(id, nextMuted ? "mute" : "unMute");
+  }
+
+  function registerCard(id, el) {
+    if (el) cardRefs.current[id] = el;
+    else delete cardRefs.current[id];
+  }
+
+  // Watches which card is actually on screen and activates its video —
+  // scrolling a card away pauses it, scrolling a new one in plays it.
+  useEffect(() => {
+    if (screen !== "browse" || !items.length) return undefined;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        // Record every card's latest visible ratio first — a single batch can
+        // report several cards at once (e.g. two short cards both crossing
+        // 60% on a tall screen). Only the single MOST visible card should end
+        // up playing; picking a "first one over the threshold" per entry
+        // caused a second card to immediately re-pause the first one that
+        // had just started playing.
+        entries.forEach((entry) => {
+          const id = entry.target.getAttribute("data-card-id");
+          if (!id) return;
+          ratioMapRef.current[id] = entry.intersectionRatio;
+        });
+
+        let bestId = "";
+        let bestRatio = 0;
+        Object.entries(ratioMapRef.current).forEach(([id, ratio]) => {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestId = id;
+          }
+        });
+
+        if (bestRatio >= 0.6 && bestId) {
+          activateCard(bestId);
+        } else if (activeIdRef.current && (ratioMapRef.current[activeIdRef.current] || 0) < 0.3) {
+          pauseMedia(activeIdRef.current);
+          activeIdRef.current = "";
+        }
+      },
+      { threshold: [0, 0.3, 0.6, 1] }
+    );
+
+    Object.values(cardRefs.current).forEach((el) => observerRef.current.observe(el));
+
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (activeIdRef.current) pauseMedia(activeIdRef.current);
+      activeIdRef.current = "";
+      ratioMapRef.current = {};
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, items]);
+
   async function finishProfile() {
     if (busy) return;
     setBusy(true);
@@ -157,16 +298,21 @@ export default function MeetSomeoneGame({ onBack }) {
           location: location.trim(),
           // Both fields below are required for gender-aware matching.
           // MATCHING NOTE (backend): two profiles must never be matched if they
-          // report the same gender — unconditionally, with no opt-out, now that
-          // "Open to Neither" has been removed. (The Worker patch sent earlier
-          // has a now-unreachable "Open to Neither" bypass around this check;
-          // it's harmless since preference can no longer be "neither", but it
-          // can be deleted for cleanliness whenever it's convenient.)
+          // report the same gender — unconditionally, with no opt-out, since
+          // neither step here has an "other"/opt-out choice anymore. (The
+          // Worker patch sent earlier has a now fully unreachable "Open to
+          // Neither" bypass around this check — harmless dead code, safe to
+          // delete whenever convenient.)
           gender: ownGender,
           preference,
           heart,
           photo_url: photo.url,
           photo_key: photo.key,
+          // Optional: a video link (e.g. YouTube) for this profile's card in
+          // Browse. If the backend doesn't store this field yet, it's simply
+          // ignored — same as any extra field would be — so this is safe to
+          // send either way.
+          video_url: videoLink.trim() || undefined,
           answers: { perfect_free_day: freeDay, matters_most: matters },
         }),
       });
@@ -204,15 +350,84 @@ export default function MeetSomeoneGame({ onBack }) {
               profile.public_data?.answers?.perfect_free_day ||
               "Not added";
             const hasMatch = profile.match_status === "View heart match";
+            const ytId = getYouTubeId(profile.video_url);
+            const hasVideo = Boolean(profile.video_url) && !mediaErrors[profile.id];
+            const muted = isMuted(profile.id);
+            const blocked = blockedMap[profile.id];
+
             return (
-              <article className="meet-card" key={profile.id}>
-                <img
-                  className="meet-card-photo"
-                  src={profile.creator_photo_url || "/favicon.ico"}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
+              <article
+                className="meet-card"
+                key={profile.id}
+                data-card-id={profile.id}
+                ref={(el) => registerCard(profile.id, el)}
+              >
+                {hasVideo ? (
+                  ytId ? (
+                    <iframe
+                      className="meet-card-media meet-card-yt"
+                      ref={(el) => {
+                        if (el) iframeRefs.current[profile.id] = el;
+                        else delete iframeRefs.current[profile.id];
+                      }}
+                      src={youTubeEmbedSrc(ytId)}
+                      title={`${profile.creator_name || "Gwamo member"} video`}
+                      frameBorder="0"
+                      allow="autoplay; encrypted-media"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <video
+                      className="meet-card-media"
+                      ref={(el) => {
+                        if (el) videoRefs.current[profile.id] = el;
+                        else delete videoRefs.current[profile.id];
+                      }}
+                      src={profile.video_url}
+                      muted={muted}
+                      loop
+                      playsInline
+                      preload="metadata"
+                      onError={() =>
+                        setMediaErrors((current) => ({ ...current, [profile.id]: "This video couldn't be played." }))
+                      }
+                    />
+                  )
+                ) : (
+                  <img
+                    className="meet-card-media"
+                    src={profile.creator_photo_url || "/favicon.ico"}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                )}
+
+                {hasVideo && blocked && (
+                  <button
+                    type="button"
+                    className="meet-media-playbtn"
+                    onClick={() => {
+                      setBlockedMap((current) => ({ ...current, [profile.id]: false }));
+                      playMedia(profile.id);
+                    }}
+                  >
+                    ▶ Play
+                  </button>
+                )}
+
+                {hasVideo && !blocked && (
+                  <button
+                    type="button"
+                    className="meet-mute-badge"
+                    onClick={() => toggleMute(profile.id)}
+                    aria-label={muted ? "Unmute video" : "Mute video"}
+                    title={muted ? "Muted for autoplay — tap to unmute" : "Sound on — tap to mute"}
+                  >
+                    {muted ? "🔇" : "🔊"}
+                  </button>
+                )}
+
                 <div className="meet-card-overlay" />
                 <div className="meet-card-info">
                   <h2>{profile.creator_name || "Gwamo member"}</h2>
@@ -278,15 +493,16 @@ export default function MeetSomeoneGame({ onBack }) {
           <div className="meet-step">Step 2</div>
           <h2>About you — what's your gender?</h2>
           <p className="meet-lead">Gwamo uses this only to keep your matches accurate.</p>
-          <div className="meet-pref-row">
+          <div className="meet-option-stack">
             {GENDER_CHOICES.map((choice) => (
-              <PreferenceChoice
+              <button
+                type="button"
                 key={choice.key}
-                icon={choice.icon}
-                label={choice.label}
-                active={ownGender === choice.key}
+                className={`meet-line-option${ownGender === choice.key ? " is-active" : ""}`}
                 onClick={() => setOwnGender(choice.key)}
-              />
+              >
+                {choice.label}
+              </button>
             ))}
           </div>
           <button className="meet-primary" disabled={!ownGender} onClick={() => setStep(3)}>
@@ -299,15 +515,16 @@ export default function MeetSomeoneGame({ onBack }) {
         <>
           <div className="meet-step">Step 3</div>
           <h2>❤️ Who would you like to meet?</h2>
-          <div className="meet-pref-row">
+          <div className="meet-option-stack">
             {PREFERENCE_CHOICES.map((choice) => (
-              <PreferenceChoice
+              <button
+                type="button"
                 key={choice.key}
-                icon={choice.icon}
-                label={choice.label}
-                active={preference === choice.key}
+                className={`meet-line-option${preference === choice.key ? " is-active" : ""}`}
                 onClick={() => setPreference(choice.key)}
-              />
+              >
+                {choice.label}
+              </button>
             ))}
           </div>
           <button className="meet-primary" disabled={!preference} onClick={() => setStep(4)}>
@@ -407,6 +624,13 @@ export default function MeetSomeoneGame({ onBack }) {
             <span>{photoFile ? `📷 ${photoFile.name}` : "📷 Add your profile photo"}</span>
             <input type="file" accept="image/*" onChange={(event) => setPhotoFile(event.target.files?.[0] || null)} />
           </label>
+          <input
+            className="meet-input"
+            value={videoLink}
+            onChange={(event) => setVideoLink(event.target.value)}
+            placeholder="🎥 Add a video link (optional, e.g. YouTube)"
+            inputMode="url"
+          />
           <button
             className="meet-primary"
             disabled={busy || !profileName.trim() || !whatsapp.trim() || !photoFile}
@@ -463,10 +687,6 @@ function MeetSomeoneStyles() {
       .meet-input { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; border: 1px solid rgba(145,188,235,.20); border-radius: 16px; outline: none; color: #fff; background: rgba(3,12,27,.80); font-size: 15px; }
       .meet-photo-field { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; display: flex; align-items: center; border: 1px dashed rgba(255,119,160,.42); border-radius: 16px; color: rgba(255,255,255,.82); background: rgba(30,8,21,.58); font-size: 14px; font-weight: 750; cursor: pointer; position: relative; }
       .meet-photo-field input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-      /* Icon-only preference / gender buttons — modification 1: no visible text label. */
-      .meet-pref-row { display: flex; gap: 12px; margin: 6px 0 22px; }
-      .meet-pref-choice { width: 62px; height: 62px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; background: rgba(255,255,255,.04); color: #fff; font-size: 27px; line-height: 1; cursor: pointer; }
-      .meet-pref-choice.is-active { border-color: rgba(255,95,147,.75); background: rgba(232,54,112,.16); box-shadow: 0 0 0 1px rgba(255,95,147,.2), 0 0 22px rgba(232,54,112,.22); transform: translateY(-2px); }
       .meet-heart-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; margin: 16px 0 6px; }
       .meet-heart-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); cursor: pointer; }
       .meet-heart-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(255,90,145,.12); }
@@ -479,8 +699,11 @@ function MeetSomeoneStyles() {
       .meet-browse-empty { min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; border: 1px dashed rgba(255,255,255,.12); border-radius: 22px; color: rgba(255,255,255,.52); background: rgba(255,255,255,.025); text-align: center; font-size: 12px; }
       .meet-browse-empty strong { color: #fff; font-size: 15px; }
       .meet-card-list { display: grid; gap: 16px; margin-top: 18px; }
-      .meet-card { position: relative; aspect-ratio: 4/3; overflow: hidden; border: 1px solid rgba(255,109,153,.22); border-radius: 24px; box-shadow: 0 20px 46px rgba(0,0,0,.32); }
-      .meet-card-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .meet-card { position: relative; aspect-ratio: 4/3; overflow: hidden; border: 1px solid rgba(255,109,153,.22); border-radius: 24px; box-shadow: 0 20px 46px rgba(0,0,0,.32); background: #000; }
+      .meet-card-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: 0; }
+      .meet-card-yt { pointer-events: none; }
+      .meet-mute-badge { position: absolute; top: 12px; right: 12px; z-index: 6; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.24); border-radius: 50%; color: #fff; background: rgba(4,6,14,.55); backdrop-filter: blur(6px); font-size: 15px; cursor: pointer; }
+      .meet-media-playbtn { position: absolute; top: 50%; left: 50%; z-index: 6; transform: translate(-50%,-50%); padding: 9px 18px; border: 1px solid rgba(255,255,255,.32); border-radius: 999px; color: #fff; background: rgba(4,6,14,.62); font-size: 12px; font-weight: 800; cursor: pointer; }
       .meet-card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.5) 40%, rgba(4,3,9,0) 75%); }
       .meet-card-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
       .meet-card-info h2 { margin: 0 0 2px !important; color: #fff; font-size: 19px !important; }
@@ -490,7 +713,6 @@ function MeetSomeoneStyles() {
       @media (max-width: 390px) {
         .meet-someone-panel { padding-left: 12px; padding-right: 12px; }
         .meet-fixed-bar { padding-left: 12px; padding-right: 12px; }
-        .meet-pref-choice { width: 54px; height: 54px; font-size: 23px; }
       }
     `}</style>
   );
