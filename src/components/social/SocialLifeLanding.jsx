@@ -1,34 +1,33 @@
-import { useState } from "react";
-import MeetSomeoneGame from "./MeetSomeoneGame";
+﻿import { useState } from "react";
 
 // Tapping "Meet Someone" now plays the Match Game right here, inside this
-// component — it no longer depends on a parent screen (e.g. Home.jsx)
+// component â€” it no longer depends on a parent screen (e.g. Home.jsx)
 // switching what it renders. `onSelect` is still called for every choice
 // (including "meet-someone") so a parent that wants to know what was picked
 // still can, but nothing outside this file needs to change for the game to
 // show up.
 //
 // This whole area (the landing cards and the game) also now forces a dark
-// theme — see <SocialLifeShellStyles /> below for why.
+// theme â€” see <SocialLifeShellStyles /> below for why.
 export default function SocialLifeLanding({ onSelect }) {
   const [screen, setScreen] = useState("landing"); // "landing" | "meet-someone"
 
   const choices = [
     {
       key: "meet-someone",
-      emoji: "❤️",
+      emoji: "â¤ï¸",
       title: "Meet Someone",
       text: "Meet someone and find a meaningful connection.",
     },
     {
       key: "make-money-together",
-      emoji: "💰",
+      emoji: "ðŸ’°",
       title: "Make Money Together",
       text: "Build a small money mission with other people.",
     },
     {
       key: "romantic-couples",
-      emoji: "💞",
+      emoji: "ðŸ’ž",
       title: "Browse Romantic Couples",
       text: "Discover romantic couple books and their stories.",
     },
@@ -74,7 +73,7 @@ export default function SocialLifeLanding({ onSelect }) {
               </span>
 
               <span className="social-life-choice-arrow" aria-hidden="true">
-                ›
+                â€º
               </span>
             </button>
           ))}
@@ -93,7 +92,7 @@ function SocialLifeShellStyles() {
        * This app's headings/background follow the device's light/dark
        * setting (prefers-color-scheme) everywhere else, which meant a
        * viewer whose phone or browser is set to light mode saw this
-       * section's light-colored text sitting on a light background —
+       * section's light-colored text sitting on a light background â€”
        * unreadable. .social-life-shell pins an explicit dark background
        * and dark native controls here regardless of that setting, the same
        * way the Connect screen already does.
