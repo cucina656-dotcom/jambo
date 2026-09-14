@@ -128,7 +128,7 @@ const CATEGORY_TABS = [
   { key: "time-market", label: "Market", icon: Clock },
   {
     key: "social-life",
-    label: "LOVE & RELATIONSHIPS",
+    label: "Social Life",
     icon: Users,
   },
   {
