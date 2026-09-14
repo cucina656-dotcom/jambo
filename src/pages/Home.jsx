@@ -1,4 +1,4 @@
-import TvMedia from "../components/tv/TvMedia";
+﻿import TvMedia from "../components/tv/TvMedia";
 import TvConversationOverlay from "../components/tv/TvConversationOverlay";
 import ConnectExperience from "../components/connect/ConnectExperience";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
@@ -127,13 +127,13 @@ const noop = () => {};
 const CATEGORY_TABS = [
   { key: "time-market", label: "Market", icon: Clock },
   {
-    key: "social-life",
-    label: "Social Life",
+    key: "connect",
+    label: "Connect",
     icon: Users,
   },
   {
-    key: "connect",
-    label: "Connect",
+    key: "social-life",
+    label: "Heart Zone💕",
     icon: Users,
   },
   { key: "tv", label: "TV", icon: Tv },
@@ -854,7 +854,7 @@ function Home() {
         setAuthPin("");
         setAuthConfirmPin("");
         setAuthError("");
-        setAuthSuccessMessage("Registration successful! \ud83c\udf89");
+        setAuthSuccessMessage("Registration successful! 🎉");
         const action = pendingAuthActionRef.current;
         pendingAuthActionRef.current = null;
         if (action) setPendingAuthResolution({ action, provider });
@@ -954,7 +954,7 @@ function Home() {
         setAuthPhone("");
         setAuthPin("");
         setAuthError("");
-        setAuthSuccessMessage("Login successful! \ud83d\udc4b");
+        setAuthSuccessMessage("Login successful! 👋");
         const action = pendingAuthActionRef.current;
         pendingAuthActionRef.current = null;
         if (action) setPendingAuthResolution({ action, provider });
@@ -1033,7 +1033,7 @@ function Home() {
         setUserData(provider);
         setAuthPhone("");
         setAuthPin("");
-        setAuthSuccessMessage("Account activated! \ud83c\udf89");
+        setAuthSuccessMessage("Account activated! 🎉");
         const action = pendingAuthActionRef.current;
         pendingAuthActionRef.current = null;
         if (action) setPendingAuthResolution({ action, provider });
@@ -2751,7 +2751,7 @@ function Home() {
           onClick={() => handleOfferTime(emptySectionAction.postType)}
           className="empty-button"
         >
-          {`\uFF0B ${emptySectionAction.label}`}
+          {`＋ ${emptySectionAction.label}`}
         </button>
       </div>
     );
@@ -3646,7 +3646,7 @@ const ServiceEditorModal = memo(
       <div className="modal-card" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <h2>
-            {isEdit ? "\u270E Edit Post" : "\uFF0B What are you posting?"}
+            {isEdit ? "✎ Edit Post" : "＋ What are you posting?"}
           </h2>
           <button
             type="button"
@@ -3654,7 +3654,7 @@ const ServiceEditorModal = memo(
             className="modal-close"
             aria-label="Close"
           >
-            {"\u00D7"}
+            {"×"}
           </button>
         </div>
         {!isEdit && (
@@ -3668,25 +3668,25 @@ const ServiceEditorModal = memo(
               {[
                 [
                   "offer",
-                  "\uD83D\uDEE0\uFE0F",
+                  "🛠️",
                   "Offer Work",
                   "Show what you can do",
                 ],
                 [
                   "need",
-                  "\uD83D\uDE4B",
+                  "🙋",
                   "Ask for Help",
                   "Find someone to help",
                 ],
                 [
                   "exchange",
-                  "\uD83D\uDD04",
+                  "🔄",
                   "Trade Skills",
                   "Give work, get work",
                 ],
                 [
                   "moment",
-                  "\u2728",
+                  "✨",
                   "Share a Moment",
                   "Story, song or movie saying",
                 ],
@@ -3946,8 +3946,8 @@ const ServiceEditorModal = memo(
               {compressingMedia
                 ? "Processing..."
                 : postType === "moment"
-                  ? "\u25A3 Add a photo or short video"
-                  : "\u25A3 Show the work, need, or skill"}
+                  ? "▣ Add a photo or short video"
+                  : "▣ Show the work, need, or skill"}
             </span>
             <input
               id="field-media-upload"
@@ -3995,7 +3995,7 @@ const ServiceEditorModal = memo(
               <span>
                 {compressingMedia
                   ? "Processing..."
-                  : "\u25CE Add or change your profile photo"}
+                  : "◎ Add or change your profile photo"}
               </span>
               <input
                 id="field-profile-photo"
@@ -5988,12 +5988,12 @@ const MyTimeSheet = memo(({ onClose }) => {
         <Wallet size={40} className="mytime-icon" aria-hidden="true" />
         <p>
           {
-            "This is where you'll track the economic value of your time on Gwamo \u2014 time offered, time exchanged, completed requests and what you've earned."
+            "This is where you'll track the economic value of your time on Gwamo — time offered, time exchanged, completed requests and what you've earned."
           }
         </p>
         <p className="field-help">
           {
-            "These numbers arrive once Time Requests go live. Nothing to see yet \u2014 check back soon."
+            "These numbers arrive once Time Requests go live. Nothing to see yet — check back soon."
           }
         </p>
       </div>
@@ -9776,6 +9776,50 @@ function HomeStylesInner() {
       @media (prefers-reduced-motion: reduce) {
         .tv-message-item {
           animation-duration: 48s !important;
+        }
+      }
+
+      /* ============================================================
+         Requested: nav items made bold, slightly bigger, with an
+         eye-catching red glow. Uses !important so it reliably wins
+         over the several .category-tab rules already above at every
+         breakpoint, without editing any of them.
+      ============================================================= */
+      .category-tab {
+        font-weight: 900 !important;
+        font-size: 13px !important;
+        text-shadow: 0 0 6px rgba(255, 45, 68, .88), 0 0 14px rgba(255, 20, 60, .55) !important;
+      }
+      .category-tab.is-active {
+        text-shadow: 0 0 9px rgba(255, 45, 68, 1), 0 0 20px rgba(255, 20, 60, .78) !important;
+      }
+      @media (max-width: 700px) {
+        .category-tab {
+          font-size: 12px !important;
+        }
+      }
+
+      /* ============================================================
+         Requested: keep the page fast and light on low-memory / small
+         -screen devices, without changing any behavior. Off-screen reel
+         cards stop being rendered/painted until they scroll near the
+         viewport - their height is already fixed by the CSS above, so
+         this never affects layout, scroll position, or the existing
+         IntersectionObserver logic (which reads normal box geometry).
+      ============================================================= */
+      .service-reel-card {
+        content-visibility: auto;
+        contain-intrinsic-size: 620px 1000px;
+      }
+      @media (max-width: 700px) {
+        .service-reel-card {
+          contain-intrinsic-size: 540px 900px;
+        }
+      }
+      @media (prefers-reduced-data: reduce) {
+        .tv-media-backdrop img,
+        .tv-media-backdrop video {
+          filter: none;
         }
       }
     `}</style>

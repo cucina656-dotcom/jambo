@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
+import RomanticStories from "./RomanticStories";
 
 // Meet Someone — adapted from the original Connect "LoveGame"/"BrowseLove" flow,
 // wired in under Social Life > Meet Someone.
@@ -187,8 +188,8 @@ function MeetFixedBar({ onBack }) {
   );
 }
 
-export default function MeetSomeoneGame({ onBack }) {
-  const [screen, setScreen] = useState("play"); // "play" | "browse"
+function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
+  const [screen, setScreen] = useState(initialScreen); // "play" | "browse"
   const [step, setStep] = useState(0);
   const [adult, setAdult] = useState(false);
   const [location, setLocation] = useState("");
@@ -1162,5 +1163,32 @@ function MeetSomeoneStyles() {
         .meet-fixed-bar { padding-left: 12px; padding-right: 12px; }
       }
     `}</style>
+  );
+}
+
+export default function SocialLifeLanding() {
+  const [view, setView] = useState("romantic");
+  const [meetScreen, setMeetScreen] = useState("play");
+
+  function showRomanticStories() {
+    setView("romantic");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }));
+  }
+
+  function showMeetSomeone(screen = "play") {
+    setMeetScreen(screen);
+    setView("meet");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }));
+  }
+
+  if (view === "meet") {
+    return <MeetSomeoneGame onBack={showRomanticStories} initialScreen={meetScreen} />;
+  }
+
+  return (
+    <RomanticStories
+      onPlayMatchGame={() => showMeetSomeone("play")}
+      onBrowseMeetSomeone={() => showMeetSomeone("browse")}
+    />
   );
 }
