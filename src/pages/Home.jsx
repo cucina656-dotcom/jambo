@@ -1706,10 +1706,9 @@ function Home() {
       );
       return;
     }
-    if (postType === "offer" && !enteredValue) {
-      alert("Please enter your price.");
-      return;
-    }
+    // Price is no longer required for Offer Work. The old validation that
+    // forced a price has been intentionally removed here so anyone can
+    // publish an Offer Work post without entering a price.
     if (postType === "exchange" && !wantedExchange) {
       alert("Please say what service you need in return.");
       return;
@@ -1730,32 +1729,36 @@ function Home() {
     } else if (mediaToSave) {
       detectedMediaType = "embed";
     }
+    // Trade Skills now keeps exchange_offer and exchange_need as separate
+    // structured fields (they are already submitted individually below), so
+    // we no longer concatenate "I can give / I need / cash can balance"
+    // into the single description string. For every other post type the
+    // description simply keeps carrying its category/location/availability
+    // context lines.
     const detailLines = [baseDescription];
-    if (postType === "exchange") {
-      detailLines.push(`I can give: ${headline}`);
-      detailLines.push(`I need: ${wantedExchange}`);
-      detailLines.push(
-        allowCashBalance
-          ? "Cash can balance the difference."
-          : "Service-for-service only.",
-      );
-    }
-    if (serviceCategory && postType !== "moment") {
-      detailLines.push(`Category: ${serviceCategory}`);
-    }
-    if (postLocation && postType !== "moment") {
-      detailLines.push(`Location: ${postLocation}`);
-    }
-    if (postType === "offer") {
-      detailLines.push(`Available: ${availability}`);
-    }
-    if (postType === "need") {
-      detailLines.push(`Needed: ${availability}`);
+    if (postType !== "exchange") {
+      if (serviceCategory && postType !== "moment") {
+        detailLines.push(`Category: ${serviceCategory}`);
+      }
+      if (postLocation && postType !== "moment") {
+        detailLines.push(`Location: ${postLocation}`);
+      }
+      if (postType === "offer") {
+        detailLines.push(`Available: ${availability}`);
+      }
+      if (postType === "need") {
+        detailLines.push(`Needed: ${availability}`);
+      }
     }
     const workDescription = detailLines.join("\n");
+    // Price is no longer used as the card title. Offer Work now uses the
+    // actual work/service headline the person typed, and every other type
+    // keeps its previous non-price behavior. The legacy `title` field is
+    // still submitted (see below) so old records and the backend schema
+    // remain compatible.
     const cardValue =
       postType === "offer"
-        ? `${enteredValue} / ${priceUnit}`
+        ? headline
         : postType === "need"
           ? enteredValue
             ? `Budget: ${enteredValue}`
@@ -1910,7 +1913,10 @@ function Home() {
       setEditingServicePost(post);
       setNewCreatorName(post.service_provider_name || post.creator_name || "");
       setNewCreatorIdentity(post.creator_identity || "");
-      setNewTitle(post.service_charge_per_minute || post.title || "");
+      // Price is intentionally no longer loaded into the edit form's title
+      // field - the form no longer shows a price input. The legacy title is
+      // left untouched on the server by saveServiceEdit below.
+      setNewTitle("");
       setSubtitle(post.work_description || post.subtitle || "");
       setPostType(post.post_type || "offer");
       setPostHeadline(post.service_name || post.service_title || "");
@@ -1944,10 +1950,9 @@ function Home() {
     if (!editingServicePost) return;
     const chargeText = newTitle.trim();
     const workDescription = subtitle.trim();
-    if (!chargeText) {
-      alert("Please enter how much your time costs.");
-      return;
-    }
+    // Price is no longer required - the old "Please enter how much your
+    // time costs" validation has been intentionally removed here. We still
+    // keep the field on the backend untouched (see body below).
     if (!workDescription) {
       alert("Please describe your service.");
       return;
@@ -1990,12 +1995,15 @@ function Home() {
             ? "video"
             : "embed";
       }
+      // The PATCH body no longer overwrites service_charge_per_minute.
+      // Whatever legacy value the record already had is preserved by simply
+      // omitting the field, so old posts keep their historic price data
+      // without it ever being shown again in the new UI.
       const response = await authFetch("/api/time-market/services", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: editingServicePost.id,
-          service_charge_per_minute: chargeText,
           work_description: workDescription,
           media_url: mediaUrl,
           media_type: mediaType,
@@ -3341,14 +3349,11 @@ const ServicePost = memo(function ServicePost({
     post.creator_name ||
     post.provider_name ||
     "Provider";
-  const priceText =
-    post.service_charge_per_minute || post.title || "Price not set";
-  const priceSplit = priceText.split(/\/(.+)/);
-  const priceMain = (priceSplit[0] || priceText).trim();
-  const priceUnit = priceSplit[1] ? priceSplit[1].trim() : "";
-  // Moment posts store their "Song saying / Movie saying / My story" label
-  // in this same title field, not a real price - never show it here.
+  // Price is intentionally no longer derived or displayed here. Old records
+  // keep their service_charge_per_minute value in the database untouched;
+  // the card simply no longer surfaces it in the new UI.
   const isMomentPost = getPostType(post) === "moment";
+  const postKind = getPostType(post);
   const explicitServiceName = String(
     post.service_name || post.service_title || "",
   ).trim();
@@ -3366,6 +3371,19 @@ const ServicePost = memo(function ServicePost({
     fullDescription.toLowerCase() !== serviceName.toLowerCase()
       ? fullDescription
       : "";
+  // Trade Skills (exchange) posts show the two structured halves as separate
+  // labeled blocks when the structured fields are present. For older trade
+  // posts that only ever had the concatenated description, we simply fall
+  // back to the regular description block below, without trying to guess or
+  // re-parse anything.
+  const exchangeOfferText =
+    postKind === "exchange"
+      ? String(post.exchange_offer || post.service_name || "").trim()
+      : "";
+  const exchangeNeedText =
+    postKind === "exchange" ? String(post.exchange_need || "").trim() : "";
+  const hasStructuredTrade =
+    postKind === "exchange" && Boolean(exchangeOfferText || exchangeNeedText);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const descriptionNeedsToggle = tagline.length > DESCRIPTION_PREVIEW_LENGTH;
   const visibleDescription = isDescriptionExpanded
@@ -3444,6 +3462,29 @@ const ServicePost = memo(function ServicePost({
           </button>
         )}
       </p>
+    </div>
+  ) : null;
+  // Trade Skills output: "I can give" and "I need" as two visually separate
+  // blocks, sourced from the already-existing structured fields. Falls back
+  // to the plain description block when those fields are empty (old posts).
+  const tradeSkillsBlock = hasStructuredTrade ? (
+    <div className="trade-skills-blocks">
+      {exchangeOfferText ? (
+        <div className="trade-skill-block">
+          <span className="trade-skill-label">I can give</span>
+          <span className="trade-skill-value">
+            {renderDescriptionWithLinks(exchangeOfferText)}
+          </span>
+        </div>
+      ) : null}
+      {exchangeNeedText ? (
+        <div className="trade-skill-block">
+          <span className="trade-skill-label">I need</span>
+          <span className="trade-skill-value">
+            {renderDescriptionWithLinks(exchangeNeedText)}
+          </span>
+        </div>
+      ) : null}
     </div>
   ) : null;
   // "Call" is a second, independent way to reach the provider alongside
@@ -3530,12 +3571,7 @@ const ServicePost = memo(function ServicePost({
               )}
             </button>
             {serviceName && <h2 className="service-name">{serviceName}</h2>}
-            {priceMain && !isMomentPost && (
-              <div className="post-price">
-                <span>{priceMain}</span>
-                {priceUnit && <span className="post-price-unit"> / {priceUnit}</span>}
-              </div>
-            )}
+            {tradeSkillsBlock}
             {descriptionBlock}
           </div>
         </div>
@@ -3673,12 +3709,6 @@ const ServiceEditorModal = memo(
                   "Show what you can do",
                 ],
                 [
-                  "need",
-                  "🙋",
-                  "Ask for Help",
-                  "Find someone to help",
-                ],
-                [
                   "exchange",
                   "🔄",
                   "Trade Skills",
@@ -3747,65 +3777,57 @@ const ServiceEditorModal = memo(
               </div>
             </>
           )}
-          <label htmlFor="field-post-headline">
-            {postType === "offer"
-              ? "What work can you do?"
-              : postType === "need"
-                ? "What help do you need?"
-                : postType === "exchange"
-                  ? "What service can you give?"
-                  : "Short title"}
-          </label>
-          <input
-            id="field-post-headline"
-            type="text"
-            placeholder={
-              postType === "offer"
-                ? "e.g. Fast phone repair"
-                : postType === "need"
-                  ? "e.g. I need a plumber"
-                  : postType === "exchange"
-                    ? "e.g. Website design"
-                    : "e.g. This movie taught me courage"
-            }
-            value={postHeadline}
-            onChange={(event) => setPostHeadline(event.target.value)}
-          />
-          {postType === "exchange" && (
+          {postType === "exchange" ? (
+            <div className="trade-skills-fields">
+              <div className="form-field">
+                <label htmlFor="field-exchange-give">
+                  What skill/service can you give?
+                </label>
+                <input
+                  id="field-exchange-give"
+                  type="text"
+                  value={postHeadline}
+                  onChange={(event) => setPostHeadline(event.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="field-exchange-need">
+                  What skill/service do you need?
+                </label>
+                <input
+                  id="field-exchange-need"
+                  type="text"
+                  value={exchangeNeed}
+                  onChange={(event) => setExchangeNeed(event.target.value)}
+                />
+              </div>
+            </div>
+          ) : (
             <>
-              <label htmlFor="field-exchange-need">
-                What service do you need?
+              <label htmlFor="field-post-headline">
+                {postType === "offer"
+                  ? "What work can you do?"
+                  : postType === "need"
+                    ? "What help do you need?"
+                    : "Short title"}
               </label>
               <input
-                id="field-exchange-need"
+                id="field-post-headline"
                 type="text"
-                placeholder="e.g. Professional photography"
-                value={exchangeNeed}
-                onChange={(event) => setExchangeNeed(event.target.value)}
+                value={postHeadline}
+                onChange={(event) => setPostHeadline(event.target.value)}
               />
             </>
           )}
-          {postType !== "moment" && (
+          {postType !== "moment" && postType !== "exchange" && (
             <>
               <label htmlFor="field-category">Category</label>
-              <select
+              <input
                 id="field-category"
+                type="text"
                 value={serviceCategory}
                 onChange={(event) => setServiceCategory(event.target.value)}
-              >
-                <option value="">Choose a category</option>
-                <option value="Phone repair">Phone repair</option>
-                <option value="Cleaning">Cleaning</option>
-                <option value="Teaching">Teaching</option>
-                <option value="Construction">Construction</option>
-                <option value="Cooking">Cooking</option>
-                <option value="Transport">Transport</option>
-                <option value="Beauty">Beauty</option>
-                <option value="Computer help">Computer help</option>
-                <option value="Farming">Farming</option>
-                <option value="Photography">Photography</option>
-                <option value="Other">Other</option>
-              </select>
+              />
             </>
           )}
           <label htmlFor="field-description">
@@ -3814,71 +3836,22 @@ const ServiceEditorModal = memo(
               : postType === "need"
                 ? "Explain the problem"
                 : postType === "exchange"
-                  ? "Explain your exchange"
+                  ? "Explain your exchange (optional)"
                   : "Write your saying, story, or thought"}
           </label>
           <textarea
             id="field-description"
-            placeholder={
-              postType === "offer"
-                ? "e.g. I fix screens, batteries and charging ports."
-                : postType === "need"
-                  ? "e.g. My kitchen water pipe is leaking."
-                  : postType === "exchange"
-                    ? "e.g. I can build a business website and I need photos for my work."
-                    : "Add your own words so people understand why this matters to you."
-            }
             value={subtitle}
             onChange={(event) => setSubtitle(event.target.value)}
           />
-          {postType !== "moment" && (
+          {postType !== "moment" && postType !== "exchange" && (
             <>
               <label htmlFor="field-location">Where?</label>
               <input
                 id="field-location"
                 type="text"
-                placeholder="e.g. Kigali, Gasabo"
                 value={postLocation}
                 onChange={(event) => setPostLocation(event.target.value)}
-              />
-            </>
-          )}
-          {postType === "offer" && (
-            <div className="two-field-row">
-              <div>
-                <label htmlFor="field-charge">Price</label>
-                <input
-                  id="field-charge"
-                  type="text"
-                  placeholder="e.g. 5,000 RWF"
-                  value={newTitle}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="field-price-unit">How do you charge?</label>
-                <select
-                  id="field-price-unit"
-                  value={priceUnit}
-                  onChange={(event) => setPriceUnit(event.target.value)}
-                >
-                  <option value="job">Per job</option>
-                  <option value="hour">Per hour</option>
-                  <option value="day">Per day</option>
-                  <option value="minute">Per minute</option>
-                </select>
-              </div>
-            </div>
-          )}
-          {postType === "need" && (
-            <>
-              <label htmlFor="field-charge">Your budget (Optional)</label>
-              <input
-                id="field-charge"
-                type="text"
-                placeholder="e.g. 15,000 RWF"
-                value={newTitle}
-                onChange={(event) => setNewTitle(event.target.value)}
               />
             </>
           )}
@@ -3982,7 +3955,6 @@ const ServiceEditorModal = memo(
           <input
             id="field-media-link"
             type="text"
-            placeholder="e.g. https://youtube.com/watch?v=xxxxx"
             value={newMediaUrl}
             onChange={(event) => setNewMediaUrl(event.target.value)}
           />
@@ -9821,6 +9793,79 @@ function HomeStylesInner() {
         .tv-media-backdrop video {
           filter: none;
         }
+      }
+
+      /* ============================================================
+         Requested changes - Trade Skills separate blocks, compact
+         form fields, and the compact posting CTAs.
+      ============================================================= */
+      .trade-skills-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .trade-skills-fields .form-field {
+        display: flex;
+        flex-direction: column;
+      }
+      .trade-skills-blocks {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .trade-skill-block {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .trade-skill-label {
+        color: rgba(255, 255, 255, .72);
+        font-size: 10.5px;
+        font-weight: 750;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+        text-shadow: 0 1px 5px rgba(0, 0, 0, .92);
+      }
+      .trade-skill-value {
+        color: #ffffff;
+        font-size: 12.5px;
+        font-weight: 500;
+        line-height: 1.35;
+        text-shadow: 0 1px 5px rgba(0, 0, 0, .92);
+        overflow-wrap: anywhere;
+      }
+      .home-page:has(.category-tab:first-child.is-active) .trade-skill-value {
+        color: rgba(235, 244, 252, .9);
+        font-size: 12px;
+      }
+      /* Compact posting CTAs - noticeably smaller footprint, same
+         tappability. */
+      .post-type-choice {
+        min-height: 76px;
+        padding: 10px;
+        gap: 3px;
+      }
+      .post-type-icon {
+        font-size: 18px;
+      }
+      .post-type-choice strong {
+        font-size: 13px;
+      }
+      .post-type-choice small {
+        font-size: 10.5px;
+      }
+      .empty-button {
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 12px;
+        font-size: 15px;
+      }
+      .load-more-button {
+        min-height: 46px;
+        padding: 0 20px;
+        border-radius: 14px;
+        font-size: 14px;
       }
     `}</style>
   );
