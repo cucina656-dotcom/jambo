@@ -764,7 +764,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
                             target="_blank"
                             rel="noreferrer"
                           >
-                            View heart match
+                            Ask admin your match info
                           </a>
                         ) : (
                           <span className="heart-match-status">Waiting</span>
