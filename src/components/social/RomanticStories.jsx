@@ -49,6 +49,21 @@ function flagFromCode(code) {
   return String.fromCodePoint(...code.toUpperCase().split("").map((char) => 127397 + char.charCodeAt(0)));
 }
 
+function countryCodeFromFlag(flag) {
+  const raw = String(flag || "").trim();
+  if (!raw) return "";
+  const codePoints = [...raw].map((ch) => ch.codePointAt(0));
+  if (codePoints.length !== 2) return "";
+  const code = codePoints
+    .map((cp) => {
+      const letter = cp - 127397;
+      if (letter < 65 || letter > 90) return "";
+      return String.fromCharCode(letter);
+    })
+    .join("");
+  return code.length === 2 ? code : "";
+}
+
 function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -70,6 +85,10 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   const [coupleFormMessage, setCoupleFormMessage] = useState("");
   const [couplePin, setCouplePin] = useState("");
   const [coupleManagerUnlocked, setCoupleManagerUnlocked] = useState(false);
+
+    const [editingCoupleId, setEditingCoupleId] = useState("");
+  const [editCoupleNames, setEditCoupleNames] = useState("");
+  const [editCoupleFlag, setEditCoupleFlag] = useState("");
 
   const [songs, setSongs] = useState([]);
   const [songIndex, setSongIndex] = useState(0);
@@ -391,6 +410,63 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     }
   }
 
+  async function saveCoupleEdit(coupleId) {
+    if (!couplePin.trim()) {
+      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      return;
+    }
+    const names = editCoupleNames.trim();
+    const flag = flagFromCode(editCoupleFlag);
+
+    if (!names) {
+      setCoupleFormMessage("Couple names are required.");
+      return;
+    }
+    if (!flag) {
+      setCoupleFormMessage("Choose a valid country.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${ROMANTIC_API_URL}/api/romantic/couples`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Pin": couplePin.trim(),
+        },
+        body: JSON.stringify({
+          id: coupleId,
+          names,
+          flag,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Could not update this couple.");
+      }
+
+      const saved = data.couple;
+      setCouples((current) =>
+        current.map((couple) =>
+          couple.id === coupleId
+            ? {
+                ...couple,
+                names: saved.names,
+                flag: saved.flag,
+              }
+            : couple
+        )
+      );
+
+      setEditingCoupleId("");
+      setEditCoupleNames("");
+      setEditCoupleFlag("");
+      setCoupleFormMessage("Couple updated.");
+    } catch (error) {
+      setCoupleFormMessage(error.message || "Could not update this couple.");
+    }
+  }
+
   function unlockSongManager() {
     if (!songPin.trim()) {
       setSongMessage("Enter the Romantic Stories PIN.");
@@ -499,34 +575,32 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
   return (
     <section className="romantic-stories-root">
-      <div className="romantic-top-actions">
+       <div className="romantic-top-bar">
         <button type="button" className="romantic-match-button" onClick={onPlayMatchGame}>
-          Play the Match Game
+          ❤️ Play Match
         </button>
 
-        <div className="romantic-manage-row">
-          <button
-            type="button"
-            className="romantic-small-action"
-            onClick={() => {
-              setShowAddCouple((current) => !current);
-              setShowSongManager(false);
-            }}
-          >
-            ＋ Add couple
-          </button>
+        <button
+          type="button"
+          className="romantic-chip"
+          onClick={() => {
+            setShowAddCouple((current) => !current);
+            setShowSongManager(false);
+          }}
+        >
+          ＋ Couple
+        </button>
 
-          <button
-            type="button"
-            className="romantic-small-action"
-            onClick={() => {
-              setShowSongManager((current) => !current);
-              setShowAddCouple(false);
-            }}
-          >
-            ♫ Manage songs
-          </button>
-        </div>
+        <button
+          type="button"
+          className="romantic-chip"
+          onClick={() => {
+            setShowSongManager((current) => !current);
+            setShowAddCouple(false);
+          }}
+        >
+          ♫ Songs
+        </button>
       </div>
 
       {showAddCouple && (
@@ -616,21 +690,85 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
             <div className="romantic-song-list">
               {!couples.length && <div className="romantic-song-empty">No couples added yet.</div>}
 
-              {couples.map((couple, index) => (
-                <div className="romantic-song-row" key={couple.id}>
-                  <div className="romantic-song-name">
-                    {index + 1}. {couple.names} {couple.flag}
-                  </div>
+              {couples.map((couple, index) => {
+                const isEditing = editingCoupleId === couple.id;
 
-                  <button
-                    type="button"
-                    className="romantic-song-action danger"
-                    onClick={() => deleteCouple(couple.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
+                if (isEditing) {
+                  return (
+                    <div className="romantic-song-row" key={couple.id}>
+                      <input
+                        className="romantic-input"
+                        style={{ marginBottom: 0 }}
+                        value={editCoupleNames}
+                        onChange={(event) => setEditCoupleNames(event.target.value)}
+                        placeholder="Couple names"
+                      />
+
+                      <select
+                        className="romantic-input romantic-select"
+                        style={{ marginBottom: 0 }}
+                        value={editCoupleFlag}
+                        onChange={(event) => setEditCoupleFlag(event.target.value)}
+                      >
+                        {countryOptions.map((country) => (
+                          <option key={country.code} value={country.code}>
+                            {country.flag} {country.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        className="romantic-song-action"
+                        onClick={() => saveCoupleEdit(couple.id)}
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        type="button"
+                        className="romantic-song-action"
+                        onClick={() => {
+                          setEditingCoupleId("");
+                          setEditCoupleNames("");
+                          setEditCoupleFlag("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="romantic-song-row" key={couple.id}>
+                    <div className="romantic-song-name">
+                      {index + 1}. {couple.names} {couple.flag}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="romantic-song-action"
+                      onClick={() => {
+                        setEditingCoupleId(couple.id);
+                        setEditCoupleNames(couple.names || "");
+                        const code = countryCodeFromFlag(couple.flag) || "RW";
+                        setEditCoupleFlag(code);
+                      }}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      className="romantic-song-action danger"
+                      onClick={() => deleteCouple(couple.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -790,11 +928,18 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
         </div>
       </div>
 
-      <button type="button" className="romantic-sound-button" onClick={toggleSound} aria-pressed={soundOn}>
-        {soundOn ? "🔊 Sound on" : "🔇 Sound off"}
+          <button
+        type="button"
+        className="romantic-sound-fab"
+        onClick={toggleSound}
+        aria-pressed={soundOn}
+        aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
+        title={soundOn ? "Sound on" : "Sound off"}
+      >
+        {soundOn ? "🔊" : "🔇"}
       </button>
 
-      {onBrowseMeetSomeone && (
+          {onBrowseMeetSomeone && (
         <button type="button" className="romantic-browse-link" onClick={onBrowseMeetSomeone}>
           Browse Meet Someone →
         </button>
@@ -816,41 +961,45 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           overflow-x: hidden;
         }
 
-        .romantic-top-actions {
-          display: grid;
-          gap: 10px;
-          margin-bottom: 14px;
-        }
+      
+ .romantic-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 
-        .romantic-match-button {
-          width: 100%;
-          min-height: 54px;
-          border: 1px solid rgba(255,95,147,.52);
-          border-radius: 16px;
-          color: #fff;
-          background: linear-gradient(135deg, #e83670, #a91d50);
-          box-shadow: 0 12px 30px rgba(232,54,112,.22);
-          font-size: 15px;
-          font-weight: 900;
-          cursor: pointer;
-        }
+.romantic-match-button {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(255,95,147,.55);
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #e83670, #a91d50);
+  box-shadow: 0 8px 20px rgba(232,54,112,.22);
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
 
-        .romantic-manage-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-        }
+.romantic-chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,177,211,.26);
+  border-radius: 999px;
+  color: rgba(255,255,255,.92);
+  background: rgba(77,19,46,.52);
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+      
 
-        .romantic-small-action {
-          min-height: 42px;
-          border: 1px solid rgba(255,177,211,.23);
-          border-radius: 14px;
-          color: rgba(255,255,255,.92);
-          background: rgba(77,19,46,.56);
-          font-size: 12px;
-          font-weight: 850;
-          cursor: pointer;
-        }
+     
 
         .romantic-control-panel {
           margin: 0 0 14px;
@@ -1333,36 +1482,42 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           line-height: 1.5;
         }
 
-        .romantic-sound-button {
-          display: block;
-          width: 100%;
-          min-height: 52px;
-          margin-top: 15px;
-          border: 1px solid rgba(255,177,211,.38);
-          border-radius: 16px;
-          color: #fff;
-          background: linear-gradient(135deg, rgba(132,29,73,.96), rgba(72,14,39,.96));
-          box-shadow: 0 12px 28px rgba(0,0,0,.24);
-          font: inherit;
-          font-size: 14px;
-          font-weight: 900;
-          cursor: pointer;
-        }
+        .romantic-sound-fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 30;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,177,211,.45);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(60,14,36,.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.42), 0 0 18px rgba(255,72,150,.20);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
 
-        .romantic-browse-link {
-          display: block;
-          width: 100%;
-          margin-top: 14px;
-          padding: 0;
-          border: 0;
-          background: none;
-          color: #90e3ff;
-          font: inherit;
-          font-size: 13px;
-          font-weight: 800;
-          text-align: center;
-          cursor: pointer;
-        }
+    .romantic-browse-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #90e3ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  opacity: .8;
+  cursor: pointer;
+}
 
         @keyframes romanticNoticeIn {
           from { opacity: 0; transform: translate(-50%, -5px) scale(.98); }

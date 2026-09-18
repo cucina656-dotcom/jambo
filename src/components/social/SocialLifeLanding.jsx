@@ -1129,8 +1129,14 @@ function MeetSomeoneStyles() {
       .love-card-photo-info h2 { margin: 0 0 2px !important; color: #fff; font-size: 21px !important; text-shadow: 0 0 4px #fff, 0 0 11px #ff6fb0, 0 0 22px #ff2d95, 0 0 40px rgba(255,45,149,.65); animation: loveNeonText 2.6s ease-in-out infinite; }
       .love-card-area, .love-card-freeday { color: #eaf7ff; font-size: 12.5px; text-shadow: 0 0 3px #fff, 0 0 8px #7fd7ff, 0 0 16px rgba(71,178,255,.85), 0 0 30px rgba(71,178,255,.4); animation: loveNeonText 2.6s ease-in-out infinite; }
       .love-card-status-row { margin-top: 7px; }
-      @keyframes loveVideoTrade { 0%,66.67% { height: 55%; } 72.22%,94.44% { height: 0%; } 100% { height: 55%; } }
-      @keyframes loveProfileTrade { 0%,66.67% { height: 45%; } 72.22%,94.44% { height: 100%; } 100% { height: 45%; } }
+     @keyframes loveVideoTrade {
+  0%, 45%   { height: 100%; }
+  55%, 100% { height: 0%; }
+}
+@keyframes loveProfileTrade {
+  0%, 45%   { height: 0%; }
+  55%, 100% { height: 100%; }
+} }
       @keyframes loveNeonText { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
       /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
       .love-card-stage.is-editing .love-card-video-section { animation: none; height: 55%; }
@@ -1139,7 +1145,27 @@ function MeetSomeoneStyles() {
         .love-card-video-section, .love-card-profile-section { animation: none !important; transition: none !important; }
         .love-card-video-section { height: 55%; }
         .love-card-profile-section { height: 45%; }
-        .love-mute-badge { animation: none; }
+         .love-mute-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(120,240,255,.55);
+  background: rgba(4,10,20,.40);
+  backdrop-filter: blur(3px);
+  font-size: 23px;
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(95,242,255,.85), 0 0 20px rgba(95,242,255,.55), 0 0 42px rgba(95,242,255,.30);
+  animation: loveNeonMutePulse 2.2s ease-in-out infinite;
+}
         .love-card-photo-info h2, .love-card-area, .love-card-freeday { animation: none; }
       }
       .heart-match-status { width: fit-content; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; color: rgba(255,255,255,.92); background: rgba(255,255,255,.16); backdrop-filter: blur(6px); font-size: 10px; font-weight: 900; text-decoration: none; text-shadow: 0 0 6px rgba(255,255,255,.85); box-shadow: 0 0 10px rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.25); }
