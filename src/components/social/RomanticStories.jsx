@@ -379,12 +379,13 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       return;
     }
 
-    setCoupleManagerUnlocked(true);
-    setCoupleFormMessage(
-      "Couple management is open for this safe frontend test. Real PIN verification will be connected to the Worker later."
-    );
+ setCoupleFormMessage(
+  "💡 Une opportunité à ses débuts. Un potentiel de rendement important.\n\n" +
+  "📈 Investisseurs sérieux : contactez-nous uniquement pour discuter des rendements potentiels et des conditions d'investissement.\n\n" +
+  "📧 intarepride@gmail.com\n\n" +
+  "Parlons des rendements."
+);
   }
-
   async function deleteCouple(coupleId) {
     if (!couplePin.trim()) {
       setCoupleFormMessage("Enter the Romantic Stories PIN.");
