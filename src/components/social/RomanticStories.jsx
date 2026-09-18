@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+const ROMANTIC_API_URL = "https://kitchenbrain.cucina656.workers.dev";
 
 const DEMO_COUPLES = [
   {
@@ -81,6 +82,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   const audioRef = useRef(null);
   const bookRef = useRef(null);
   const [bookNotice, setBookNotice] = useState("");
+  const [serverLoaded, setServerLoaded] = useState(false);
 
   const regionNames = useMemo(() => {
     try {
@@ -212,12 +214,76 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     };
   }, [couples, songs]);
 
+    // Load couples, songs, and playback state from the worker on mount.
+  // This is what makes the storybook and the background playlist survive a
+  // page refresh. Runs once.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAll() {
+      try {
+        const [couplesRes, songsRes, playbackRes] = await Promise.all([
+          fetch(`${ROMANTIC_API_URL}/api/romantic/couples`).then((r) => r.json()),
+          fetch(`${ROMANTIC_API_URL}/api/romantic/songs`).then((r) => r.json()),
+          fetch(`${ROMANTIC_API_URL}/api/romantic/playback`).then((r) => r.json()),
+        ]);
+
+        if (cancelled) return;
+
+        const serverCouples = Array.isArray(couplesRes?.couples) ? couplesRes.couples : [];
+        const serverSongs = Array.isArray(songsRes?.songs) ? songsRes.songs : [];
+        const playback = playbackRes?.playback || {};
+
+        if (serverCouples.length > 0) {
+          setCouples(
+            serverCouples.map((c) => ({
+              id: c.id,
+              names: c.names,
+              whatsapp: c.whatsapp,
+              flag: c.flag || "🏳️",
+              image: c.image_url,
+              localImage: false,
+            }))
+          );
+        }
+
+        if (serverSongs.length > 0) {
+          setSongs(
+            serverSongs.map((s) => ({
+              id: s.id,
+              name: s.name,
+              url: s.url,
+              localUrl: false,
+            }))
+          );
+        }
+
+        const startIndex = Number(playback.song_index || 0);
+        if (serverSongs.length > 0 && startIndex < serverSongs.length) {
+          setSongIndex(startIndex);
+        }
+        if (playback.sound_on === true) {
+          setSoundOn(true);
+        }
+      } catch (err) {
+        console.warn("Romantic Stories load failed:", err);
+      } finally {
+        if (!cancelled) setServerLoaded(true);
+      }
+    }
+
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const safePageIndex = Math.min(pageIndex, Math.max(0, couples.length - 1));
   const safeNextPageIndex = Math.min(nextPageIndex, Math.max(0, couples.length - 1));
   const visibleCouple = pageTurning ? couples[safeNextPageIndex] : couples[safePageIndex];
   const turningCouple = couples[safePageIndex];
 
-  function handleAddCouple(event) {
+   async function handleAddCouple(event) {
     event.preventDefault();
     setCoupleFormMessage("");
 
@@ -225,48 +291,69 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       setCoupleFormMessage("Add the couple names.");
       return;
     }
-
     if (!coupleWhatsapp.trim()) {
       setCoupleFormMessage("Add the WhatsApp number.");
       return;
     }
-
     if (!coupleImageFile) {
       setCoupleFormMessage("Upload one couple image.");
       return;
     }
+    if (!couplePin.trim()) {
+      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      return;
+    }
 
-    const imageUrl = URL.createObjectURL(coupleImageFile);
-    const newCouple = {
-      id: makeId("couple"),
-      names: coupleNames.trim(),
-      whatsapp: coupleWhatsapp.trim(),
-      flag: flagFromCode(countryCode),
-      image: imageUrl,
-      localImage: true,
-    };
+    try {
+      const form = new FormData();
+      form.append("names", coupleNames.trim());
+      form.append("whatsapp", coupleWhatsapp.trim());
+      form.append("flag", flagFromCode(countryCode));
+      form.append("file", coupleImageFile);
 
-    setCouples((current) => [...current, newCouple]);
-    setCoupleNames("");
-    setCoupleWhatsapp("");
-    setCountryCode("RW");
-    setCoupleImageFile(null);
-    setCoupleFormMessage("");
-    setShowAddCouple(false);
-    setBookNotice(`${newCouple.names} added to Romantic Stories.`);
-
-    window.setTimeout(() => {
-      bookRef.current?.scrollIntoView({
-        behavior: reducedMotion ? "auto" : "smooth",
-        block: "center",
+      const response = await fetch(`${ROMANTIC_API_URL}/api/romantic/couples`, {
+        method: "POST",
+        headers: { "X-Admin-Pin": couplePin.trim() },
+        body: form,
       });
-    }, 80);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Could not add this couple.");
+      }
 
-    window.setTimeout(() => {
-      setBookNotice("");
-    }, 2800);
+      const saved = data.couple;
+      const newCouple = {
+        id: saved.id,
+        names: saved.names,
+        whatsapp: saved.whatsapp,
+        flag: saved.flag || "🏳️",
+        image: saved.image_url,
+        localImage: false,
+      };
+
+      setCouples((current) => [...current, newCouple]);
+      setCoupleNames("");
+      setCoupleWhatsapp("");
+      setCountryCode("RW");
+      setCoupleImageFile(null);
+      setCoupleFormMessage("");
+      setShowAddCouple(false);
+      setBookNotice(`${newCouple.names} added to Romantic Stories.`);
+
+      window.setTimeout(() => {
+        bookRef.current?.scrollIntoView({
+          behavior: reducedMotion ? "auto" : "smooth",
+          block: "center",
+        });
+      }, 80);
+
+      window.setTimeout(() => {
+        setBookNotice("");
+      }, 2800);
+    } catch (error) {
+      setCoupleFormMessage(error.message || "Could not add this couple.");
+    }
   }
-
   function unlockCoupleManager() {
     if (!couplePin.trim()) {
       setCoupleFormMessage("Enter the Romantic Stories PIN.");
@@ -279,13 +366,29 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     );
   }
 
-  function deleteCouple(coupleId) {
-    setCouples((current) => {
-      const target = current.find((couple) => couple.id === coupleId);
-      if (target?.localImage && target.image) URL.revokeObjectURL(target.image);
-      return current.filter((couple) => couple.id !== coupleId);
-    });
-    setCoupleFormMessage("Couple removed.");
+  async function deleteCouple(coupleId) {
+    if (!couplePin.trim()) {
+      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      return;
+    }
+    try {
+      const response = await fetch(`${ROMANTIC_API_URL}/api/romantic/couples`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Pin": couplePin.trim(),
+        },
+        body: JSON.stringify({ id: coupleId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Could not remove this couple.");
+      }
+      setCouples((current) => current.filter((couple) => couple.id !== coupleId));
+      setCoupleFormMessage("Couple removed.");
+    } catch (error) {
+      setCoupleFormMessage(error.message || "Could not remove this couple.");
+    }
   }
 
   function unlockSongManager() {
@@ -300,50 +403,83 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     );
   }
 
-  function addSongs(files) {
+  async function addSongs(files) {
     const selected = Array.from(files || []);
     if (!selected.length) return;
+    if (!songPin.trim()) {
+      setSongMessage("Enter the Romantic Stories PIN.");
+      return;
+    }
 
-    const added = selected.map((file) => ({
-      id: makeId("song"),
-      name: file.name,
-      url: URL.createObjectURL(file),
-      localUrl: true,
-    }));
+    setSongMessage(`Uploading ${selected.length} song${selected.length === 1 ? "" : "s"}...`);
 
-    setSongs((current) => [...current, ...added]);
-    setSongMessage(`✓ ${added.length} song${added.length === 1 ? "" : "s"} added to the shared book playlist.`);
-    setShowSongUpload(false);
+    let addedCount = 0;
+    let lastError = "";
+
+    for (const file of selected) {
+      try {
+        const form = new FormData();
+        form.append("name", file.name);
+        form.append("file", file);
+
+        const response = await fetch(`${ROMANTIC_API_URL}/api/romantic/songs`, {
+          method: "POST",
+          headers: { "X-Admin-Pin": songPin.trim() },
+          body: form,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || data.message || "Upload failed.");
+        }
+
+        const saved = data.song;
+        setSongs((current) => [
+          ...current,
+          { id: saved.id, name: saved.name, url: saved.url, localUrl: false },
+        ]);
+        addedCount += 1;
+      } catch (error) {
+        lastError = error.message || "Upload failed.";
+      }
+    }
+
+    if (addedCount > 0) {
+      setSongMessage(
+        `✓ ${addedCount} song${addedCount === 1 ? "" : "s"} added to the shared book playlist.`
+      );
+      setShowSongUpload(false);
+    } else if (lastError) {
+      setSongMessage(lastError);
+    }
   }
 
-  function replaceSong(songId, file) {
-    if (!file) return;
+ 
 
-    setSongs((current) =>
-      current.map((song) => {
-        if (song.id !== songId) return song;
-        if (song.localUrl && song.url) URL.revokeObjectURL(song.url);
-        return {
-          ...song,
-          name: file.name,
-          url: URL.createObjectURL(file),
-          localUrl: true,
-        };
-      })
-    );
 
-    setSongMessage("Song replaced.");
-  }
-
-  function deleteSong(songId) {
-    setSongs((current) => {
-      const target = current.find((song) => song.id === songId);
-      if (target?.localUrl && target.url) URL.revokeObjectURL(target.url);
-      return current.filter((song) => song.id !== songId);
-    });
-
-    setSongIndex(0);
-    setSongMessage("Song deleted.");
+   async function deleteSong(songId) {
+    if (!songPin.trim()) {
+      setSongMessage("Enter the Romantic Stories PIN.");
+      return;
+    }
+    try {
+      const response = await fetch(`${ROMANTIC_API_URL}/api/romantic/songs`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Pin": songPin.trim(),
+        },
+        body: JSON.stringify({ id: songId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Could not remove this song.");
+      }
+      setSongs((current) => current.filter((song) => song.id !== songId));
+      setSongIndex(0);
+      setSongMessage("Song removed.");
+    } catch (error) {
+      setSongMessage(error.message || "Could not remove this song.");
+    }
   }
 
   function toggleSound() {
@@ -567,12 +703,13 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
                       {index + 1}. {song.name}
                     </div>
 
-                    <label className="romantic-song-action">
+                                        <label className="romantic-song-action">
                       Add another
                       <input
                         type="file"
                         accept="audio/*,.mp3"
-                        onChange={(event) => replaceSong(song.id, event.target.files?.[0] || null)}
+                        multiple
+                        onChange={(event) => addSongs(event.target.files)}
                       />
                     </label>
 
