@@ -1136,7 +1136,7 @@ function MeetSomeoneStyles() {
 @keyframes loveProfileTrade {
   0%, 45%   { height: 0%; }
   55%, 100% { height: 100%; }
-} }
+} 
       @keyframes loveNeonText { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
       /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
       .love-card-stage.is-editing .love-card-video-section { animation: none; height: 55%; }
