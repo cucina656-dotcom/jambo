@@ -1,5 +1,6 @@
 import { countryCodeToFlagEmoji } from "../../utils/countries";
 
+
 // Neon palette. Every message gets one of these. The exact shade is chosen
 // from a hash of the sender's phone (or viewer id), so the same person
 // always shows in the same colour and regulars become recognisable.
@@ -8,7 +9,6 @@ const TV_NEON_PALETTE = [
   "#3b82f6", // blue
   "#60a5fa", // light blue
   "#0ea5e9", // sky blue
-  
   "#22d3ee", // aqua
   "#4ade80", // green
   "#ffd93b", // gold
@@ -25,6 +25,7 @@ function hashNeonIndex(key = "") {
   }
   return Math.abs(hash) % TV_NEON_PALETTE.length;
 }
+
 
 function TvConversationMessage({
   message,
@@ -60,7 +61,7 @@ function TvConversationMessage({
   return (
     <div
       className={`tv-message-item${paused ? " is-paused" : ""}`}
-      style={{
+         style={{
         bottom: `${lane * laneHeight}px`,
         "--tv-message-duration": `${duration}s`,
         "--tv-message-delay": `${delay}s`,

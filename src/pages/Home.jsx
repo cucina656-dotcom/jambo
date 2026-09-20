@@ -9904,32 +9904,18 @@ function HomeStylesInner() {
 /* The whole message becomes a neon pill. Colour comes from the
    --tv-neon variable set per message in JS. */
 .tv-message-item {
-  padding: 5px 14px 5px 5px;
-  border: 1.5px solid var(--tv-neon, #28d7ff);
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--tv-neon, #28d7ff) 12%, transparent),
-      rgba(2, 8, 18, .68)
-    );
-  -webkit-backdrop-filter: blur(9px);
-  backdrop-filter: blur(9px);
-  box-shadow:
-    inset 0 0 14px color-mix(in srgb, var(--tv-neon, #28d7ff) 22%, transparent),
-    0 0 8px color-mix(in srgb, var(--tv-neon, #28d7ff) 75%, transparent),
-    0 0 22px color-mix(in srgb, var(--tv-neon, #28d7ff) 42%, transparent);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
   grid-template-columns: 34px minmax(0, 1fr);
   column-gap: 9px;
   align-items: start;
-  transition: box-shadow 220ms ease;
 }
-.tv-message-item:hover {
-  box-shadow:
-    inset 0 0 16px color-mix(in srgb, var(--tv-neon, #28d7ff) 28%, transparent),
-    0 0 12px color-mix(in srgb, var(--tv-neon, #28d7ff) 90%, transparent),
-    0 0 30px color-mix(in srgb, var(--tv-neon, #28d7ff) 55%, transparent);
-}
+
 
 /* Slightly bigger avatar inside the capsule, matching the reference. */
 .tv-message-item .tv-message-avatar {
@@ -9966,7 +9952,7 @@ function HomeStylesInner() {
   text-align: left;
 }
 
-/* Name in the neon colour, with a soft glow. */
+/* Name in the palette colour with a matching glow + strong black shadow. */
 .tv-message-name {
   order: 1;
   color: var(--tv-neon, #28d7ff);
@@ -9975,18 +9961,29 @@ function HomeStylesInner() {
   letter-spacing: .1px;
   max-width: 100%;
   text-shadow:
-    0 0 6px color-mix(in srgb, var(--tv-neon, #28d7ff) 78%, transparent),
-    0 0 14px color-mix(in srgb, var(--tv-neon, #28d7ff) 45%, transparent);
+    0 0 4px color-mix(in srgb, var(--tv-neon, #28d7ff) 65%, transparent),
+    0 0 8px color-mix(in srgb, var(--tv-neon, #28d7ff) 40%, transparent),
+    0 1px 2px rgba(0, 0, 0, 1),
+    0 2px 6px rgba(0, 0, 0, 1),
+    0 0 12px rgba(0, 0, 0, .95),
+    0 0 22px rgba(0, 0, 0, .85);
 }
 
-/* Text keeps the same readability as before, just inside a capsule. */
+/* Body in neon white with a black shadow. */
+/* Body in neon white with a palette tint and a strong black shadow. */
 .tv-message-text {
   order: 2;
-  color: rgba(255, 255, 255, .96);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 520;
   line-height: 1.34;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, .95);
+  text-shadow:
+    0 0 4px color-mix(in srgb, var(--tv-neon, #28d7ff) 55%, transparent),
+    0 0 8px color-mix(in srgb, var(--tv-neon, #28d7ff) 35%, transparent),
+    0 1px 2px rgba(0, 0, 0, 1),
+    0 2px 6px rgba(0, 0, 0, 1),
+    0 0 12px rgba(0, 0, 0, .95),
+    0 0 22px rgba(0, 0, 0, .85);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -9994,41 +9991,12 @@ function HomeStylesInner() {
   overflow-wrap: anywhere;
 }
 
-/* Fallback for browsers without color-mix(): give the capsule a solid
-   neon border and a simpler glow, so nothing looks broken. */
-@supports not (color: color-mix(in srgb, red, blue)) {
-  .tv-message-item {
-    background: rgba(2, 8, 18, .74);
-    box-shadow:
-      inset 0 0 12px rgba(255, 255, 255, .10),
-      0 0 8px var(--tv-neon, #28d7ff),
-      0 0 18px var(--tv-neon, #28d7ff);
-  }
-  .tv-message-name {
-    text-shadow: 0 0 8px var(--tv-neon, #28d7ff);
-  }
-  .tv-message-flag {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 18px;
-  height: 13px;
-  display: grid;
-  place-items: center;
-  border-radius: 2px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  font-size: 13px;
-  line-height: 1;
-  overflow: hidden;
-}
-}
+
 
 /* Mobile: keep the capsule tidy and the flag readable. */
 @media (max-width: 700px) {
   .tv-message-item {
-    padding: 4px 12px 4px 4px;
+   padding: 0;
     grid-template-columns: 30px minmax(0, 1fr);
     column-gap: 8px;
   }
