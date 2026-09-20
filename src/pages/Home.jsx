@@ -9113,12 +9113,12 @@ function HomeStylesInner() {
         top: 140px;
         left: 16px;
       }
-      .home-page.is-tv-mode .tv-conversation-column {
-        top: 140px;
-        right: 92px;
-        bottom: 168px;
-        left: 16px;
-      }
+  .home-page.is-tv-mode .tv-conversation-column {
+  top: 152px:
+  right: 92px;
+  bottom: 168px;
+  left: 16px;
+}
       .tv-conversation-column {
         position: absolute;
         z-index: 41;
@@ -9163,22 +9163,26 @@ function HomeStylesInner() {
          visible. Every item keeps a stable lane, duration and small stagger
          delay so new arrivals join without resetting the messages already
          moving. The final fade flows directly back into the next loop. */
-      @keyframes tvMessageRise {
-        0% {
-          opacity: 0;
-          transform: translate3d(0, 18px, 0);
-        }
-        6% {
-          opacity: 1;
-        }
-        88% {
-          opacity: 1;
-        }
-        100% {
-          opacity: 0;
-          transform: translate3d(0, -72svh, 0);
-        }
-      }
+     @keyframes tvMessageRise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  14% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  20% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -72svh, 0);
+  }
+}
       .tv-message-avatar {
         position: relative;
         width: 29px;
@@ -9199,20 +9203,22 @@ function HomeStylesInner() {
         border: 1.5px solid rgba(255, 255, 255, .68);
         box-shadow: 0 0 9px rgba(22, 139, 255, .55);
       }
-      .tv-message-flag {
-        position: absolute;
-        right: -3px;
-        bottom: -3px;
-        width: 15px;
-        height: 15px;
-        display: grid;
-        place-items: center;
-        border-radius: 50%;
-        background: rgba(1, 8, 20, .86);
-        font-size: 10px;
-        line-height: 1;
-        box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .58);
-      }
+.tv-message-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
       .tv-message-body {
         position: relative;
         min-width: 0;
@@ -9702,10 +9708,21 @@ function HomeStylesInner() {
           height: 26px;
         }
         .tv-message-flag {
-          width: 13px;
-          height: 13px;
-          font-size: 9px;
-        }
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
         .tv-message-text {
           font-size: 10.8px;
         }
@@ -9867,6 +9884,180 @@ function HomeStylesInner() {
         border-radius: 14px;
         font-size: 14px;
       }
+
+/* =========================================================
+   TV live chat — glowing capsules, bigger flags, live count
+   ========================================================== */
+
+/* The LIVE badge grows a small "· N Watching" tail. */
+.tv-live-anchor {
+  gap: 8px;
+}
+.tv-live-anchor .tv-live-watchers {
+  color: rgba(255, 255, 255, .95);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The whole message becomes a neon pill. Colour comes from the
+   --tv-neon variable set per message in JS. */
+.tv-message-item {
+  padding: 5px 14px 5px 5px;
+  border: 1.5px solid var(--tv-neon, #28d7ff);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tv-neon, #28d7ff) 12%, transparent),
+      rgba(2, 8, 18, .68)
+    );
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  box-shadow:
+    inset 0 0 14px color-mix(in srgb, var(--tv-neon, #28d7ff) 22%, transparent),
+    0 0 8px color-mix(in srgb, var(--tv-neon, #28d7ff) 75%, transparent),
+    0 0 22px color-mix(in srgb, var(--tv-neon, #28d7ff) 42%, transparent);
+  grid-template-columns: 34px minmax(0, 1fr);
+  column-gap: 9px;
+  align-items: start;
+  transition: box-shadow 220ms ease;
+}
+.tv-message-item:hover {
+  box-shadow:
+    inset 0 0 16px color-mix(in srgb, var(--tv-neon, #28d7ff) 28%, transparent),
+    0 0 12px color-mix(in srgb, var(--tv-neon, #28d7ff) 90%, transparent),
+    0 0 30px color-mix(in srgb, var(--tv-neon, #28d7ff) 55%, transparent);
+}
+
+/* Slightly bigger avatar inside the capsule, matching the reference. */
+.tv-message-item .tv-message-avatar {
+  width: 34px;
+  height: 34px;
+  margin-top: 4px;
+}
+
+/* The flag is now noticeably bigger and glows in the same neon. */
+ .tv-message-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
+
+/* Inner text block inside the capsule. */
+.tv-message-item .tv-message-body {
+  padding: 6px 6px 7px 0;
+  gap: 2px;
+  transform: none;
+  max-width: 100%;
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* Name in the neon colour, with a soft glow. */
+.tv-message-name {
+  order: 1;
+  color: var(--tv-neon, #28d7ff);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: .1px;
+  max-width: 100%;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--tv-neon, #28d7ff) 78%, transparent),
+    0 0 14px color-mix(in srgb, var(--tv-neon, #28d7ff) 45%, transparent);
+}
+
+/* Text keeps the same readability as before, just inside a capsule. */
+.tv-message-text {
+  order: 2;
+  color: rgba(255, 255, 255, .96);
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 1.34;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Fallback for browsers without color-mix(): give the capsule a solid
+   neon border and a simpler glow, so nothing looks broken. */
+@supports not (color: color-mix(in srgb, red, blue)) {
+  .tv-message-item {
+    background: rgba(2, 8, 18, .74);
+    box-shadow:
+      inset 0 0 12px rgba(255, 255, 255, .10),
+      0 0 8px var(--tv-neon, #28d7ff),
+      0 0 18px var(--tv-neon, #28d7ff);
+  }
+  .tv-message-name {
+    text-shadow: 0 0 8px var(--tv-neon, #28d7ff);
+  }
+  .tv-message-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
+}
+
+/* Mobile: keep the capsule tidy and the flag readable. */
+@media (max-width: 700px) {
+  .tv-message-item {
+    padding: 4px 12px 4px 4px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    column-gap: 8px;
+  }
+  .tv-message-item .tv-message-avatar {
+    width: 30px;
+    height: 30px;
+    margin-top: 3px;
+  }
+ .tv-message-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
+  .tv-message-name { font-size: 10.8px; }
+  .tv-message-text { font-size: 11.2px; }
+}
+
+
     `}</style>
   );
 }

@@ -30,6 +30,11 @@ const TV_POLL_INTERVAL_MS = 7000;
 const TV_MESSAGE_DURATION_SECONDS = 30;
 const TV_MESSAGE_STAGGER_SECONDS = 3.75;
 
+// How often we tell the server "I'm still watching this post". 12 s is
+// chosen so a 40 s server-side TTL covers two missed heartbeats before the
+// viewer is considered gone.
+const TV_WATCH_HEARTBEAT_MS = 12000;
+
 const TV_IDENTITY_KEY_PREFIX = "gwamo-tv-identity:v2:";
 const TV_PUBLIC_IDENTITY_KEY =
   `${TV_IDENTITY_KEY_PREFIX}public-viewer`;
@@ -65,13 +70,46 @@ function getOrCreateTvPublicViewerId() {
   }
 }
 
-// =============================================================================
-// TvConversationOverlay - public, animated conversation floating over TV
-// media. Entirely separate from private "Contact me" messaging. Reading is
-// public; sending uses a lightweight viewer identity and does not require login.
-// TV card keeps a live connection (WebSocket, falling back to modest
-// polling) - off-screen cards stay idle to save resources and battery.
-// =============================================================================
+// Smoothly animate a viewer count so it never jumps, never drops to zero
+// while we still believe someone is watching, and never rises faster than
+// a small step. This is purely visual smoothing on top of a real number -
+// it never invents viewers.
+function useSmoothedViewerCount(target) {
+  const [displayed, setDisplayed] = useState(target || 0);
+  const displayedRef = useRef(target || 0);
+
+  useEffect(() => {
+    const goal = Math.max(0, Number(target) || 0);
+    let cancelled = false;
+    let stepTimer = null;
+
+    const tick = () => {
+      if (cancelled) return;
+      const current = displayedRef.current;
+      const diff = goal - current;
+      if (diff === 0) return;
+      // Move toward the goal in modest steps. Small changes take a few
+      // seconds; big jumps take a bit longer but never stall.
+      const magnitude = Math.max(1, Math.ceil(Math.abs(diff) / 6));
+      const next =
+        diff > 0
+          ? Math.min(goal, current + magnitude)
+          : Math.max(goal, current - magnitude);
+      displayedRef.current = next;
+      setDisplayed(next);
+      stepTimer = setTimeout(tick, 900);
+    };
+
+    stepTimer = setTimeout(tick, 400);
+    return () => {
+      cancelled = true;
+      if (stepTimer) clearTimeout(stepTimer);
+    };
+  }, [target]);
+
+  return displayed;
+}
+
 const TvConversationOverlay = memo(function TvConversationOverlay({
   postId,
   isActive,
@@ -99,6 +137,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const [pausedMessageIds, setPausedMessageIds] = useState(() => new Set());
   const [remoteTypingUsers, setRemoteTypingUsers] = useState({});
   const [localTyping, setLocalTyping] = useState(false);
+  const [liveWatchers, setLiveWatchers] = useState(null);
   const [tvIdentity, setTvIdentity] = useState({
     name: "",
     photoUrl: "",
@@ -106,6 +145,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   });
   const socketRef = useRef(null);
   const pollTimerRef = useRef(null);
+  const watcherTimerRef = useRef(null);
   const seenIdsRef = useRef(new Set());
   const isMountedRef = useRef(true);
   const typingStopTimerRef = useRef(null);
@@ -145,6 +185,20 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     remote.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     return remote[0];
   }, [localTypingIdentity, remoteTypingUsers]);
+
+  // The viewer count shown next to the LIVE badge. If the parent does not
+  // provide one (e.g. Social Life), we fall back to the live watcher count
+  // broadcast by the Worker. Smoothing keeps the number from jumping.
+  const rawViewerCount = useMemo(() => {
+    if (typeof viewCount === "number" && Number.isFinite(viewCount)) {
+      return viewCount;
+    }
+    if (liveWatchers === null) return null;
+    return liveWatchers;
+  }, [viewCount, liveWatchers]);
+  const smoothedViewerCount = useSmoothedViewerCount(rawViewerCount ?? 0);
+  const showViewerCount =
+    !isSocialLife && rawViewerCount !== null && rawViewerCount > 0;
 
   const saveIdentity = useCallback(
     (nextIdentity) => {
@@ -204,6 +258,8 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
 
       laneCounterRef.current += 1;
 
+      const assignedLane = slot;
+
       let delay = -(slot * TV_MESSAGE_STAGGER_SECONDS);
 
       if (live) {
@@ -213,9 +269,6 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           ? Math.max(0, nowSeconds - previousLaunch)
           : TV_MESSAGE_STAGGER_SECONDS;
 
-        // Never make a new message wait invisibly. If messages arrive close
-        // together, start the newer one slightly farther along the same path
-        // so it appears above the older one without sideways drift.
         delay = -Math.max(
           0,
           TV_MESSAGE_STAGGER_SECONDS - secondsSincePrevious,
@@ -223,10 +276,21 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         lastLiveLaunchRef.current = nowSeconds;
       }
 
+      // sender_key gives TvConversationMessage a stable handle to colour
+      // the message from. Real senders have a phone; public viewers have a
+      // viewer id; anonymous messages fall back to their name.
+      const senderKey =
+        rawMessage.phone ||
+        rawMessage.user_phone ||
+        rawMessage.user_id ||
+        rawMessage.user_name ||
+        messageId;
+
       additions.push({
         ...rawMessage,
         id: messageId,
-        _tvLane: 0,
+        sender_key: String(senderKey),
+        _tvLane: assignedLane,
         _tvDuration: TV_MESSAGE_DURATION_SECONDS,
         _tvDelay: delay,
       });
@@ -269,7 +333,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         return [];
       }
     },
-    [apiUrl, postId, isSocialLife, normalizePublicItems],
+    [apiUrl, postId, normalizePublicItems],
   );
 
   const loadRecent = useCallback(async () => {
@@ -334,6 +398,25 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     [clearRemoteTyping, publicViewerId, defaultLogo],
   );
 
+  // Send a tiny presence heartbeat so the Worker can keep a real list of
+  // who is watching this post right now. We only do this over the
+  // WebSocket, since polling does not carry presence.
+  const sendWatcherHeartbeat = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    try {
+      socket.send(
+        JSON.stringify({
+          type: "tv_watching",
+          tv_post_id: postId,
+          viewer_id: publicViewerId,
+        }),
+      );
+    } catch {
+      // Presence is optional; the count just stays where it was.
+    }
+  }, [postId, publicViewerId]);
+
   const connectRealtime = useCallback(async () => {
     if (isSocialLife) {
       startPolling();
@@ -353,6 +436,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       }
       const socket = new WebSocket(data.websocket_url);
       socketRef.current = socket;
+      socket.onopen = () => {
+        // Announce ourselves immediately so the count updates right away.
+        sendWatcherHeartbeat();
+      };
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
@@ -360,6 +447,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
             appendMessages([payload.message], { live: true });
           } else if (payload?.type === "tv_typing") {
             receiveTypingPresence(payload);
+          } else if (
+            payload?.type === "tv_watching_count" &&
+            typeof payload.count === "number"
+          ) {
+            if (isMountedRef.current) setLiveWatchers(payload.count);
           }
         } catch {
           // Ignore malformed frames.
@@ -367,7 +459,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       };
       socket.onclose = () => {
         socketRef.current = null;
-        if (isMountedRef.current) startPolling();
+        if (isMountedRef.current) {
+          startPolling();
+        }
       };
       socket.onerror = () => {
         try {
@@ -376,6 +470,18 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
           /* already closing */
         }
       };
+
+      // Kick off the heartbeat on this client. It runs while the socket is
+      // open and stops as soon as the component unmounts or the socket
+      // closes. Because the Worker only counts recent heartbeats, viewers
+      // who navigate away naturally drop out of the count.
+      if (watcherTimerRef.current) {
+        clearInterval(watcherTimerRef.current);
+      }
+      watcherTimerRef.current = setInterval(() => {
+        if (document.hidden) return;
+        sendWatcherHeartbeat();
+      }, TV_WATCH_HEARTBEAT_MS);
     } catch {
       startPolling();
     }
@@ -385,6 +491,7 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
     appendMessages,
     startPolling,
     receiveTypingPresence,
+    sendWatcherHeartbeat,
     isSocialLife,
   ]);
 
@@ -397,6 +504,10 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
       isMountedRef.current = false;
       stopPolling();
       if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+      if (watcherTimerRef.current) {
+        clearInterval(watcherTimerRef.current);
+        watcherTimerRef.current = null;
+      }
       remoteTypingTimersRef.current.forEach((timer) => clearTimeout(timer));
       remoteTypingTimersRef.current.clear();
       if (socketRef.current) {
@@ -684,6 +795,11 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
         <div className="tv-live-anchor" aria-hidden="true">
           <span className="tv-live-dot" />
           <span>LIVE</span>
+          {showViewerCount && (
+            <span className="tv-live-watchers">
+              · {smoothedViewerCount.toLocaleString()} Watching
+            </span>
+          )}
         </div>
       )}
 

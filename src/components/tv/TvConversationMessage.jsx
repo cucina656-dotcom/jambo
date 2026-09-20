@@ -1,5 +1,31 @@
 import { countryCodeToFlagEmoji } from "../../utils/countries";
 
+// Neon palette. Every message gets one of these. The exact shade is chosen
+// from a hash of the sender's phone (or viewer id), so the same person
+// always shows in the same colour and regulars become recognisable.
+const TV_NEON_PALETTE = [
+  "#28d7ff", // cyan (blue)
+  "#3b82f6", // blue
+  "#60a5fa", // light blue
+  "#0ea5e9", // sky blue
+  
+  "#22d3ee", // aqua
+  "#4ade80", // green
+  "#ffd93b", // gold
+];
+
+// Simple, stable string hash. We do NOT need cryptographic strength here -
+// only that the same key produces the same index every time, forever.
+function hashNeonIndex(key = "") {
+  const text = String(key || "");
+  if (!text) return 0;
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % TV_NEON_PALETTE.length;
+}
+
 function TvConversationMessage({
   message,
   paused,
@@ -12,6 +38,15 @@ function TvConversationMessage({
   const lane = Number(message._tvLane || 0);
   const duration = Number(message._tvDuration || 36);
   const delay = Number(message._tvDelay || 0);
+
+  // Colour is derived from the sender, not from arrival order, so the same
+  // person stays visually consistent across messages and reloads.
+  const colourKey =
+    message.sender_key ||
+    message.user_id ||
+    message.user_name ||
+    messageId;
+  const neonColour = TV_NEON_PALETTE[hashNeonIndex(colourKey)];
 
   const profileImage =
     message.profile_image ||
@@ -29,6 +64,7 @@ function TvConversationMessage({
         bottom: `${lane * laneHeight}px`,
         "--tv-message-duration": `${duration}s`,
         "--tv-message-delay": `${delay}s`,
+        "--tv-neon": neonColour,
       }}
       onClick={(event) => {
         event.stopPropagation();
