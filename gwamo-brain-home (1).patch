@@ -1,0 +1,202 @@
+--- a/src/pages/Home.jsx
++++ b/src/pages/Home.jsx
+@@ -547,6 +547,17 @@
+   const [showInfoModal, setShowInfoModal] = useState(null);
+   // Step 1: a single lightweight Gwamo toast for "new message" notices.
+   const [toast, setToast] = useState(null);
++  // Gwamo Brain visitor chat (separate from registered-user inbox).
++  const [brainOpen, setBrainOpen] = useState(false);
++  const [brainSettings, setBrainSettings] = useState({ title: "Gwamo Brain", welcome_message: "Hello! How can I help you?", media_url: "" });
++  const [brainConversation, setBrainConversation] = useState(null);
++  const [brainMessages, setBrainMessages] = useState([]);
++  const [brainDraft, setBrainDraft] = useState("");
++  const [brainLoading, setBrainLoading] = useState(false);
++  const [brainSending, setBrainSending] = useState(false);
++  const [brainError, setBrainError] = useState("");
++  const brainTokenRef = useRef("");
++  const brainBottomRef = useRef(null);
+   const toastTimerRef = useRef(null);
+   const notifiedMessageKeysRef = useRef(new Set());
+   const previousTotalUnreadRef = useRef(0);
+@@ -2702,6 +2713,100 @@
+       setReactedPosts((current) => ({ ...relevant, ...current }));
+     }
+   }, [user, posts, loadReactedFromStorage]);
++  // =============================================================================
++  // Gwamo Brain visitor support chat
++  // =============================================================================
++  useEffect(() => {
++    let alive = true;
++    const loadBrain = async () => {
++      try {
++        const settingsResponse = await fetch(`${API_URL}/api/brain/settings`, { cache: "no-store" });
++        const settingsData = await settingsResponse.json();
++        if (alive && settingsData?.settings) setBrainSettings((current) => ({ ...current, ...settingsData.settings }));
++      } catch (error) {
++        devWarn("Gwamo Brain settings could not be loaded", error);
++      }
++      try {
++        let token = "";
++        try { token = window.localStorage.getItem("gwamo-brain-visitor-token") || ""; } catch {}
++        const response = await fetch(`${API_URL}/api/brain/conversation`, {
++          method: "POST",
++          headers: { "Content-Type": "application/json", ...(token ? { "X-Gwamo-Visitor-Token": token } : {}) },
++          body: JSON.stringify({}),
++        });
++        const data = await response.json();
++        if (!response.ok || !data?.success) throw new Error(data?.message || "Could not start chat.");
++        const savedToken = data.visitor_token || token;
++        if (savedToken) {
++          brainTokenRef.current = savedToken;
++          try { window.localStorage.setItem("gwamo-brain-visitor-token", savedToken); } catch {}
++        }
++        if (alive) {
++          setBrainConversation(data.conversation || null);
++          setBrainError("");
++        }
++      } catch (error) {
++        if (alive) setBrainError("Chat is temporarily unavailable. Please try again.");
++        devWarn("Gwamo Brain conversation could not be started", error);
++      }
++    };
++    loadBrain();
++    return () => { alive = false; };
++  }, []);
++
++  const loadBrainMessages = useCallback(async () => {
++    const token = brainTokenRef.current;
++    if (!token) return;
++    try {
++      const response = await fetch(`${API_URL}/api/brain/messages`, {
++        headers: { "X-Gwamo-Visitor-Token": token },
++        cache: "no-store",
++      });
++      const data = await response.json();
++      if (!response.ok || !data?.success) throw new Error(data?.message || "Could not load messages.");
++      setBrainMessages(Array.isArray(data.messages) ? data.messages : []);
++      setBrainError("");
++    } catch (error) {
++      setBrainError("Unable to load messages right now.");
++      devWarn("Gwamo Brain messages could not be loaded", error);
++    }
++  }, []);
++
++  useEffect(() => {
++    if (!brainOpen || !brainConversation) return undefined;
++    loadBrainMessages();
++    const timer = window.setInterval(loadBrainMessages, 3000);
++    return () => window.clearInterval(timer);
++  }, [brainOpen, brainConversation, loadBrainMessages]);
++
++  useEffect(() => {
++    if (brainOpen) brainBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
++  }, [brainOpen, brainMessages]);
++
++  const sendBrainMessage = useCallback(async (event) => {
++    event?.preventDefault?.();
++    const text = brainDraft.trim();
++    const token = brainTokenRef.current;
++    if (!text || !token || brainSending) return;
++    setBrainSending(true);
++    setBrainError("");
++    try {
++      const response = await fetch(`${API_URL}/api/brain/message`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json", "X-Gwamo-Visitor-Token": token },
++        body: JSON.stringify({ text }),
++      });
++      const data = await response.json();
++      if (!response.ok || !data?.success) throw new Error(data?.message || "Message could not be sent.");
++      setBrainDraft("");
++      await loadBrainMessages();
++    } catch (error) {
++      setBrainError(error?.message || "Message could not be sent. Please try again.");
++    } finally {
++      setBrainSending(false);
++    }
++  }, [brainDraft, brainSending, loadBrainMessages]);
++
+   // =============================================================================
+   // WhatsApp Share
+   // =============================================================================
+@@ -2854,6 +2959,43 @@
+         onOpenInfo={(topic) => setShowInfoModal(topic)}
+       />
+       {mainContent}
++      <div className="gwamo-brain-widget">
++        {brainOpen && (
++          <section className="gwamo-brain-panel" role="dialog" aria-label={`${brainSettings.title || "Gwamo Brain"} chat`}>
++            <header className="gwamo-brain-header">
++              <div className="gwamo-brain-avatar" aria-hidden="true">✦</div>
++              <div className="gwamo-brain-heading"><strong>{brainSettings.title || "Gwamo Brain"}</strong><span>Private support chat</span></div>
++              <button type="button" className="gwamo-brain-close" onClick={() => setBrainOpen(false)} aria-label="Close chat"><X size={19} /></button>
++            </header>
++            {brainSettings.media_url && (
++              <div className="gwamo-brain-media">
++                {/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(brainSettings.media_url)
++                  ? <video src={brainSettings.media_url} controls playsInline />
++                  : <img src={brainSettings.media_url} alt="Support" />}
++              </div>
++            )}
++            <div className="gwamo-brain-messages" aria-live="polite">
++              {!brainMessages.length && <div className="gwamo-brain-welcome">{brainSettings.welcome_message || "Hello! How can I help you?"}</div>}
++              {brainMessages.map((message) => (
++                <div key={message.id} className={`gwamo-brain-bubble ${message.sender === "visitor" ? "is-visitor" : "is-helper"}`}>
++                  <span>{message.text_content || message.text || ""}</span>
++                  <time>{message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</time>
++                </div>
++              ))}
++              <div ref={brainBottomRef} />
++            </div>
++            {brainError && <p className="gwamo-brain-error" role="status">{brainError}</p>}
++            <form className="gwamo-brain-compose" onSubmit={sendBrainMessage}>
++              <input value={brainDraft} onChange={(event) => setBrainDraft(event.target.value)} placeholder="Write a message…" aria-label="Write a message" maxLength={4000} disabled={!brainTokenRef.current || brainSending} />
++              <button type="submit" aria-label="Send message" disabled={!brainDraft.trim() || brainSending || !brainTokenRef.current}><Send size={18} /></button>
++            </form>
++            <div className="gwamo-brain-footnote">Your messages are private to the support team.</div>
++          </section>
++        )}
++        <button type="button" className={`gwamo-brain-launcher${brainOpen ? " is-open" : ""}`} onClick={() => setBrainOpen((open) => !open)} aria-expanded={brainOpen}>
++          {brainOpen ? <X size={21} /> : <MessageSquare size={21} />}<span>{brainOpen ? "Close" : "Chat with us"}</span>
++        </button>
++      </div>
+       {toast && (
+         <div className="gwamo-toast" role="status" aria-live="polite">
+           {toast.message}
+@@ -6215,7 +6357,35 @@
+ // =============================================================================
+ function HomeStylesInner() {
+   return (
+-    <style>{`
++    <style>
++      .gwamo-brain-widget { position: fixed; z-index: 10020; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; font-family: inherit; }
++      .gwamo-brain-launcher { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 50px; padding: 0 18px; border: 1px solid rgba(130,220,255,.55); border-radius: 999px; color: #fff; background: linear-gradient(135deg,#087dff,#0646a5); box-shadow: 0 8px 28px rgba(0,92,220,.36),0 0 18px rgba(45,170,255,.22); font-weight: 800; cursor: pointer; }
++      .gwamo-brain-launcher.is-open { min-width: 50px; padding: 0 14px; }
++      .gwamo-brain-panel { width: min(370px, calc(100vw - 24px)); height: min(570px, calc(100dvh - 100px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(111,190,255,.35); border-radius: 22px; color: #f6fbff; background: rgba(5,15,34,.97); box-shadow: 0 18px 60px rgba(0,0,0,.45),0 0 25px rgba(20,126,255,.16); backdrop-filter: blur(18px); }
++      .gwamo-brain-header { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid rgba(255,255,255,.09); background: linear-gradient(110deg,rgba(9,92,180,.4),rgba(7,19,43,.2)); }
++      .gwamo-brain-avatar { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 38px; border-radius: 50%; color: #fff; background: linear-gradient(145deg,#32c8ff,#1250be); box-shadow: 0 0 15px rgba(39,171,255,.4); font-size: 21px; }
++      .gwamo-brain-heading { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
++      .gwamo-brain-heading strong { font-size: 14px; line-height: 1.2; }
++      .gwamo-brain-heading span { color: #9db4d2; font-size: 11px; }
++      .gwamo-brain-close { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #dcecff; background: rgba(255,255,255,.08); cursor: pointer; }
++      .gwamo-brain-media { max-height: 145px; overflow: hidden; background: #020914; }
++      .gwamo-brain-media img,.gwamo-brain-media video { display: block; width: 100%; max-height: 145px; object-fit: cover; }
++      .gwamo-brain-messages { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 14px 12px; overscroll-behavior: contain; }
++      .gwamo-brain-welcome { align-self: flex-start; max-width: 88%; padding: 11px 13px; border: 1px solid rgba(127,183,255,.16); border-radius: 5px 16px 16px 16px; color: #e8f3ff; background: rgba(255,255,255,.075); font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
++      .gwamo-brain-bubble { max-width: 88%; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px 7px; border-radius: 15px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
++      .gwamo-brain-bubble.is-helper { align-self: flex-start; border: 1px solid rgba(127,183,255,.16); border-top-left-radius: 5px; background: rgba(255,255,255,.075); }
++      .gwamo-brain-bubble.is-visitor { align-self: flex-end; border-top-right-radius: 5px; color: #fff; background: linear-gradient(135deg,#087dff,#0754c7); }
++      .gwamo-brain-bubble time { align-self: flex-end; color: rgba(224,239,255,.6); font-size: 9px; }
++      .gwamo-brain-compose { display: flex; align-items: center; gap: 8px; padding: 10px; border-top: 1px solid rgba(255,255,255,.09); }
++      .gwamo-brain-compose input { min-width: 0; height: 42px; flex: 1; padding: 0 14px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; outline: none; color: #fff; background: rgba(255,255,255,.06); font: inherit; font-size: 13px; }
++      .gwamo-brain-compose input:focus { border-color: rgba(63,176,255,.7); }
++      .gwamo-brain-compose input::placeholder { color: #91a4bd; }
++      .gwamo-brain-compose button { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 42px; border: 0; border-radius: 50%; color: #fff; background: #087dff; cursor: pointer; }
++      .gwamo-brain-compose button:disabled { opacity: .45; cursor: not-allowed; }
++      .gwamo-brain-error { margin: 0; padding: 0 12px 7px; color: #ffb6b6; font-size: 11px; }
++      .gwamo-brain-footnote { padding: 0 12px 10px; color: #8498b3; text-align: center; font-size: 10px; }
++      @media (max-width: 480px) { .gwamo-brain-widget { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); } .gwamo-brain-panel { width: calc(100vw - 20px); height: min(590px, calc(100dvh - 86px)); border-radius: 19px; } .gwamo-brain-launcher { min-height: 48px; } }
++{`
+       :root {
+         --page-bg: #020712;
+         --panel-bg: #06101f;
