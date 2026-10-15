@@ -3102,6 +3102,7 @@ function Home() {
           onClose={() => setShowInfoModal(null)}
         />
       )}
+      <GwamoBrainWidget apiUrl={API_URL} />
       <HomeStyles />
     </div>
   );
@@ -6210,6 +6211,273 @@ const InfoModal = memo(({ topic, onClose }) => {
   );
 });
 InfoModal.displayName = "InfoModal";
+
+// =============================================================================
+// Gwamo Brain visitor support chat + PIN-protected human helper panel.
+// Uses the exact routes and field names implemented by the Cloudflare Worker.
+// =============================================================================
+function GwamoBrainWidget({ apiUrl }) {
+  const [open, setOpen] = useState(false);
+  const [settings, setSettings] = useState({
+    title: "Gwamo Brain",
+    welcome_message: "Hello! How can I help you?",
+    media_url: "",
+  });
+  const [visitorToken, setVisitorToken] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [helperMode, setHelperMode] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminAuthed, setAdminAuthed] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState("");
+  const [adminMessages, setAdminMessages] = useState([]);
+  const [adminDraft, setAdminDraft] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [editSettings, setEditSettings] = useState(null);
+  const scrollRef = useRef(null);
+  const adminScrollRef = useRef(null);
+  const visitorTokenRef = useRef("");
+  const api = `${apiUrl}/api/brain`;
+
+  const visitorHeaders = useCallback(() => ({
+    "X-Gwamo-Visitor-Token": visitorTokenRef.current,
+  }), []);
+  const adminHeaders = useCallback(() => ({
+    "Content-Type": "application/json",
+    "X-Admin-Pin": adminPin,
+  }), [adminPin]);
+
+  const readResponse = useCallback(async (response) => {
+    let data = {};
+    try { data = await response.json(); } catch { /* handled below */ }
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || data.message || `Request failed (${response.status})`);
+    }
+    return data;
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    const response = await fetch(`${api}/settings`, { cache: "no-store" });
+    const data = await readResponse(response);
+    if (data.settings) setSettings((current) => ({ ...current, ...data.settings }));
+  }, [api, readResponse]);
+
+  const loadVisitorMessages = useCallback(async (showSpinner = false) => {
+    if (!visitorTokenRef.current) return;
+    if (showSpinner) setLoading(true);
+    try {
+      const response = await fetch(`${api}/messages`, {
+        headers: visitorHeaders(), cache: "no-store",
+      });
+      const data = await readResponse(response);
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
+      setError("");
+    } catch (err) {
+      setError(err.message || "Could not load your support messages.");
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
+  }, [api, visitorHeaders, readResponse]);
+
+  const initializeVisitor = useCallback(async () => {
+    try {
+      await loadSettings();
+      let savedToken = "";
+      try { savedToken = localStorage.getItem("gwamo-brain-visitor-token") || ""; } catch { /* storage unavailable */ }
+      const headers = savedToken ? { "X-Gwamo-Visitor-Token": savedToken } : {};
+      const response = await fetch(`${api}/conversation`, {
+        method: "POST", headers, cache: "no-store",
+      });
+      const data = await readResponse(response);
+      const token = String(data.visitor_token || savedToken || "");
+      if (!token) throw new Error("The support service did not return a visitor token.");
+      visitorTokenRef.current = token;
+      setVisitorToken(token);
+      try { localStorage.setItem("gwamo-brain-visitor-token", token); } catch { /* storage unavailable */ }
+      await loadVisitorMessages(true);
+    } catch (err) {
+      setError(err.message || "Support chat is temporarily unavailable.");
+    }
+  }, [api, loadSettings, loadVisitorMessages, readResponse]);
+
+  useEffect(() => { initializeVisitor(); }, [initializeVisitor]);
+  useEffect(() => {
+    if (!open || helperMode || !visitorToken) return undefined;
+    const id = window.setInterval(() => loadVisitorMessages(false), 3000);
+    return () => window.clearInterval(id);
+  }, [open, helperMode, visitorToken, loadVisitorMessages]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, open]);
+  useEffect(() => {
+    if (adminScrollRef.current) adminScrollRef.current.scrollTop = adminScrollRef.current.scrollHeight;
+  }, [adminMessages]);
+
+  const sendVisitorMessage = useCallback(async (event) => {
+    event?.preventDefault();
+    const text = draft.trim();
+    if (!text || sending || !visitorTokenRef.current) return;
+    setSending(true); setError("");
+    try {
+      const response = await fetch(`${api}/message`, {
+        method: "POST",
+        headers: { ...visitorHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await readResponse(response);
+      if (data.message) setMessages((current) => [...current, data.message]);
+      setDraft("");
+      await loadVisitorMessages(false);
+    } catch (err) {
+      setError(err.message || "Your message could not be sent.");
+    } finally { setSending(false); }
+  }, [api, draft, sending, visitorHeaders, readResponse, loadVisitorMessages]);
+
+  const loadAdminConversations = useCallback(async () => {
+    const response = await fetch(`${api}/admin/conversations`, {
+      headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
+    });
+    const data = await readResponse(response);
+    setConversations(Array.isArray(data.conversations) ? data.conversations : []);
+  }, [api, adminPin, readResponse]);
+
+  const loadAdminMessages = useCallback(async (conversationId) => {
+    if (!conversationId) { setAdminMessages([]); return; }
+    const response = await fetch(`${api}/admin/messages?conversation_id=${encodeURIComponent(conversationId)}`, {
+      headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
+    });
+    const data = await readResponse(response);
+    setAdminMessages(Array.isArray(data.messages) ? data.messages : []);
+  }, [api, adminPin, readResponse]);
+
+  const loginHelper = useCallback(async (event) => {
+    event?.preventDefault(); setAdminError(""); setAdminBusy(true);
+    try {
+      // The Worker validates the PIN on every admin request. This initial request
+      // verifies access without exposing private conversations to the public.
+      const response = await fetch(`${api}/admin/conversations`, {
+        headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
+      });
+      const data = await readResponse(response);
+      setConversations(Array.isArray(data.conversations) ? data.conversations : []);
+      setAdminAuthed(true);
+      setEditSettings({ ...settings });
+      setSelectedConversation(""); setAdminMessages([]);
+    } catch (err) {
+      setAdminError(err.message || "Admin PIN was not accepted.");
+    } finally { setAdminBusy(false); }
+  }, [api, adminPin, readResponse, settings]);
+
+  useEffect(() => {
+    if (!helperMode || !adminAuthed) return undefined;
+    const id = window.setInterval(async () => {
+      try {
+        await loadAdminConversations();
+        if (selectedConversation) await loadAdminMessages(selectedConversation);
+      } catch (err) { setAdminError(err.message || "Could not refresh helper inbox."); }
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [helperMode, adminAuthed, selectedConversation, loadAdminConversations, loadAdminMessages]);
+
+  const sendHelperReply = useCallback(async (event) => {
+    event?.preventDefault();
+    const text = adminDraft.trim();
+    if (!text || !selectedConversation || adminBusy) return;
+    setAdminBusy(true); setAdminError("");
+    try {
+      const response = await fetch(`${api}/admin/reply`, {
+        method: "POST", headers: adminHeaders(),
+        body: JSON.stringify({ conversation_id: selectedConversation, text }),
+      });
+      const data = await readResponse(response);
+      if (data.message) setAdminMessages((current) => [...current, data.message]);
+      setAdminDraft("");
+      await loadAdminConversations();
+    } catch (err) { setAdminError(err.message || "Reply could not be sent."); }
+    finally { setAdminBusy(false); }
+  }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
+
+  const saveBrainSettings = useCallback(async (event) => {
+    event?.preventDefault();
+    if (!editSettings || adminBusy) return;
+    setAdminBusy(true); setAdminError("");
+    try {
+      const response = await fetch(`${api}/admin/settings`, {
+        method: "POST", headers: adminHeaders(),
+        body: JSON.stringify({
+          title: editSettings.title,
+          welcome_message: editSettings.welcome_message,
+          media_url: editSettings.media_url,
+        }),
+      });
+      const data = await readResponse(response);
+      if (data.settings) setSettings(data.settings);
+      setAdminError("Settings saved.");
+    } catch (err) { setAdminError(err.message || "Settings could not be saved."); }
+    finally { setAdminBusy(false); }
+  }, [api, editSettings, adminBusy, adminHeaders, readResponse]);
+
+  const mediaUrl = String(settings.media_url || "").trim();
+  const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(mediaUrl);
+
+  return (
+    <>
+      <style>{`
+        .gbw-launch{position:fixed;z-index:9998;right:20px;bottom:20px;border:1px solid rgba(83,230,158,.65);border-radius:999px;padding:13px 18px;display:flex;align-items:center;gap:9px;background:linear-gradient(135deg,#0b6b48,#06452f);color:#fff;font-weight:800;box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 18px rgba(43,220,135,.25);cursor:pointer}
+        .gbw-panel{position:fixed;z-index:9999;right:20px;bottom:82px;width:min(390px,calc(100vw - 24px));height:min(620px,calc(100dvh - 112px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(84,226,160,.38);border-radius:20px;background:#071710;color:#f5fff8;box-shadow:0 20px 70px rgba(0,0,0,.65);font-family:Inter,system-ui,sans-serif}
+        .gbw-head{display:flex;align-items:center;gap:10px;padding:14px;background:linear-gradient(135deg,#0d704b,#063a29);border-bottom:1px solid rgba(255,255,255,.12)}.gbw-logo{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#b9ffd8;color:#075235;font-size:23px}.gbw-headcopy{flex:1;min-width:0}.gbw-headcopy strong{display:block;font-size:15px;overflow-wrap:anywhere}.gbw-headcopy small{display:block;color:#d3ffe5;font-size:11px;margin-top:3px}.gbw-iconbtn{border:0;background:transparent;color:white;padding:7px;border-radius:9px;cursor:pointer}.gbw-media{max-height:130px;width:100%;object-fit:cover;background:#02120b}.gbw-welcome{padding:10px 13px;color:#d9f6e5;font-size:12px;line-height:1.45;border-bottom:1px solid rgba(255,255,255,.08)}.gbw-messages{flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;background:radial-gradient(ellipse at top,#0a2b1c,#06130d 72%)}.gbw-bubble{max-width:86%;padding:9px 11px;border-radius:14px;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}.gbw-bubble.visitor{align-self:flex-end;background:#146b45;border-bottom-right-radius:4px}.gbw-bubble.helper{align-self:flex-start;background:#182a20;border:1px solid rgba(255,255,255,.08);border-bottom-left-radius:4px}.gbw-time{display:block;margin-top:4px;color:#b6d8c3;font-size:9px}.gbw-error{padding:7px 12px;color:#ffc0b8;font-size:11px}.gbw-compose{display:flex;gap:8px;padding:10px;background:#081b11;border-top:1px solid rgba(255,255,255,.1)}.gbw-compose input,.gbw-form input,.gbw-form textarea{width:100%;min-width:0;border:1px solid rgba(180,230,199,.2);border-radius:10px;padding:11px;background:#0d2418;color:#fff;outline:none;font:inherit}.gbw-compose button,.gbw-primary{border:0;border-radius:10px;padding:0 14px;background:#55e39a;color:#06351f;font-weight:900;cursor:pointer}.gbw-compose button:disabled,.gbw-primary:disabled{opacity:.55;cursor:wait}.gbw-helperlink{align-self:center;border:0;background:transparent;color:#a9eec7;font-size:11px;text-decoration:underline;cursor:pointer;padding:6px}.gbw-adminlogin{padding:16px;display:grid;gap:10px}.gbw-adminlogin h3{margin:0}.gbw-admin{display:grid;grid-template-columns:125px minmax(0,1fr);min-height:0;flex:1}.gbw-convos{overflow:auto;border-right:1px solid rgba(255,255,255,.1)}.gbw-convo{width:100%;text-align:left;display:block;padding:10px;border:0;border-bottom:1px solid rgba(255,255,255,.07);background:transparent;color:#fff;cursor:pointer}.gbw-convo.active{background:#17432d}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:11px}.gbw-convo small{font-size:10px;color:#b7d8c4;margin-top:5px}.gbw-convo span{font-size:10px;color:#d3ffe0;margin-top:4px}.gbw-adminright{display:flex;flex-direction:column;min-width:0;min-height:0}.gbw-adminmessages{flex:1;min-height:0;overflow:auto;padding:9px;display:flex;flex-direction:column;gap:8px}.gbw-form{padding:10px;display:grid;gap:8px}.gbw-form textarea{min-height:68px;resize:vertical}.gbw-form .gbw-primary{min-height:38px}.gbw-settings{border-top:1px solid rgba(255,255,255,.12);padding:10px;display:grid;gap:7px;max-height:185px;overflow:auto}.gbw-settings label{font-size:10px;color:#c8ebd5}.gbw-settings input,.gbw-settings textarea{margin-top:3px;font-size:12px}.gbw-settings textarea{min-height:48px}.gbw-status{font-size:11px;color:#ffd1a6;padding:0 10px 8px}.gbw-empty{color:#bad6c4;text-align:center;font-size:12px;padding:22px 10px}.gbw-back{font-size:11px;color:#c4f5d6;border:0;background:transparent;text-align:left;padding:9px;cursor:pointer}
+        @media(max-width:520px){.gbw-launch{right:12px;bottom:12px;padding:12px 14px}.gbw-panel{right:8px;bottom:68px;width:calc(100vw - 16px);height:min(680px,calc(100dvh - 82px));border-radius:17px}.gbw-admin{grid-template-columns:100px minmax(0,1fr)}.gbw-convo{padding:8px}}
+      `}</style>
+      {!open && <button className="gbw-launch" type="button" onClick={() => setOpen(true)} aria-label="Open Gwamo Brain support chat"><MessageSquare size={19} /> Chat with us</button>}
+      {open && (
+        <section className="gbw-panel" role="dialog" aria-label="Gwamo Brain support chat" aria-modal="false">
+          <header className="gbw-head">
+            <div className="gbw-logo" aria-hidden="true">🧠</div>
+            <div className="gbw-headcopy"><strong>{helperMode ? "Gwamo Brain Helper" : (settings.title || "Gwamo Brain")}</strong><small>{helperMode ? (adminAuthed ? "Private helper inbox" : "Authorized helper access") : "Human support · Private conversation"}</small></div>
+            {helperMode && adminAuthed && <button className="gbw-iconbtn" type="button" onClick={() => { setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]); setSelectedConversation(""); }} aria-label="Log out helper">Log out</button>}
+            <button className="gbw-iconbtn" type="button" onClick={() => setOpen(false)} aria-label="Close support chat"><X size={20}/></button>
+          </header>
+          {!helperMode ? (
+            <>
+              {mediaUrl && (isVideo ? <video className="gbw-media" src={mediaUrl} controls playsInline preload="metadata" /> : <img className="gbw-media" src={mediaUrl} alt="Support" onError={(event) => { event.currentTarget.style.display = "none"; }} />)}
+              <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
+              <div className="gbw-messages" ref={scrollRef} aria-live="polite">
+                {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation…</div>}
+                {messages.map((message) => <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>{message.text_content}<span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span></div>)}
+                {!loading && messages.length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
+              </div>
+              {error && <div className="gbw-error" role="status">{error}</div>}
+              <form className="gbw-compose" onSubmit={sendVisitorMessage}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" maxLength={4000} aria-label="Your support message" /><button type="submit" disabled={!draft.trim() || sending || !visitorToken}>{sending ? "…" : <Send size={18}/>}</button></form>
+              <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Helper login</button>
+            </>
+          ) : !adminAuthed ? (
+            <form className="gbw-adminlogin" onSubmit={loginHelper}><h3>Helper login</h3><p style={{ margin: 0, fontSize: 12, color: "#c5e5d1" }}>Enter the existing Admin PIN. The Worker checks it before showing private conversations.</p><input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" autoComplete="current-password" required /><button className="gbw-primary" type="submit" disabled={!adminPin || adminBusy}>{adminBusy ? "Checking…" : "Open private inbox"}</button><button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminError(""); }}>← Back to visitor chat</button>{adminError && <div className="gbw-error">{adminError}</div>}</form>
+          ) : (
+            <>
+              <div className="gbw-admin">
+                <aside className="gbw-convos" aria-label="Visitor conversations">
+                  {conversations.length === 0 && <div className="gbw-empty">No conversations yet.</div>}
+                  {conversations.map((conversation) => <button type="button" key={conversation.id} className={`gbw-convo ${selectedConversation === conversation.id ? "active" : ""}`} onClick={async () => { setSelectedConversation(conversation.id); setAdminError(""); try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); } }}><strong>{conversation.visitor_label || "Visitor"}</strong><small>{conversation.status || "open"}</small><span>{conversation.last_message || "No messages yet"}</span></button>)}
+                </aside>
+                <div className="gbw-adminright">
+                  {!selectedConversation ? <div className="gbw-empty">Choose a visitor to read and reply.</div> : <><div className="gbw-adminmessages" ref={adminScrollRef}>{adminMessages.map((message) => <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>{message.text_content}<span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span></div>)}</div><form className="gbw-form" onSubmit={sendHelperReply}><textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply exactly as you want it sent…" maxLength={4000} required /><button className="gbw-primary" type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending…" : "Send reply"}</button></form></>}
+              </div></div>
+              {editSettings && <form className="gbw-settings" onSubmit={saveBrainSettings}><label>Chat title<input value={editSettings.title || ""} maxLength={100} onChange={(event) => setEditSettings((current) => ({ ...current, title: event.target.value }))} required /></label><label>Welcome message<textarea value={editSettings.welcome_message || ""} maxLength={2000} onChange={(event) => setEditSettings((current) => ({ ...current, welcome_message: event.target.value }))} required /></label><label>HTTPS image/video URL<input type="url" value={editSettings.media_url || ""} maxLength={2000} placeholder="https://…" onChange={(event) => setEditSettings((current) => ({ ...current, media_url: event.target.value }))} /></label><button className="gbw-primary" type="submit" disabled={adminBusy}>Save chat settings</button></form>}
+              {adminError && <div className="gbw-status" role="status">{adminError}</div>}
+              <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminAuthed(false); setAdminPin(""); setAdminError(""); }}>← Return to visitor chat</button>
+            </>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
 // =============================================================================
 // HomeStyles
 // =============================================================================
