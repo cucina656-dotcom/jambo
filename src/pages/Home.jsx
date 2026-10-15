@@ -3013,21 +3013,30 @@ function Home() {
         />
       )}
       {showProviderProfile && providerProfileTarget && (
-        <ProviderProfileSheet
-          post={providerProfileTarget}
-          isOwner={Boolean(
-            isLoggedIn &&
-              user &&
-              isSameProviderAsPost(providerProfileTarget, user),
-          )}
-          onClose={closeProviderProfile}
-          onMessage={() => {
-            const target = providerProfileTarget;
-            closeProviderProfile();
-            openInboxForPost(target);
-          }}
-          onShare={() => sharePost(providerProfileTarget)}
-        />
+        <div className="modal-overlay" onClick={closeProviderProfile}>
+          <section
+            className="modal-card gwamo-live-chat-sheet"
+            role="dialog"
+            aria-label="Gwamo Live Chat"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h2>Gwamo Live Chat</h2>
+                <p className="field-help">Talk privately with the Gwamo helper.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeProviderProfile}
+                className="modal-close"
+                aria-label="Close live chat"
+              >
+                <X size={20} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+            </div>
+            <GwamoBrainWidget apiUrl={API_URL} embedded />
+          </section>
+        </div>
       )}
       {showMyProfile && (
         <ProfileEditModal
@@ -6216,8 +6225,8 @@ InfoModal.displayName = "InfoModal";
 // Gwamo Brain visitor support chat + PIN-protected human helper panel.
 // Uses the exact routes and field names implemented by the Cloudflare Worker.
 // =============================================================================
-function GwamoBrainWidget({ apiUrl }) {
-  const [open, setOpen] = useState(false);
+function GwamoBrainWidget({ apiUrl, embedded = false }) {
+  const [open, setOpen] = useState(Boolean(embedded));
   const [settings, setSettings] = useState({
     title: "Gwamo Brain",
     welcome_message: "Hello! How can I help you?",
@@ -6430,17 +6439,21 @@ function GwamoBrainWidget({ apiUrl }) {
       <style>{`
         .gbw-launch{position:fixed;z-index:9998;right:20px;bottom:20px;border:1px solid rgba(83,230,158,.65);border-radius:999px;padding:13px 18px;display:flex;align-items:center;gap:9px;background:linear-gradient(135deg,#0b6b48,#06452f);color:#fff;font-weight:800;box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 18px rgba(43,220,135,.25);cursor:pointer}
         .gbw-panel{position:fixed;z-index:9999;right:20px;bottom:82px;width:min(390px,calc(100vw - 24px));height:min(620px,calc(100dvh - 112px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(84,226,160,.38);border-radius:20px;background:#071710;color:#f5fff8;box-shadow:0 20px 70px rgba(0,0,0,.65);font-family:Inter,system-ui,sans-serif}
+        .gbw-panel.gbw-embedded{position:relative;inset:auto;z-index:1;width:100%;height:min(68dvh,680px);min-height:360px;max-height:680px;border-radius:14px;box-shadow:none;flex:1}
+        .gwamo-live-chat-sheet{width:min(760px,calc(100vw - 24px));max-width:760px;padding:16px;display:flex;flex-direction:column;max-height:calc(100dvh - 28px);overflow:hidden}
+        .gwamo-live-chat-sheet .modal-header{flex-shrink:0}
+        @media(max-width:520px){.gwamo-live-chat-sheet{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);padding:10px}.gbw-panel.gbw-embedded{height:calc(100dvh - 125px);min-height:300px}}
         .gbw-head{display:flex;align-items:center;gap:10px;padding:14px;background:linear-gradient(135deg,#0d704b,#063a29);border-bottom:1px solid rgba(255,255,255,.12)}.gbw-logo{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#b9ffd8;color:#075235;font-size:23px}.gbw-headcopy{flex:1;min-width:0}.gbw-headcopy strong{display:block;font-size:15px;overflow-wrap:anywhere}.gbw-headcopy small{display:block;color:#d3ffe5;font-size:11px;margin-top:3px}.gbw-iconbtn{border:0;background:transparent;color:white;padding:7px;border-radius:9px;cursor:pointer}.gbw-media{max-height:130px;width:100%;object-fit:cover;background:#02120b}.gbw-welcome{padding:10px 13px;color:#d9f6e5;font-size:12px;line-height:1.45;border-bottom:1px solid rgba(255,255,255,.08)}.gbw-messages{flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;background:radial-gradient(ellipse at top,#0a2b1c,#06130d 72%)}.gbw-bubble{max-width:86%;padding:9px 11px;border-radius:14px;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}.gbw-bubble.visitor{align-self:flex-end;background:#146b45;border-bottom-right-radius:4px}.gbw-bubble.helper{align-self:flex-start;background:#182a20;border:1px solid rgba(255,255,255,.08);border-bottom-left-radius:4px}.gbw-time{display:block;margin-top:4px;color:#b6d8c3;font-size:9px}.gbw-error{padding:7px 12px;color:#ffc0b8;font-size:11px}.gbw-compose{display:flex;gap:8px;padding:10px;background:#081b11;border-top:1px solid rgba(255,255,255,.1)}.gbw-compose input,.gbw-form input,.gbw-form textarea{width:100%;min-width:0;border:1px solid rgba(180,230,199,.2);border-radius:10px;padding:11px;background:#0d2418;color:#fff;outline:none;font:inherit}.gbw-compose button,.gbw-primary{border:0;border-radius:10px;padding:0 14px;background:#55e39a;color:#06351f;font-weight:900;cursor:pointer}.gbw-compose button:disabled,.gbw-primary:disabled{opacity:.55;cursor:wait}.gbw-helperlink{align-self:center;border:0;background:transparent;color:#a9eec7;font-size:11px;text-decoration:underline;cursor:pointer;padding:6px}.gbw-adminlogin{padding:16px;display:grid;gap:10px}.gbw-adminlogin h3{margin:0}.gbw-admin{display:grid;grid-template-columns:125px minmax(0,1fr);min-height:0;flex:1}.gbw-convos{overflow:auto;border-right:1px solid rgba(255,255,255,.1)}.gbw-convo{width:100%;text-align:left;display:block;padding:10px;border:0;border-bottom:1px solid rgba(255,255,255,.07);background:transparent;color:#fff;cursor:pointer}.gbw-convo.active{background:#17432d}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:11px}.gbw-convo small{font-size:10px;color:#b7d8c4;margin-top:5px}.gbw-convo span{font-size:10px;color:#d3ffe0;margin-top:4px}.gbw-adminright{display:flex;flex-direction:column;min-width:0;min-height:0}.gbw-adminmessages{flex:1;min-height:0;overflow:auto;padding:9px;display:flex;flex-direction:column;gap:8px}.gbw-form{padding:10px;display:grid;gap:8px}.gbw-form textarea{min-height:68px;resize:vertical}.gbw-form .gbw-primary{min-height:38px}.gbw-settings{border-top:1px solid rgba(255,255,255,.12);padding:10px;display:grid;gap:7px;max-height:185px;overflow:auto}.gbw-settings label{font-size:10px;color:#c8ebd5}.gbw-settings input,.gbw-settings textarea{margin-top:3px;font-size:12px}.gbw-settings textarea{min-height:48px}.gbw-status{font-size:11px;color:#ffd1a6;padding:0 10px 8px}.gbw-empty{color:#bad6c4;text-align:center;font-size:12px;padding:22px 10px}.gbw-back{font-size:11px;color:#c4f5d6;border:0;background:transparent;text-align:left;padding:9px;cursor:pointer}
         @media(max-width:520px){.gbw-launch{right:12px;bottom:12px;padding:12px 14px}.gbw-panel{right:8px;bottom:68px;width:calc(100vw - 16px);height:min(680px,calc(100dvh - 82px));border-radius:17px}.gbw-admin{grid-template-columns:100px minmax(0,1fr)}.gbw-convo{padding:8px}}
       `}</style>
-      {!open && <button className="gbw-launch" type="button" onClick={() => setOpen(true)} aria-label="Open Gwamo Brain support chat"><MessageSquare size={19} /> Chat with us</button>}
+      {!embedded && !open && <button className="gbw-launch" type="button" onClick={() => setOpen(true)} aria-label="Open Gwamo Brain support chat"><MessageSquare size={19} /> Chat with us</button>}
       {open && (
-        <section className="gbw-panel" role="dialog" aria-label="Gwamo Brain support chat" aria-modal="false">
+        <section className={`gbw-panel${embedded ? " gbw-embedded" : ""}`} role="dialog" aria-label="Gwamo Brain support chat" aria-modal="false">
           <header className="gbw-head">
             <div className="gbw-logo" aria-hidden="true">🧠</div>
             <div className="gbw-headcopy"><strong>{helperMode ? "Gwamo Brain Helper" : (settings.title || "Gwamo Brain")}</strong><small>{helperMode ? (adminAuthed ? "Private helper inbox" : "Authorized helper access") : "Human support · Private conversation"}</small></div>
             {helperMode && adminAuthed && <button className="gbw-iconbtn" type="button" onClick={() => { setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]); setSelectedConversation(""); }} aria-label="Log out helper">Log out</button>}
-            <button className="gbw-iconbtn" type="button" onClick={() => setOpen(false)} aria-label="Close support chat"><X size={20}/></button>
+            {!embedded && <button className="gbw-iconbtn" type="button" onClick={() => setOpen(false)} aria-label="Close support chat"><X size={20}/></button>}
           </header>
           {!helperMode ? (
             <>
