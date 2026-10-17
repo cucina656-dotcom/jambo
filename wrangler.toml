@@ -1,11 +1,15 @@
-name = "kitchenbrain"
-main = "src/pages/worker.js"
-compatibility_date = "2026-10-15"
-
-[[durable_objects.bindings]]
+# ...
+[[unsafe.bindings]]
 name = "CHAT_ROOMS"
+type = "durable_object_namespace"
 class_name = "ConversationRoom"
+namespace_id = "e8259190c80847888785b687a1450355"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["ConversationRoom"]
+[[d1_databases]]
+binding = "DB"
+database_id = "b9329439-091e-4e8a-893e-2501efbdf97d"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "ruhuha-media"
+# ...
