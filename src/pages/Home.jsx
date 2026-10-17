@@ -3098,13 +3098,12 @@ function Home() {
           }}
         />
       )}
-      {showInfoModal && (
+       {showInfoModal && (
         <InfoModal
           topic={showInfoModal}
           onClose={() => setShowInfoModal(null)}
         />
       )}
-      <GwamoBrainWidget apiUrl={API_URL} />
       <HomeStyles />
     </div>
   );
