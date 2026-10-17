@@ -140,7 +140,7 @@ const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 const noop = () => {};
 
 const CATEGORY_TABS = [
-  { key: "time-market", label: "Market", icon: Clock },
+   { key: "time-market", label: "Chat", icon: Clock },
   { key: "connect", label: "Connect", icon: Users },
   { key: "social-life", label: "Heart Zone💕", icon: Users },
   { key: "tv", label: "TV", icon: Tv },
@@ -572,64 +572,101 @@ function GwamoBrainWidget({ apiUrl }) {
 
   return (
     <div className="gwamo-brain-container">
-      <style>{`
+          <style>{`
         .gwamo-brain-container {
           display: flex; flex-direction: column; align-items: center;
           width: 100%; max-width: 800px; margin: 0 auto;
-          min-height: calc(100vh - 200px); padding: 20px 16px;
+          height: calc(100dvh - 140px); /* Fits perfectly on mobile/desktop */
+          padding: 12px;
         }
+        
         .gbw-panel {
-          width: 100%; display: flex; flex-direction: column;
-          background: rgba(6, 16, 31, 0.95); border: 1px solid rgba(84, 226, 160, 0.38);
-          border-radius: 20px; overflow: hidden; box-shadow: 0 20px 70px rgba(0,0,0,0.65);
-          font-family: Inter, system-ui, sans-serif; flex: 1;
+          width: 100%; height: 100%; display: flex; flex-direction: column;
+          background: #09121f; border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 24px; overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+          font-family: Inter, system-ui, sans-serif;
         }
+
+        /* Header */
         .gbw-head {
-          display: flex; align-items: center; gap: 10px; padding: 14px;
-          background: linear-gradient(135deg, #0d704b, #063a29); border-bottom: 1px solid rgba(255,255,255,.12);
+          display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+          background: rgba(10, 22, 40, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px); z-index: 10;
         }
-        .gbw-logo { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #b9ffd8; color: #075235; font-size: 23px; }
+        .gbw-logo { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, #168bff, #0d704b); color: #fff; font-size: 22px; box-shadow: 0 4px 12px rgba(22, 139, 255, 0.3); }
         .gbw-headcopy { flex: 1; min-width: 0; }
-        .gbw-headcopy strong { display: block; font-size: 15px; color: #fff; overflow-wrap: anywhere; }
-        .gbw-headcopy small { display: block; color: #d3ffe5; font-size: 11px; margin-top: 3px; }
-        .gbw-media { max-height: 180px; width: 100%; object-fit: cover; background: #02120b; }
-        .gbw-welcome { padding: 12px 15px; color: #d9f6e5; font-size: 13px; line-height: 1.45; border-bottom: 1px solid rgba(255,255,255,.08); }
-        .gbw-messages { flex: 1; min-height: 300px; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: radial-gradient(ellipse at top, #0a2b1c, #06130d 72%); }
-        .gbw-bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-        .gbw-bubble.visitor { align-self: flex-end; background: #146b45; color: #fff; border-bottom-right-radius: 4px; }
-        .gbw-bubble.helper { align-self: flex-start; background: #182a20; color: #fff; border: 1px solid rgba(255,255,255,.08); border-bottom-left-radius: 4px; }
-        .gbw-time { display: block; margin-top: 5px; color: #b6d8c3; font-size: 10px; }
-        .gbw-error { padding: 10px 15px; color: #ffc0b8; background: rgba(255,0,0,0.1); font-size: 12px; }
-        .gbw-compose { display: flex; gap: 10px; padding: 15px; background: #081b11; border-top: 1px solid rgba(255,255,255,.1); }
+        .gbw-headcopy strong { display: block; font-size: 16px; color: #fff; font-weight: 700; letter-spacing: -0.3px; }
+        .gbw-headcopy small { display: block; color: #64b3ff; font-size: 12px; margin-top: 2px; font-weight: 500; }
+        
+        /* Media & Welcome */
+        .gbw-media { max-height: 160px; width: 100%; object-fit: cover; background: #000; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .gbw-welcome { padding: 14px 20px; color: #b8c9dc; font-size: 13px; line-height: 1.5; background: rgba(22, 139, 255, 0.05); border-bottom: 1px solid rgba(22, 139, 255, 0.1); }
+
+        /* Message Area */
+        .gbw-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: #040910; scroll-behavior: smooth; }
+        .gbw-messages::-webkit-scrollbar { width: 6px; }
+        .gbw-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        
+        /* Bubbles */
+        .gbw-bubble { max-width: 80%; padding: 12px 16px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 2px 6px rgba(0,0,0,0.15); position: relative; }
+        .gbw-bubble.visitor { 
+          align-self: flex-end; background: linear-gradient(135deg, #168bff, #0064df); color: #fff; 
+          border-radius: 18px 18px 4px 18px; 
+        }
+        .gbw-bubble.helper { 
+          align-self: flex-start; background: #152235; color: #f0f4f8; 
+          border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 18px 18px 18px 4px; 
+        }
+        .gbw-time { display: block; margin-top: 6px; font-size: 10px; text-align: right; opacity: 0.7; }
+        
+        /* Composer */
+        .gbw-compose { display: flex; gap: 10px; padding: 14px 20px; background: rgba(10, 22, 40, 0.95); border-top: 1px solid rgba(255,255,255,0.05); }
         .gbw-compose input, .gbw-form input, .gbw-form textarea {
-          width: 100%; min-width: 0; border: 1px solid rgba(180,230,199,.2); border-radius: 10px;
-          padding: 12px; background: #0d2418; color: #fff; outline: none; font: inherit;
+          width: 100%; min-width: 0; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px;
+          padding: 12px 18px; background: rgba(0,0,0,0.2); color: #fff; outline: none; font: inherit;
+          font-size: 14px; transition: border-color 0.2s;
         }
+        .gbw-compose input:focus, .gbw-form textarea:focus { border-color: #168bff; }
         .gbw-compose button, .gbw-primary {
-          border: 0; border-radius: 10px; padding: 0 18px; background: #55e39a;
-          color: #06351f; font-weight: 900; cursor: pointer; transition: opacity 0.2s;
+          border: 0; border-radius: 50%; width: 44px; height: 44px; display: grid; place-items: center;
+          background: #168bff; color: #fff; cursor: pointer; transition: transform 0.2s, opacity 0.2s;
+          flex-shrink: 0;
         }
-        .gbw-compose button:disabled, .gbw-primary:disabled { opacity: 0.55; cursor: wait; }
-        .gbw-helperlink { align-self: center; border: 0; background: transparent; color: #a9eec7; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 10px; margin-top: 10px; }
-        .gbw-adminlogin { padding: 20px; display: grid; gap: 12px; }
-        .gbw-adminlogin h3 { margin: 0; color: #fff; }
-        .gbw-admin { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 400px; flex: 1; }
-        .gbw-convos { overflow: auto; border-right: 1px solid rgba(255,255,255,.1); max-height: 500px; }
-        .gbw-convo { width: 100%; text-align: left; display: block; padding: 12px; border: 0; border-bottom: 1px solid rgba(255,255,255,.07); background: transparent; color: #fff; cursor: pointer; }
-        .gbw-convo.active { background: #17432d; }
+        .gbw-primary { border-radius: 12px; width: 100%; height: auto; padding: 12px; font-weight: 700; }
+        .gbw-compose button:disabled, .gbw-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: scale(0.95); }
+        .gbw-helperlink { align-self: center; border: 0; background: transparent; color: #7b95b5; font-size: 12px; text-decoration: none; cursor: pointer; padding: 12px; transition: color 0.2s; }
+        .gbw-helperlink:hover { color: #168bff; }
+
+        /* Empty / Error */
+        .gbw-empty { color: #5e738c; text-align: center; font-size: 13px; padding: 40px 20px; font-style: italic; }
+        .gbw-error { padding: 12px 20px; color: #ff8a97; background: rgba(255, 51, 79, 0.1); font-size: 13px; text-align: center; border-bottom: 1px solid rgba(255, 51, 79, 0.2); }
+
+        /* Admin/Helper UI */
+        .gbw-adminlogin { padding: 30px; display: flex; flex-direction: column; gap: 16px; max-width: 400px; margin: 0 auto; justify-content: center; height: 100%; }
+        .gbw-adminlogin h3 { margin: 0; color: #fff; font-size: 20px; text-align: center; }
+        .gbw-admin { display: grid; grid-template-columns: 220px minmax(0, 1fr); height: 100%; min-height: 0; flex: 1; }
+        .gbw-convos { overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.05); background: #060c14; }
+        .gbw-convo { width: 100%; text-align: left; display: block; padding: 14px 16px; border: 0; border-bottom: 1px solid rgba(255,255,255,0.04); background: transparent; color: #fff; cursor: pointer; transition: background 0.2s; }
+        .gbw-convo:hover { background: rgba(255,255,255,0.03); }
+        .gbw-convo.active { background: rgba(22, 139, 255, 0.1); border-left: 3px solid #168bff; }
         .gbw-convo strong, .gbw-convo small, .gbw-convo span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .gbw-convo strong { font-size: 12px; }
-        .gbw-convo small { font-size: 10px; color: #b7d8c4; margin-top: 5px; }
-        .gbw-convo span { font-size: 11px; color: #d3ffe0; margin-top: 4px; }
-        .gbw-adminright { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-        .gbw-adminmessages { flex: 1; min-height: 200px; max-height: 400px; overflow: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .gbw-form { padding: 12px; display: grid; gap: 10px; border-top: 1px solid rgba(255,255,255,.1); }
-        .gbw-empty { color: #bad6c4; text-align: center; font-size: 13px; padding: 30px 15px; }
-        .gbw-back { font-size: 12px; color: #c4f5d6; border: 0; background: transparent; text-align: left; padding: 10px 15px; cursor: pointer; }
-        .gbw-iconbtn { border: 0; background: transparent; color: #fff; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+        .gbw-convo strong { font-size: 13px; font-weight: 700; color: #fff; }
+        .gbw-convo small { font-size: 11px; color: #64b3ff; margin-top: 4px; }
+        .gbw-convo span { font-size: 12px; color: #8fa3b8; margin-top: 4px; }
+        .gbw-adminright { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #040910; }
+        .gbw-adminmessages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .gbw-form { padding: 14px 20px; display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(10, 22, 40, 0.95); }
+        .gbw-form textarea { min-height: 44px; max-height: 100px; border-radius: 14px; resize: none; }
+        .gbw-form .gbw-primary { width: auto; padding: 0 20px; border-radius: 14px; white-space: nowrap; }
+        .gbw-back { font-size: 13px; color: #7b95b5; border: 0; background: transparent; padding: 12px 20px; cursor: pointer; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+        .gbw-back:hover { color: #fff; }
+        .gbw-iconbtn { border: 0; background: rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        
         @media(max-width: 600px) {
-          .gbw-admin { grid-template-columns: 100px minmax(0, 1fr); }
-          .gbw-adminmessages { max-height: 300px; }
+          .gwamo-brain-container { padding: 0; height: calc(100dvh - 120px); }
+          .gbw-panel { border-radius: 0; border: 0; }
+          .gbw-admin { grid-template-columns: 120px minmax(0, 1fr); }
+          .gbw-bubble { max-width: 88%; padding: 10px 14px; font-size: 13px; }
         }
       `}</style>
 
@@ -673,7 +710,7 @@ function GwamoBrainWidget({ apiUrl }) {
         ) : !adminAuthed ? (
           <form className="gbw-adminlogin" onSubmit={loginHelper}>
             <h3>Helper login</h3>
-            <p style={{ margin: 0, fontSize: 13, color: "#c5e5d1" }}>Enter the existing Admin PIN. The Worker checks it before showing private conversations.</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#c5e5d1" }}>Enter your PIN to respond to Gwamo visitors</p>
             <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" autoComplete="current-password" required />
             <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminPin || adminBusy}>{adminBusy ? "Checking..." : "Open private inbox"}</button>
             <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminError(""); }}>← Back to visitor chat</button>
