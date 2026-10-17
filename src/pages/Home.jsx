@@ -573,11 +573,11 @@ function GwamoBrainWidget({ apiUrl }) {
   return (
     <div className="gwamo-brain-container">
           <style>{`
-        .gwamo-brain-container {
+          .gwamo-brain-container {
           display: flex; flex-direction: column; align-items: center;
           width: 100%; max-width: 800px; margin: 0 auto;
-          height: calc(100dvh - 140px); /* Fits perfectly on mobile/desktop */
-          padding: 12px;
+          height: calc(100dvh - 150px); /* Adjusted for bottom nav */
+          padding: 12px 12px 80px 12px; /* Bottom padding pushes input above nav */
         }
         
         .gbw-panel {
@@ -2104,6 +2104,37 @@ function Home() {
         <InfoModal topic={showInfoModal} onClose={() => setShowInfoModal(null)} />
       )}
 
+      {/* FIXED BOTTOM NAVIGATION */}
+      <div className="bottom-nav">
+        <div className="bottom-nav-scroll">
+          {CATEGORY_TABS.map((tab) => {
+            const TabIcon = tab.icon;
+            const isActive = activeCategory === tab.key;
+            
+            // The special center Plus button
+            if (tab.key === "time-market") {
+              return (
+                <div key={tab.key} className="bottom-nav-plus-wrap">
+                  <button type="button" className="bottom-nav-plus" onClick={() => handleOfferTime("offer")} aria-label="Add">
+                    <Plus size={28} strokeWidth={2.5} />
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <button key={tab.key} type="button" className={`bottom-nav-item${isActive ? " is-active" : ""}`} onClick={() => setActiveCategory(tab.key)}>
+                <TabIcon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                <span>{tab.label === "Heart Zone💕" ? "Heart" : tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+    
+
+
       <HomeStyles />
     </div>
   );
@@ -2167,17 +2198,7 @@ const TimeMarketTopBar = memo(({ activeCategory, onCategoryChange, onOpenMyProfi
             </div>
           )}
         </div>
-        <nav className="category-nav" aria-label="Gwamo sections">
-          {CATEGORY_TABS.map((tab) => {
-            const TabIcon = tab.icon;
-            return (
-              <button key={tab.key} type="button" className={`category-tab${activeCategory === tab.key ? " is-active" : ""}`} onClick={() => openCategory(tab)} aria-current={!tab.href && activeCategory === tab.key ? "page" : undefined}>
-                <TabIcon size={15} strokeWidth={2.2} aria-hidden="true" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+    
       </div>
     </header>
   );
@@ -3511,8 +3532,8 @@ function HomeStylesInner() {
       .coming-soon-panel { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: calc(140px + env(safe-area-inset-top)) 24px 60px; text-align: center; color: rgba(255, 255, 255, 0.72); }
       .coming-soon-panel h2 { margin: 0; color: #ffffff; font-size: 22px; }
       .coming-soon-panel p { max-width: 380px; margin: 0 0 8px; line-height: 1.5; }
-      .home-feed { width: min(100%, 900px); margin: 0 auto; padding: calc(174px + env(safe-area-inset-top)) 16px 46px; }
-      .service-reel-card { position: relative; isolation: isolate; width: 100%; height: clamp(620px, calc(100svh - 188px), 900px); margin: 0 auto 28px; overflow: hidden; border: 1px solid rgba(126, 119, 190, .28); border-radius: 28px; background: #020712; box-shadow: 0 22px 64px rgba(0, 0, 0, .56), 0 0 30px rgba(8, 124, 255, .07); }
+      .home-feed { width: min(100%, 900px); margin: 0 auto; padding: calc(90px + env(safe-area-inset-top)) 16px 100px; }
+      .service-reel-card { position: relative; isolation: isolate; width: 100%; height: clamp(620px, calc(100svh - 160px), 900px); margin: 0 auto 28px; overflow: hidden; border: 1px solid rgba(126, 119, 190, .28); border-radius: 28px; background: #020712; box-shadow: 0 22px 64px rgba(0, 0, 0, .56), 0 0 30px rgba(8, 124, 255, .07); }
       .service-reel-card .media-card, .service-reel-card .media-viewport, .service-reel-card .media-layer { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: inherit; }
       .media-layer { display: grid; place-items: center; overflow: hidden; background: #000000; }
       .home-media { width: 100%; height: 100%; display: block; border: 0; object-position: center; background: #000000; }
@@ -3747,9 +3768,9 @@ function HomeStylesInner() {
         .login-pill span { display: none; }
         .login-pill { min-height: 38px; padding: 0 11px; }
         .dropdown-menu { top: calc(100% + 8px); }
-        .home-feed { padding: calc(158px + env(safe-area-inset-top)) 12px 34px; }
+        .home-feed { padding: calc(80px + env(safe-area-inset-top)) 12px 100px; }
         .coming-soon-panel, .loading-state, .empty-state { padding-top: calc(158px + env(safe-area-inset-top)); }
-        .service-reel-card { height: clamp(590px, calc(100svh - 172px), 780px); border-radius: 22px; }
+        .service-reel-card { height: clamp(590px, calc(100svh - 150px), 780px); border-radius: 22px; }
         .service-avatar-badge { top: 14px; right: 14px; width: 46px; height: 46px; }
         .post-info-block { left: 22px; right: 82px; bottom: 122px; }
         .creator-name { font-size: 14px; }
