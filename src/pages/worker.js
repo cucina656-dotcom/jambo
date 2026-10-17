@@ -34,6 +34,8 @@ const MAX_PAGE_LIMIT = 20;
 const MAX_COMMENT_LENGTH = 500;
 const TV_MESSAGE_MAX_LENGTH = 220;
 const TV_RECENT_MESSAGE_LIMIT = 30;
+const TV_WATCHING_WINDOW_MS = 40 * 1000;
+const TV_WATCHING_BROADCAST_MS = 5 * 1000;
 const MAX_WATCH_SECONDS_PER_REQUEST = 30;
 const VIEW_DEDUP_WINDOW_MS = 30 * 60 * 1000;
  
@@ -65,6 +67,65 @@ const CONNECT_NAME_MAX_LENGTH = 80;
 const CONNECT_LOCATION_MAX_LENGTH = 120;
 const CONNECT_OWNER_TOKEN_BYTES = 24;
 const CONNECT_MEMBER_TOKEN_BYTES = 24;
+const CONNECT_LIVE_ACTIVE_WINDOW_MS = 2 * 60 * 1000;
+const CONNECT_LIVE_RING_TIMEOUT_MS = 45 * 1000;
+const CONNECT_LIVE_ITEM_IDS = new Set([
+  "tomatoes",
+  "cooking-oil",
+  "onions",
+  "bell-pepper",
+  "fresh-beans",
+  "rice",
+  "potatoes",
+  "sweet-potatoes",
+  "cassava",
+  "chilli",
+  "avocado",
+  "sugar",
+  "salt",
+  "matches",
+  "dodo-greens",
+  "isombe",
+  "cassava-ugali",
+  "maize-flour",
+  "nido",
+  "milk-products",
+  "inyange-products",
+  "bicycle-delivery",
+  "driver-delivery",
+  "send-abroad",
+  "buy-plot",
+  "buy-land",
+  "rent-house",
+  "buy-house",
+  "loan",
+  "find-job",  "offer-job",
+  "deal",
+  "favor-exchange",
+  "cook-order",
+  "irembo",
+  "rib",
+  "medicine-help",
+  "mbaza",
+  "quit-drugs",
+  "reconcile",
+  "advice",
+  "entertainment",
+  "talk-person-99",
+  "private-question-99",
+  "match-need-99",
+  "electronic-device",
+  "app-website-help",
+  "technology-device-help",
+  "welder",
+  "builder",
+  "construction-helper",
+  "electrician",
+  "mechanic",
+  "buy-bicycle",
+  "buy-motorcycle",
+  "buy-car",
+]);
 const CONNECT_ROOM_STATUSES = new Set([
   "team_forming",
   "talking",
@@ -79,7 +140,8 @@ const CONNECT_ITEM_STATUSES = new Set([
   "closed",
   "hidden",
 ]);
-const LOVE_HEARTS = new Set(["💛", "🧡", "💚", "💙", "💜"]);
+const LOVE_HEARTS = new Set(["💛", "🧡", "💚", "💙", "💜", "🤍"]);
+const LOVE_GENDERS = new Set(["woman", "man"]);
  
 const ALLOWED_IMAGE_MIME = new Set([
   "image/jpeg",
@@ -137,8 +199,7 @@ function corsHeaders(extra = {}) {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, X-Admin-Pin, X-King-Pin, X-Connect-Video-Pin, X-Mission-Member-Token",
-    "Access-Control-Max-Age": "86400",
+    "Content-Type, Authorization, X-Admin-Pin, X-King-Pin, X-Connect-Video-Pin, X-Mission-Member-Token, X-Gwamo-Visitor-Token",    "Access-Control-Max-Age": "86400",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     ...extra,
@@ -237,8 +298,7 @@ const COUNTRY_CODE_FLAGS = [
   { code: "234", flag: "🇳🇬" },
   { code: "233", flag: "🇬🇭" },
   { code: "971", flag: "🇦🇪" },
-  { code: "44", flag: "🇬🇧" },
-  { code: "33", flag: "🇫🇷" },
+  { code: "44", flag: "🇬🇧" },  { code: "33", flag: "🇫🇷" },
   { code: "32", flag: "🇧🇪" },
   { code: "27", flag: "🇿🇦" },
   { code: "91", flag: "🇮🇳" },
@@ -337,8 +397,7 @@ function normalizePostType(value = "") {
   const type = String(value || "").trim().toLowerCase();
   return ["offer", "need", "exchange", "moment"].includes(type)
     ? type
-    : "offer";
-}
+    : "offer";}
  
 function makeSessionToken() {
   return `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
@@ -437,8 +496,7 @@ async function derivePinHash(pin, salt, iterations, pepper) {
       hash: "SHA-256",
     },
     keyMaterial,
-    256
-  );
+    256  );
  
   return bytesToHex(bits);
 }
@@ -514,6 +572,39 @@ function getAdminPin(env) {
   return pin;
 }
  
+    function getRomanticPin(env) {
+      const pin = String(env.ROMANTIC_PIN || "").trim();
+      // Must be at least 4 characters and not the classic weak default.
+      if (pin.length < 4 || pin === "101" || pin === "1234") return "";
+      return pin;
+    }
+
+    function authorizeRomanticRequest(request, env, fallback = "") {
+      const configured = getRomanticPin(env);
+      if (!configured) {
+        return errorResponse(
+          "ROMANTIC_PIN is not configured or is too weak. Set a secret of at least 4 characters (not 101 or 1234) in Worker Settings.",
+          503
+        );
+      }
+
+      const credential = adminPinFromRequest(request, fallback);
+      if (constantTimeEqual(credential, configured)) return null;
+
+      const allowed = checkRateLimit(
+        `romantic-auth:${getClientIp(request)}`,
+        8,
+        15 * 60_000
+      );
+
+      return errorResponse(
+        allowed
+          ? "Invalid Romantic Stories PIN."
+          : "Too many invalid PIN attempts. Try again in 15 minutes.",
+        allowed ? 403 : 429
+      );
+    }
+
 function validateAdminPin(value, env) {
   const configured = getAdminPin(env);
   return Boolean(configured) && constantTimeEqual(String(value || ""), configured);
@@ -537,8 +628,7 @@ function requireAdminConfiguration(env) {
   return errorResponse(
     'ADMIN_PIN is missing or insecure. Save a secret of at least 8 characters; the old value "101" is disabled.',
     503
-  );
-}
+  );}
  
 function authorizeAdminRequest(request, env, fallback = "") {
   const configError = requireAdminConfiguration(env);
@@ -637,8 +727,7 @@ function authorizeConnectVideoRequest(request, env, fallback = "") {
     8,
     15 * 60_000
   );
- 
-  return errorResponse(
+   return errorResponse(
     allowed ? "Wrong video PIN." : "Too many invalid video PIN attempts.",
     allowed ? 403 : 429
   );
@@ -737,8 +826,7 @@ async function getConnectItemById(db, id) {
     .prepare(`SELECT * FROM connect_items WHERE id = ? LIMIT 1`)
     .bind(String(id || "").trim())
     .first();
-}
- 
+} 
 async function getMoneyRoomByMissionId(db, missionId) {
   return await db
     .prepare(`
@@ -786,6 +874,11 @@ function roomStatus(value = "") {
 function normalizedLoveHeart(value = "") {
   const heart = String(value || "").trim();
   return LOVE_HEARTS.has(heart) ? heart : "";
+}
+
+function normalizedLoveGender(value = "") {
+  const gender = String(value || "").trim().toLowerCase();
+  return LOVE_GENDERS.has(gender) ? gender : "";
 }
  
 function safeConnectArray(value, maxItems = 12, maxLength = 160) {
@@ -837,8 +930,7 @@ async function getAuthenticatedProvider(request, env) {
   }
  
   await env.DB
-    .prepare(`
-      UPDATE time_market_sessions
+    .prepare(`      UPDATE time_market_sessions
       SET last_used_at = ?
       WHERE id = ?
     `)
@@ -937,8 +1029,7 @@ async function createProviderSession(env, providerId) {
         VALUES (?, ?, ?, ?, ?, ?)
       `)
       .bind(
-        sessionId,
-        providerId,
+        sessionId,        providerId,
         tokenHash,
         createdAt,
         createdAt,
@@ -1037,8 +1128,7 @@ async function deletePostWithRelations(env, post) {
   }
  
   await env.DB.batch([
-    env.DB
-      .prepare(`DELETE FROM time_market_conversations WHERE service_post_id = ?`)
+    env.DB      .prepare(`DELETE FROM time_market_conversations WHERE service_post_id = ?`)
       .bind(postId),
     env.DB.prepare(`DELETE FROM home_comments WHERE post_id = ?`).bind(postId),
     env.DB.prepare(`DELETE FROM home_reactions WHERE post_id = ?`).bind(postId),
@@ -1137,8 +1227,7 @@ function validateUpload(file, kind) {
       return {
         valid: false,
         message: "Post image must be smaller than 6 MB.",
-      };
-    }
+      };    }
  
     return { valid: true };
   }
@@ -1237,12 +1326,51 @@ function validateUpload(file, kind) {
       return {
         valid: false,
         message: "Document must be smaller than 15 MB.",
-      };
-    }
+      };    }
  
     return { valid: true };
   }
  
+      if (kind === "romantic_photo") {
+        if (!ALLOWED_IMAGE_MIME.has(file.type)) {
+          return {
+            valid: false,
+            message: "Couple photo must be JPG, PNG, WebP, or GIF.",
+          };
+        }
+        if (file.size > MAX_POST_IMAGE_BYTES) {
+          return {
+            valid: false,
+            message: "Couple photo must be smaller than 6 MB.",
+          };
+        }
+        return { valid: true };
+      }
+
+      if (kind === "romantic_song") {
+        const submittedType = String(file.type || "").toLowerCase();
+        const extension = getExtension(file.name || "");
+        const allowedExtension = ["mp3", "m4a", "aac", "ogg", "wav"].includes(extension);
+        const allowedType =
+          submittedType.startsWith("audio/") ||
+          !submittedType ||
+          submittedType === "application/octet-stream";
+
+        if (!allowedType || !allowedExtension) {
+          return {
+            valid: false,
+            message: "Song must be MP3, M4A, AAC, OGG, or WAV.",
+          };
+        }
+        if (file.size > MAX_CHAT_AUDIO_BYTES) {
+          return {
+            valid: false,
+            message: "Song must be smaller than 20 MB.",
+          };
+        }
+        return { valid: true };
+      }
+
   return {
     valid: false,
     message: "Unknown upload type.",
@@ -1337,8 +1465,7 @@ async function uploadFile(request, env, file, kind) {
 function getPrivateMediaSecret(env) {
   const secret = String(env.MEDIA_SIGNING_KEY || "").trim();
   return secret.length >= 32 ? secret : "";
-}
- 
+} 
 async function buildPrivateMessageMediaUrl(request, env, message) {
   if (!message?.media_key) return message?.media_url || "";
  
@@ -1437,8 +1564,7 @@ async function ensureConversationUniqueness(db) {
     const [keeper, ...extras] = rows.results || [];
     if (!keeper) continue;
  
-    for (const duplicate of extras) {
-      await db.batch([
+    for (const duplicate of extras) {      await db.batch([
         db
           .prepare(`
             UPDATE time_market_messages
@@ -1537,8 +1663,7 @@ async function ensureSchema(db) {
         manual_views INTEGER NOT NULL DEFAULT 0,
         real_reactions INTEGER NOT NULL DEFAULT 0,
         manual_reactions INTEGER NOT NULL DEFAULT 0,
-        envelope_clicks INTEGER NOT NULL DEFAULT 0,
-        last_envelope_clicked_at TEXT,
+        envelope_clicks INTEGER NOT NULL DEFAULT 0,        last_envelope_clicked_at TEXT,
         updated_at TEXT
       )
     `),
@@ -1633,12 +1758,70 @@ async function ensureSchema(db) {
     `),
   ]);
  
+
+      // Romantic Stories — couples storybook + background songs. Stored in the
+      // worker (not the browser) so they survive a page refresh. Images and
+      // songs go into R2 (MEDIA_BUCKET), never as transient blob: URLs.
+      await db.batch([
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS romantic_couples (
+            id TEXT PRIMARY KEY,
+            names TEXT NOT NULL DEFAULT '',
+            whatsapp TEXT NOT NULL DEFAULT '',
+            flag TEXT NOT NULL DEFAULT '',
+            image_url TEXT NOT NULL DEFAULT '',
+            image_key TEXT,
+            created_at TEXT NOT NULL
+          )
+        `),
+
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS romantic_songs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            r2_key TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+          )
+        `),
+
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS romantic_playback (
+            id TEXT PRIMARY KEY,
+            song_index INTEGER NOT NULL DEFAULT 0,
+            sound_on INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+          )
+        `),
+
+        db.prepare(`
+          CREATE INDEX IF NOT EXISTS idx_romantic_couples_created
+          ON romantic_couples(created_at ASC)
+        `),
+
+        db.prepare(`
+          CREATE INDEX IF NOT EXISTS idx_romantic_songs_order
+          ON romantic_songs(sort_order ASC, created_at ASC)
+        `),
+      ]);
+
+      await db
+        .prepare(`
+          INSERT INTO romantic_playback (id, song_index, sound_on, updated_at)
+          VALUES ('global', 0, 0, ?)
+          ON CONFLICT(id) DO NOTHING
+        `)
+        .bind(nowIso())
+        .run();
+
+
+
   // Time Market tables (provider/session tables have no dependencies;
   // conversations/messages depend on feedx_posts + providers, both now created).
   await db.batch([
     db.prepare(`
-      CREATE TABLE IF NOT EXISTS time_market_providers (
-        id TEXT PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS time_market_providers (        id TEXT PRIMARY KEY,
         full_name TEXT NOT NULL,
         phone TEXT NOT NULL UNIQUE,
         service_provider_name TEXT NOT NULL DEFAULT '',
@@ -1737,8 +1920,7 @@ async function ensureSchema(db) {
         approved_at TEXT,
         rejected_at TEXT,
         used_at TEXT,
-        attempts INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,        created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (provider_id)
           REFERENCES time_market_providers(id)
@@ -1837,8 +2019,7 @@ async function ensureSchema(db) {
         status TEXT NOT NULL DEFAULT 'active',
         admin_note TEXT NOT NULL DEFAULT '',
         public_data_json TEXT NOT NULL DEFAULT '{}',
-        private_data_json TEXT NOT NULL DEFAULT '{}',
-        owner_token_hash TEXT NOT NULL DEFAULT '',
+        private_data_json TEXT NOT NULL DEFAULT '{}',        owner_token_hash TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -1937,10 +2118,120 @@ async function ensureSchema(db) {
         FOREIGN KEY (profile_a_id)
           REFERENCES connect_items(id)
           ON DELETE CASCADE,
-        FOREIGN KEY (profile_b_id)
-          REFERENCES connect_items(id)
+        FOREIGN KEY (profile_b_id)          REFERENCES connect_items(id)
           ON DELETE CASCADE
       )
+    `),
+ 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS connect_live_presence (
+        id TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        side TEXT NOT NULL,
+        location TEXT NOT NULL DEFAULT '',
+        is_available INTEGER NOT NULL DEFAULT 1,
+        item_photo_url TEXT NOT NULL DEFAULT '',
+        item_photo_key TEXT,
+        language TEXT NOT NULL DEFAULT 'rw',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        UNIQUE(provider_id, item_id, side),
+        FOREIGN KEY (provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE
+      )
+    `),
+ 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS connect_live_messages (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        sender_provider_id TEXT NOT NULL,
+        receiver_provider_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        read_at TEXT,
+        FOREIGN KEY (sender_provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE,
+        FOREIGN KEY (receiver_provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE
+      )
+    `),
+ 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS connect_live_calls (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        caller_provider_id TEXT NOT NULL,
+        callee_provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ringing',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        answered_at TEXT,
+        ended_at TEXT,
+        FOREIGN KEY (caller_provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE,
+        FOREIGN KEY (callee_provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE
+      )
+    `),
+ 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS connect_live_call_signals (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL UNIQUE,
+        call_id TEXT NOT NULL,
+        sender_provider_id TEXT NOT NULL,
+        signal_type TEXT NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT 'null',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (call_id)
+          REFERENCES connect_live_calls(id)
+          ON DELETE CASCADE,
+        FOREIGN KEY (sender_provider_id)
+          REFERENCES time_market_providers(id)
+          ON DELETE CASCADE
+      )
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_presence_match
+      ON connect_live_presence(item_id, side, is_available, last_seen_at DESC)
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_presence_provider
+      ON connect_live_presence(provider_id, updated_at DESC)
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_messages_pair
+      ON connect_live_messages(item_id, sender_provider_id, receiver_provider_id, created_at)
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_messages_receiver
+      ON connect_live_messages(receiver_provider_id, created_at DESC)    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_calls_callee
+      ON connect_live_calls(callee_provider_id, status, created_at DESC)
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_calls_participants
+      ON connect_live_calls(caller_provider_id, callee_provider_id, updated_at DESC)
+    `),
+ 
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_connect_live_call_signals_call
+      ON connect_live_call_signals(call_id, seq ASC)
     `),
  
     db.prepare(`
@@ -1984,6 +2275,102 @@ async function ensureSchema(db) {
     `),
   ]);
  
+  // ==================== GWAMO BRAIN SUPPORT TABLES ====================
+  await db.batch([
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gwamo_brain_conversations (
+        id TEXT PRIMARY KEY,
+        visitor_token_hash TEXT NOT NULL UNIQUE,
+        visitor_label TEXT NOT NULL DEFAULT 'Visitor',
+        status TEXT NOT NULL DEFAULT 'open',
+        last_message_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gwamo_brain_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        sender TEXT NOT NULL CHECK (sender IN ('visitor', 'helper')),
+        text_content TEXT NOT NULL,
+        media_url TEXT NOT NULL DEFAULT '',
+        media_type TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (conversation_id)
+          REFERENCES gwamo_brain_conversations(id)
+          ON DELETE CASCADE
+      )
+    `),
+
+    db.prepare(`
+           CREATE TABLE IF NOT EXISTS gwamo_brain_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        sender TEXT NOT NULL CHECK (sender IN ('visitor', 'helper')),
+        text_content TEXT NOT NULL,
+        media_url TEXT NOT NULL DEFAULT '',
+        media_type TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (conversation_id)
+          REFERENCES gwamo_brain_conversations(id)
+          ON DELETE CASCADE
+      )
+    `),
+
+    db.prepare(`
+          CREATE INDEX IF NOT EXISTS idx_gwamo_brain_messages
+      ON gwamo_brain_messages(conversation_id, created_at)
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gwamo_brain_realtime_tickets (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        conversation_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_gwamo_brain_realtime_tickets_hash
+      ON gwamo_brain_realtime_tickets(token_hash)
+    `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gwamo_brain_settings (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT 'Gwamo Brain',
+        welcome_message TEXT NOT NULL DEFAULT 'Hello! How can I help you?',
+        media_url TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      INSERT INTO gwamo_brain_settings (
+        id, title, welcome_message, media_url, updated_at
+      )
+      VALUES (
+        'main',
+        'Gwamo Brain',
+        'Hello! How can I help you?',
+        '',
+        datetime('now')
+      )
+      ON CONFLICT(id) DO NOTHING
+    `)
+  ]);
+  // ==================== END GWAMO BRAIN SUPPORT TABLES ====================
+
+
+   await addMissingColumns(db, "gwamo_brain_messages", [
+    ["media_url", "TEXT NOT NULL DEFAULT ''"],
+    ["media_type", "TEXT NOT NULL DEFAULT ''"],
+  ]);
+
   await addMissingColumns(db, "feedx_posts", [
     ["creator_name", "TEXT NOT NULL DEFAULT ''"],
     ["creator_identity", "TEXT NOT NULL DEFAULT ''"],
@@ -2016,6 +2403,7 @@ async function ensureSchema(db) {
  
   await addMissingColumns(db, "feedx_post_analytics", [
     ["watch_seconds", "INTEGER NOT NULL DEFAULT 0"],
+    ["manual_watching", "INTEGER NOT NULL DEFAULT 0"],
     ["iframe_exposure_seconds", "INTEGER NOT NULL DEFAULT 0"],
     ["last_watched_at", "TEXT"],
     ["real_views", "INTEGER NOT NULL DEFAULT 0"],
@@ -2025,8 +2413,7 @@ async function ensureSchema(db) {
     ["envelope_clicks", "INTEGER NOT NULL DEFAULT 0"],
     ["last_envelope_clicked_at", "TEXT"],
     ["updated_at", "TEXT"],
-  ]);
- 
+  ]); 
   await addMissingColumns(db, "time_market_providers", [
     ["pin_hash", "TEXT"],
     ["pin_salt", "TEXT"],
@@ -2125,8 +2512,7 @@ function mapPost(
   const realReactions = Number(
     reactionCount ?? analytics?.real_reactions ?? 0
   );
- 
-  const manualReactions = Number(
+   const manualReactions = Number(
     analytics?.manual_reactions || 0
   );
  
@@ -2163,6 +2549,7 @@ function mapPost(
     ),
     real_views: realViews,
     manual_views: manualViews,
+    manual_watching: Number(analytics?.manual_watching || 0),
     displayed_views: realViews + manualViews,
     real_reactions: realReactions,
     manual_reactions: manualReactions,
@@ -2225,8 +2612,7 @@ async function getPostForPublic(db, postId) {
       WHERE post_id = ?
     `)
     .bind(postId)
-    .first();
- 
+    .first(); 
   return mapPost(
     post,
     analytics || {},
@@ -2325,8 +2711,7 @@ async function handleHomeUpdate(request, env) {
       `Could not read form data: ${error.message}`,
       400
     );
-  }
- 
+  } 
   const auth = await requireProvider(request, env);
   if (auth.response) return auth.response;
   const authProvider = auth.provider;
@@ -2425,8 +2810,7 @@ async function handleHomeUpdate(request, env) {
     authProvider?.phone || creatorIdentity;
  
   const effectiveCreatorType = authProvider
-    ? "whatsapp"
-    : creatorType;
+    ? "whatsapp"    : creatorType;
  
   if (!effectiveCreatorName) {
     return errorResponse(
@@ -2525,8 +2909,7 @@ async function handleHomeUpdate(request, env) {
  
       if (
         /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(
-          lowerUrl
-        )
+          lowerUrl        )
       ) {
         mediaType = "image";
       } else if (
@@ -2625,8 +3008,7 @@ async function handleHomeUpdate(request, env) {
     ]);
  
     const post = await getPostForPublic(
-      env.DB,
-      postId
+      env.DB,      postId
     );
  
     return jsonResponse(
@@ -2725,8 +3107,7 @@ async function hashViewer(request, env) {
   }
  
   const bytes = new TextEncoder().encode(identity);
- 
-  const digest = await crypto.subtle.digest(
+   const digest = await crypto.subtle.digest(
     "SHA-256",
     bytes
   );
@@ -2825,8 +3206,7 @@ async function getViewResponse(
 async function handleView(request, env) {
   let body;
  
-  try {
-    body = await request.json();
+  try {    body = await request.json();
   } catch {
     return errorResponse("Invalid JSON body.");
   }
@@ -2925,8 +3305,7 @@ async function handleWatch(request, env) {
   }
  
   const seconds = Math.min(
-    Math.floor(secondsNumber),
-    MAX_WATCH_SECONDS_PER_REQUEST
+    Math.floor(secondsNumber),    MAX_WATCH_SECONDS_PER_REQUEST
   );
  
   await ensureAnalyticsRow(env.DB, postId);
@@ -3025,8 +3404,7 @@ async function handleGetComments(
         country_flag,
         comment,
         created_at
-      FROM home_comments
-      WHERE post_id = ?
+      FROM home_comments      WHERE post_id = ?
       ORDER BY
         datetime(created_at) DESC,
         id DESC
@@ -3125,8 +3503,7 @@ async function handlePostComment(
  
   const result = await env.DB
     .prepare(`
-      INSERT INTO home_comments (
-        post_id,
+      INSERT INTO home_comments (        post_id,
         commenter_phone,
         country_flag,
         comment,
@@ -3225,8 +3602,7 @@ async function handleReact(request, env) {
         INSERT INTO home_reactions (
           post_id,
           phone,
-          created_at
-        )
+          created_at        )
         VALUES (?, ?, ?)
       `)
       .bind(
@@ -3325,8 +3701,7 @@ async function handleReactionCounts(request, env) {
     ),
   ].slice(0, 60);
  
-  if (!ids.length) {
-    return jsonResponse(
+  if (!ids.length) {    return jsonResponse(
       { success: true, counts: {} },
       200,
       { "Cache-Control": "no-store" }
@@ -3425,8 +3800,7 @@ async function handleEnvelopeClick(
     )
     .run();
  
-  const analytics = await env.DB
-    .prepare(`
+  const analytics = await env.DB    .prepare(`
       SELECT
         envelope_clicks,
         last_envelope_clicked_at
@@ -3525,8 +3899,7 @@ async function handleProviderRegister(
   }
  
   const existing = await getProviderByPhone(
-    env.DB,
-    phone
+    env.DB,    phone
   );
  
   const timestamp = nowIso();
@@ -3625,8 +3998,7 @@ async function handleProviderRegister(
         ?, ?, ?, ?,
         ?, ?
       )
-    `)
-    .bind(
+    `)    .bind(
       id,
       fullName,
       phone,
@@ -3725,8 +4097,7 @@ async function handleProviderLogin(
     );
     return errorResponse("Telephone number or PIN is incorrect.", 401);
   }
- 
-  const lockedUntil = Date.parse(provider.login_locked_until || "");
+   const lockedUntil = Date.parse(provider.login_locked_until || "");
   if (Number.isFinite(lockedUntil) && lockedUntil > Date.now()) {
     return errorResponse(
       "Too many incorrect PIN attempts. Try again after 15 minutes or use Forgot PIN.",
@@ -3825,8 +4196,7 @@ async function handleProviderLogin(
       SET failed_login_attempts = 0,
           login_locked_until = NULL,
           updated_at = ?
-      WHERE id = ?
-    `)
+      WHERE id = ?    `)
     .bind(nowIso(), provider.id)
     .run();
  
@@ -3925,8 +4295,7 @@ async function handleProviderActivate(request, env) {
     `activation:${provider.id}`,
     env
   );
- 
-  if (!provider.activation_code_hash || !constantTimeEqual(candidateHash, provider.activation_code_hash)) {
+   if (!provider.activation_code_hash || !constantTimeEqual(candidateHash, provider.activation_code_hash)) {
     return errorResponse("The activation code is incorrect.", 403);
   }
  
@@ -4025,8 +4394,7 @@ async function handlePinResetRequest(request, env) {
           "If this number belongs to an eligible Gwamo account, an admin can verify it by telephone.",
       },
       202,
-      { "Cache-Control": "no-store" }
-    );
+      { "Cache-Control": "no-store" }    );
   }
  
   if ((provider.account_status || "active") === "pending_phone_review") {
@@ -4125,8 +4493,7 @@ async function handlePinResetStatus(request, env) {
       { success: true, status: "pending", approved: false },
       200,
       { "Cache-Control": "no-store" }
-    );
-  }
+    );  }
  
   if (
     reset.status === "pending" &&
@@ -4225,8 +4592,7 @@ async function handlePinResetComplete(request, env) {
  
   await env.DB.batch([
     env.DB
-      .prepare(`
-        UPDATE time_market_providers
+      .prepare(`        UPDATE time_market_providers
         SET pin_hash = ?,
             pin_salt = ?,
             pin_iterations = ?,
@@ -4325,8 +4691,7 @@ async function handleProviderMe(
     200,
     {
       "Cache-Control": "no-store",
-    }
-  );
+    }  );
 }
  
 async function handleProviderProfileUpdate(
@@ -4425,8 +4790,7 @@ async function handleProviderProfileUpdate(
       nowIso(),
       auth.provider.id
     )
-    .run();
- 
+    .run(); 
   if (oldProfileImageKey && oldProfileImageKey !== profileImageKey) {
     await deleteR2Key(env, oldProfileImageKey);
   }
@@ -4525,8 +4889,7 @@ async function handleProviderServices(
   }
  
   const result = await env.DB
-    .prepare(`
-      SELECT *
+    .prepare(`      SELECT *
       FROM feedx_posts
       WHERE provider_id = ?
       ORDER BY
@@ -4625,8 +4988,7 @@ async function handleProviderServiceEdit(
  
   const description = String(
     body.work_description ??
-      body.subtitle ??
-      post.subtitle ??
+      body.subtitle ??      post.subtitle ??
       ""
   )
     .trim()
@@ -4725,8 +5087,7 @@ async function handleProviderServiceDelete(
       auth.provider.id
     )
     .first();
- 
-  if (!post) {
+   if (!post) {
     return errorResponse(
       "Service not found or it does not belong to you.",
       404
@@ -4825,8 +5186,7 @@ async function handleConversationStart(
  
   let body;
  
-  try {
-    body = await request.json();
+  try {    body = await request.json();
   } catch {
     return errorResponse(
       "Invalid JSON body."
@@ -4925,8 +5285,7 @@ async function handleConversationStart(
     },
     conversation?.id === conversationId ? 201 : 200
   );
-}
- 
+} 
 async function handleConversationList(
   request,
   env
@@ -5025,8 +5384,7 @@ async function handleConversationList(
           LIMIT 1
         ) AS last_message_at,
         (
-          SELECT COUNT(*)
-          FROM time_market_messages m
+          SELECT COUNT(*)          FROM time_market_messages m
           WHERE m.conversation_id = c.id
             AND m.sender_provider_id != ?
             AND m.read_at IS NULL
@@ -5125,8 +5483,7 @@ async function handleConversationMessages(
     .prepare(`
       UPDATE time_market_messages
       SET delivered_at = COALESCE(delivered_at, ?),
-          read_at = COALESCE(read_at, ?)
-      WHERE conversation_id = ?
+          read_at = COALESCE(read_at, ?)      WHERE conversation_id = ?
         AND sender_provider_id != ?
     `)
     .bind(openedAt, openedAt, conversationId, auth.provider.id)
@@ -5225,8 +5582,7 @@ async function handleConversationSend(
       .includes("multipart/form-data")
   ) {
     const formData = await request.formData();
- 
-    conversationId = String(
+     conversationId = String(
       formData.get("conversation_id") || ""
     ).trim();
  
@@ -5325,8 +5681,7 @@ async function handleConversationSend(
       file.size > 0
     ) {
       if (!getPrivateMediaSecret(env)) {
-        return errorResponse(
-          "Private attachment signing is not configured. Add a MEDIA_SIGNING_KEY secret of at least 32 characters.",
+        return errorResponse(          "Private attachment signing is not configured. Add a MEDIA_SIGNING_KEY secret of at least 32 characters.",
           503
         );
       }
@@ -5425,8 +5780,7 @@ async function handleConversationSend(
           timestamp,
           conversationId
         ),
-    ]);
- 
+    ]); 
     const message = await env.DB
       .prepare(`
         SELECT *
@@ -5525,8 +5879,7 @@ async function handleRealtimeTicket(request, env) {
  
   await env.DB.batch([
     env.DB
-      .prepare(`
-        DELETE FROM time_market_realtime_tickets
+      .prepare(`        DELETE FROM time_market_realtime_tickets
         WHERE expires_at <= ? OR used_at IS NOT NULL
       `)
       .bind(createdAt),
@@ -5625,8 +5978,7 @@ async function handleRealtimeConnect(request, env) {
     new Request("https://chat.internal/connect", {
       method: "GET",
       headers,
-    })
-  );
+    })  );
 }
  
 // =============================================================================
@@ -5683,6 +6035,91 @@ async function handleGetTvConversation(request, env) {
   );
 }
  
+async function handleAdminPostTvConversation(request, env) {
+  // Admin PIN auth — matches the /api/admin/* convention.
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  const tvPostId = String(body.tv_post_id || body.post_id || "").trim();
+  const message = sanitizeTvMessage(body.message);
+  const countryCode = normalizeCountryCode(body.country_code);
+
+  if (!tvPostId) return errorResponse("tv_post_id is required.");
+  if (!message) return errorResponse("Message cannot be empty.");
+  if (!countryCode) return errorResponse("Choose a valid country.");
+
+  if (!(await postExists(env.DB, tvPostId))) {
+    return errorResponse("TV post not found.", 404);
+  }
+
+  // Admin-side display identity. Falls back gracefully if fields are missing.
+  const userName =
+    normalizeTvDisplayName(body.user_name || body.display_name || "") ||
+    "Someone";
+
+  const profileImage = normalizeTvProfileImage(
+    body.profile_image || body.profile_image_url || ""
+  );
+
+  const id = crypto.randomUUID();
+  const createdAt = nowIso();
+
+  await env.DB
+    .prepare(`
+      INSERT INTO tv_conversations (
+        id, tv_post_id, user_id, user_name, profile_image,
+        country_code, message, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      id,
+      tvPostId,
+      "admin",       // admin-authored rows carry no real provider id
+      userName,
+      profileImage,
+      countryCode,
+      message,
+      createdAt
+    )
+    .run();
+
+  const created = {
+    id,
+    tv_post_id: tvPostId,
+    user_id: "admin",
+    user_name: userName,
+    profile_image: profileImage,
+    country_code: countryCode,
+    message,
+    created_at: createdAt,
+  };
+
+  // Live broadcast to anyone watching this TV post (same as public path).
+  await notifyConversationRoom(env, `tv:${tvPostId}`, {
+    type: "tv_message",
+    tv_post_id: tvPostId,
+    message: created,
+  });
+
+  return jsonResponse(
+    {
+      success: true,
+      message: created,
+      conversation: created,   // Admin.jsx reads result.conversation
+    },
+    201,
+    { "Cache-Control": "no-store" }
+  );
+}
+
 async function handlePostTvConversation(request, env) {
   const publicIdentity = await request.clone().json().catch(() => ({}));
 const loggedInProvider = await getAuthenticatedProvider(request, env);
@@ -5691,6 +6128,7 @@ const viewerId = String(publicIdentity.viewer_id || "")
   .replace(/[\u0000-\u001F\u007F]/g, "")
   .trim()
   .slice(0, 128);
+  
  
 if (!loggedInProvider && !viewerId) {
   return errorResponse("Public viewer identity is missing.", 400);
@@ -5725,8 +6163,7 @@ const auth = {
     return errorResponse("Message cannot be empty.");
   }
   if (!countryCode) {
-    return errorResponse("Choose a valid country before sending.");
-  }
+    return errorResponse("Choose a valid country before sending.");  }
   if (!(await postExists(env.DB, tvPostId))) {
     return errorResponse("TV post not found.", 404);
   }
@@ -5813,247 +6250,6 @@ const auth = {
   );
 }
  
-
-async function handleAdminGetTvConversations(request, env) {
-  const authError = authorizeAdminRequest(request, env);
-  if (authError) return authError;
-
-  const result = await env.DB.prepare(`
-    SELECT
-      t.id, t.tv_post_id, t.user_id, t.user_name, t.profile_image,
-      t.country_code, t.message, t.created_at
-    FROM tv_conversations t
-    ORDER BY datetime(t.created_at) DESC, t.id DESC
-    LIMIT 300
-  `).all();
-
-  return jsonResponse(
-    { success: true, conversations: result.results || [] },
-    200,
-    { "Cache-Control": "no-store" }
-  );
-}
-
-async function handleAdminUploadTvConversationPhoto(request, env) {
-  const authError = authorizeAdminRequest(request, env);
-  if (authError) return authError;
-
-  const contentType = String(request.headers.get("content-type") || "");
-  if (!contentType.toLowerCase().includes("multipart/form-data")) {
-    return errorResponse("This endpoint requires multipart/form-data.", 415);
-  }
-
-  let formData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return errorResponse("Invalid upload form.");
-  }
-
-  const file = formData.get("file");
-  if (!file || typeof file.arrayBuffer !== "function") {
-    return errorResponse("Choose a profile picture.");
-  }
-
-  try {
-    const uploaded = await uploadFile(request, env, file, "profile_image");
-
-    return jsonResponse(
-      {
-        success: true,
-        url: uploaded.url,
-        key: uploaded.key,
-      },
-      201,
-      { "Cache-Control": "no-store" }
-    );
-  } catch (error) {
-    return errorResponse(
-      error?.message || "Could not upload TV profile picture.",
-      400
-    );
-  }
-}
-
-async function handleAdminCreateTvConversation(request, env) {
-  const authError = authorizeAdminRequest(request, env);
-  if (authError) return authError;
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("Invalid JSON body.");
-  }
-
-  const tvPostId = String(body.tv_post_id || body.post_id || "").trim();
-  const userName = normalizeTvDisplayName(
-    body.user_name || body.display_name || ""
-  );
-  const profileImage = normalizeTvProfileImage(
-    body.profile_image || body.profile_image_url || ""
-  );
-  const countryCode = normalizeCountryCode(body.country_code);
-  const message = sanitizeTvMessage(body.message);
-
-  if (!tvPostId) return errorResponse("Choose a TV post.");
-  if (!userName) return errorResponse("Enter the name that should appear on TV.");
-  if (!profileImage) return errorResponse("Upload a valid TV profile picture.");
-  if (!countryCode) return errorResponse("Choose a valid country.");
-  if (!message) return errorResponse("Conversation message cannot be empty.");
-  if (!(await postExists(env.DB, tvPostId))) {
-    return errorResponse("TV post not found.", 404);
-  }
-
-  const id = crypto.randomUUID();
-  const viewerId = `viewer-${crypto.randomUUID()}`;
-  const createdAt = nowIso();
-
-  await env.DB.prepare(`
-    INSERT INTO tv_conversations (
-      id, tv_post_id, user_id, user_name, profile_image,
-      country_code, message, created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      tvPostId,
-      viewerId,
-      userName,
-      profileImage,
-      countryCode,
-      message,
-      createdAt
-    )
-    .run();
-
-  const created = {
-    id,
-    tv_post_id: tvPostId,
-    user_id: viewerId,
-    user_name: userName,
-    profile_image: profileImage,
-    country_code: countryCode,
-    message,
-    created_at: createdAt,
-  };
-
-  await notifyConversationRoom(env, `tv:${tvPostId}`, {
-    type: "tv_message",
-    tv_post_id: tvPostId,
-    message: created,
-  });
-
-  return jsonResponse(
-    { success: true, message: created },
-    201,
-    { "Cache-Control": "no-store" }
-  );
-}
-
-async function handleAdminDeleteTvConversation(request, env) {
-  const authError = authorizeAdminRequest(request, env);
-  if (authError) return authError;
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("Invalid JSON body.");
-  }
-
-  const conversationId = String(
-    body.conversation_id || body.message_id || body.id || ""
-  ).trim();
-
-  if (!conversationId) {
-    return errorResponse("conversation_id is required.");
-  }
-
-  const existing = await env.DB.prepare(`
-    SELECT id, tv_post_id, profile_image
-    FROM tv_conversations
-    WHERE id = ?
-    LIMIT 1
-  `)
-    .bind(conversationId)
-    .first();
-
-  if (!existing) {
-    return errorResponse("TV conversation not found.", 404);
-  }
-
-  await env.DB.prepare("DELETE FROM tv_conversations WHERE id = ?")
-    .bind(conversationId)
-    .run();
-
-  let profilePictureDeleted = false;
-  const profileImage = String(existing.profile_image || "").trim();
-
-  if (profileImage) {
-    const mediaKey = managedMediaKeyFromUrl(profileImage);
-
-    const [tvReference, providerReference, postReference] = await Promise.all([
-      env.DB.prepare(`
-        SELECT id
-        FROM tv_conversations
-        WHERE profile_image = ?
-        LIMIT 1
-      `)
-        .bind(profileImage)
-        .first(),
-
-      env.DB.prepare(`
-        SELECT id
-        FROM time_market_providers
-        WHERE profile_image_url = ?
-           OR profile_image_key = ?
-        LIMIT 1
-      `)
-        .bind(profileImage, mediaKey || "")
-        .first(),
-
-      env.DB.prepare(`
-        SELECT id
-        FROM feedx_posts
-        WHERE logo_url = ?
-           OR logo_key = ?
-        LIMIT 1
-      `)
-        .bind(profileImage, mediaKey || "")
-        .first(),
-    ]);
-
-    const isStillReferenced =
-      Boolean(tvReference) ||
-      Boolean(providerReference) ||
-      Boolean(postReference);
-
-    if (
-      !isStillReferenced &&
-      mediaKey &&
-      mediaKey.startsWith("feedx/profile_image/")
-    ) {
-      await deleteR2Key(env, mediaKey);
-      profilePictureDeleted = true;
-    }
-  }
-
-  await notifyConversationRoom(env, `tv:${existing.tv_post_id}`, {
-    type: "tv_message_deleted",
-    tv_post_id: existing.tv_post_id,
-    message_id: conversationId,
-  });
-
-  return jsonResponse({
-    success: true,
-    deleted_id: conversationId,
-    profile_picture_deleted: profilePictureDeleted,
-    message: "TV conversation, displayed name and profile picture were removed.",
-  });
-}
-
 // Ticket issuance is intentionally public (no auth) - reading the TV
 // conversation live requires no login, only sending does.
 async function handleTvRealtimeTicket(request, env) {
@@ -6066,8 +6262,7 @@ async function handleTvRealtimeTicket(request, env) {
   }
  
   let body;
-  try {
-    body = await request.json();
+  try {    body = await request.json();
   } catch {
     return errorResponse("Invalid JSON body.");
   }
@@ -6166,8 +6361,7 @@ async function handleTvRealtimeConnect(request, env) {
   if (Number(used?.meta?.changes || 0) !== 1) {
     return errorResponse("Realtime ticket has already been used.", 401);
   }
- 
-  const roomId = env.CHAT_ROOMS.idFromName(`tv:${ticket.tv_post_id}`);
+   const roomId = env.CHAT_ROOMS.idFromName(`tv:${ticket.tv_post_id}`);
   const room = env.CHAT_ROOMS.get(roomId);
   const headers = new Headers(request.headers);
   headers.set("X-Conversation-Id", `tv:${ticket.tv_post_id}`);
@@ -6181,6 +6375,225 @@ async function handleTvRealtimeConnect(request, env) {
   );
 }
  
+async function handleAdminTvConversationPhoto(request, env) {
+  // 1. Authorize with admin PIN (same as every other /api/admin/* route)
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  // 2. Require multipart form-data
+  const contentType = String(request.headers.get("content-type") || "");
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return errorResponse("This endpoint requires multipart/form-data.", 415);
+  }
+
+  const formData = await request.formData();
+  const file = formData.get("file");
+
+  if (!(file instanceof File) || file.size <= 0) {
+    return errorResponse("No file was received.", 400);
+  }
+
+  // 3. Reuse uploadFile with kind=profile_image so the object lands under
+  //    feedx/profile_image/... which normalizeTvProfileImage accepts.
+  try {
+    const uploaded = await uploadFile(request, env, file, "profile_image");
+    return jsonResponse({
+      success: true,
+      url: uploaded.url,
+      key: uploaded.key,
+    });
+  } catch (error) {
+    return errorResponse(error?.message || "TV photo upload failed.", 400);
+  }
+}
+
+async function handleAdminTvConversations(request, env) {
+  const url = new URL(request.url);
+  const authError = authorizeAdminRequest(
+    request,
+    env,
+    url.searchParams.get("pin") || ""
+  );
+  if (authError) return authError;
+
+  const tvPostId = String(
+    url.searchParams.get("post_id") ||
+      url.searchParams.get("tv_post_id") ||
+      ""
+  ).trim();
+  const limit = clamp(
+    Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500,
+    1,
+    1000
+  );
+
+  let query = `
+    SELECT
+      tc.id,
+      tc.tv_post_id,
+      tc.user_id,
+      tc.user_name,
+      tc.profile_image,
+      tc.country_code,
+      tc.message,
+      tc.created_at,
+      fp.title AS post_title,
+      fp.subtitle AS post_subtitle,
+      fp.media_url AS post_media_url,
+      fp.creator_name AS post_creator_name,
+      p.phone AS user_phone,
+      p.verification_status AS user_verification_status
+    FROM tv_conversations tc
+    LEFT JOIN feedx_posts fp
+      ON fp.id = tc.tv_post_id
+    LEFT JOIN time_market_providers p
+      ON p.id = tc.user_id
+  `;
+
+  const bindings = [];
+  if (tvPostId) {
+    query += ` WHERE tc.tv_post_id = ? `;
+    bindings.push(tvPostId);
+  }
+  query += `
+    ORDER BY datetime(tc.created_at) DESC, tc.id DESC
+    LIMIT ?
+  `;
+  bindings.push(limit);
+
+  const result = await env.DB.prepare(query).bind(...bindings).all();
+  const conversations = result.results || [];
+
+  // Keep several harmless aliases for compatibility with older/newer Admin.jsx
+  // builds. They all reference the same authorized TV conversation rows.
+  return jsonResponse(
+    {
+      success: true,
+      conversations,
+      tv_conversations: conversations,
+      messages: conversations,
+      items: conversations,
+      total: conversations.length,
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleAdminDeleteTvConversation(request, env) {
+  // Admin PIN auth — same as every other /api/admin/* route.
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  const conversationId = String(
+    body.conversation_id || body.id || ""
+  ).trim();
+
+  if (!conversationId) {
+    return errorResponse("conversation_id is required.");
+  }
+
+  const row = await env.DB
+    .prepare(`SELECT id, profile_image FROM tv_conversations WHERE id = ? LIMIT 1`)
+    .bind(conversationId)
+    .first();
+
+  if (!row) {
+    return errorResponse("TV conversation not found.", 404);
+  }
+
+  await env.DB
+    .prepare(`DELETE FROM tv_conversations WHERE id = ?`)
+    .bind(conversationId)
+    .run();
+
+  return jsonResponse({
+    success: true,
+    message:
+      "TV conversation, displayed name and profile picture were removed.",
+    deleted_id: conversationId,
+  });
+}
+
+
+async function handleAdminServices(request, env) {
+  const url = new URL(request.url);
+  const authError = authorizeAdminRequest(
+    request,
+    env,
+    url.searchParams.get("pin") || ""
+  );
+  if (authError) return authError;
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        fp.*,
+        p.verification_status
+      FROM feedx_posts fp
+      LEFT JOIN time_market_providers p
+        ON p.id = fp.provider_id
+      ORDER BY datetime(fp.created_at) DESC, fp.id DESC
+    `)
+    .all();
+
+  const services = await Promise.all(
+    (result.results || []).map(async (post) => {
+      const [analytics, commentRow, reactionRow] = await Promise.all([
+        env.DB
+          .prepare(`
+            SELECT *
+            FROM feedx_post_analytics
+            WHERE post_id = ?
+          `)
+          .bind(post.id)
+          .first(),
+        env.DB
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM home_comments
+            WHERE post_id = ?
+          `)
+          .bind(post.id)
+          .first(),
+        env.DB
+          .prepare(`
+            SELECT COUNT(*) AS count
+            FROM home_reactions
+            WHERE post_id = ?
+          `)
+          .bind(post.id)
+          .first(),
+      ]);
+
+      return mapPost(
+        post,
+        analytics || {},
+        Number(commentRow?.count || 0),
+        Number(reactionRow?.count || 0)
+      );
+    })
+  );
+
+  return jsonResponse(
+    {
+      success: true,
+      services,
+    },
+    200,
+    {
+      "Cache-Control": "no-store",
+    }
+  );
+}
+
 async function handleAdminProviders(
   request,
   env
@@ -6194,8 +6607,7 @@ async function handleAdminProviders(
   if (authError) return authError;
  
   const result = await env.DB
-    .prepare(`
-      SELECT *
+    .prepare(`      SELECT *
       FROM time_market_providers
       ORDER BY
         CASE verification_status
@@ -6294,8 +6706,7 @@ async function handleAdminVerifyProvider(
   let activationCodeHash = null;
   let activationCodeExpiresAt = null;
  
-  if (status === "verified") {
-    activationCode = randomVerificationCode();
+  if (status === "verified") {    activationCode = randomVerificationCode();
     activationCodeHash = await hashVerificationSecret(
       activationCode,
       `activation:${provider.id}`,
@@ -6394,8 +6805,7 @@ async function handleAdminPinResets(request, env) {
         r.status,
         r.expires_at,
         r.approved_at,
-        r.rejected_at,
-        r.used_at,
+        r.rejected_at,        r.used_at,
         r.attempts,
         r.created_at,
         r.updated_at,
@@ -6494,8 +6904,7 @@ async function handleAdminPinResetDecision(request, env) {
     const attempts = Number(reset.attempts || 0) + 1;
     const status = attempts >= 5 ? "rejected" : "pending";
     await env.DB
-      .prepare(`
-        UPDATE time_market_pin_resets
+      .prepare(`        UPDATE time_market_pin_resets
         SET attempts = ?, status = ?, rejected_at = CASE WHEN ? = 'rejected' THEN ? ELSE rejected_at END, updated_at = ?
         WHERE id = ?
       `)
@@ -6594,8 +7003,7 @@ async function handleAdminConversations(
           s.title
             AS service_charge_per_minute,
           s.subtitle
-            AS work_description,
-          buyer.full_name
+            AS work_description,          buyer.full_name
             AS customer_full_name,
           buyer.phone
             AS customer_phone,
@@ -6694,8 +7102,7 @@ async function handleAdminConversations(
       FROM time_market_conversations c
       LEFT JOIN feedx_posts s
         ON s.id = c.service_post_id
-      LEFT JOIN time_market_providers buyer
-        ON buyer.id = c.customer_provider_id
+      LEFT JOIN time_market_providers buyer        ON buyer.id = c.customer_provider_id
       LEFT JOIN time_market_providers seller
         ON seller.id = c.provider_id
       WHERE EXISTS (
@@ -6748,6 +7155,10 @@ async function handleAdminUpdateStats(
   const manualReactions = Number(
     body.manual_reactions
   );
+
+   const manualWatching = Number(
+    body.manual_watching || 0
+  );
  
   if (!postId) {
     return errorResponse(
@@ -6759,7 +7170,9 @@ async function handleAdminUpdateStats(
     !Number.isSafeInteger(manualViews) ||
     manualViews < 0 ||
     !Number.isSafeInteger(manualReactions) ||
-    manualReactions < 0
+    manualReactions < 0 ||
+    !Number.isSafeInteger(manualWatching) ||
+    manualWatching < 0
   ) {
     return errorResponse(
       "manual_views and manual_reactions must be whole numbers of zero or more."
@@ -6780,22 +7193,23 @@ async function handleAdminUpdateStats(
  
   await env.DB
     .prepare(`
-      UPDATE feedx_post_analytics
+         UPDATE feedx_post_analytics
       SET manual_views = ?,
           manual_reactions = ?,
+          manual_watching = ?,
           updated_at = ?
       WHERE post_id = ?
     `)
-    .bind(
+      .bind(
       manualViews,
       manualReactions,
+      manualWatching,
       nowIso(),
       postId
     )
     .run();
  
-  const post = await getPostForPublic(
-    env.DB,
+  const post = await getPostForPublic(    env.DB,
     postId
   );
  
@@ -6894,8 +7308,7 @@ async function handleAdminReport(
       .first();
  
     const comments = await env.DB
-      .prepare(`
-        SELECT
+      .prepare(`        SELECT
           id,
           commenter_phone,
           country_flag,
@@ -6994,8 +7407,7 @@ async function handlePrivateMessageMedia(request, env) {
   const signature = String(
     url.searchParams.get("signature") || ""
   ).trim();
- 
-  if (
+   if (
     !messageId ||
     !Number.isSafeInteger(expires) ||
     expires <= Math.floor(Date.now() / 1000) ||
@@ -7094,8 +7506,7 @@ async function handleR2Media(
   const key = decodeURIComponent(
     pathname.replace(/^\//, "")
   );
- 
-  if (
+   if (
     !key.startsWith("feedx/") &&
     !key.startsWith("time-market/")
   ) {
@@ -7194,8 +7605,7 @@ async function handleR2Media(
     headers.set(
       "Content-Range",
       `bytes ${start}-${end}/${object.size}`
-    );
- 
+    ); 
     headers.set(
       "Content-Length",
       String(object.range.length)
@@ -7217,6 +7627,833 @@ async function handleR2Media(
 }
  
  
+// ==================== CONNECT LIVE MATCHING ====================
+// Uses the same authenticated Gwamo provider/session as Market. Phone numbers
+// stay server-side and are never returned by these routes.
+
+
+async function readConnectLiveJsonBody(request) {
+  try {
+    const body = await request.json();
+    return body && typeof body === "object" ? body : {};
+  } catch {
+    return {};
+  }
+}
+
+function connectLiveSide(value = "") {
+  const side = String(value || "").trim().toLowerCase();
+  return side === "need" || side === "offer" ? side : "";
+}
+
+function connectLiveItemId(value = "") {
+  const itemId = String(value || "").trim().toLowerCase();
+  return CONNECT_LIVE_ITEM_IDS.has(itemId) ? itemId : "";
+}
+
+function connectLiveActiveCutoff() {
+  return new Date(Date.now() - CONNECT_LIVE_ACTIVE_WINDOW_MS).toISOString();
+}
+
+function connectLivePublicProvider(row = {}) {
+  const verificationStatus = normalizeVerificationStatus(row.verification_status);
+  return {
+    provider_id: String(row.provider_id || row.id || ""),
+    full_name:
+      row.service_provider_name || row.full_name || row.name || "Gwamo member",
+    profile_photo_url: row.profile_image_url || row.profile_photo_url || "",
+    location: row.location || "",
+    verification_status: verificationStatus,
+    verified: verificationStatus === "verified",
+    available: Number(row.is_available ?? 1) === 1,
+    item_photo_url: row.item_photo_url || "",
+  };
+}
+
+async function connectLiveRelationship(db, firstProviderId, secondProviderId, itemId) {
+  return await db
+    .prepare(`
+      SELECT 1 AS matched
+      FROM connect_live_presence a
+      JOIN connect_live_presence b
+        ON b.item_id = a.item_id
+       AND b.side != a.side
+      WHERE a.provider_id = ?
+        AND b.provider_id = ?
+        AND a.item_id = ?
+      LIMIT 1
+    `)
+    .bind(firstProviderId, secondProviderId, itemId)
+    .first();
+}
+
+async function getConnectLiveMatches(db, providerId, itemId, ownSide, location = "") {
+  const oppositeSide = ownSide === "need" ? "offer" : "need";
+  const cutoff = connectLiveActiveCutoff();
+  const cleanLocation = sanitizeConnectText(location || "", CONNECT_LOCATION_MAX_LENGTH);
+
+  const result = await db
+    .prepare(`
+      SELECT
+        lp.provider_id,
+        lp.location,
+        lp.is_available,
+        lp.item_photo_url,
+        lp.last_seen_at,
+        p.full_name,
+        p.service_provider_name,
+        p.profile_image_url,
+        p.verification_status
+      FROM connect_live_presence lp      JOIN time_market_providers p ON p.id = lp.provider_id
+      WHERE lp.item_id = ?
+        AND lp.side = ?
+        AND lp.is_available = 1
+        AND lp.provider_id != ?
+        AND p.account_status = 'active'
+        AND datetime(lp.last_seen_at) >= datetime(?)
+      ORDER BY
+        CASE
+          WHEN ? != '' AND lower(lp.location) = lower(?) THEN 0
+          WHEN ? != '' AND lower(lp.location) LIKE '%' || lower(?) || '%' THEN 1
+          ELSE 2
+        END,
+        datetime(lp.last_seen_at) DESC
+      LIMIT 50
+    `)
+    .bind(
+      itemId,
+      oppositeSide,
+      providerId,
+      cutoff,
+      cleanLocation,
+      cleanLocation,
+      cleanLocation,
+      cleanLocation
+    )
+    .all();
+
+  return (result.results || []).map(connectLivePublicProvider);
+}
+
+async function handleConnectLiveCounts(request, env) {
+  const url = new URL(request.url);
+  const side = connectLiveSide(url.searchParams.get("side"));
+  if (!side) return errorResponse("Connect side must be need or offer.");
+
+  const cutoff = connectLiveActiveCutoff();
+  const result = await env.DB
+    .prepare(`
+      SELECT item_id, COUNT(DISTINCT provider_id) AS count
+      FROM connect_live_presence
+      WHERE side = ?
+        AND is_available = 1
+        AND datetime(last_seen_at) >= datetime(?)
+      GROUP BY item_id
+    `)
+    .bind(side, cutoff)
+    .all();
+
+  const counts = {};
+  for (const row of result.results || []) {
+    if (CONNECT_LIVE_ITEM_IDS.has(String(row.item_id || ""))) {
+      counts[row.item_id] = Number(row.count || 0);
+    }
+  }
+
+  return jsonResponse({ success: true, counts }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+async function handleConnectLivePresence(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const body = await readConnectLiveJsonBody(request);
+  const itemId = connectLiveItemId(body.item_id);
+  const side = connectLiveSide(body.side);
+  const location = sanitizeConnectText(body.location || "", CONNECT_LOCATION_MAX_LENGTH);
+  const language = String(body.language || "rw").toLowerCase() === "en" ? "en" : "rw";
+  const isAvailable = body.available === false ? 0 : 1;
+
+  if (!itemId) return errorResponse("Choose a valid Connect item.");
+  if (!side) return errorResponse("Connect side must be need or offer.");
+  if (!location) return errorResponse("Location is required.");
+
+  let itemPhotoUrl = normalizeConnectUrl(body.item_photo_url || "");
+  let itemPhotoKey = sanitizeConnectText(body.item_photo_key || "", 500);
+  if (itemPhotoUrl) {
+    const managedKey = managedMediaKeyFromUrl(itemPhotoUrl);
+    if (!managedKey) {
+      return errorResponse("Connect item photo must be uploaded through Gwamo.");
+    }
+    itemPhotoKey = managedKey;
+  } else {
+    itemPhotoKey = "";
+  }
+
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      INSERT INTO connect_live_presence (
+        id,
+        provider_id,
+        item_id,
+        side,
+        location,
+        is_available,
+        item_photo_url,
+        item_photo_key,        language,
+        created_at,
+        updated_at,
+        last_seen_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider_id, item_id, side) DO UPDATE SET
+        location = excluded.location,
+        is_available = excluded.is_available,
+        item_photo_url = CASE
+          WHEN excluded.item_photo_url != '' THEN excluded.item_photo_url
+          ELSE connect_live_presence.item_photo_url
+        END,
+        item_photo_key = CASE
+          WHEN excluded.item_photo_key != '' THEN excluded.item_photo_key
+          ELSE connect_live_presence.item_photo_key
+        END,
+        language = excluded.language,
+        updated_at = excluded.updated_at,
+        last_seen_at = excluded.last_seen_at
+    `)
+    .bind(
+      crypto.randomUUID(),
+      auth.provider.id,
+      itemId,
+      side,
+      location,
+      isAvailable,
+      itemPhotoUrl,
+      itemPhotoKey,
+      language,
+      timestamp,
+      timestamp,
+      timestamp
+    )
+    .run();
+
+  const matches = isAvailable
+    ? await getConnectLiveMatches(env.DB, auth.provider.id, itemId, side, location)
+    : [];
+
+  return jsonResponse(
+    {
+      success: true,
+      presence: {
+        item_id: itemId,
+        side,
+        location,
+        available: Boolean(isAvailable),
+        item_photo_url: itemPhotoUrl,
+      },
+      matches,
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveMatches(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const url = new URL(request.url);
+  const itemId = connectLiveItemId(url.searchParams.get("item_id"));
+  const side = connectLiveSide(url.searchParams.get("side"));
+  const location = sanitizeConnectText(
+    url.searchParams.get("location") || "",
+    CONNECT_LOCATION_MAX_LENGTH
+  );
+
+  if (!itemId) return errorResponse("Choose a valid Connect item.");
+  if (!side) return errorResponse("Connect side must be need or offer.");
+
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      UPDATE connect_live_presence
+      SET last_seen_at = ?, updated_at = ?
+      WHERE provider_id = ? AND item_id = ? AND side = ?
+    `)
+    .bind(timestamp, timestamp, auth.provider.id, itemId, side)
+    .run();
+
+  const matches = await getConnectLiveMatches(
+    env.DB,
+    auth.provider.id,
+    itemId,
+    side,
+    location
+  );
+
+  return jsonResponse({ success: true, matches }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+async function handleConnectLiveMessages(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+  const url = new URL(request.url);
+  const otherProviderId = String(url.searchParams.get("with_provider_id") || "").trim();
+  const itemId = connectLiveItemId(url.searchParams.get("item_id"));
+  if (!otherProviderId || !itemId) {
+    return errorResponse("Connect person and item are required.");
+  }
+
+  const relationship = await connectLiveRelationship(
+    env.DB,
+    auth.provider.id,
+    otherProviderId,
+    itemId
+  );
+  if (!relationship) return errorResponse("This Connect match is not available.", 403);
+
+  const result = await env.DB
+    .prepare(`
+      SELECT id, sender_provider_id, receiver_provider_id, message, created_at, read_at
+      FROM connect_live_messages
+      WHERE item_id = ?
+        AND (
+          (sender_provider_id = ? AND receiver_provider_id = ?)
+          OR
+          (sender_provider_id = ? AND receiver_provider_id = ?)
+        )
+      ORDER BY datetime(created_at) ASC
+      LIMIT 250
+    `)
+    .bind(
+      itemId,
+      auth.provider.id,
+      otherProviderId,
+      otherProviderId,
+      auth.provider.id
+    )
+    .all();
+
+  await env.DB
+    .prepare(`
+      UPDATE connect_live_messages
+      SET read_at = COALESCE(read_at, ?)
+      WHERE item_id = ?
+        AND sender_provider_id = ?
+        AND receiver_provider_id = ?
+        AND read_at IS NULL
+    `)
+    .bind(nowIso(), itemId, otherProviderId, auth.provider.id)
+    .run();
+
+  const messages = (result.results || []).map((row) => ({
+    id: row.id,
+    message: row.message || "",
+    created_at: row.created_at,
+    read_at: row.read_at || null,
+    mine: String(row.sender_provider_id) === String(auth.provider.id),
+  }));
+
+  return jsonResponse({ success: true, messages }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+async function handleConnectLiveMessage(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const body = await readConnectLiveJsonBody(request);
+  const otherProviderId = String(body.to_provider_id || "").trim();
+  const itemId = connectLiveItemId(body.item_id);
+  const message = sanitizeConnectText(body.message || "", 1000);
+
+  if (!otherProviderId || otherProviderId === String(auth.provider.id)) {
+    return errorResponse("Choose another Connect member.");
+  }
+  if (!itemId) return errorResponse("Choose a valid Connect item.");
+  if (!message) return errorResponse("Message cannot be empty.");
+
+  const rateKey = `connect-live-message:${auth.provider.id}`;
+  if (!checkRateLimit(rateKey, 60, 60_000)) {
+    return errorResponse("Too many messages. Try again shortly.", 429);
+  }
+
+  const relationship = await connectLiveRelationship(
+    env.DB,
+    auth.provider.id,
+    otherProviderId,
+    itemId
+  );
+  if (!relationship) return errorResponse("This Connect match is not available.", 403);
+
+  const recipient = await getProviderById(env.DB, otherProviderId);
+  if (!recipient || (recipient.account_status || "active") !== "active") {
+    return errorResponse("This Connect member is unavailable.", 404);
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      INSERT INTO connect_live_messages (        id, item_id, sender_provider_id, receiver_provider_id, message, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .bind(id, itemId, auth.provider.id, otherProviderId, message, timestamp)
+    .run();
+
+  return jsonResponse(
+    {
+      success: true,
+      message: {
+        id,
+        message,
+        created_at: timestamp,
+        mine: true,
+      },
+    },
+    201,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveRecent(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const providerId = String(auth.provider.id);
+  const messages = await env.DB
+    .prepare(`
+      SELECT
+        m.item_id,
+        m.created_at,
+        CASE
+          WHEN m.sender_provider_id = ? THEN m.receiver_provider_id
+          ELSE m.sender_provider_id
+        END AS other_provider_id,
+        p.full_name,
+        p.service_provider_name,
+        p.profile_image_url,
+        p.verification_status
+      FROM connect_live_messages m
+      JOIN time_market_providers p
+        ON p.id = CASE
+          WHEN m.sender_provider_id = ? THEN m.receiver_provider_id
+          ELSE m.sender_provider_id
+        END
+      WHERE m.sender_provider_id = ? OR m.receiver_provider_id = ?
+      ORDER BY datetime(m.created_at) DESC
+      LIMIT 60
+    `)
+    .bind(providerId, providerId, providerId, providerId)
+    .all();
+
+  const calls = await env.DB
+    .prepare(`
+      SELECT
+        c.item_id,
+        c.updated_at AS created_at,
+        CASE
+          WHEN c.caller_provider_id = ? THEN c.callee_provider_id
+          ELSE c.caller_provider_id
+        END AS other_provider_id,
+        p.full_name,
+        p.service_provider_name,
+        p.profile_image_url,
+        p.verification_status
+      FROM connect_live_calls c
+      JOIN time_market_providers p
+        ON p.id = CASE
+          WHEN c.caller_provider_id = ? THEN c.callee_provider_id
+          ELSE c.caller_provider_id
+        END
+      WHERE c.caller_provider_id = ? OR c.callee_provider_id = ?
+      ORDER BY datetime(c.updated_at) DESC
+      LIMIT 60
+    `)
+    .bind(providerId, providerId, providerId, providerId)
+    .all();
+
+  const combined = [...(messages.results || []), ...(calls.results || [])]
+    .sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0));
+
+  const seen = new Set();
+  const items = [];
+  for (const row of combined) {
+    const key = `${row.item_id}:${row.other_provider_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      item_id: row.item_id,
+      created_at: row.created_at,
+      person: connectLivePublicProvider({
+        provider_id: row.other_provider_id,
+        full_name: row.full_name,
+        service_provider_name: row.service_provider_name,
+        profile_image_url: row.profile_image_url,
+        verification_status: row.verification_status,
+        is_available: 1,
+      }),
+    });    if (items.length >= 40) break;
+  }
+
+  return jsonResponse({ success: true, items }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+async function getConnectLiveCallForParticipant(db, callId, providerId) {
+  return await db
+    .prepare(`
+      SELECT *
+      FROM connect_live_calls
+      WHERE id = ?
+        AND (caller_provider_id = ? OR callee_provider_id = ?)
+      LIMIT 1
+    `)
+    .bind(callId, providerId, providerId)
+    .first();
+}
+
+async function expireConnectLiveCallIfNeeded(env, call) {
+  if (!call || call.status !== "ringing") return call;
+  const createdAt = Date.parse(call.created_at || "");
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt <= CONNECT_LIVE_RING_TIMEOUT_MS) {
+    return call;
+  }
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      UPDATE connect_live_calls
+      SET status = 'missed', updated_at = ?, ended_at = ?
+      WHERE id = ? AND status = 'ringing'
+    `)
+    .bind(timestamp, timestamp, call.id)
+    .run();
+  return { ...call, status: "missed", updated_at: timestamp, ended_at: timestamp };
+}
+
+async function handleConnectLiveCallRequest(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const body = await readConnectLiveJsonBody(request);
+  const otherProviderId = String(body.to_provider_id || "").trim();
+  const itemId = connectLiveItemId(body.item_id);
+  if (!otherProviderId || otherProviderId === String(auth.provider.id)) {
+    return errorResponse("Choose another Connect member.");
+  }
+  if (!itemId) return errorResponse("Choose a valid Connect item.");
+
+  const rateKey = `connect-live-call:${auth.provider.id}`;
+  if (!checkRateLimit(rateKey, 12, 60_000)) {
+    return errorResponse("Too many call attempts. Try again shortly.", 429);
+  }
+
+  const relationship = await connectLiveRelationship(
+    env.DB,
+    auth.provider.id,
+    otherProviderId,
+    itemId
+  );
+  if (!relationship) return errorResponse("This Connect match is not available.", 403);
+
+  const recipient = await getProviderById(env.DB, otherProviderId);
+  if (!recipient || (recipient.account_status || "active") !== "active") {
+    return errorResponse("This Connect member is unavailable.", 404);
+  }
+
+  const cutoff = new Date(Date.now() - CONNECT_LIVE_RING_TIMEOUT_MS).toISOString();
+  const existing = await env.DB
+    .prepare(`
+      SELECT * FROM connect_live_calls
+      WHERE item_id = ?
+        AND caller_provider_id = ?
+        AND callee_provider_id = ?
+        AND status = 'ringing'
+        AND datetime(created_at) >= datetime(?)
+      ORDER BY datetime(created_at) DESC
+      LIMIT 1
+    `)
+    .bind(itemId, auth.provider.id, otherProviderId, cutoff)
+    .first();
+
+  if (existing) {
+    return jsonResponse({ success: true, call_id: existing.id, status: existing.status });
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      INSERT INTO connect_live_calls (
+        id, item_id, caller_provider_id, callee_provider_id,
+        status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'ringing', ?, ?)
+    `)
+    .bind(id, itemId, auth.provider.id, otherProviderId, timestamp, timestamp)
+    .run();
+  return jsonResponse(
+    { success: true, call_id: id, status: "ringing" },
+    201,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveCallStatus(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const url = new URL(request.url);
+  const callId = String(url.searchParams.get("call_id") || "").trim();
+  if (!callId) return errorResponse("call_id is required.");
+
+  let call = await getConnectLiveCallForParticipant(env.DB, callId, auth.provider.id);
+  if (!call) return errorResponse("Call not found.", 404);
+  call = await expireConnectLiveCallIfNeeded(env, call);
+
+  return jsonResponse(
+    {
+      success: true,
+      call: {
+        id: call.id,
+        item_id: call.item_id,
+        status: call.status,
+        role:
+          String(call.caller_provider_id) === String(auth.provider.id)
+            ? "caller"
+            : "callee",
+        created_at: call.created_at,
+        answered_at: call.answered_at || null,
+        ended_at: call.ended_at || null,
+      },
+      status: call.status,
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveIncomingCall(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+
+  const row = await env.DB
+    .prepare(`
+      SELECT
+        c.*,
+        p.full_name,
+        p.service_provider_name,
+        p.profile_image_url,
+        p.verification_status
+      FROM connect_live_calls c
+      JOIN time_market_providers p ON p.id = c.caller_provider_id
+      WHERE c.callee_provider_id = ? AND c.status = 'ringing'
+      ORDER BY datetime(c.created_at) DESC
+      LIMIT 1
+    `)
+    .bind(auth.provider.id)
+    .first();
+
+  if (!row) return jsonResponse({ success: true, call: null });
+  const call = await expireConnectLiveCallIfNeeded(env, row);
+  if (call.status !== "ringing") return jsonResponse({ success: true, call: null });
+
+  return jsonResponse(
+    {
+      success: true,
+      call: {
+        id: call.id,
+        item_id: call.item_id,
+        status: call.status,
+        created_at: call.created_at,
+        person: connectLivePublicProvider({
+          provider_id: call.caller_provider_id,
+          full_name: call.full_name,
+          service_provider_name: call.service_provider_name,
+          profile_image_url: call.profile_image_url,
+          verification_status: call.verification_status,
+          is_available: 1,
+        }),
+      },
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveCallRespond(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+  const body = await readConnectLiveJsonBody(request);
+  const callId = String(body.call_id || "").trim();
+  const action = String(body.action || "").trim().toLowerCase();
+  if (!callId || !["accept", "decline"].includes(action)) {
+    return errorResponse("Choose accept or decline.");
+  }
+
+  let call = await getConnectLiveCallForParticipant(env.DB, callId, auth.provider.id);  if (!call) return errorResponse("Call not found.", 404);
+  call = await expireConnectLiveCallIfNeeded(env, call);
+  if (String(call.callee_provider_id) !== String(auth.provider.id)) {
+    return errorResponse("Only the person receiving the call can answer it.", 403);
+  }
+  if (call.status !== "ringing") {
+    return jsonResponse({ success: true, status: call.status, call_id: call.id });
+  }
+
+  const timestamp = nowIso();
+  const status = action === "accept" ? "accepted" : "declined";
+  await env.DB
+    .prepare(`
+      UPDATE connect_live_calls
+      SET status = ?, updated_at = ?, answered_at = ?, ended_at = ?
+      WHERE id = ? AND status = 'ringing'
+    `)
+    .bind(
+      status,
+      timestamp,
+      action === "accept" ? timestamp : null,
+      action === "decline" ? timestamp : null,
+      call.id
+    )
+    .run();
+
+  return jsonResponse({ success: true, call_id: call.id, status });
+}
+
+async function handleConnectLiveCallEnd(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+  const body = await readConnectLiveJsonBody(request);
+  const callId = String(body.call_id || "").trim();
+  if (!callId) return errorResponse("call_id is required.");
+
+  const call = await getConnectLiveCallForParticipant(env.DB, callId, auth.provider.id);
+  if (!call) return errorResponse("Call not found.", 404);
+
+  if (["ended", "declined", "missed", "failed"].includes(call.status)) {
+    return jsonResponse({ success: true, call_id: call.id, status: call.status });
+  }
+
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      UPDATE connect_live_calls
+      SET status = 'ended', updated_at = ?, ended_at = ?
+      WHERE id = ?
+    `)
+    .bind(timestamp, timestamp, call.id)
+    .run();
+
+  return jsonResponse({ success: true, call_id: call.id, status: "ended" });
+}
+
+async function handleConnectLiveCallSignal(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+  const body = await readConnectLiveJsonBody(request);
+  const callId = String(body.call_id || "").trim();
+  const signalType = String(body.type || body.signal_type || "").trim().toLowerCase();
+  if (!callId || !["offer", "answer", "ice"].includes(signalType)) {
+    return errorResponse("A valid call signal is required.");
+  }
+
+  const call = await getConnectLiveCallForParticipant(env.DB, callId, auth.provider.id);
+  if (!call) return errorResponse("Call not found.", 404);
+  if (["ended", "declined", "missed", "failed"].includes(call.status)) {
+    return errorResponse("This call is no longer active.", 409);
+  }
+
+  const payload = body.payload ?? body.data ?? null;
+  const payloadJson = JSON.stringify(payload);
+  if (!payloadJson || payloadJson.length > 64_000) {
+    return errorResponse("Call signal is too large.");
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = nowIso();
+  await env.DB
+    .prepare(`
+      INSERT INTO connect_live_call_signals (
+        id, call_id, sender_provider_id, signal_type, payload_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .bind(id, callId, auth.provider.id, signalType, payloadJson, timestamp)
+    .run();
+
+  const inserted = await env.DB
+    .prepare(`SELECT seq FROM connect_live_call_signals WHERE id = ? LIMIT 1`)
+    .bind(id)
+    .first();
+
+  if (signalType === "answer" && call.status === "accepted") {
+    await env.DB
+      .prepare(`
+        UPDATE connect_live_calls
+        SET status = 'connected', updated_at = ?
+        WHERE id = ? AND status = 'accepted'      `)
+      .bind(timestamp, callId)
+      .run();
+  }
+
+  return jsonResponse(
+    {
+      success: true,
+      signal: { id, seq: Number(inserted?.seq || 0), type: signalType, created_at: timestamp },
+    },
+    201,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleConnectLiveCallSignals(request, env) {
+  const auth = await requireProvider(request, env);
+  if (auth.response) return auth.response;
+  const url = new URL(request.url);
+  const callId = String(url.searchParams.get("call_id") || "").trim();
+  const afterSeq = Math.max(0, Number.parseInt(url.searchParams.get("after_seq") || "0", 10) || 0);
+  if (!callId) return errorResponse("call_id is required.");
+
+  const call = await getConnectLiveCallForParticipant(env.DB, callId, auth.provider.id);
+  if (!call) return errorResponse("Call not found.", 404);
+
+  const result = await env.DB
+    .prepare(`
+      SELECT seq, id, signal_type, payload_json, created_at
+      FROM connect_live_call_signals
+      WHERE call_id = ?
+        AND sender_provider_id != ?
+        AND seq > ?
+      ORDER BY seq ASC
+      LIMIT 100
+    `)
+    .bind(callId, auth.provider.id, afterSeq)
+    .all();
+
+  const signals = (result.results || []).map((row) => {
+    let payload = null;
+    try { payload = JSON.parse(row.payload_json || "null"); } catch {}
+    return {
+      seq: Number(row.seq || 0),
+      id: row.id,
+      type: row.signal_type,
+      payload,
+      created_at: row.created_at,
+    };
+  });
+
+  return jsonResponse({ success: true, signals }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+
 async function handleConnectUpload(request, env) {
   const contentType = String(request.headers.get("content-type") || "");
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
@@ -7227,14 +8464,21 @@ async function handleConnectUpload(request, env) {
   const kind = String(formData.get("kind") || "profile_image").trim();
   const file = formData.get("file");
  
-  if (!["profile_image", "video"].includes(kind)) {
-    return errorResponse("Connect upload kind must be profile_image or video.");
+  if (!["profile_image", "connect_item_image", "video"].includes(kind)) {
+    return errorResponse(
+      "Connect upload kind must be profile_image, connect_item_image, or video."
+    );
   }
  
   if (!(file instanceof File)) {
     return errorResponse("No file was received.");
   }
  
+  if (kind === "connect_item_image") {
+    const auth = await requireProvider(request, env);
+    if (auth.response) return auth.response;
+  }
+
   const rateKey = `connect-upload:${kind}:${getClientIp(request)}`;
   const limit = kind === "video" ? 8 : 24;
   if (!checkRateLimit(rateKey, limit, 60 * 60_000)) {
@@ -7251,8 +8495,8 @@ async function handleConnectUpload(request, env) {
   }
  
   try {
-    const uploaded = await uploadFile(request, env, file, kind);
-    return jsonResponse(
+    const uploadKind = kind === "connect_item_image" ? "post_image" : kind;
+    const uploaded = await uploadFile(request, env, file, uploadKind);    return jsonResponse(
       {
         success: true,
         kind,
@@ -7351,8 +8595,7 @@ async function createConnectBaseItem(request, env, body, connectType, payload) {
         video_url,
         video_key,
         music_url,
-        group_url,
-        status,
+        group_url,        status,
         admin_note,
         public_data_json,
         private_data_json,
@@ -7390,6 +8633,421 @@ async function createConnectBaseItem(request, env, body, connectType, payload) {
   };
 }
  
+// =====================================================================
+// ROMANTIC STORIES
+// Public read, admin-PIN-gated write. Backed by the romantic_couples,
+// romantic_songs and romantic_playback tables, and by R2 (MEDIA_BUCKET)
+// for the actual image and song files. Makes the storybook and the
+// background playlist survive a page refresh, and lets the song index
+// resume where it stopped.
+// =====================================================================
+
+async function handleRomanticListCouples(request, env) {
+  const result = await env.DB
+    .prepare(`
+      SELECT id, names, whatsapp, flag, image_url, created_at
+      FROM romantic_couples
+      ORDER BY datetime(created_at) ASC, id ASC
+    `)
+    .all();
+
+  return jsonResponse(
+    { success: true, couples: result.results || [] },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticAddCouple(request, env) {
+    const authError = authorizeRomanticRequest(request, env, "");
+    if (authError) return authError;
+
+  const contentType = String(request.headers.get("content-type") || "");
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return errorResponse("This endpoint requires multipart/form-data.", 415);
+  }
+
+  let formData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    return errorResponse(`Could not read form data: ${error.message}`, 400);
+  }
+
+  const names = String(formData.get("names") || "").trim().slice(0, 120);
+  const whatsapp = normalizeWhatsAppNumber(formData.get("whatsapp") || "");
+  const flag = validSubmittedCountryFlag(formData.get("flag") || "");
+  const file = formData.get("file");
+
+  if (!names) return errorResponse("Add the couple names.");
+  if (!whatsapp) return errorResponse("Add a valid WhatsApp number.");
+  if (!(file instanceof File) || file.size <= 0) {
+    return errorResponse("Upload one couple image.");
+  }
+
+  if (
+    !checkRateLimit(
+      `romantic-add:${getClientIp(request)}`,
+      30,
+      60 * 60_000
+    )
+  ) {
+    return errorResponse("Too many uploads. Try again later.", 429);
+  }
+
+  let uploaded = null;
+  try {
+    uploaded = await uploadFile(request, env, file, "romantic_photo");
+
+    const id = crypto.randomUUID();
+    const timestamp = nowIso();
+
+    await env.DB
+      .prepare(`
+        INSERT INTO romantic_couples (
+          id, names, whatsapp, flag, image_url, image_key, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        id,
+        names,
+        whatsapp,
+        flag || "",
+        uploaded.url,
+        uploaded.key,
+        timestamp
+      )
+      .run();
+
+    const couple = {
+      id,
+      names,
+      whatsapp,
+      flag: flag || "",
+      image_url: uploaded.url,
+      created_at: timestamp,
+    };
+
+    return jsonResponse(
+      { success: true, couple },
+      201,
+      { "Cache-Control": "no-store" }
+    );
+  } catch (error) {
+    await deleteR2Key(env, uploaded?.key);
+    return errorResponse(
+      error?.message || "Could not add this couple.",
+      400
+    );
+  }
+}
+
+async function handleRomanticDeleteCouple(request, env) {
+   const authError = authorizeRomanticRequest(request, env, "");
+   if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  const id = String(body.id || body.couple_id || "").trim();
+  if (!id) return errorResponse("id is required.");
+
+  const row = await env.DB
+    .prepare(`
+      SELECT id, image_key
+      FROM romantic_couples
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  if (!row) return errorResponse("Couple not found.", 404);
+
+  await env.DB
+    .prepare(`DELETE FROM romantic_couples WHERE id = ?`)
+    .bind(id)
+    .run();
+
+  await deleteR2Key(env, row.image_key);
+
+  return jsonResponse(
+    { success: true, message: "Couple removed." },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticUpdateCouple(request, env) {
+  const authError = authorizeRomanticRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  const id = String(body.id || body.couple_id || "").trim();
+  if (!id) return errorResponse("id is required.");
+
+  const names = String(body.names || "").trim().slice(0, 120);
+  const flag = validSubmittedCountryFlag(body.flag || "");
+
+  if (!names) return errorResponse("Couple names are required.");
+  if (!flag) return errorResponse("Choose a valid country.");
+
+  const existing = await env.DB
+    .prepare(`
+      SELECT id
+      FROM romantic_couples
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  if (!existing) return errorResponse("Couple not found.", 404);
+
+  await env.DB
+    .prepare(`
+      UPDATE romantic_couples
+      SET names = ?, flag = ?
+      WHERE id = ?
+    `)
+    .bind(names, flag, id)
+    .run();
+
+  const updated = await env.DB
+    .prepare(`
+      SELECT id, names, whatsapp, flag, image_url, created_at
+      FROM romantic_couples
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  return jsonResponse(
+    { success: true, couple: updated },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticListSongs(request, env) {
+  const result = await env.DB
+    .prepare(`
+      SELECT id, name, url, sort_order, created_at
+      FROM romantic_songs
+      ORDER BY sort_order ASC, datetime(created_at) ASC, id ASC
+    `)
+    .all();
+
+  return jsonResponse(
+    { success: true, songs: result.results || [] },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticAddSong(request, env) {
+  const authError = authorizeRomanticRequest(request, env, "");
+  if (authError) return authError;
+
+  const contentType = String(request.headers.get("content-type") || "");
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return errorResponse("This endpoint requires multipart/form-data.", 415);
+  }
+
+  let formData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    return errorResponse(`Could not read form data: ${error.message}`, 400);
+  }
+
+  const file = formData.get("file");
+  const submittedName = String(formData.get("name") || "").trim().slice(0, 200);
+
+  if (!(file instanceof File) || file.size <= 0) {
+    return errorResponse("No song file was received.");
+  }
+
+  if (!checkRateLimit(`romantic-song:${getClientIp(request)}`, 30, 60 * 60_000)) {
+    return errorResponse("Too many uploads. Try again later.", 429);
+  }
+
+  let uploaded = null;
+  try {
+    uploaded = await uploadFile(request, env, file, "romantic_song");
+
+    const id = crypto.randomUUID();
+    const timestamp = nowIso();
+
+    const maxRow = await env.DB
+      .prepare(`SELECT COALESCE(MAX(sort_order), -1) AS top FROM romantic_songs`)
+      .first();
+    const nextOrder = Number(maxRow?.top ?? -1) + 1;
+
+    const name = submittedName || safeFileName(file.name || "song");
+
+    await env.DB
+      .prepare(`
+        INSERT INTO romantic_songs (
+          id, name, url, r2_key, sort_order, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .bind(id, name, uploaded.url, uploaded.key, nextOrder, timestamp)
+      .run();
+
+    const song = {
+      id,
+      name,
+      url: uploaded.url,
+      sort_order: nextOrder,
+      created_at: timestamp,
+    };
+
+    return jsonResponse(
+      { success: true, song },
+      201,
+      { "Cache-Control": "no-store" }
+    );
+  } catch (error) {
+    await deleteR2Key(env, uploaded?.key);
+    return errorResponse(error?.message || "Could not add this song.", 400);
+  }
+}
+
+async function handleRomanticDeleteSong(request, env) {
+   const authError = authorizeRomanticRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  const id = String(body.id || body.song_id || "").trim();
+  if (!id) return errorResponse("id is required.");
+
+  const row = await env.DB
+    .prepare(`
+      SELECT id, r2_key
+      FROM romantic_songs
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  if (!row) return errorResponse("Song not found.", 404);
+
+  await env.DB
+    .prepare(`DELETE FROM romantic_songs WHERE id = ?`)
+    .bind(id)
+    .run();
+
+  await deleteR2Key(env, row.r2_key);
+
+  return jsonResponse(
+    { success: true, message: "Song removed." },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticGetPlayback(request, env) {
+  const row = await env.DB
+    .prepare(`
+      SELECT song_index, sound_on, updated_at
+      FROM romantic_playback
+      WHERE id = 'global'
+      LIMIT 1
+    `)
+    .first();
+
+  return jsonResponse(
+    {
+      success: true,
+      playback: {
+        song_index: Number(row?.song_index || 0),
+        sound_on: Number(row?.sound_on || 0) === 1,
+        updated_at: row?.updated_at || null,
+      },
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function handleRomanticSetPlayback(request, env) {
+  // Public write on purpose: this is a single shared "current song index"
+  // toggle, and it only matters for the background music player. It is not
+  // sensitive (no PII, no auth-relevant data), so it is safe to accept from
+  // any visitor. Range is clamped to sane values below.
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.");
+  }
+
+  if (
+    !checkRateLimit(
+      `romantic-playback:${getClientIp(request)}`,
+      120,
+      60_000
+    )
+  ) {
+    return errorResponse("Too many playback updates. Slow down.", 429);
+  }
+
+  const rawIndex = Number(body.song_index);
+  const songIndex = Number.isFinite(rawIndex)
+    ? clamp(Math.floor(rawIndex), 0, 10_000)
+    : 0;
+
+  const soundOn = body.sound_on === true || body.sound_on === 1 ? 1 : 0;
+
+  const timestamp = nowIso();
+
+  await env.DB
+    .prepare(`
+      INSERT INTO romantic_playback (id, song_index, sound_on, updated_at)
+      VALUES ('global', ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        song_index = excluded.song_index,
+        sound_on = excluded.sound_on,
+        updated_at = excluded.updated_at
+    `)
+    .bind(songIndex, soundOn, timestamp)
+    .run();
+
+  return jsonResponse(
+    {
+      success: true,
+      playback: {
+        song_index: songIndex,
+        sound_on: soundOn === 1,
+        updated_at: timestamp,
+      },
+    },
+    200,
+    { "Cache-Control": "no-store" }
+  );
+}
+
 async function handleConnectCreateLove(request, env) {
   if (
     !checkRateLimit(
@@ -7414,6 +9072,9 @@ async function handleConnectCreateLove(request, env) {
  
   const preference = sanitizeConnectText(body.preference || "", 80);
   const heart = normalizedLoveHeart(body.heart);
+
+  const gender = normalizedLoveGender(body.gender);
+
   const answersObject = parseJsonObject(body.answers, {});
   const answers = {};
  
@@ -7425,6 +9086,8 @@ async function handleConnectCreateLove(request, env) {
  
   if (!preference) return errorResponse("Choose who you want to meet.");
   if (!heart) return errorResponse("Choose a valid heart.");
+
+    if (!gender) return errorResponse("Choose Miss or Mr.");
  
   const created = await createConnectBaseItem(
     request,
@@ -7434,6 +9097,7 @@ async function handleConnectCreateLove(request, env) {
     {
       public_data: {
         preference,
+         gender,
         answers,
       },
       private_data: {
@@ -7451,11 +9115,12 @@ async function handleConnectCreateLove(request, env) {
       profile: publicConnectItem(created.item),
       owner_token: created.owner_token,
     },
-    201,
-    { "Cache-Control": "no-store" }
+    201,    { "Cache-Control": "no-store" }
   );
 }
  
+
+
 async function handleConnectCreateWalk(request, env) {
   if (
     !checkRateLimit(
@@ -7551,8 +9216,7 @@ async function handleConnectCreateMoney(request, env) {
   const creatorMemberToken = makeConnectToken(CONNECT_MEMBER_TOKEN_BYTES);
   const creatorMemberTokenHash = await hashToken(creatorMemberToken);
   const creationEventId = crypto.randomUUID();
-  const timestamp = nowIso();
- 
+  const timestamp = nowIso(); 
   await env.DB.batch([
     env.DB
       .prepare(`
@@ -7624,6 +9288,39 @@ async function handleConnectCreateMoney(request, env) {
   );
 }
  
+// Looks for another active love profile with the SAME heart and a DIFFERENT
+// gender. Returns "View heart match" when one exists, otherwise "Waiting".
+// Because the query requires a different gender, two Mr cards with the same
+// heart never match each other, and the same is true for two Miss cards.
+async function computeLoveMatchStatus(db, row) {
+  const heart = String(
+    parseJsonObject(row.private_data_json, {}).heart || ""
+  ).trim();
+  const gender = String(
+    parseJsonObject(row.public_data_json, {}).gender || ""
+  ).trim();
+
+  if (!heart || !gender) return "Waiting";
+
+  const other = await db
+    .prepare(`
+      SELECT 1 AS matched
+      FROM connect_items
+      WHERE connect_type = 'love'
+        AND status = 'active'
+        AND id != ?
+        AND json_extract(private_data_json, '$.heart') = ?
+        AND json_extract(public_data_json, '$.gender') != ?
+        AND json_extract(public_data_json, '$.gender') != ''
+      LIMIT 1
+    `)
+    .bind(String(row.id), heart, gender)
+    .first();
+
+  return other ? "View heart match" : "Waiting";
+}
+
+
 async function handleConnectList(request, env, connectType) {
   const url = new URL(request.url);
   const limit = clamp(
@@ -7651,8 +9348,7 @@ async function handleConnectList(request, env, connectType) {
             WHERE mr.item_id = i.id
             LIMIT 1
           ), 'team_forming') AS room_status
-        FROM connect_items i
-        WHERE i.connect_type = 'money'
+        FROM connect_items i        WHERE i.connect_type = 'money'
           AND i.status = 'active'
         ORDER BY datetime(i.created_at) DESC
         LIMIT ?
@@ -7678,33 +9374,6 @@ async function handleConnectList(request, env, connectType) {
       `)
       .bind(limit)
       .all();
-  } else if (connectType === "love") {
-    result = await env.DB
-      .prepare(`
-        SELECT
-          i.*,
-          CASE
-            WHEN EXISTS (
-              SELECT 1
-              FROM connect_items other
-              WHERE other.connect_type = 'love'
-                AND other.status = 'active'
-                AND other.id != i.id
-                AND COALESCE(json_extract(other.private_data_json, '$.heart'), '') =
-                    COALESCE(json_extract(i.private_data_json, '$.heart'), '')
-                AND COALESCE(json_extract(i.private_data_json, '$.heart'), '') != ''
-            )
-            THEN 1
-            ELSE 0
-          END AS has_heart_match
-        FROM connect_items i
-        WHERE i.connect_type = 'love'
-          AND i.status = 'active'
-        ORDER BY datetime(i.created_at) DESC
-        LIMIT ?
-      `)
-      .bind(limit)
-      .all();
   } else {
     result = await env.DB
       .prepare(`
@@ -7719,22 +9388,22 @@ async function handleConnectList(request, env, connectType) {
       .all();
   }
  
-  const items = (result.results || []).map((row) => {
-    const mapped = publicConnectItem(row);
-    if (connectType === "money") {
-      mapped.member_count = Number(row.member_count || 0);
-      mapped.room_status = row.room_status || "team_forming";
-    }
-    if (connectType === "walk") {
-      mapped.interest_count = Number(row.interest_count || 0);
-    }
-    if (connectType === "love") {
-      mapped.match_status = Number(row.has_heart_match || 0)
-        ? "View heart match"
-        : "Waiting";
-    }
-    return mapped;
-  });
+    const items = await Promise.all(
+    (result.results || []).map(async (row) => {
+      const mapped = publicConnectItem(row);
+      if (connectType === "money") {
+        mapped.member_count = Number(row.member_count || 0);
+        mapped.room_status = row.room_status || "team_forming";
+      }
+      if (connectType === "walk") {
+        mapped.interest_count = Number(row.interest_count || 0);
+      }
+      if (connectType === "love") {
+        mapped.match_status = await computeLoveMatchStatus(env.DB, row);
+      }
+      return mapped;
+    })
+  );
  
   return jsonResponse(
     { success: true, items },
@@ -7783,8 +9452,7 @@ async function handleConnectWalkJoin(request, env) {
   }
  
   const loggedInProvider = await getAuthenticatedProvider(request, env);
-  const memberToken = makeConnectToken(CONNECT_MEMBER_TOKEN_BYTES);
-  const tokenHash = await hashToken(memberToken);
+  const memberToken = makeConnectToken(CONNECT_MEMBER_TOKEN_BYTES);  const tokenHash = await hashToken(memberToken);
   const id = crypto.randomUUID();
   const timestamp = nowIso();
  
@@ -7883,8 +9551,7 @@ async function handleConnectMoneyJoin(request, env) {
   }
  
   let room = await getMoneyRoomByMissionId(env.DB, missionId);
-  if (!room) {
-    const roomId = crypto.randomUUID();
+  if (!room) {    const roomId = crypto.randomUUID();
     const timestamp = nowIso();
     await env.DB
       .prepare(`
@@ -7983,8 +9650,7 @@ async function handleConnectMoneyJoin(request, env) {
     { "Cache-Control": "no-store" }
   );
 }
- 
-async function handleConnectMoneyRoom(request, env) {
+ async function handleConnectMoneyRoom(request, env) {
   const url = new URL(request.url);
   const missionId = String(
     url.searchParams.get("mission_id") ||
@@ -8083,8 +9749,7 @@ async function handleConnectMoneyMessage(request, env) {
  
   const missionId = String(body.mission_id || body.item_id || "").trim();
   const message = sanitizeConnectMessage(body.message);
-  if (!missionId) return errorResponse("mission_id is required.");
-  if (!message) return errorResponse("Message cannot be empty.");
+  if (!missionId) return errorResponse("mission_id is required.");  if (!message) return errorResponse("Message cannot be empty.");
  
   const room = await getMoneyRoomByMissionId(env.DB, missionId);
   if (!room) return errorResponse("Mission Room not found.", 404);
@@ -8183,8 +9848,7 @@ async function handleConnectLoveMatches(request, env) {
       id: match.id,
       status: match.status || "pending",
       revealed,
-      profile: {
-        ...publicConnectItem(other),
+      profile: {        ...publicConnectItem(other),
         ...(revealed
           ? {
               whatsapp: other.creator_whatsapp || "",
@@ -8283,8 +9947,7 @@ async function handleKingOverview(request, env) {
         FROM connect_money_rooms
         GROUP BY status
       `)
-      .all(),
- 
+      .all(), 
     env.DB
       .prepare(`
         SELECT *
@@ -8383,8 +10046,7 @@ async function handleKingItemUpdate(request, env) {
     body.status == null
       ? item.status
       : connectStatus(body.status);
- 
-  if (!nextStatus) return errorResponse("Invalid Connect item status.");
+   if (!nextStatus) return errorResponse("Invalid Connect item status.");
  
   const adminNote =
     body.admin_note == null
@@ -8483,8 +10145,7 @@ async function handleKingWalkInterests(request, env) {
   );
   if (authError) return authError;
  
-  const walkId = String(url.searchParams.get("walk_id") || "").trim();
-  if (!walkId) return errorResponse("walk_id is required.");
+  const walkId = String(url.searchParams.get("walk_id") || "").trim();  if (!walkId) return errorResponse("walk_id is required.");
  
   const result = await env.DB
     .prepare(`
@@ -8583,8 +10244,7 @@ async function handleKingMoneyRoom(request, env) {
     { "Cache-Control": "no-store" }
   );
 }
- 
-async function handleKingMoneyRoomStatus(request, env) {
+ async function handleKingMoneyRoomStatus(request, env) {
   let body;
   try {
     body = await request.json();
@@ -8683,8 +10343,7 @@ async function handleKingLoveMatches(request, env) {
     profile_a_private: parseJsonObject(row.profile_a_private, {}),
     profile_b_private: parseJsonObject(row.profile_b_private, {}),
   }));
- 
-  return jsonResponse(
+   return jsonResponse(
     { success: true, matches },
     200,
     { "Cache-Control": "no-store" }
@@ -8783,8 +10442,7 @@ async function handleKingLoveMatchUpsert(request, env) {
           admin_note,
           created_at,
           updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        )        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         id,
@@ -8846,6 +10504,7 @@ export class ConversationRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
+    this._watchingTick = null;
   }
  
   async fetch(request) {
@@ -8883,9 +10542,16 @@ export class ConversationRoom {
     server.serializeAttachment({
       conversation_id: request.headers.get("X-Conversation-Id") || "",
       provider_id: request.headers.get("X-Provider-Id") || "",
-      connected_at: nowIso(),
-    });
+      connected_at: nowIso(),    });
  
+    this.scheduleWatchingTick(
+      String(request.headers.get("X-Conversation-Id") || "")
+    );
+
+    this.scheduleWatchingTick(
+      String(request.headers.get("X-Conversation-Id") || "")
+    );
+
     return new Response(null, { status: 101, webSocket: client });
   }
  
@@ -8908,7 +10574,9 @@ export class ConversationRoom {
       return;
     }
  
-    if (!payload || payload.type !== "tv_typing") return;
+     if (!payload || (payload.type !== "tv_typing" && payload.type !== "tv_watching")) {
+      return;
+    }
  
     let attachment = {};
     try {
@@ -8939,6 +10607,28 @@ export class ConversationRoom {
     // A stop frame may omit presentation fields. A start frame must have the
     // visible identity needed by Home.jsx to render the badge correctly.
     if (typing && (!userName || !countryCode)) return;
+
+        // A watcher heartbeat is not a typing event: it only records that
+    // this socket is currently watching the post. Handle it here and
+    // return, so it never reaches the typing broadcast below.
+    if (payload.type === "tv_watching") {
+      try {
+        const currentAttachment = socket.deserializeAttachment?.() || {};
+        socket.serializeAttachment({
+          ...currentAttachment,
+          watching_at: Date.now(),
+          watching_viewer_id: String(
+            payload.viewer_id || currentAttachment.watching_viewer_id || ""
+          ).slice(0, 128),
+        });
+      } catch {
+        // Attachment writes are best-effort; the next tick still counts
+        // sockets whose `watching_at` is fresh.
+      }
+      this.broadcastWatchingCount(conversationId);
+      return;
+    }
+
  
     const outgoing = JSON.stringify({
       type: "tv_typing",
@@ -8966,6 +10656,68 @@ export class ConversationRoom {
     }
   }
  
+  // Count sockets that have sent a heartbeat within the window and push
+  // the current number to everybody in this room. `conversationId` is
+  // the full room key, e.g. "tv:abc-123"; we strip the "tv:" prefix so
+  // the client sees the same post id it subscribed with.
+  broadcastWatchingCount(conversationId) {
+    const now = Date.now();
+    let count = 0;
+    for (const peer of this.state.getWebSockets()) {
+      try {
+        const attachment = peer.deserializeAttachment?.() || {};
+        const last = Number(attachment.watching_at || 0);
+        if (last && now - last <= TV_WATCHING_WINDOW_MS) {
+          count += 1;
+        }
+      } catch {
+        // Ignore attachments we cannot read; they simply do not count.
+      }
+    }
+
+    const payload = JSON.stringify({
+      type: "tv_watching_count",
+      tv_post_id: String(conversationId || "").startsWith("tv:")
+        ? String(conversationId).slice(3)
+        : "",
+      count,
+    });
+
+    for (const peer of this.state.getWebSockets()) {
+      try {
+        peer.send(payload);
+      } catch {
+        // The hibernation runtime will clean up dead sockets.
+      }
+    }
+  }
+
+    // Runs every few seconds so the count falls back down naturally when
+  // viewers close their tab or navigate away - without them having to
+  // explicitly say goodbye. The tick only runs while there is at least
+  // one socket connected; when the last viewer leaves, the timer stops
+  // on its own (the Durable Object will hibernate).
+  scheduleWatchingTick(conversationId) {
+    if (this._watchingTick) return;
+    const tick = () => {
+      const hasSockets = this.state.getWebSockets().length > 0;
+      if (hasSockets) {
+        this.broadcastWatchingCount(conversationId);
+      } else {
+        // Nobody left. Stop the timer so the object can hibernate.
+        if (this._watchingTick) clearTimeout(this._watchingTick);
+        this._watchingTick = null;
+        return;
+      }
+      this._watchingTick = setTimeout(
+        tick,
+        TV_WATCHING_BROADCAST_MS
+      );
+    };
+    this._watchingTick = setTimeout(tick, TV_WATCHING_BROADCAST_MS);
+  }
+
+
   async webSocketError(socket) {
     try {
       socket.close(1011, "Realtime connection error");
@@ -8973,8 +10725,636 @@ export class ConversationRoom {
       // Socket may already be closed.
     }
   }
+
+    async webSocketClose(socket, code, reason) {
+    try {
+      socket.close(code || 1000, reason || "Closed");
+    } catch {
+      // Socket may already be closed.
+    }
+  }
 }
  
+
+ // ==================== GWAMO BRAIN CHAT FUNCTIONS ====================
+
+async function brainGetSettings(env) {
+  const settings = await env.DB.prepare(`
+    SELECT title, welcome_message, media_url
+    FROM gwamo_brain_settings
+    WHERE id = 'main'
+    LIMIT 1
+  `).first();
+
+  return jsonResponse({
+    success: true,
+    settings: settings || {
+      title: "Gwamo Brain",
+      welcome_message: "Hello! How can I help you?",
+      media_url: ""
+    }
+  });
+}
+
+async function brainGetOrCreateConversation(request, env) {
+
+    if (
+    !checkRateLimit(
+      `brain-conversation:${getClientIp(request)}`,
+      12,
+      60_000
+    )
+  ) {
+    return errorResponse(
+      "Too many support chat attempts. Please try again shortly.",
+      429
+    );
+  }
+
+  const suppliedToken =
+    request.headers.get("X-Gwamo-Visitor-Token") || "";
+
+  let token = suppliedToken;
+  let conversation = null;
+
+  if (token) {
+    const tokenHash = await hashToken(token);
+
+    conversation = await env.DB.prepare(`
+      SELECT id, visitor_label, status
+      FROM gwamo_brain_conversations
+      WHERE visitor_token_hash = ?
+      LIMIT 1
+    `).bind(tokenHash).first();
+  }
+
+  if (!conversation) {
+    token = makeSessionToken();
+    const tokenHash = await hashToken(token);
+    const id = crypto.randomUUID();
+    const now = nowIso();
+
+    await env.DB.prepare(`
+      INSERT INTO gwamo_brain_conversations (
+        id, visitor_token_hash, visitor_label,
+        status, last_message_at, created_at, updated_at
+      ) VALUES (?, ?, 'Visitor', 'open', ?, ?, ?)
+    `).bind(id, tokenHash, now, now, now).run();
+
+    conversation = {
+      id,
+      visitor_label: "Visitor",
+      status: "open"
+    };
+  }
+
+  return jsonResponse({
+    success: true,
+    conversation,
+    visitor_token: token
+  });
+}
+
+async function brainGetVisitorMessages(request, env) {
+  const token =
+    request.headers.get("X-Gwamo-Visitor-Token") || "";
+
+  if (!token) {
+    return errorResponse("Visitor token is required.", 401);
+  }
+
+  const tokenHash = await hashToken(token);
+
+  const conversation = await env.DB.prepare(`
+    SELECT id
+    FROM gwamo_brain_conversations
+    WHERE visitor_token_hash = ?
+    LIMIT 1
+  `).bind(tokenHash).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+   const result = await env.DB.prepare(`
+    SELECT id, sender, text_content, media_url, media_type, created_at
+    FROM gwamo_brain_messages
+    WHERE conversation_id = ?
+    ORDER BY created_at ASC
+    LIMIT 300
+  `).bind(conversation.id).all();
+
+  return jsonResponse({
+    success: true,
+    messages: result.results || []
+  });
+}
+
+async function brainSendVisitorMessage(request, env) {
+
+    if (
+    !checkRateLimit(
+      `brain-message:${getClientIp(request)}`,
+      30,
+      60_000
+    )
+  ) {
+    return errorResponse(
+      "Too many messages. Please slow down.",
+      429
+    );
+  }
+
+  const token =
+    request.headers.get("X-Gwamo-Visitor-Token") || "";
+
+  if (!token) {
+    return errorResponse("Visitor token is required.", 401);
+  }
+
+  let body;
+
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.", 400);
+  }
+
+  const message = String(body.text || "").trim();
+
+  if (!message || message.length > 4000) {
+    return errorResponse(
+      "Message must contain 1 to 4000 characters.",
+      400
+    );
+  }
+
+  const tokenHash = await hashToken(token);
+
+  const conversation = await env.DB.prepare(`
+    SELECT id, status
+    FROM gwamo_brain_conversations
+    WHERE visitor_token_hash = ?
+    LIMIT 1
+  `).bind(tokenHash).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+  if (conversation.status !== "open") {
+    return errorResponse("This conversation is closed.", 403);
+  }
+
+  const id = crypto.randomUUID();
+  const now = nowIso();
+
+  await env.DB.prepare(`
+    INSERT INTO gwamo_brain_messages (
+      id, conversation_id, sender, text_content, created_at
+    ) VALUES (?, ?, 'visitor', ?, ?)
+  `).bind(id, conversation.id, message, now).run();
+  await env.DB.prepare(`
+    UPDATE gwamo_brain_conversations
+    SET last_message_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(now, now, conversation.id).run();
+
+  const outboundMessage = {
+    id,
+    sender: "visitor",
+    text_content: message,
+    created_at: now
+  };
+
+  await notifyConversationRoom(env, `brain:${conversation.id}`, {
+    type: "brain_message",
+    conversation_id: conversation.id,
+    message: outboundMessage,
+  });
+
+  return jsonResponse({
+    success: true,
+    message: outboundMessage
+  });
+}
+async function brainRealtimeTicket(request, env) {
+  const token = request.headers.get("X-Gwamo-Visitor-Token") || "";
+  if (!token) {
+    return errorResponse("Visitor token is required.", 401);
+  }
+
+  if (!env.CHAT_ROOMS) {
+    return errorResponse(
+      "Realtime support chat is not configured. Polling still works.",
+      503,
+      { realtime_available: false }
+    );
+  }
+
+  if (
+    !checkRateLimit(
+      `brain-ticket:${getClientIp(request)}`,
+      30,
+      60_000
+    )
+  ) {
+    return errorResponse("Too many requests. Try again shortly.", 429);
+  }
+
+  const tokenHash = await hashToken(token);
+
+  const conversation = await env.DB.prepare(`
+    SELECT id
+    FROM gwamo_brain_conversations
+    WHERE visitor_token_hash = ?
+    LIMIT 1
+  `).bind(tokenHash).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+  const rawTicket = `${crypto.randomUUID()}${randomHex(24)}`.replace(/-/g, "");
+  const ticketId = crypto.randomUUID();
+  const createdAt = nowIso();
+  const expiresAt = new Date(Date.now() + 60_000).toISOString();
+
+  await env.DB.prepare(`
+    INSERT INTO gwamo_brain_realtime_tickets (
+      id, token_hash, conversation_id, expires_at, used_at, created_at
+    ) VALUES (?, ?, ?, ?, NULL, ?)
+  `).bind(
+    ticketId,
+    await hashToken(rawTicket),
+    conversation.id,
+    expiresAt,
+    createdAt
+  ).run();
+
+  const socketUrl = new URL("/api/brain/realtime/connect", request.url);
+  socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+  socketUrl.searchParams.set("ticket", rawTicket);
+
+  return jsonResponse(
+    {
+      success: true,
+      realtime_available: true,
+      websocket_url: socketUrl.toString(),
+      expires_at: expiresAt,
+    },
+    201,
+    { "Cache-Control": "no-store" }
+  );
+}
+
+async function brainRealtimeConnect(request, env) {
+  if (!env.CHAT_ROOMS) {
+    return errorResponse("Realtime support chat is not configured.", 503);
+  }
+
+  if (String(request.headers.get("Upgrade") || "").toLowerCase() !== "websocket") {
+    return errorResponse("A WebSocket upgrade is required.", 426, {
+      upgrade: "websocket",
+    });
+  }
+
+  const url = new URL(request.url);
+  const rawTicket = String(url.searchParams.get("ticket") || "").trim();
+  if (!rawTicket) return errorResponse("Realtime ticket is required.", 401);
+
+  const tokenHash = await hashToken(rawTicket);
+
+  const ticket = await env.DB.prepare(`
+    SELECT *
+    FROM gwamo_brain_realtime_tickets
+    WHERE token_hash = ? AND used_at IS NULL
+    LIMIT 1
+  `).bind(tokenHash).first();
+
+  if (!ticket || Date.parse(ticket.expires_at || "") <= Date.now()) {
+    return errorResponse("Realtime ticket is invalid or expired.", 401);
+  }
+
+  const used = await env.DB.prepare(`
+    UPDATE gwamo_brain_realtime_tickets
+    SET used_at = ?
+    WHERE id = ? AND used_at IS NULL AND expires_at > ?
+  `).bind(nowIso(), ticket.id, nowIso()).run();
+
+  if (Number(used?.meta?.changes || 0) !== 1) {
+    return errorResponse("Realtime ticket has already been used.", 401);
+  }
+
+  const roomId = env.CHAT_ROOMS.idFromName(`brain:${ticket.conversation_id}`);
+  const room = env.CHAT_ROOMS.get(roomId);
+  const headers = new Headers(request.headers);
+  headers.set("X-Conversation-Id", `brain:${ticket.conversation_id}`);
+  headers.set("X-Provider-Id", "brain-visitor");
+
+  return room.fetch(
+    new Request("https://chat.internal/connect", {
+      method: "GET",
+      headers,
+    })
+  );
+}
+
+// ==================== END GWAMO BRAIN CHAT FUNCTIONS ====================
+
+
+ // ==================== GWAMO BRAIN ADMIN FUNCTIONS ====================
+
+async function brainAdminConversations(request, env) {
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  const result = await env.DB.prepare(`
+    SELECT
+      c.id,
+      c.visitor_label,
+      c.status,
+      c.last_message_at,
+      c.created_at,
+      (
+        SELECT m.text_content
+        FROM gwamo_brain_messages m
+        WHERE m.conversation_id = c.id
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_message
+    FROM gwamo_brain_conversations c
+    ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+    LIMIT 200
+  `).all();
+
+  return jsonResponse({
+    success: true,
+    conversations: result.results || []
+  });
+}
+
+async function brainAdminMessages(request, env) {
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  const url = new URL(request.url);
+  const conversationId = url.searchParams.get("conversation_id");
+
+  if (!conversationId) {
+    return errorResponse("Conversation ID is required.", 400);
+  }
+
+  const conversation = await env.DB.prepare(`
+    SELECT id, visitor_label, status
+    FROM gwamo_brain_conversations
+    WHERE id = ?
+    LIMIT 1
+  `).bind(conversationId).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+   const result = await env.DB.prepare(`
+    SELECT id, sender, text_content, media_url, media_type, created_at
+    FROM gwamo_brain_messages
+    WHERE conversation_id = ?
+    ORDER BY created_at ASC
+    LIMIT 500
+  `).bind(conversationId).all();
+
+  return jsonResponse({
+    success: true,
+    conversation,
+    messages: result.results || []
+  });
+}
+
+async function brainAdminUpload(request, env) {
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  const contentType = String(request.headers.get("content-type") || "");
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return errorResponse("This endpoint requires multipart/form-data.", 415);
+  }
+
+  if (
+    !checkRateLimit(
+      `brain-upload:${getClientIp(request)}`,
+      20,
+      60_000
+    )
+  ) {
+    return errorResponse("Too many uploads. Please slow down.", 429);
+  }
+
+  let formData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    return errorResponse(`Could not read form data: ${error.message}`, 400);
+  }
+
+  const conversationId = String(formData.get("conversation_id") || "").trim();
+  if (!conversationId) {
+    return errorResponse("conversation_id is required.", 400);
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size <= 0) {
+    return errorResponse("No file was received.", 400);
+  }
+
+  const conversation = await env.DB.prepare(`
+    SELECT id, status
+    FROM gwamo_brain_conversations
+    WHERE id = ?
+    LIMIT 1
+  `).bind(conversationId).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+  let kind;
+  if (file.type.startsWith("image/")) {
+    kind = "post_image";
+  } else if (file.type.startsWith("video/")) {
+    kind = "video";
+  } else {
+    return errorResponse("Only photos and videos can be sent.", 400);
+  }
+
+  try {
+    const uploaded = await uploadFile(request, env, file, kind);
+    const mediaType = kind === "post_image" ? "image" : "video";
+    return jsonResponse(
+      {
+        success: true,
+        url: uploaded.url,
+        key: uploaded.key,
+        media_type: mediaType,
+      },
+      201,
+      { "Cache-Control": "no-store" }
+    );
+  } catch (error) {
+    return errorResponse(error?.message || "Upload failed.", 400);
+  }
+}
+async function brainAdminReply(request, env) {
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.", 400);
+  }
+
+  const conversationId = String(body.conversation_id || "").trim();
+  const message = String(body.text || "").trim();
+  const mediaUrl = String(body.media_url || "").trim().slice(0, 2048);
+  const mediaType = String(body.media_type || "").trim().toLowerCase();
+
+  if (!conversationId) {
+    return errorResponse("Conversation ID is required.", 400);
+  }
+
+  if (!message && !mediaUrl) {
+    return errorResponse(
+      "A message or an attachment is required.",
+      400
+    );
+  }
+
+  if (message.length > 4000) {
+    return errorResponse(
+      "Message must be 4000 characters or fewer.",
+      400
+    );
+  }
+
+  if (mediaUrl && !/^https:\/\//i.test(mediaUrl)) {
+    return errorResponse("Media URL must use HTTPS.", 400);
+  }
+
+  const cleanMediaType =
+    mediaType === "image" || mediaType === "video" ? mediaType : "";
+
+  if (mediaUrl && !cleanMediaType) {
+    return errorResponse("Media type must be image or video.", 400);
+  }
+
+  const conversation = await env.DB.prepare(`
+    SELECT id, status
+    FROM gwamo_brain_conversations
+    WHERE id = ?
+    LIMIT 1
+  `).bind(conversationId).first();
+
+  if (!conversation) {
+    return errorResponse("Conversation not found.", 404);
+  }
+
+  if (conversation.status !== "open") {
+    return errorResponse("This conversation is closed.", 403);
+  }
+
+  const id = crypto.randomUUID();
+  const now = nowIso();
+
+  await env.DB.prepare(`
+    INSERT INTO gwamo_brain_messages (
+      id, conversation_id, sender, text_content,
+      media_url, media_type, created_at
+    ) VALUES (?, ?, 'helper', ?, ?, ?, ?)
+  `).bind(
+    id,
+    conversationId,
+    message,
+    mediaUrl,
+    cleanMediaType,
+    now
+  ).run();
+  await env.DB.prepare(`
+    UPDATE gwamo_brain_conversations
+    SET last_message_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(now, now, conversationId).run();
+
+  const outboundMessage = {
+    id,
+    sender: "helper",
+    text_content: message,
+    media_url: mediaUrl,
+    media_type: cleanMediaType,
+    created_at: now
+  };
+
+  await notifyConversationRoom(env, `brain:${conversationId}`, {
+    type: "brain_message",
+    conversation_id: conversationId,
+    message: outboundMessage,
+  });
+
+  return jsonResponse({
+    success: true,
+    message: outboundMessage
+  });
+}
+
+async function brainAdminUpdateSettings(request, env) {
+  const authError = authorizeAdminRequest(request, env, "");
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body.", 400);
+  }
+
+  const title = String(body.title ?? "").trim();
+  const welcomeMessage = String(body.welcome_message ?? "").trim();
+  const mediaUrl = String(body.media_url ?? "").trim();
+
+  if (
+    !title || title.length > 100 ||
+    !welcomeMessage || welcomeMessage.length > 2000 ||
+    mediaUrl.length > 2000
+  ) {
+    return errorResponse("The title, welcome message, or media URL is invalid.", 400);
+  }
+
+  if (mediaUrl && !/^https:\/\//i.test(mediaUrl)) {
+    return errorResponse("Media URL must use HTTPS.", 400);
+  }
+
+  await env.DB.prepare(`
+    UPDATE gwamo_brain_settings
+    SET title = ?, welcome_message = ?, media_url = ?, updated_at = ?
+    WHERE id = 'main'
+  `).bind(title, welcomeMessage, mediaUrl, nowIso()).run();
+
+  return jsonResponse({
+    success: true,
+    settings: {
+      title,
+      welcome_message: welcomeMessage,
+      media_url: mediaUrl
+    }
+  });
+}
+
+// ==================== END GWAMO BRAIN ADMIN FUNCTIONS ====================
+
+
+
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -8983,8 +11363,7 @@ export default {
       url.pathname.replace(/\/+$/, "") ||
       "/";
  
-    const method =
-      request.method.toUpperCase();
+    const method =      request.method.toUpperCase();
  
     if (method === "OPTIONS") {
       return new Response(null, {
@@ -9058,10 +11437,148 @@ export default {
         }
       }
  
- 
+      
+    // ==================== GWAMO BRAIN VISITOR ROUTES ====================
+
+    if (
+        pathname === "/api/brain/settings" &&
+        method === "GET"
+    ) {
+        return await brainGetSettings(env);
+    }
+
+    if (
+        pathname === "/api/brain/conversation" &&
+        method === "POST"
+    ) {
+        return await brainGetOrCreateConversation(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/messages" &&
+        method === "GET"
+    ) {
+        return await brainGetVisitorMessages(request, env);
+    }
+
+     if (
+        pathname === "/api/brain/message" &&
+        method === "POST"
+    ) {
+        return await brainSendVisitorMessage(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/realtime/ticket" &&
+        method === "POST"
+    ) {
+        return await brainRealtimeTicket(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/realtime/connect" &&
+        method === "GET"
+    ) {
+        return await brainRealtimeConnect(request, env);
+    }
+
+    // ==================== END GWAMO BRAIN VISITOR ROUTES ====================
+
+
+    
+    // ==================== GWAMO BRAIN ADMIN ROUTES ====================
+
+    if (
+        pathname === "/api/brain/admin/conversations" &&
+        method === "GET"
+    ) {
+        return await brainAdminConversations(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/admin/messages" &&
+        method === "GET"
+    ) {
+        return await brainAdminMessages(request, env);
+    }
+
+       if (
+        pathname === "/api/brain/admin/upload" &&
+        method === "POST"
+    ) {
+        return await brainAdminUpload(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/admin/reply" &&
+        method === "POST"
+    ) {
+        return await brainAdminReply(request, env);
+    }
+
+    if (
+        pathname === "/api/brain/admin/settings" &&
+        method === "POST"
+    ) {
+        return await brainAdminUpdateSettings(request, env);
+    }
+
+    // ==================== END GWAMO BRAIN ADMIN ROUTES ====================
+
       // ==================== GWAMO CONNECT ====================
       // Public/user Connect routes. Private phone numbers and love-heart data
       // are intentionally omitted from public list responses.
+      if (pathname === "/api/connect/live/counts" && method === "GET") {
+        return await handleConnectLiveCounts(request, env);
+      }
+
+      if (pathname === "/api/connect/live/presence" && method === "POST") {
+        return await handleConnectLivePresence(request, env);
+      }
+
+      if (pathname === "/api/connect/live/matches" && method === "GET") {
+        return await handleConnectLiveMatches(request, env);
+      }
+
+      if (pathname === "/api/connect/live/messages" && method === "GET") {
+        return await handleConnectLiveMessages(request, env);
+      }
+
+      if (pathname === "/api/connect/live/message" && method === "POST") {
+        return await handleConnectLiveMessage(request, env);
+      }
+
+      if (pathname === "/api/connect/live/recent" && method === "GET") {
+        return await handleConnectLiveRecent(request, env);      }
+
+      if (pathname === "/api/connect/live/call/request" && method === "POST") {
+        return await handleConnectLiveCallRequest(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/status" && method === "GET") {
+        return await handleConnectLiveCallStatus(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/incoming" && method === "GET") {
+        return await handleConnectLiveIncomingCall(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/respond" && method === "POST") {
+        return await handleConnectLiveCallRespond(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/end" && method === "POST") {
+        return await handleConnectLiveCallEnd(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/signal" && method === "POST") {
+        return await handleConnectLiveCallSignal(request, env);
+      }
+
+      if (pathname === "/api/connect/live/call/signals" && method === "GET") {
+        return await handleConnectLiveCallSignals(request, env);
+      }
+
       if (
         pathname === "/api/connect/upload" &&
         method === "POST"
@@ -9131,8 +11648,7 @@ export default {
       ) {
         return await handleConnectMoneyJoin(request, env);
       }
- 
-      if (
+       if (
         pathname === "/api/connect/money/room" &&
         method === "GET"
       ) {
@@ -9217,6 +11733,71 @@ export default {
         return await handleKingLoveMatchUpsert(request, env);
       }
  
+                // ==================== ROMANTIC STORIES ====================
+          if (
+            pathname === "/api/romantic/couples" &&
+            method === "GET"
+          ) {
+            return await handleRomanticListCouples(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/couples" &&
+            method === "POST"
+          ) {
+            return await handleRomanticAddCouple(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/couples" &&
+            method === "DELETE"
+          ) {
+            return await handleRomanticDeleteCouple(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/couples" &&
+            method === "PATCH"
+          ) {
+            return await handleRomanticUpdateCouple(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/songs" &&
+            method === "GET"
+          ) {
+            return await handleRomanticListSongs(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/songs" &&
+            method === "POST"
+          ) {
+            return await handleRomanticAddSong(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/songs" &&
+            method === "DELETE"
+          ) {
+            return await handleRomanticDeleteSong(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/playback" &&
+            method === "GET"
+          ) {
+            return await handleRomanticGetPlayback(request, env);
+          }
+
+          if (
+            pathname === "/api/romantic/playback" &&
+            method === "POST"
+          ) {
+            return await handleRomanticSetPlayback(request, env);
+          }
+
+
       // Provider registration
       if (
         pathname ===
@@ -9231,8 +11812,7 @@ export default {
  
       // Provider login
       if (
-        pathname ===
-          "/api/time-market/login" &&
+        pathname ===          "/api/time-market/login" &&
         method === "POST"
       ) {
         return await handleProviderLogin(
@@ -9331,8 +11911,7 @@ export default {
               env.DB,
               serviceId
             );
- 
-          if (!post) {
+           if (!post) {
             return errorResponse(
               "Service not found.",
               404
@@ -9431,8 +12010,7 @@ export default {
       }
  
       if (
-        pathname === "/api/time-market/realtime/ticket" &&
-        method === "POST"
+        pathname === "/api/time-market/realtime/ticket" &&        method === "POST"
       ) {
         return await handleRealtimeTicket(request, env);
       }
@@ -9456,6 +12034,54 @@ export default {
         );
       }
  
+// Admin: public TV conversations - GET (list)
+if (
+  pathname === "/api/admin/tv-conversations" &&
+  method === "GET"
+) {
+  return await handleAdminTvConversations(request, env);
+}
+
+// Admin: public TV conversations - POST (create)
+if (
+  pathname === "/api/admin/tv-conversations" &&
+  method === "POST"
+) {
+  return await handleAdminPostTvConversation(request, env);
+}
+
+// Admin: public TV conversations - DELETE (remove)
+if (
+  pathname === "/api/admin/tv-conversations" &&
+  method === "DELETE"
+) {
+  return await handleAdminDeleteTvConversation(request, env);
+}
+
+// Admin: TV conversation profile photo upload
+if (
+  pathname === "/api/admin/tv-conversation-photo" &&
+  method === "POST"
+) {
+  return await handleAdminTvConversationPhoto(request, env);
+}
+     
+
+
+
+
+      // Admin: services / listings
+      if (
+        pathname ===
+          "/api/admin/time-market/services" &&
+        method === "GET"
+      ) {
+        return await handleAdminServices(
+          request,
+          env
+        );
+      }
+
       // Admin: providers
       if (
         pathname ===
@@ -9518,8 +12144,7 @@ export default {
       }
  
       if (
-        pathname ===
-          "/api/home/update" &&
+        pathname ===          "/api/home/update" &&
         method === "POST"
       ) {
         return await handleHomeUpdate(
@@ -9618,8 +12243,7 @@ export default {
       }
  
       if (
-        pathname === "/api/tv/realtime/ticket" &&
-        method === "POST"
+        pathname === "/api/tv/realtime/ticket" &&        method === "POST"
       ) {
         return await handleTvRealtimeTicket(request, env);
       }
@@ -9642,34 +12266,6 @@ export default {
         );
       }
  
-      if (
-        pathname === "/api/admin/tv-conversations" &&
-        method === "GET"
-      ) {
-        return await handleAdminGetTvConversations(request, env);
-      }
-
-      if (
-        pathname === "/api/admin/tv-conversations" &&
-        method === "POST"
-      ) {
-        return await handleAdminCreateTvConversation(request, env);
-      }
-
-      if (
-        pathname === "/api/admin/tv-conversations" &&
-        method === "DELETE"
-      ) {
-        return await handleAdminDeleteTvConversation(request, env);
-      }
-
-      if (
-        pathname === "/api/admin/tv-conversation-photo" &&
-        method === "POST"
-      ) {
-        return await handleAdminUploadTvConversationPhoto(request, env);
-      }
-
       if (
         pathname ===
           "/api/admin/update-feedx-stats" &&
