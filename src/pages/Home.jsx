@@ -360,7 +360,6 @@ function attachmentPreviewLabel(messageType) {
 // GWAMO BRAIN WIDGET (INTEGRATED DIRECTLY)
 // ==========================================
 function GwamoBrainWidget({ apiUrl }) {
-  const [open, setOpen] = useState(true); 
   const [settings, setSettings] = useState({
     title: "Gwamo Brain",
     welcome_message: "Hello! How can I help you today?",
@@ -372,7 +371,7 @@ function GwamoBrainWidget({ apiUrl }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  
+
   const [helperMode, setHelperMode] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [adminAuthed, setAdminAuthed] = useState(false);
@@ -382,12 +381,20 @@ function GwamoBrainWidget({ apiUrl }) {
   const [adminDraft, setAdminDraft] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
-  
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [showConversationList, setShowConversationList] = useState(true);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState([]);
+
   const scrollRef = useRef(null);
   const adminScrollRef = useRef(null);
   const visitorTokenRef = useRef("");
+  const holdTimerRef = useRef(null);
+  const backgroundHoldTimerRef = useRef(null);
 
   const api = `${apiUrl}/api/brain`;
+  const currentHiddenKey = helperMode
+    ? `gwamo-brain-hidden-helper-${selectedConversation || "none"}`
+    : `gwamo-brain-hidden-visitor-${visitorToken || "guest"}`;
 
   const visitorHeaders = useCallback(() => ({
     "X-Gwamo-Visitor-Token": visitorTokenRef.current,
@@ -413,7 +420,7 @@ function GwamoBrainWidget({ apiUrl }) {
       const data = await readResponse(response);
       if (data.settings) setSettings((current) => ({ ...current, ...data.settings }));
     } catch (err) {
-      console.warn("Could not load brain settings", err);
+      console.warn("Could not load Gwamo Brain settings", err);
     }
   }, [api, readResponse]);
 
@@ -439,7 +446,6 @@ function GwamoBrainWidget({ apiUrl }) {
       await loadSettings();
       let savedToken = "";
       try { savedToken = localStorage.getItem("gwamo-brain-visitor-token") || ""; } catch { /* storage unavailable */ }
-      
       const headers = savedToken ? { "X-Gwamo-Visitor-Token": savedToken } : {};
       const response = await fetch(`${api}/conversation`, {
         method: "POST", headers, cache: "no-store",
@@ -447,7 +453,6 @@ function GwamoBrainWidget({ apiUrl }) {
       const data = await readResponse(response);
       const token = String(data.visitor_token || savedToken || "");
       if (!token) throw new Error("The support service did not return a visitor token.");
-      
       visitorTokenRef.current = token;
       setVisitorToken(token);
       try { localStorage.setItem("gwamo-brain-visitor-token", token); } catch { /* storage unavailable */ }
@@ -460,24 +465,67 @@ function GwamoBrainWidget({ apiUrl }) {
   useEffect(() => { initializeVisitor(); }, [initializeVisitor]);
 
   useEffect(() => {
-    if (!open || helperMode || !visitorToken) return undefined;
+    try {
+      const saved = localStorage.getItem(currentHiddenKey);
+      setHiddenMessageIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setHiddenMessageIds([]);
+    }
+  }, [currentHiddenKey]);
+
+  useEffect(() => {
+    if (helperMode || !visitorToken) return undefined;
     const id = window.setInterval(() => loadVisitorMessages(false), 3000);
     return () => window.clearInterval(id);
-  }, [open, helperMode, visitorToken, loadVisitorMessages]);
+  }, [helperMode, visitorToken, loadVisitorMessages]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, open]);
+  }, [messages, hiddenMessageIds]);
 
   useEffect(() => {
     if (adminScrollRef.current) adminScrollRef.current.scrollTop = adminScrollRef.current.scrollHeight;
-  }, [adminMessages]);
+  }, [adminMessages, hiddenMessageIds]);
+
+  useEffect(() => () => {
+    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
+    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
+  }, []);
+
+  const persistHiddenMessages = useCallback((nextIds) => {
+    setHiddenMessageIds(nextIds);
+    try { localStorage.setItem(currentHiddenKey, JSON.stringify(nextIds)); } catch { /* storage unavailable */ }
+  }, [currentHiddenKey]);
+
+  const deleteMessageFromThisView = useCallback((message) => {
+    if (!message || message.id == null) return;
+    const label = helperMode ? "this helper inbox" : "your chat";
+    if (!window.confirm(`Remove this message from ${label}? It will be hidden only in this view.`)) return;
+    const id = String(message.id);
+    persistHiddenMessages((hiddenMessageIds || []).includes(id)
+      ? hiddenMessageIds
+      : [...hiddenMessageIds, id]);
+  }, [helperMode, hiddenMessageIds, persistHiddenMessages]);
+
+  const startMessageHold = (message) => (event) => {
+    if (event?.pointerType === "mouse" && event.button !== 0) return;
+    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = window.setTimeout(() => {
+      deleteMessageFromThisView(message);
+    }, 750);
+  };
+
+  const endMessageHold = () => {
+    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = null;
+  };
 
   const sendVisitorMessage = useCallback(async (event) => {
     event?.preventDefault();
     const text = draft.trim();
     if (!text || sending || !visitorTokenRef.current) return;
-    setSending(true); setError("");
+    setSending(true);
+    setError("");
     try {
       const response = await fetch(`${api}/message`, {
         method: "POST",
@@ -490,7 +538,9 @@ function GwamoBrainWidget({ apiUrl }) {
       await loadVisitorMessages(false);
     } catch (err) {
       setError(err.message || "Your message could not be sent.");
-    } finally { setSending(false); }
+    } finally {
+      setSending(false);
+    }
   }, [api, draft, sending, visitorHeaders, readResponse, loadVisitorMessages]);
 
   const loadAdminConversations = useCallback(async () => {
@@ -511,7 +561,9 @@ function GwamoBrainWidget({ apiUrl }) {
   }, [api, adminPin, readResponse]);
 
   const loginHelper = useCallback(async (event) => {
-    event?.preventDefault(); setAdminError(""); setAdminBusy(true);
+    event?.preventDefault();
+    setAdminError("");
+    setAdminBusy(true);
     try {
       const response = await fetch(`${api}/admin/conversations`, {
         headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
@@ -519,10 +571,14 @@ function GwamoBrainWidget({ apiUrl }) {
       const data = await readResponse(response);
       setConversations(Array.isArray(data.conversations) ? data.conversations : []);
       setAdminAuthed(true);
-      setSelectedConversation(""); setAdminMessages([]);
+      setSelectedConversation("");
+      setAdminMessages([]);
+      setShowConversationList(true);
     } catch (err) {
       setAdminError(err.message || "Admin PIN was not accepted.");
-    } finally { setAdminBusy(false); }
+    } finally {
+      setAdminBusy(false);
+    }
   }, [api, adminPin, readResponse]);
 
   useEffect(() => {
@@ -531,7 +587,9 @@ function GwamoBrainWidget({ apiUrl }) {
       try {
         await loadAdminConversations();
         if (selectedConversation) await loadAdminMessages(selectedConversation);
-      } catch (err) { setAdminError(err.message || "Could not refresh helper inbox."); }
+      } catch (err) {
+        setAdminError(err.message || "Could not refresh helper inbox.");
+      }
     }, 3000);
     return () => window.clearInterval(id);
   }, [helperMode, adminAuthed, selectedConversation, loadAdminConversations, loadAdminMessages]);
@@ -540,7 +598,8 @@ function GwamoBrainWidget({ apiUrl }) {
     event?.preventDefault();
     const text = adminDraft.trim();
     if (!text || !selectedConversation || adminBusy) return;
-    setAdminBusy(true); setAdminError("");
+    setAdminBusy(true);
+    setAdminError("");
     try {
       const response = await fetch(`${api}/admin/reply`, {
         method: "POST", headers: adminHeaders(),
@@ -550,266 +609,206 @@ function GwamoBrainWidget({ apiUrl }) {
       if (data.message) setAdminMessages((current) => [...current, data.message]);
       setAdminDraft("");
       await loadAdminConversations();
-    } catch (err) { setAdminError(err.message || "Reply could not be sent."); }
-    finally { setAdminBusy(false); }
+    } catch (err) {
+      setAdminError(err.message || "Reply could not be sent.");
+    } finally {
+      setAdminBusy(false);
+    }
   }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
 
-  // Helper uploads video directly to the background settings
+  // Only the authorized Gwamo helper can upload or remove the shared Home-screen background.
   const uploadHelperBackgroundVideo = async (file) => {
     if (!file) return;
-    setAdminBusy(true); setAdminError("");
-    
+    if (!file.type.startsWith("video/")) {
+      setAdminError("Choose a video file for the Home-screen background.");
+      return;
+    }
+    setAdminBusy(true);
+    setAdminError("");
     try {
-      // 1. First, upload the file to the generic brain upload endpoint
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("conversation_id", selectedConversation);
-      
+      formData.append("conversation_id", selectedConversation || "");
       const uploadRes = await fetch(`${api}/admin/upload`, {
-        method: "POST",
-        headers: { "X-Admin-Pin": adminPin },
-        body: formData,
+        method: "POST", headers: { "X-Admin-Pin": adminPin }, body: formData,
       });
       const uploadData = await readResponse(uploadRes);
-      
-      if (!uploadData.url) throw new Error("Upload failed, no URL returned.");
-
-      // 2. Save the returned URL as the background media_url in the settings
+      if (!uploadData.url) throw new Error("Upload failed: no video URL was returned.");
       const settingsRes = await fetch(`${api}/admin/settings`, {
-        method: "POST",
-        headers: adminHeaders(),
-        body: JSON.stringify({ 
-          title: settings.title, 
-          welcome_message: settings.welcome_message, 
-          media_url: uploadData.url 
+        method: "POST", headers: adminHeaders(),
+        body: JSON.stringify({
+          title: settings.title,
+          welcome_message: settings.welcome_message,
+          media_url: uploadData.url,
         }),
       });
       await readResponse(settingsRes);
-      
-      // 3. Update the local state so the background changes immediately
-      setSettings((curr) => ({ ...curr, media_url: uploadData.url }));
-      alert("Background video updated successfully!");
-      
+      setSettings((current) => ({ ...current, media_url: uploadData.url }));
     } catch (err) {
-      setAdminError(err.message || "Failed to set background video.");
+      setAdminError(err.message || "Failed to set the Home-screen background video.");
     } finally {
       setAdminBusy(false);
     }
   };
 
   const deleteBackgroundVideo = async () => {
-    if (!window.confirm("Remove background video for all users?")) return;
+    if (!window.confirm("Remove the background video from the Gwamo Home screen for everyone?")) return;
     try {
       setAdminBusy(true);
-      const res = await fetch(`${api}/admin/settings`, {
-        method: "POST",
-        headers: adminHeaders(),
+      setAdminError("");
+      const response = await fetch(`${api}/admin/settings`, {
+        method: "POST", headers: adminHeaders(),
         body: JSON.stringify({ title: settings.title, welcome_message: settings.welcome_message, media_url: "" }),
       });
-      await readResponse(res);
+      await readResponse(response);
       setSettings((current) => ({ ...current, media_url: "" }));
     } catch (err) {
-      setAdminError(err.message || "Failed to remove video.");
+      setAdminError(err.message || "Failed to remove the background video.");
     } finally {
       setAdminBusy(false);
     }
   };
 
+  const startBackgroundHold = (event) => {
+    if (!helperMode || !adminAuthed || !settings.media_url || (event?.pointerType === "mouse" && event.button !== 0)) return;
+    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
+    backgroundHoldTimerRef.current = window.setTimeout(() => {
+      deleteBackgroundVideo();
+    }, 900);
+  };
+  const endBackgroundHold = () => {
+    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
+    backgroundHoldTimerRef.current = null;
+  };
+
   const mediaUrl = String(settings.media_url || "").trim();
-  const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(mediaUrl);
+  const isVideo = /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(mediaUrl);
+  const visibleMessages = (list) => (Array.isArray(list) ? list : []).filter((message) =>
+    !hiddenMessageIds.includes(String(message.id))
+  );
+  const filteredConversations = conversations.filter((conversation) => {
+    const query = conversationSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [conversation.visitor_label, conversation.last_message, conversation.status, conversation.id]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const selectedConversationData = conversations.find((conversation) => String(conversation.id) === String(selectedConversation));
 
   return (
     <div className="gwamo-brain-container">
       <style>{`
-      .gwamo-brain-container {
-        display: flex; flex-direction: column; align-items: center;
-        width: 100%; max-width: 640px; margin: 0 auto;
-        height: calc(100svh - var(--nav-h, 64px));
-        padding: calc(var(--top-offset, 60px) + 8px) 12px 12px;
-      }
-      @supports (height: 100dvh) {
-        .gwamo-brain-container { height: calc(100dvh - var(--nav-h, 64px)); }
-      }
-      .gbw-panel {
-        width: 100%; flex: 1; min-height: 0;
-        display: flex; flex-direction: column;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        background: var(--surface);
-        font-family: var(--font-body, system-ui, sans-serif);
-        position: relative;
-      }
-      
-      /* Chat Background Video */
-      .gbw-chat-background {
-        position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      }
-      .gbw-chat-background video, .gbw-chat-background img {
-        width: 100%; height: 100%; object-fit: cover; opacity: 0.25;
-      }
-      .gbw-chat-background::after {
-        content: ""; position: absolute; inset: 0;
-        background: linear-gradient(to bottom, rgba(13, 19, 32, 0.8), rgba(13, 19, 32, 0.95));
-      }
-      
-      .gbw-head { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-      .gbw-logo { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; color: var(--amber-ink); background: var(--amber); }
-      .gbw-headcopy { flex: 1; min-width: 0; }
-      .gbw-headcopy strong { display: block; color: var(--text); font-family: var(--font-display, inherit); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
-      .gbw-headcopy small { display: block; margin-top: 2px; color: var(--text-dim); font-size: 12.5px; }
-      
-      .gbw-welcome { position: relative; z-index: 1; margin: 14px 16px 0; padding: 12px 14px; border-radius: 14px; color: var(--text); background: var(--amber-soft); font-size: 14px; line-height: 1.5; }
-      
-      .gbw-messages { position: relative; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
-      .gbw-messages::-webkit-scrollbar, .gbw-adminmessages::-webkit-scrollbar { width: 6px; }
-      .gbw-messages::-webkit-scrollbar-thumb, .gbw-adminmessages::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255, 255, 255, 0.12); }
-      .gbw-bubble { position: relative; max-width: 82%; padding: 10px 14px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-      .gbw-bubble.visitor { align-self: flex-end; border-radius: 18px 18px 5px 18px; color: var(--amber-ink); background: var(--amber); }
-      .gbw-bubble.helper { align-self: flex-start; border-radius: 18px 18px 18px 5px; color: var(--text); background: var(--surface-2); }
-      .gbw-time { display: block; margin-top: 4px; font-size: 10.5px; text-align: right; opacity: 0.65; }
-
-      .gbw-compose { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: rgba(21,29,46,0.85); backdrop-filter: blur(8px); }
-      .gbw-compose input, .gbw-form input, .gbw-form textarea, .gbw-adminlogin input {
-        flex: 1; width: 100%; min-width: 0;
-        padding: 12px 16px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        outline: none;
-        color: var(--text);
-        background: var(--surface-2);
-        font: inherit; font-size: 15px;
-        transition: border-color 150ms ease;
-      }
-      .gbw-compose input:focus, .gbw-form textarea:focus, .gbw-adminlogin input:focus { border-color: var(--amber); }
-      .gbw-compose input::placeholder, .gbw-form textarea::placeholder, .gbw-adminlogin input::placeholder { color: rgba(154, 166, 186, 0.75); }
-      .gbw-compose button, .gbw-primary {
-        width: 44px; height: 44px; flex-shrink: 0;
-        display: grid; place-items: center;
-        border: 0; border-radius: 50%;
-        color: var(--amber-ink); background: var(--amber);
-        font-weight: 700; cursor: pointer;
-        transition: background 150ms ease, opacity 150ms ease;
-      }
-      .gbw-compose button:hover:not(:disabled), .gbw-primary:hover:not(:disabled) { background: var(--amber-strong); }
-      .gbw-primary { width: 100%; height: auto; padding: 12px; border-radius: 14px; font-size: 15px; }
-      .gbw-compose button:disabled, .gbw-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-      .gbw-helperlink { position: relative; z-index: 1; align-self: center; padding: 4px 12px 12px; border: 0; color: rgba(154, 166, 186, 0.7); background: transparent; font-size: 12px; cursor: pointer; }
-      .gbw-helperlink:hover { color: var(--text); }
-      .gbw-empty { padding: 36px 20px; color: var(--text-dim); font-size: 14px; line-height: 1.5; text-align: center; }
-      .gbw-error { position: relative; z-index: 1; padding: 10px 16px; color: #ff8e9c; background: rgba(255, 92, 112, 0.1); font-size: 13px; text-align: center; }
-
-      .gbw-adminlogin { position: relative; z-index: 1; max-width: 400px; height: 100%; margin: 0 auto; padding: 30px 24px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
-      .gbw-adminlogin h3 { margin: 0; color: var(--text); font-family: var(--font-display, inherit); font-size: 22px; text-align: center; }
-      
-      .gbw-admin { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
-      .gbw-convos { overflow-y: auto; border-right: 1px solid var(--line); background: rgba(13,19,32,0.6); }
-      .gbw-convo { display: block; width: 100%; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; color: var(--text); background: transparent; text-align: left; cursor: pointer; transition: background 140ms ease; }
-      .gbw-convo:hover { background: rgba(255, 255, 255, 0.04); }
-      .gbw-convo.active { border-left-color: var(--amber); background: var(--amber-soft); }
-      .gbw-convo strong, .gbw-convo small, .gbw-convo span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .gbw-convo strong { font-size: 14px; font-weight: 700; }
-      .gbw-convo small { margin-top: 3px; color: var(--amber); font-size: 11.5px; }
-      .gbw-convo span { margin-top: 3px; color: var(--text-dim); font-size: 12.5px; }
-      
-      .gbw-adminright { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: rgba(21,29,46,0.4); }
-      .gbw-adminmessages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-      
-      .gbw-form { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--surface); }
-      .gbw-form textarea { min-height: 44px; max-height: 100px; border-radius: 14px; resize: none; }
-      .gbw-form .gbw-primary { width: auto; padding: 0 18px; border-radius: 14px; white-space: nowrap; }
-      
-      .gbw-back { position: relative; z-index: 1; padding: 12px 20px; border: 0; border-top: 1px solid var(--line); color: var(--text-dim); background: transparent; font-size: 13.5px; text-align: center; cursor: pointer; }
-      .gbw-back:hover { color: var(--text); }
-      .gbw-iconbtn { padding: 7px 12px; border: 0; border-radius: 10px; color: var(--text); background: var(--surface-3); font-size: 12.5px; font-weight: 600; cursor: pointer; }
-      .gbw-iconbtn.danger { color: #ff8e9c; background: rgba(255, 92, 112, 0.15); }
-
-      @media (max-width: 600px) {
-        .gwamo-brain-container { padding: calc(var(--top-offset, 60px) + 4px) 0 0; }
-        .gbw-panel { border-width: 1px 0 0; border-radius: 22px 22px 0 0; }
-        .gbw-admin { grid-template-columns: 120px minmax(0, 1fr); }
-        .gbw-bubble { max-width: 88%; }
-      }
+        .gwamo-brain-container{position:relative;isolation:isolate;display:flex;flex-direction:column;align-items:center;width:100%;max-width:860px;margin:0 auto;height:calc(100svh - var(--nav-h,64px));min-height:420px;padding:calc(var(--top-offset,60px) + 8px) 12px 12px;box-sizing:border-box}
+        @supports(height:100dvh){.gwamo-brain-container{height:calc(100dvh - var(--nav-h,64px))}}
+        .gbw-page-background{position:absolute;inset:0;z-index:-1;overflow:hidden;background:#0d1320}
+        .gbw-page-background video,.gbw-page-background img{width:100%;height:100%;display:block;object-fit:cover;opacity:.62}
+        .gbw-page-background:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,15,28,.5),rgba(8,15,28,.82))}
+        .gbw-panel{position:relative;width:100%;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:24px;background:rgba(13,19,32,.48);box-shadow:0 18px 60px rgba(0,0,0,.24);backdrop-filter:blur(12px);font-family:var(--font-body,system-ui,sans-serif);color:var(--text,#f7f9fc)}
+        .gbw-head{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.14);background:rgba(9,15,27,.42)}
+        .gbw-logo{width:42px;height:42px;flex-shrink:0;display:grid;place-items:center;border-radius:14px;color:#102315;background:#b8f36b;box-shadow:0 0 24px rgba(184,243,107,.15)}
+        .gbw-headcopy{flex:1;min-width:0}.gbw-headcopy strong{display:block;color:#fff;font-size:17px;font-weight:750;letter-spacing:-.02em}.gbw-headcopy small{display:block;margin-top:3px;color:rgba(239,245,255,.72);font-size:12px}
+        .gbw-welcome{position:relative;z-index:1;margin:12px 16px 0;padding:11px 14px;border:1px solid rgba(184,243,107,.2);border-radius:14px;color:#f5ffe9;background:rgba(57,82,41,.56);font-size:14px;line-height:1.5}
+        .gbw-messages,.gbw-adminmessages{position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;overscroll-behavior:contain}
+        .gbw-messages::-webkit-scrollbar,.gbw-adminmessages::-webkit-scrollbar,.gbw-convos::-webkit-scrollbar{width:5px}.gbw-messages::-webkit-scrollbar-thumb,.gbw-adminmessages::-webkit-scrollbar-thumb,.gbw-convos::-webkit-scrollbar-thumb{border-radius:10px;background:rgba(255,255,255,.2)}
+        .gbw-bubble{position:relative;max-width:82%;padding:10px 13px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:default;box-shadow:0 3px 12px rgba(0,0,0,.1)}
+        .gbw-bubble.visitor{align-self:flex-end;border:1px solid rgba(184,243,107,.18);border-radius:18px 18px 5px 18px;color:#14230b;background:linear-gradient(135deg,#c9f98d,#a9e65c)}
+        .gbw-bubble.helper{align-self:flex-start;border:1px solid rgba(255,255,255,.12);border-radius:18px 18px 18px 5px;color:#f7f9ff;background:rgba(26,38,57,.88)}
+        .gbw-time{display:block;margin-top:5px;font-size:10.5px;text-align:right;opacity:.72}.gbw-hold-hint{font-size:11px;color:rgba(255,255,255,.65);text-align:center;padding:0 8px 7px}
+        .gbw-compose{position:relative;z-index:1;display:flex;align-items:center;gap:9px;padding:11px 13px;border-top:1px solid rgba(255,255,255,.14);background:rgba(9,15,27,.7);backdrop-filter:blur(12px)}
+        .gbw-compose input,.gbw-admin-compose textarea,.gbw-adminlogin input,.gbw-search{flex:1;width:100%;min-width:0;box-sizing:border-box;padding:12px 15px;border:1px solid rgba(255,255,255,.17);border-radius:15px;outline:none;color:#fff;background:rgba(255,255,255,.075);font:inherit;font-size:14px;transition:border-color .15s,background .15s}
+        .gbw-compose input:focus,.gbw-admin-compose textarea:focus,.gbw-adminlogin input:focus,.gbw-search:focus{border-color:#b8f36b;background:rgba(255,255,255,.1)}
+        .gbw-compose input::placeholder,.gbw-admin-compose textarea::placeholder,.gbw-adminlogin input::placeholder,.gbw-search::placeholder{color:rgba(235,241,250,.6)}
+        .gbw-send,.gbw-primary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:0 17px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer;transition:transform .15s,filter .15s;white-space:nowrap}
+        .gbw-send{width:46px;min-width:46px;padding:0;border-radius:50%}.gbw-send:hover:not(:disabled),.gbw-primary:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}.gbw-send:disabled,.gbw-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+        .gbw-helperlink,.gbw-back{position:relative;z-index:1;align-self:center;padding:8px 12px 11px;border:0;color:rgba(235,241,250,.65);background:transparent;font-size:12px;cursor:pointer}.gbw-helperlink:hover,.gbw-back:hover{color:#fff}
+        .gbw-empty{padding:30px 18px;color:rgba(240,245,255,.72);font-size:13.5px;line-height:1.55;text-align:center}.gbw-error{position:relative;z-index:2;padding:10px 14px;color:#ffd9de;background:rgba(145,31,51,.52);font-size:12.5px;text-align:center}
+        .gbw-adminlogin{position:relative;z-index:1;width:min(100%,390px);height:100%;box-sizing:border-box;margin:0 auto;padding:28px 22px;display:flex;flex-direction:column;justify-content:center;gap:13px}.gbw-adminlogin h3{margin:0;color:#fff;font-size:25px;letter-spacing:-.03em;text-align:center}.gbw-login-mark{width:60px;height:60px;display:grid;place-items:center;align-self:center;border-radius:20px;color:#14230b;background:#b8f36b}.gbw-login-copy{margin:0 0 8px;color:rgba(239,245,255,.72);font-size:13px;line-height:1.5;text-align:center}
+        .gbw-admin{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,275px) minmax(0,1fr)}.gbw-convo-side{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.13);background:rgba(8,14,25,.42)}.gbw-convo-heading{padding:14px 13px 10px}.gbw-convo-heading strong{display:block;color:#fff;font-size:15px}.gbw-convo-heading small{display:block;margin-top:4px;color:rgba(235,241,250,.6);font-size:11px}.gbw-search{margin-top:11px;padding:10px 12px;border-radius:12px;font-size:12.5px}.gbw-convos{flex:1;min-height:0;overflow-y:auto}.gbw-convo{display:block;width:100%;box-sizing:border-box;padding:13px;border:0;border-bottom:1px solid rgba(255,255,255,.08);border-left:3px solid transparent;color:#fff;background:transparent;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}.gbw-convo:hover{background:rgba(255,255,255,.055)}.gbw-convo.active{border-left-color:#b8f36b;background:rgba(184,243,107,.12)}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:13px;font-weight:750}.gbw-convo small{margin-top:4px;color:#c5f78e;font-size:10.5px;text-transform:capitalize}.gbw-convo span{margin-top:5px;color:rgba(235,241,250,.65);font-size:11.5px}.gbw-adminright{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;background:rgba(13,20,33,.18)}.gbw-chat-toolbar{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.35)}.gbw-chat-toolbar-copy{flex:1;min-width:0}.gbw-chat-toolbar strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#fff}.gbw-chat-toolbar small{display:block;margin-top:3px;color:rgba(235,241,250,.6);font-size:10.5px}.gbw-iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:11px;color:#f5f7fb;background:rgba(255,255,255,.07);font-size:11.5px;font-weight:650;cursor:pointer}.gbw-iconbtn:hover{background:rgba(255,255,255,.13)}.gbw-iconbtn.danger{color:#ffd6db;border-color:rgba(255,116,135,.24);background:rgba(255,92,112,.13)}
+        .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
+        @media(max-width:650px){.gwamo-brain-container{padding:calc(var(--top-offset,60px) + 4px) 0 0;min-height:380px}.gbw-panel{border-width:1px 0 0;border-radius:22px 22px 0 0}.gbw-admin{grid-template-columns:minmax(0,1fr)}.gbw-admin.show-chat .gbw-convo-side{display:none}.gbw-admin:not(.show-chat) .gbw-adminright{display:none}.gbw-mobile-back{display:inline-flex}.gbw-bubble{max-width:88%}.gbw-head{padding:11px 13px}.gbw-admin-compose{gap:6px;padding:9px}.gbw-admin-compose .gbw-primary{padding:0 11px;font-size:12px}.gbw-background-status{flex-wrap:wrap}.gbw-background-hint{width:100%}}
+        @media(prefers-reduced-motion:reduce){.gbw-messages,.gbw-adminmessages{scroll-behavior:auto}.gbw-send,.gbw-primary{transition:none}}
       `}</style>
 
-      <section className="gbw-panel">
-        
-        {/* BACKGROUND VIDEO LAYER */}
-        {mediaUrl && (
-          <div className="gbw-chat-background" aria-hidden="true">
-            {isVideo ? (
-              <video src={mediaUrl} autoPlay loop muted playsInline />
-            ) : (
-              <img src={mediaUrl} alt="" />
-            )}
-          </div>
-        )}
+      <div className="gbw-page-background" aria-hidden="true">
+        {mediaUrl && isVideo ? <video src={mediaUrl} autoPlay loop muted playsInline /> : mediaUrl ? <img src={mediaUrl} alt="" /> : null}
+      </div>
 
+      <section className="gbw-panel">
         <header className="gbw-head">
           <div className="gbw-logo" aria-hidden="true"><MessageSquare size={22} strokeWidth={2.2} /></div>
           <div className="gbw-headcopy">
             <strong>{helperMode ? "Gwamo Brain Helper" : (settings.title || "Gwamo Brain")}</strong>
-            <small>{helperMode ? (adminAuthed ? "Private helper inbox" : "Authorized helper access") : "Human support · Private conversation"}</small>
+            <small>{helperMode ? (adminAuthed ? "Private helper inbox · Live updates" : "Authorized helper access") : "Human support · Private conversation"}</small>
           </div>
           {helperMode && adminAuthed && (
-            <button className="gbw-iconbtn" type="button" onClick={() => { setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]); setSelectedConversation(""); }}>Log out</button>
+            <button className="gbw-iconbtn" type="button" onClick={() => {
+              setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]);
+              setSelectedConversation(""); setShowConversationList(true);
+            }}><LogOut size={14} /> Log out</button>
           )}
         </header>
 
         {!helperMode ? (
           <>
             <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
-            
             <div className="gbw-messages" ref={scrollRef} aria-live="polite">
               {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
-              
-              {messages.map((message) => {
-                const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
+              {visibleMessages(messages).map((message) => {
                 const videoUrl = message.media_url || message.mediaUrl;
-
+                const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
                 return (
-                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                    {isMsgVideo && (
-                      <video 
-                        src={videoUrl} 
-                        controls 
-                        playsInline 
-                        style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
-                      />
-                    )}
+                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                    onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
+                    onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
+                    onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your view">
+                    {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
                     {message.text_content}
                     <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
                   </div>
                 );
               })}
-
-              {!loading && messages.length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
+              {!loading && visibleMessages(messages).length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
             </div>
+            <div className="gbw-hold-hint">Tip: press and hold a message to remove it from your view.</div>
             {error && <div className="gbw-error" role="status">{error}</div>}
-            
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
-              <button type="submit" disabled={!draft.trim() || sending || !visitorToken}>{sending ? "..." : <Send size={18}/>}</button>
+              <button className="gbw-send" type="submit" disabled={!draft.trim() || sending || !visitorToken} aria-label="Send message">{sending ? "…" : <Send size={18} />}</button>
             </form>
-            <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Helper login</button>
+            <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Gwamo helper login</button>
           </>
         ) : !adminAuthed ? (
           <form className="gbw-adminlogin" onSubmit={loginHelper}>
-            <h3>Helper login</h3>
-            <p style={{ margin: 0, fontSize: 13, color: "#c5e5d1" }}>Enter your PIN to respond to Gwamo visitors</p>
-            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Admin PIN" autoComplete="current-password" required />
-            <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminPin || adminBusy}>{adminBusy ? "Checking..." : "Open private inbox"}</button>
+            <div className="gbw-login-mark"><ShieldCheck size={29} /></div>
+            <h3>Helper sign in</h3>
+            <p className="gbw-login-copy">Use your authorized PIN to open the private inbox and reply to visitors.</p>
+            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Enter helper PIN" autoComplete="current-password" required />
+            <button className="gbw-primary" type="submit" disabled={!adminPin || adminBusy}>{adminBusy ? "Checking PIN…" : <><LogIn size={16} /> Open helper inbox</>}</button>
             <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminError(""); }}>← Back to visitor chat</button>
-            {adminError && <div className="gbw-error">{adminError}</div>}
+            {adminError && <div className="gbw-error" role="status">{adminError}</div>}
           </form>
         ) : (
           <>
-            <div className="gbw-admin">
-              <aside className="gbw-convos" aria-label="Visitor conversations">
-                {conversations.length === 0 && <div className="gbw-empty">No conversations yet.</div>}
-                {conversations.map((conversation) => (
-                  <button type="button" key={conversation.id} className={`gbw-convo ${selectedConversation === conversation.id ? "active" : ""}`} onClick={async () => {
-                    setSelectedConversation(conversation.id); setAdminError("");
+          <div className="gbw-background-status" onPointerDown={startBackgroundHold} onPointerUp={endBackgroundHold} onPointerLeave={endBackgroundHold} onPointerCancel={endBackgroundHold} onContextMenu={(event) => { if (mediaUrl) event.preventDefault(); }}>
+            <span>{mediaUrl ? "Home-screen background video is active" : "No Home-screen background video set"}</span>
+            {mediaUrl && <button className="gbw-iconbtn danger" type="button" onClick={deleteBackgroundVideo} disabled={adminBusy}><Trash2 size={14} /> Remove video</button>}
+            <label className="gbw-upload-label" title="Upload Home-screen background video" aria-label="Upload Home-screen background video">
+              <Video size={19} />
+              <input type="file" accept="video/*" disabled={adminBusy} style={{ display: "none" }} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) uploadHelperBackgroundVideo(file); }} />
+            </label>
+            <small className="gbw-background-hint">Only the helper can change this video. Press and hold this bar to remove the active background.</small>
+          </div>
+          <div className={`gbw-admin ${selectedConversation && !showConversationList ? "show-chat" : ""}`}>
+            <aside className="gbw-convo-side" aria-label="Visitor conversations">
+              <div className="gbw-convo-heading">
+                <strong>Visitor inbox</strong>
+                <small>{conversations.length} conversation{conversations.length === 1 ? "" : "s"} · refreshes automatically</small>
+                <input className="gbw-search" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search visitors or messages…" aria-label="Search conversations" />
+              </div>
+              <div className="gbw-convos">
+                {filteredConversations.length === 0 && <div className="gbw-empty">{conversationSearch ? "No conversations match your search." : "No conversations yet."}</div>}
+                {filteredConversations.map((conversation) => (
+                  <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
+                    setSelectedConversation(conversation.id); setAdminError(""); setShowConversationList(false);
                     try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); }
                   }}>
                     <strong>{conversation.visitor_label || "Visitor"}</strong>
@@ -817,83 +816,56 @@ function GwamoBrainWidget({ apiUrl }) {
                     <span>{conversation.last_message || "No messages yet"}</span>
                   </button>
                 ))}
-              </aside>
-              <div className="gbw-adminright">
-                {!selectedConversation ? (
-                  <div className="gbw-empty">Choose a visitor to read and reply.</div>
-                ) : (
-                  <>
-                    <div className="gbw-adminmessages" ref={adminScrollRef}>
-                      {adminMessages.map((message) => {
-                        const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
-                        const videoUrl = message.media_url || message.mediaUrl;
-
-                        return (
-                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                            {isMsgVideo && (
-                              <video 
-                                src={videoUrl} 
-                                controls 
-                                playsInline 
-                                style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
-                              />
-                            )}
-                            {message.text_content}
-                            <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    
-                    {/* Background Video Deletion Option */}
-                    {mediaUrl && (
-                      <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255, 92, 112, 0.1)" }}>
-                        <span style={{ fontSize: "12px", color: "#ff8e9c" }}>Background Video Active</span>
-                        <button onClick={deleteBackgroundVideo} className="gbw-iconbtn danger" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Trash2 size={14} /> Remove
-                        </button>
-                      </div>
-                    )}
-
-                    <form className="gbw-form" onSubmit={sendHelperReply} style={{ position: 'relative' }}>
-                      <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
-                      
-                      {/* Helper Video Uploader - Now uploads to background! */}
-                      <button 
-                        type="button" 
-                        onClick={() => document.getElementById('helper-video-upload').click()} 
-                        style={{ width: '44px', height: '44px', background: 'var(--surface-3)', color: 'var(--text)', borderRadius: '14px', display: 'grid', placeItems: 'center', flexShrink: 0 }}
-                        disabled={adminBusy}
-                        aria-label="Upload Background Video"
-                        title="Upload Background Video"
-                      >
-                        <Video size={20} />
-                      </button>
-                      <input 
-                        id="helper-video-upload" 
-                        type="file" 
-                        accept="video/*" 
-                        style={{ display: 'none' }} 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          e.target.value = "";
-                          if (file) uploadHelperBackgroundVideo(file);
-                        }} 
-                      />
-                      <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
-                    </form>
-                  </>
-                )}
               </div>
+            </aside>
+
+            <div className="gbw-adminright">
+              {!selectedConversation ? (
+                <div className="gbw-empty">Choose a visitor on the left to read their messages and reply.<br /><br />You can manage many separate visitor conversations from this inbox.</div>
+              ) : (
+                <>
+                  <div className="gbw-chat-toolbar">
+                    <button className="gbw-iconbtn gbw-mobile-back" type="button" onClick={() => setShowConversationList(true)}>← Inbox</button>
+                    <div className="gbw-chat-toolbar-copy">
+                      <strong>{selectedConversationData?.visitor_label || "Visitor conversation"}</strong>
+                      <small>{selectedConversationData?.status || "Conversation selected"} · Press and hold a message to hide it from your helper view</small>
+                    </div>
+                  </div>
+                  <div className="gbw-adminmessages" ref={adminScrollRef}>
+                    {visibleMessages(adminMessages).map((message) => {
+                      const videoUrl = message.media_url || message.mediaUrl;
+                      const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
+                      return (
+                        <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                          onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
+                          onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
+                          onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your helper view">
+                          {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
+                          {message.text_content}
+                          <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                        </div>
+                      );
+                    })}
+                    {visibleMessages(adminMessages).length === 0 && <div className="gbw-empty">No visible messages in this conversation.</div>}
+                  </div>
+
+
+                  <form className="gbw-admin-compose" onSubmit={sendHelperReply}>
+                    <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write a helpful reply…" maxLength={4000} required aria-label="Helper reply" />
+                    <button className="gbw-primary" type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending…" : <><Send size={15} /> Reply</>}</button>
+                  </form>
+                </>
+              )}
+              {adminError && <div className="gbw-error" role="status">{adminError}</div>}
             </div>
-            {adminError && <div className="gbw-status" role="status" style={{ color: '#ffc0b8', padding: '10px', background: 'rgba(255, 92, 112, 0.1)', textAlign: 'center' }}>{adminError}</div>}
-            <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminAuthed(false); setAdminPin(""); setAdminError(""); }}>← Return to visitor chat</button>
+          </div>
           </>
         )}
       </section>
     </div>
   );
 }
+
 
 // ==========================================
 // MAIN HOME COMPONENT
