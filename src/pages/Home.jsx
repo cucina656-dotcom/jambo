@@ -386,10 +386,6 @@ function GwamoBrainWidget({ apiUrl }) {
   const scrollRef = useRef(null);
   const adminScrollRef = useRef(null);
   const visitorTokenRef = useRef("");
-  
-  // Deletion logic state
-  const [deletingMessageId, setDeletingMessageId] = useState(null);
-  const longPressTimer = useRef(null);
 
   const api = `${apiUrl}/api/brain`;
 
@@ -558,7 +554,49 @@ function GwamoBrainWidget({ apiUrl }) {
     finally { setAdminBusy(false); }
   }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
 
-  // Delete background video function for Helper
+  // Helper uploads video directly to the background settings
+  const uploadHelperBackgroundVideo = async (file) => {
+    if (!file) return;
+    setAdminBusy(true); setAdminError("");
+    
+    try {
+      // 1. First, upload the file to the generic brain upload endpoint
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("conversation_id", selectedConversation);
+      
+      const uploadRes = await fetch(`${api}/admin/upload`, {
+        method: "POST",
+        headers: { "X-Admin-Pin": adminPin },
+        body: formData,
+      });
+      const uploadData = await readResponse(uploadRes);
+      
+      if (!uploadData.url) throw new Error("Upload failed, no URL returned.");
+
+      // 2. Save the returned URL as the background media_url in the settings
+      const settingsRes = await fetch(`${api}/admin/settings`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ 
+          title: settings.title, 
+          welcome_message: settings.welcome_message, 
+          media_url: uploadData.url 
+        }),
+      });
+      await readResponse(settingsRes);
+      
+      // 3. Update the local state so the background changes immediately
+      setSettings((curr) => ({ ...curr, media_url: uploadData.url }));
+      alert("Background video updated successfully!");
+      
+    } catch (err) {
+      setAdminError(err.message || "Failed to set background video.");
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
   const deleteBackgroundVideo = async () => {
     if (!window.confirm("Remove background video for all users?")) return;
     try {
@@ -574,41 +612,6 @@ function GwamoBrainWidget({ apiUrl }) {
       setAdminError(err.message || "Failed to remove video.");
     } finally {
       setAdminBusy(false);
-    }
-  };
-
-  // Long press logic for deletion
-  const handlePointerDown = (id) => {
-    longPressTimer.current = setTimeout(() => {
-      setDeletingMessageId(id);
-    }, 600);
-  };
-  const handlePointerUp = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-  };
-
-  const confirmDeleteMessage = async (id) => {
-    try {
-      const isAdmin = helperMode;
-      const url = isAdmin ? `${api}/admin/message` : `${api}/message`;
-      const headers = isAdmin ? adminHeaders() : visitorHeaders();
-
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ message_id: id, conversation_id: selectedConversation }),
-      });
-
-      if (res.ok) {
-        if (isAdmin) setAdminMessages((curr) => curr.filter((m) => m.id !== id));
-        else setMessages((curr) => curr.filter((m) => m.id !== id));
-      } else {
-        alert("Could not delete message. Make sure backend supports DELETE.");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDeletingMessageId(null);
     }
   };
 
@@ -637,6 +640,7 @@ function GwamoBrainWidget({ apiUrl }) {
         font-family: var(--font-body, system-ui, sans-serif);
         position: relative;
       }
+      
       /* Chat Background Video */
       .gbw-chat-background {
         position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -660,12 +664,12 @@ function GwamoBrainWidget({ apiUrl }) {
       .gbw-messages { position: relative; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
       .gbw-messages::-webkit-scrollbar, .gbw-adminmessages::-webkit-scrollbar { width: 6px; }
       .gbw-messages::-webkit-scrollbar-thumb, .gbw-adminmessages::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255, 255, 255, 0.12); }
-      .gbw-bubble { position: relative; max-width: 82%; padding: 10px 14px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; user-select: none; }
+      .gbw-bubble { position: relative; max-width: 82%; padding: 10px 14px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
       .gbw-bubble.visitor { align-self: flex-end; border-radius: 18px 18px 5px 18px; color: var(--amber-ink); background: var(--amber); }
       .gbw-bubble.helper { align-self: flex-start; border-radius: 18px 18px 18px 5px; color: var(--text); background: var(--surface-2); }
       .gbw-time { display: block; margin-top: 4px; font-size: 10.5px; text-align: right; opacity: 0.65; }
 
-      .gbw-compose { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: rgba(21,29,46,0.8); backdrop-filter: blur(8px); }
+      .gbw-compose { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: rgba(21,29,46,0.85); backdrop-filter: blur(8px); }
       .gbw-compose input, .gbw-form input, .gbw-form textarea, .gbw-adminlogin input {
         flex: 1; width: 100%; min-width: 0;
         padding: 12px 16px;
@@ -720,19 +724,6 @@ function GwamoBrainWidget({ apiUrl }) {
       .gbw-iconbtn { padding: 7px 12px; border: 0; border-radius: 10px; color: var(--text); background: var(--surface-3); font-size: 12.5px; font-weight: 600; cursor: pointer; }
       .gbw-iconbtn.danger { color: #ff8e9c; background: rgba(255, 92, 112, 0.15); }
 
-      /* Delete Message Overlay */
-      .delete-overlay {
-        position: absolute; inset: 0; background: rgba(13,19,32,0.95);
-        display: flex; align-items: center; justify-content: center; gap: 16px;
-        border-radius: inherit; z-index: 10;
-      }
-      .delete-btn {
-        background: #ff5c70; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;
-      }
-      .cancel-delete-btn {
-        background: transparent; color: #fff; border: 1px solid #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer;
-      }
-
       @media (max-width: 600px) {
         .gwamo-brain-container { padding: calc(var(--top-offset, 60px) + 4px) 0 0; }
         .gbw-panel { border-width: 1px 0 0; border-radius: 22px 22px 0 0; }
@@ -777,21 +768,7 @@ function GwamoBrainWidget({ apiUrl }) {
                 const videoUrl = message.media_url || message.mediaUrl;
 
                 return (
-                  <div 
-                    key={message.id} 
-                    className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                    onPointerDown={() => handlePointerDown(message.id)}
-                    onPointerUp={handlePointerUp}
-                    onPointerLeave={handlePointerUp}
-                  >
-                    {/* Long press delete overlay */}
-                    {deletingMessageId === message.id && (
-                      <div className="delete-overlay">
-                        <button className="delete-btn" onClick={() => confirmDeleteMessage(message.id)}>Delete</button>
-                        <button className="cancel-delete-btn" onClick={() => setDeletingMessageId(null)}>Cancel</button>
-                      </div>
-                    )}
-
+                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
                     {isMsgVideo && (
                       <video 
                         src={videoUrl} 
@@ -812,35 +789,6 @@ function GwamoBrainWidget({ apiUrl }) {
             
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
-              
-              <button type="button" onClick={() => document.getElementById('brain-video-upload').click()} style={{ background: 'var(--surface-3)', color: 'var(--text)', flexShrink: 0 }} aria-label="Upload Video">
-                <Video size={20} />
-              </button>
-              <input 
-                id="brain-video-upload" 
-                type="file" 
-                accept="video/*" 
-                style={{ display: 'none' }} 
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  setSending(true);
-                  const formData = new FormData();
-                  formData.append("file", file);
-                  formData.append("message_type", "video");
-                  try {
-                    const res = await fetch(`${api}/message`, {
-                      method: "POST", headers: visitorHeaders(), body: formData,
-                    });
-                    const data = await readResponse(res);
-                    if (data.message) setMessages((curr) => [...curr, data.message]);
-                    await loadVisitorMessages(false);
-                  } catch (err) {
-                    setError(err.message || "Failed to upload video.");
-                  } finally { setSending(false); }
-                }} 
-              />
               <button type="submit" disabled={!draft.trim() || sending || !visitorToken}>{sending ? "..." : <Send size={18}/>}</button>
             </form>
             <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Helper login</button>
@@ -881,21 +829,7 @@ function GwamoBrainWidget({ apiUrl }) {
                         const videoUrl = message.media_url || message.mediaUrl;
 
                         return (
-                          <div 
-                            key={message.id} 
-                            className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                            onPointerDown={() => handlePointerDown(message.id)}
-                            onPointerUp={handlePointerUp}
-                            onPointerLeave={handlePointerUp}
-                          >
-                            {/* Long press delete overlay */}
-                            {deletingMessageId === message.id && (
-                              <div className="delete-overlay">
-                                <button className="delete-btn" onClick={() => confirmDeleteMessage(message.id)}>Delete</button>
-                                <button className="cancel-delete-btn" onClick={() => setDeletingMessageId(null)}>Cancel</button>
-                              </div>
-                            )}
-
+                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
                             {isMsgVideo && (
                               <video 
                                 src={videoUrl} 
@@ -924,12 +858,14 @@ function GwamoBrainWidget({ apiUrl }) {
                     <form className="gbw-form" onSubmit={sendHelperReply} style={{ position: 'relative' }}>
                       <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
                       
+                      {/* Helper Video Uploader - Now uploads to background! */}
                       <button 
                         type="button" 
                         onClick={() => document.getElementById('helper-video-upload').click()} 
                         style={{ width: '44px', height: '44px', background: 'var(--surface-3)', color: 'var(--text)', borderRadius: '14px', display: 'grid', placeItems: 'center', flexShrink: 0 }}
-                        disabled={adminBusy || !selectedConversation}
-                        aria-label="Upload Video"
+                        disabled={adminBusy}
+                        aria-label="Upload Background Video"
+                        title="Upload Background Video"
                       >
                         <Video size={20} />
                       </button>
@@ -938,33 +874,10 @@ function GwamoBrainWidget({ apiUrl }) {
                         type="file" 
                         accept="video/*" 
                         style={{ display: 'none' }} 
-                        onChange={async (e) => {
+                        onChange={(e) => {
                           const file = e.target.files?.[0];
                           e.target.value = "";
-                          if (!file || !selectedConversation) return;
-                          
-                          setAdminBusy(true); setAdminError("");
-                          
-                          const formData = new FormData();
-                          formData.append("file", file);
-                          formData.append("message_type", "video");
-                          formData.append("conversation_id", selectedConversation);
-                          
-                          try {
-                            const res = await fetch(`${api}/admin/reply`, {
-                              method: "POST",
-                              headers: { "X-Admin-Pin": adminPin },
-                              body: formData,
-                            });
-                            const data = await readResponse(res);
-                            if (data.message) setAdminMessages((curr) => [...curr, data.message]);
-                            setAdminDraft("");
-                            await loadAdminConversations();
-                          } catch (err) {
-                            setAdminError(err.message || "Failed to upload video.");
-                          } finally {
-                            setAdminBusy(false);
-                          }
+                          if (file) uploadHelperBackgroundVideo(file);
                         }} 
                       />
                       <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
