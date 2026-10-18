@@ -676,16 +676,73 @@ function GwamoBrainWidget({ apiUrl }) {
                   <>
                     <div className="gbw-adminmessages" ref={adminScrollRef}>
                       {adminMessages.map((message) => (
-                        <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                          {message.text_content}
-                          <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                        </div>
-                      ))}
+  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
+    
+    {/* NEW: Render Video if present */}
+    {message.message_type === "video" && message.media_url && (
+      <video 
+        src={message.media_url} 
+        controls 
+        playsInline 
+        style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
+      />
+    )}
+
+    {message.text_content}
+    <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+  </div>
+))}
                     </div>
-                    <form className="gbw-form" onSubmit={sendHelperReply}>
-                      <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
-                      <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
-                    </form>
+                    <form className="gbw-form" onSubmit={sendHelperReply} style={{ position: 'relative' }}>
+  <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
+  
+  {/* NEW: Helper Video Uploader */}
+  <button 
+    type="button" 
+    onClick={() => document.getElementById('helper-video-upload').click()} 
+    style={{ width: '44px', height: '44px', background: 'var(--surface-3)', color: 'var(--text)', borderRadius: '14px', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+    disabled={adminBusy || !selectedConversation}
+    aria-label="Upload Video"
+  >
+    <Video size={20} />
+  </button>
+  <input 
+    id="helper-video-upload" 
+    type="file" 
+    accept="video/*" 
+    style={{ display: 'none' }} 
+    onChange={async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !selectedConversation) return;
+      
+      setAdminBusy(true); setAdminError("");
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("message_type", "video");
+      formData.append("conversation_id", selectedConversation);
+      
+      try {
+        const res = await fetch(`${api}/admin/reply`, {
+          method: "POST",
+          headers: { "X-Admin-Pin": adminPin }, // Admin uses PIN, not visitor token
+          body: formData,
+        });
+        const data = await readResponse(res);
+        if (data.message) setAdminMessages((curr) => [...curr, data.message]);
+        setAdminDraft("");
+        await loadAdminConversations();
+      } catch (err) {
+        setAdminError(err.message || "Failed to upload video.");
+      } finally {
+        setAdminBusy(false);
+      }
+    }} 
+  />
+
+  <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
+</form>
                   </>
                 )}
               </div>
