@@ -627,20 +627,37 @@ function GwamoBrainWidget({ apiUrl }) {
             {mediaUrl && (isVideo ? <video className="gbw-media" src={mediaUrl} controls playsInline preload="metadata" /> : <img className="gbw-media" src={mediaUrl} alt="Support" onError={(event) => { event.currentTarget.style.display = "none"; }} />)}
             <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
             
-            <div className="gbw-messages" ref={scrollRef} aria-live="polite">
+                       <div className="gbw-messages" ref={scrollRef} aria-live="polite">
               {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
-              {messages.map((message) => (
-                <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                  {message.text_content}
-                  <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                </div>
-              ))}
+              
+              {messages.map((message) => {
+                const isVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
+                const videoUrl = message.media_url || message.mediaUrl;
+
+                return (
+                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
+                    {isVideo && (
+                      <video 
+                        src={videoUrl} 
+                        controls 
+                        playsInline 
+                        style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
+                      />
+                    )}
+                    {message.text_content}
+                    <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                  </div>
+                );
+              })}
+
               {!loading && messages.length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
             </div>
             {error && <div className="gbw-error" role="status">{error}</div>}
+            
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
-                            {/* Visitor Video Button */}
+              
+              {/* Visitor Video Button */}
               <button type="button" onClick={() => document.getElementById('brain-video-upload').click()} style={{ background: 'var(--surface-3)', color: 'var(--text)', flexShrink: 0 }} aria-label="Upload Video">
                 <Video size={20} />
               </button>
@@ -710,74 +727,76 @@ function GwamoBrainWidget({ apiUrl }) {
                 ) : (
                   <>
                     <div className="gbw-adminmessages" ref={adminScrollRef}>
-                      {adminMessages.map((message) => (
-  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-    
-    {/* NEW: Render Video if present */}
-    {message.message_type === "video" && message.media_url && (
-      <video 
-        src={message.media_url} 
-        controls 
-        playsInline 
-        style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
-      />
-    )}
+                      {adminMessages.map((message) => {
+                        const isVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
+                        const videoUrl = message.media_url || message.mediaUrl;
 
-    {message.text_content}
-    <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-  </div>
-))}
+                        return (
+                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
+                            {isVideo && (
+                              <video 
+                                src={videoUrl} 
+                                controls 
+                                playsInline 
+                                style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} 
+                              />
+                            )}
+                            {message.text_content}
+                            <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                          </div>
+                        );
+                      })}
                     </div>
+                    
                     <form className="gbw-form" onSubmit={sendHelperReply} style={{ position: 'relative' }}>
-  <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
-  
-  {/* NEW: Helper Video Uploader */}
-  <button 
-    type="button" 
-    onClick={() => document.getElementById('helper-video-upload').click()} 
-    style={{ width: '44px', height: '44px', background: 'var(--surface-3)', color: 'var(--text)', borderRadius: '14px', display: 'grid', placeItems: 'center', flexShrink: 0 }}
-    disabled={adminBusy || !selectedConversation}
-    aria-label="Upload Video"
-  >
-    <Video size={20} />
-  </button>
-  <input 
-    id="helper-video-upload" 
-    type="file" 
-    accept="video/*" 
-    style={{ display: 'none' }} 
-    onChange={async (e) => {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file || !selectedConversation) return;
-      
-      setAdminBusy(true); setAdminError("");
-      
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("message_type", "video");
-      formData.append("conversation_id", selectedConversation);
-      
-      try {
-        const res = await fetch(`${api}/admin/reply`, {
-          method: "POST",
-          headers: { "X-Admin-Pin": adminPin }, // Admin uses PIN, not visitor token
-          body: formData,
-        });
-        const data = await readResponse(res);
-        if (data.message) setAdminMessages((curr) => [...curr, data.message]);
-        setAdminDraft("");
-        await loadAdminConversations();
-      } catch (err) {
-        setAdminError(err.message || "Failed to upload video.");
-      } finally {
-        setAdminBusy(false);
-      }
-    }} 
-  />
-
-  <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
-</form>
+                      <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
+                      
+                      {/* Helper Video Uploader */}
+                      <button 
+                        type="button" 
+                        onClick={() => document.getElementById('helper-video-upload').click()} 
+                        style={{ width: '44px', height: '44px', background: 'var(--surface-3)', color: 'var(--text)', borderRadius: '14px', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+                        disabled={adminBusy || !selectedConversation}
+                        aria-label="Upload Video"
+                      >
+                        <Video size={20} />
+                      </button>
+                      <input 
+                        id="helper-video-upload" 
+                        type="file" 
+                        accept="video/*" 
+                        style={{ display: 'none' }} 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!file || !selectedConversation) return;
+                          
+                          setAdminBusy(true); setAdminError("");
+                          
+                          const formData = new FormData();
+                          formData.append("file", file);
+                          formData.append("message_type", "video");
+                          formData.append("conversation_id", selectedConversation);
+                          
+                          try {
+                            const res = await fetch(`${api}/admin/reply`, {
+                              method: "POST",
+                              headers: { "X-Admin-Pin": adminPin },
+                              body: formData,
+                            });
+                            const data = await readResponse(res);
+                            if (data.message) setAdminMessages((curr) => [...curr, data.message]);
+                            setAdminDraft("");
+                            await loadAdminConversations();
+                          } catch (err) {
+                            setAdminError(err.message || "Failed to upload video.");
+                          } finally {
+                            setAdminBusy(false);
+                          }
+                        }} 
+                      />
+                      <button className="gbw-primary" style={{ minHeight: '44px' }} type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending..." : "Send reply"}</button>
+                    </form>
                   </>
                 )}
               </div>
