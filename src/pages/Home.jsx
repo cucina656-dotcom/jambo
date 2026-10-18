@@ -555,8 +555,8 @@ function GwamoBrainWidget({ apiUrl }) {
 
           .gbw-compose { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); }
           .gbw-compose input, .gbw-form input, .gbw-form textarea, .gbw-adminlogin input {
-            width: 100%; min-width: 0;
-            padding: 12px 16px;
+           flex: 1; width: 100%; min-width: 0;
+           padding: 12px 16px;
             border: 1px solid var(--line);
             border-radius: 999px;
             outline: none;
@@ -640,6 +640,41 @@ function GwamoBrainWidget({ apiUrl }) {
             {error && <div className="gbw-error" role="status">{error}</div>}
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
+                            {/* Visitor Video Button */}
+              <button type="button" onClick={() => document.getElementById('brain-video-upload').click()} style={{ background: 'var(--surface-3)', color: 'var(--text)', flexShrink: 0 }} aria-label="Upload Video">
+                <Video size={20} />
+              </button>
+              <input 
+                id="brain-video-upload" 
+                type="file" 
+                accept="video/*" 
+                style={{ display: 'none' }} 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  
+                  setSending(true);
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  formData.append("message_type", "video");
+                  
+                  try {
+                    const res = await fetch(`${api}/message`, {
+                      method: "POST",
+                      headers: visitorHeaders(),
+                      body: formData,
+                    });
+                    const data = await readResponse(res);
+                    if (data.message) setMessages((curr) => [...curr, data.message]);
+                    await loadVisitorMessages(false);
+                  } catch (err) {
+                    setError(err.message || "Failed to upload video.");
+                  } finally {
+                    setSending(false);
+                  }
+                }} 
+              />
               <button type="submit" disabled={!draft.trim() || sending || !visitorToken}>{sending ? "..." : <Send size={18}/>}</button>
             </form>
             <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Helper login</button>
