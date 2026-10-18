@@ -48,7 +48,9 @@ import {
   Info,
   HelpCircle,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
@@ -56,12 +58,14 @@ const DEFAULT_MEDIA_LABEL = "Service media";
 const IS_DEV = Boolean(
   typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV,
 );
+
 function devWarn(...args) {
   if (IS_DEV) console.warn(...args);
 }
 function devError(...args) {
   if (IS_DEV) console.error(...args);
 }
+
 function getDisplayPostTitle(value = "") {
   const title = String(value || "").trim();
   if (!title) return "";
@@ -104,10 +108,12 @@ function getPostType(post = {}) {
   }
   return "offer";
 }
+
 const DEFAULT_LOGO =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
 const IMAGE_FALLBACK_SRC =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
+
 const INITIAL_PAGE_LIMIT = 5;
 const LOAD_MORE_LIMIT = 5;
 const MAX_WATCH_SECONDS_PER_REQUEST = 30;
@@ -123,12 +129,14 @@ const PERSONAL_PIN_PATTERN = /^\d{8}$/;
 const PIN_AUTH_METHOD = "phone_pin";
 const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 const noop = () => {};
+
 const CATEGORY_TABS = [
   { key: "time-market", label: "Chat", icon: MessageSquare },
   { key: "connect", label: "Connect", icon: Users },
   { key: "social-life", label: "Heart", icon: Heart },
   { key: "tv", label: "TV", icon: Tv },
 ];
+
 const CATEGORY_META = {
   connect: {
     label: "Connect",
@@ -140,6 +148,7 @@ const CATEGORY_META = {
   tv: { label: "TV", blurb: "Video and media content are coming to Gwamo." },
   deals: { label: "Deals", blurb: "Offers, discounts and useful local deals are coming to Gwamo." },
 };
+
 const INFO_CONTENT = {
   about: {
     title: "About Gwamo",
@@ -161,6 +170,7 @@ const INFO_CONTENT = {
     body: "Gwamo may verify your phone number and identity to help confirm that accounts belong to real people. We take strong measures to prevent fraud, impersonation, fake accounts, scams and other misuse of the platform. Accounts that fail verification or are found to be fraudulent may be restricted or removed. Your phone number is used for account identification and verification purposes, and your personal PIN should never be shared with anyone.",
   },
 };
+
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
   return (
@@ -202,6 +212,7 @@ function formatCount(value = 0) {
   if (number >= 1000) return `${(number / 1000).toFixed(1).replace(".0", "")}K`;
   return String(number);
 }
+
 const DESCRIPTION_PREVIEW_LENGTH = 96;
 function makeDescriptionPreview(value = "", maxLength = DESCRIPTION_PREVIEW_LENGTH) {
   const text = String(value || "").trim();
@@ -216,6 +227,7 @@ function makeDescriptionPreview(value = "", maxLength = DESCRIPTION_PREVIEW_LENG
   }
   return preview;
 }
+
 function renderDescriptionWithLinks(value = "") {
   return String(value || "")
     .split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi)
@@ -230,6 +242,7 @@ function renderDescriptionWithLinks(value = "") {
       );
     });
 }
+
 function normalizeWhatsAppNumber(value = "") {
   const raw = String(value || "").trim();
   const compact = raw.replace(/[\s().-]/g, "");
@@ -240,6 +253,7 @@ function normalizeWhatsAppNumber(value = "") {
   if (/^[1-9]\d{7,14}$/.test(compact)) return compact;
   return "";
 }
+
 function isSameProviderAsPost(post = {}, provider = null) {
   if (!provider) return false;
   const ownerId = String(post.provider_id || "").trim();
@@ -249,6 +263,7 @@ function isSameProviderAsPost(post = {}, provider = null) {
   const viewerPhone = normalizeWhatsAppNumber(provider.phone || "");
   return Boolean(ownerPhone && viewerPhone && ownerPhone === viewerPhone);
 }
+
 function useEscapeToClose(onClose, isOpen = true) {
   useEffect(() => {
     if (!isOpen || !onClose) return undefined;
@@ -259,6 +274,7 @@ function useEscapeToClose(onClose, isOpen = true) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 }
+
 async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } = {}) {
   if (!file || !file.type || !file.type.startsWith("image/")) return file;
   try {
@@ -286,6 +302,7 @@ async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } =
     return file;
   }
 }
+
 function getVerificationStatus(entity) {
   const rawStatus = String(entity?.verification_status || "").trim().toLowerCase();
   let status = "pending";
@@ -301,6 +318,7 @@ function getVerificationStatus(entity) {
   const labels = { verified: "Verified", pending: "Verification Pending", rejected: "Not Approved" };
   return { status, label: labels[status], verified: status === "verified", className: `status-${status}` };
 }
+
 const VerificationTag = memo(function VerificationTag({ info, size = 14 }) {
   const Icon = info.status === "verified" ? CheckCircle : info.status === "rejected" ? ShieldX : Clock;
   return (
@@ -311,6 +329,7 @@ const VerificationTag = memo(function VerificationTag({ info, size = 14 }) {
   );
 });
 VerificationTag.displayName = "VerificationTag";
+
 function isSameCalendarDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -326,6 +345,7 @@ function formatDayLabel(dateInput) {
     month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
   });
 }
+
 function attachmentPreviewLabel(messageType) {
   switch (messageType) {
     case "image": return "Photo";
@@ -335,6 +355,7 @@ function attachmentPreviewLabel(messageType) {
     default: return "Sent a message";
   }
 }
+
 // ==========================================
 // GWAMO BRAIN WIDGET (INTEGRATED DIRECTLY)
 // ==========================================
@@ -361,17 +382,26 @@ function GwamoBrainWidget({ apiUrl }) {
   const [adminDraft, setAdminDraft] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
+  
   const scrollRef = useRef(null);
   const adminScrollRef = useRef(null);
   const visitorTokenRef = useRef("");
+  
+  // Deletion logic state
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
+  const longPressTimer = useRef(null);
+
   const api = `${apiUrl}/api/brain`;
+
   const visitorHeaders = useCallback(() => ({
     "X-Gwamo-Visitor-Token": visitorTokenRef.current,
   }), []);
+
   const adminHeaders = useCallback(() => ({
     "Content-Type": "application/json",
     "X-Admin-Pin": adminPin,
   }), [adminPin]);
+
   const readResponse = useCallback(async (response) => {
     let data = {};
     try { data = await response.json(); } catch { /* handled below */ }
@@ -380,6 +410,7 @@ function GwamoBrainWidget({ apiUrl }) {
     }
     return data;
   }, []);
+
   const loadSettings = useCallback(async () => {
     try {
       const response = await fetch(`${api}/settings`, { cache: "no-store" });
@@ -389,6 +420,7 @@ function GwamoBrainWidget({ apiUrl }) {
       console.warn("Could not load brain settings", err);
     }
   }, [api, readResponse]);
+
   const loadVisitorMessages = useCallback(async (showSpinner = false) => {
     if (!visitorTokenRef.current) return;
     if (showSpinner) setLoading(true);
@@ -405,6 +437,7 @@ function GwamoBrainWidget({ apiUrl }) {
       if (showSpinner) setLoading(false);
     }
   }, [api, visitorHeaders, readResponse]);
+
   const initializeVisitor = useCallback(async () => {
     try {
       await loadSettings();
@@ -427,18 +460,23 @@ function GwamoBrainWidget({ apiUrl }) {
       setError(err.message || "Support chat is temporarily unavailable.");
     }
   }, [api, loadSettings, loadVisitorMessages, readResponse]);
+
   useEffect(() => { initializeVisitor(); }, [initializeVisitor]);
+
   useEffect(() => {
     if (!open || helperMode || !visitorToken) return undefined;
     const id = window.setInterval(() => loadVisitorMessages(false), 3000);
     return () => window.clearInterval(id);
   }, [open, helperMode, visitorToken, loadVisitorMessages]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
+
   useEffect(() => {
     if (adminScrollRef.current) adminScrollRef.current.scrollTop = adminScrollRef.current.scrollHeight;
   }, [adminMessages]);
+
   const sendVisitorMessage = useCallback(async (event) => {
     event?.preventDefault();
     const text = draft.trim();
@@ -458,6 +496,7 @@ function GwamoBrainWidget({ apiUrl }) {
       setError(err.message || "Your message could not be sent.");
     } finally { setSending(false); }
   }, [api, draft, sending, visitorHeaders, readResponse, loadVisitorMessages]);
+
   const loadAdminConversations = useCallback(async () => {
     const response = await fetch(`${api}/admin/conversations`, {
       headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
@@ -465,6 +504,7 @@ function GwamoBrainWidget({ apiUrl }) {
     const data = await readResponse(response);
     setConversations(Array.isArray(data.conversations) ? data.conversations : []);
   }, [api, adminPin, readResponse]);
+
   const loadAdminMessages = useCallback(async (conversationId) => {
     if (!conversationId) { setAdminMessages([]); return; }
     const response = await fetch(`${api}/admin/messages?conversation_id=${encodeURIComponent(conversationId)}`, {
@@ -473,6 +513,7 @@ function GwamoBrainWidget({ apiUrl }) {
     const data = await readResponse(response);
     setAdminMessages(Array.isArray(data.messages) ? data.messages : []);
   }, [api, adminPin, readResponse]);
+
   const loginHelper = useCallback(async (event) => {
     event?.preventDefault(); setAdminError(""); setAdminBusy(true);
     try {
@@ -487,6 +528,7 @@ function GwamoBrainWidget({ apiUrl }) {
       setAdminError(err.message || "Admin PIN was not accepted.");
     } finally { setAdminBusy(false); }
   }, [api, adminPin, readResponse]);
+
   useEffect(() => {
     if (!helperMode || !adminAuthed) return undefined;
     const id = window.setInterval(async () => {
@@ -497,6 +539,7 @@ function GwamoBrainWidget({ apiUrl }) {
     }, 3000);
     return () => window.clearInterval(id);
   }, [helperMode, adminAuthed, selectedConversation, loadAdminConversations, loadAdminMessages]);
+
   const sendHelperReply = useCallback(async (event) => {
     event?.preventDefault();
     const text = adminDraft.trim();
@@ -514,104 +557,203 @@ function GwamoBrainWidget({ apiUrl }) {
     } catch (err) { setAdminError(err.message || "Reply could not be sent."); }
     finally { setAdminBusy(false); }
   }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
+
+  // Delete background video function for Helper
+  const deleteBackgroundVideo = async () => {
+    if (!window.confirm("Remove background video for all users?")) return;
+    try {
+      setAdminBusy(true);
+      const res = await fetch(`${api}/admin/settings`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ title: settings.title, welcome_message: settings.welcome_message, media_url: "" }),
+      });
+      await readResponse(res);
+      setSettings((current) => ({ ...current, media_url: "" }));
+    } catch (err) {
+      setAdminError(err.message || "Failed to remove video.");
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  // Long press logic for deletion
+  const handlePointerDown = (id) => {
+    longPressTimer.current = setTimeout(() => {
+      setDeletingMessageId(id);
+    }, 600);
+  };
+  const handlePointerUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  const confirmDeleteMessage = async (id) => {
+    try {
+      const isAdmin = helperMode;
+      const url = isAdmin ? `${api}/admin/message` : `${api}/message`;
+      const headers = isAdmin ? adminHeaders() : visitorHeaders();
+
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ message_id: id, conversation_id: selectedConversation }),
+      });
+
+      if (res.ok) {
+        if (isAdmin) setAdminMessages((curr) => curr.filter((m) => m.id !== id));
+        else setMessages((curr) => curr.filter((m) => m.id !== id));
+      } else {
+        alert("Could not delete message. Make sure backend supports DELETE.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
   const mediaUrl = String(settings.media_url || "").trim();
   const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(mediaUrl);
+
   return (
     <div className="gwamo-brain-container">
-          <style>{`
-          .gwamo-brain-container {
-            display: flex; flex-direction: column; align-items: center;
-            width: 100%; max-width: 640px; margin: 0 auto;
-            height: calc(100svh - var(--nav-h, 64px));
-            padding: calc(var(--top-offset, 60px) + 8px) 12px 12px;
-          }
-          @supports (height: 100dvh) {
-            .gwamo-brain-container { height: calc(100dvh - var(--nav-h, 64px)); }
-          }
-          .gbw-panel {
-            width: 100%; flex: 1; min-height: 0;
-            display: flex; flex-direction: column;
-            overflow: hidden;
-            border: 1px solid var(--line);
-            border-radius: 24px;
-            background: var(--surface);
-            font-family: var(--font-body, system-ui, sans-serif);
-          }
-          .gbw-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-          .gbw-logo { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; color: var(--amber-ink); background: var(--amber); }
-          .gbw-headcopy { flex: 1; min-width: 0; }
-          .gbw-headcopy strong { display: block; color: var(--text); font-family: var(--font-display, inherit); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
-          .gbw-headcopy small { display: block; margin-top: 2px; color: var(--text-dim); font-size: 12.5px; }
-          .gbw-media { width: 100%; max-height: 160px; object-fit: cover; background: #000; }
-          .gbw-welcome { margin: 14px 16px 0; padding: 12px 14px; border-radius: 14px; color: var(--text); background: var(--amber-soft); font-size: 14px; line-height: 1.5; }
+      <style>{`
+      .gwamo-brain-container {
+        display: flex; flex-direction: column; align-items: center;
+        width: 100%; max-width: 640px; margin: 0 auto;
+        height: calc(100svh - var(--nav-h, 64px));
+        padding: calc(var(--top-offset, 60px) + 8px) 12px 12px;
+      }
+      @supports (height: 100dvh) {
+        .gwamo-brain-container { height: calc(100dvh - var(--nav-h, 64px)); }
+      }
+      .gbw-panel {
+        width: 100%; flex: 1; min-height: 0;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--surface);
+        font-family: var(--font-body, system-ui, sans-serif);
+        position: relative;
+      }
+      /* Chat Background Video */
+      .gbw-chat-background {
+        position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      }
+      .gbw-chat-background video, .gbw-chat-background img {
+        width: 100%; height: 100%; object-fit: cover; opacity: 0.25;
+      }
+      .gbw-chat-background::after {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(to bottom, rgba(13, 19, 32, 0.8), rgba(13, 19, 32, 0.95));
+      }
+      
+      .gbw-head { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+      .gbw-logo { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; color: var(--amber-ink); background: var(--amber); }
+      .gbw-headcopy { flex: 1; min-width: 0; }
+      .gbw-headcopy strong { display: block; color: var(--text); font-family: var(--font-display, inherit); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+      .gbw-headcopy small { display: block; margin-top: 2px; color: var(--text-dim); font-size: 12.5px; }
+      
+      .gbw-welcome { position: relative; z-index: 1; margin: 14px 16px 0; padding: 12px 14px; border-radius: 14px; color: var(--text); background: var(--amber-soft); font-size: 14px; line-height: 1.5; }
+      
+      .gbw-messages { position: relative; z-index: 1; flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+      .gbw-messages::-webkit-scrollbar, .gbw-adminmessages::-webkit-scrollbar { width: 6px; }
+      .gbw-messages::-webkit-scrollbar-thumb, .gbw-adminmessages::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255, 255, 255, 0.12); }
+      .gbw-bubble { position: relative; max-width: 82%; padding: 10px 14px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; user-select: none; }
+      .gbw-bubble.visitor { align-self: flex-end; border-radius: 18px 18px 5px 18px; color: var(--amber-ink); background: var(--amber); }
+      .gbw-bubble.helper { align-self: flex-start; border-radius: 18px 18px 18px 5px; color: var(--text); background: var(--surface-2); }
+      .gbw-time { display: block; margin-top: 4px; font-size: 10.5px; text-align: right; opacity: 0.65; }
 
-          .gbw-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
-          .gbw-messages::-webkit-scrollbar, .gbw-adminmessages::-webkit-scrollbar { width: 6px; }
-          .gbw-messages::-webkit-scrollbar-thumb, .gbw-adminmessages::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255, 255, 255, 0.12); }
-          .gbw-bubble { position: relative; max-width: 82%; padding: 10px 14px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-          .gbw-bubble.visitor { align-self: flex-end; border-radius: 18px 18px 5px 18px; color: var(--amber-ink); background: var(--amber); }
-          .gbw-bubble.helper { align-self: flex-start; border-radius: 18px 18px 18px 5px; color: var(--text); background: var(--surface-2); }
-          .gbw-time { display: block; margin-top: 4px; font-size: 10.5px; text-align: right; opacity: 0.65; }
+      .gbw-compose { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: rgba(21,29,46,0.8); backdrop-filter: blur(8px); }
+      .gbw-compose input, .gbw-form input, .gbw-form textarea, .gbw-adminlogin input {
+        flex: 1; width: 100%; min-width: 0;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        outline: none;
+        color: var(--text);
+        background: var(--surface-2);
+        font: inherit; font-size: 15px;
+        transition: border-color 150ms ease;
+      }
+      .gbw-compose input:focus, .gbw-form textarea:focus, .gbw-adminlogin input:focus { border-color: var(--amber); }
+      .gbw-compose input::placeholder, .gbw-form textarea::placeholder, .gbw-adminlogin input::placeholder { color: rgba(154, 166, 186, 0.75); }
+      .gbw-compose button, .gbw-primary {
+        width: 44px; height: 44px; flex-shrink: 0;
+        display: grid; place-items: center;
+        border: 0; border-radius: 50%;
+        color: var(--amber-ink); background: var(--amber);
+        font-weight: 700; cursor: pointer;
+        transition: background 150ms ease, opacity 150ms ease;
+      }
+      .gbw-compose button:hover:not(:disabled), .gbw-primary:hover:not(:disabled) { background: var(--amber-strong); }
+      .gbw-primary { width: 100%; height: auto; padding: 12px; border-radius: 14px; font-size: 15px; }
+      .gbw-compose button:disabled, .gbw-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+      .gbw-helperlink { position: relative; z-index: 1; align-self: center; padding: 4px 12px 12px; border: 0; color: rgba(154, 166, 186, 0.7); background: transparent; font-size: 12px; cursor: pointer; }
+      .gbw-helperlink:hover { color: var(--text); }
+      .gbw-empty { padding: 36px 20px; color: var(--text-dim); font-size: 14px; line-height: 1.5; text-align: center; }
+      .gbw-error { position: relative; z-index: 1; padding: 10px 16px; color: #ff8e9c; background: rgba(255, 92, 112, 0.1); font-size: 13px; text-align: center; }
 
-          .gbw-compose { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); }
-          .gbw-compose input, .gbw-form input, .gbw-form textarea, .gbw-adminlogin input {
-           flex: 1; width: 100%; min-width: 0;
-           padding: 12px 16px;
-            border: 1px solid var(--line);
-            border-radius: 999px;
-            outline: none;
-            color: var(--text);
-            background: var(--surface-2);
-            font: inherit; font-size: 15px;
-            transition: border-color 150ms ease;
-          }
-          .gbw-compose input:focus, .gbw-form textarea:focus, .gbw-adminlogin input:focus { border-color: var(--amber); }
-          .gbw-compose input::placeholder, .gbw-form textarea::placeholder, .gbw-adminlogin input::placeholder { color: rgba(154, 166, 186, 0.75); }
-          .gbw-compose button, .gbw-primary {
-            width: 44px; height: 44px; flex-shrink: 0;
-            display: grid; place-items: center;
-            border: 0; border-radius: 50%;
-            color: var(--amber-ink); background: var(--amber);
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 150ms ease, opacity 150ms ease;
-          }
-          .gbw-compose button:hover:not(:disabled), .gbw-primary:hover:not(:disabled) { background: var(--amber-strong); }
-          .gbw-primary { width: 100%; height: auto; padding: 12px; border-radius: 14px; font-size: 15px; }
-          .gbw-compose button:disabled, .gbw-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-          .gbw-helperlink { align-self: center; padding: 4px 12px 12px; border: 0; color: rgba(154, 166, 186, 0.7); background: transparent; font-size: 12px; cursor: pointer; }
-          .gbw-helperlink:hover { color: var(--text); }
-          .gbw-empty { padding: 36px 20px; color: var(--text-dim); font-size: 14px; line-height: 1.5; text-align: center; }
-          .gbw-error { padding: 10px 16px; color: #ff8e9c; background: rgba(255, 92, 112, 0.1); font-size: 13px; text-align: center; }
+      .gbw-adminlogin { position: relative; z-index: 1; max-width: 400px; height: 100%; margin: 0 auto; padding: 30px 24px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+      .gbw-adminlogin h3 { margin: 0; color: var(--text); font-family: var(--font-display, inherit); font-size: 22px; text-align: center; }
+      
+      .gbw-admin { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
+      .gbw-convos { overflow-y: auto; border-right: 1px solid var(--line); background: rgba(13,19,32,0.6); }
+      .gbw-convo { display: block; width: 100%; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; color: var(--text); background: transparent; text-align: left; cursor: pointer; transition: background 140ms ease; }
+      .gbw-convo:hover { background: rgba(255, 255, 255, 0.04); }
+      .gbw-convo.active { border-left-color: var(--amber); background: var(--amber-soft); }
+      .gbw-convo strong, .gbw-convo small, .gbw-convo span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .gbw-convo strong { font-size: 14px; font-weight: 700; }
+      .gbw-convo small { margin-top: 3px; color: var(--amber); font-size: 11.5px; }
+      .gbw-convo span { margin-top: 3px; color: var(--text-dim); font-size: 12.5px; }
+      
+      .gbw-adminright { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: rgba(21,29,46,0.4); }
+      .gbw-adminmessages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+      
+      .gbw-form { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+      .gbw-form textarea { min-height: 44px; max-height: 100px; border-radius: 14px; resize: none; }
+      .gbw-form .gbw-primary { width: auto; padding: 0 18px; border-radius: 14px; white-space: nowrap; }
+      
+      .gbw-back { position: relative; z-index: 1; padding: 12px 20px; border: 0; border-top: 1px solid var(--line); color: var(--text-dim); background: transparent; font-size: 13.5px; text-align: center; cursor: pointer; }
+      .gbw-back:hover { color: var(--text); }
+      .gbw-iconbtn { padding: 7px 12px; border: 0; border-radius: 10px; color: var(--text); background: var(--surface-3); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+      .gbw-iconbtn.danger { color: #ff8e9c; background: rgba(255, 92, 112, 0.15); }
 
-          .gbw-adminlogin { max-width: 400px; height: 100%; margin: 0 auto; padding: 30px 24px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
-          .gbw-adminlogin h3 { margin: 0; color: var(--text); font-family: var(--font-display, inherit); font-size: 22px; text-align: center; }
-          .gbw-admin { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
-          .gbw-convos { overflow-y: auto; border-right: 1px solid var(--line); background: var(--ink); }
-          .gbw-convo { display: block; width: 100%; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; color: var(--text); background: transparent; text-align: left; cursor: pointer; transition: background 140ms ease; }
-          .gbw-convo:hover { background: rgba(255, 255, 255, 0.04); }
-          .gbw-convo.active { border-left-color: var(--amber); background: var(--amber-soft); }
-          .gbw-convo strong, .gbw-convo small, .gbw-convo span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .gbw-convo strong { font-size: 14px; font-weight: 700; }
-          .gbw-convo small { margin-top: 3px; color: var(--amber); font-size: 11.5px; }
-          .gbw-convo span { margin-top: 3px; color: var(--text-dim); font-size: 12.5px; }
-          .gbw-adminright { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-          .gbw-adminmessages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-          .gbw-form { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); }
-          .gbw-form textarea { min-height: 44px; max-height: 100px; border-radius: 14px; resize: none; }
-          .gbw-form .gbw-primary { width: auto; padding: 0 18px; border-radius: 14px; white-space: nowrap; }
-          .gbw-back { padding: 12px 20px; border: 0; border-top: 1px solid var(--line); color: var(--text-dim); background: transparent; font-size: 13.5px; text-align: center; cursor: pointer; }
-          .gbw-back:hover { color: var(--text); }
-          .gbw-iconbtn { padding: 7px 12px; border: 0; border-radius: 10px; color: var(--text); background: var(--surface-3); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+      /* Delete Message Overlay */
+      .delete-overlay {
+        position: absolute; inset: 0; background: rgba(13,19,32,0.95);
+        display: flex; align-items: center; justify-content: center; gap: 16px;
+        border-radius: inherit; z-index: 10;
+      }
+      .delete-btn {
+        background: #ff5c70; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;
+      }
+      .cancel-delete-btn {
+        background: transparent; color: #fff; border: 1px solid #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+      }
 
-          @media (max-width: 600px) {
-            .gwamo-brain-container { padding: calc(var(--top-offset, 60px) + 4px) 0 0; }
-            .gbw-panel { border-width: 1px 0 0; border-radius: 22px 22px 0 0; }
-            .gbw-admin { grid-template-columns: 120px minmax(0, 1fr); }
-            .gbw-bubble { max-width: 88%; }
-          }
-        `}</style>
+      @media (max-width: 600px) {
+        .gwamo-brain-container { padding: calc(var(--top-offset, 60px) + 4px) 0 0; }
+        .gbw-panel { border-width: 1px 0 0; border-radius: 22px 22px 0 0; }
+        .gbw-admin { grid-template-columns: 120px minmax(0, 1fr); }
+        .gbw-bubble { max-width: 88%; }
+      }
+      `}</style>
+
       <section className="gbw-panel">
+        
+        {/* BACKGROUND VIDEO LAYER */}
+        {mediaUrl && (
+          <div className="gbw-chat-background" aria-hidden="true">
+            {isVideo ? (
+              <video src={mediaUrl} autoPlay loop muted playsInline />
+            ) : (
+              <img src={mediaUrl} alt="" />
+            )}
+          </div>
+        )}
+
         <header className="gbw-head">
           <div className="gbw-logo" aria-hidden="true"><MessageSquare size={22} strokeWidth={2.2} /></div>
           <div className="gbw-headcopy">
@@ -622,21 +764,35 @@ function GwamoBrainWidget({ apiUrl }) {
             <button className="gbw-iconbtn" type="button" onClick={() => { setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]); setSelectedConversation(""); }}>Log out</button>
           )}
         </header>
+
         {!helperMode ? (
           <>
-            {mediaUrl && (isVideo ? <video className="gbw-media" src={mediaUrl} controls playsInline preload="metadata" /> : <img className="gbw-media" src={mediaUrl} alt="Support" onError={(event) => { event.currentTarget.style.display = "none"; }} />)}
             <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
             
-                       <div className="gbw-messages" ref={scrollRef} aria-live="polite">
+            <div className="gbw-messages" ref={scrollRef} aria-live="polite">
               {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
               
               {messages.map((message) => {
-                const isVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
+                const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
                 const videoUrl = message.media_url || message.mediaUrl;
 
                 return (
-                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                    {isVideo && (
+                  <div 
+                    key={message.id} 
+                    className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                    onPointerDown={() => handlePointerDown(message.id)}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                  >
+                    {/* Long press delete overlay */}
+                    {deletingMessageId === message.id && (
+                      <div className="delete-overlay">
+                        <button className="delete-btn" onClick={() => confirmDeleteMessage(message.id)}>Delete</button>
+                        <button className="cancel-delete-btn" onClick={() => setDeletingMessageId(null)}>Cancel</button>
+                      </div>
+                    )}
+
+                    {isMsgVideo && (
                       <video 
                         src={videoUrl} 
                         controls 
@@ -657,7 +813,6 @@ function GwamoBrainWidget({ apiUrl }) {
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
               
-              {/* Visitor Video Button */}
               <button type="button" onClick={() => document.getElementById('brain-video-upload').click()} style={{ background: 'var(--surface-3)', color: 'var(--text)', flexShrink: 0 }} aria-label="Upload Video">
                 <Video size={20} />
               </button>
@@ -670,26 +825,20 @@ function GwamoBrainWidget({ apiUrl }) {
                   const file = e.target.files?.[0];
                   e.target.value = "";
                   if (!file) return;
-                  
                   setSending(true);
                   const formData = new FormData();
                   formData.append("file", file);
                   formData.append("message_type", "video");
-                  
                   try {
                     const res = await fetch(`${api}/message`, {
-                      method: "POST",
-                      headers: visitorHeaders(),
-                      body: formData,
+                      method: "POST", headers: visitorHeaders(), body: formData,
                     });
                     const data = await readResponse(res);
                     if (data.message) setMessages((curr) => [...curr, data.message]);
                     await loadVisitorMessages(false);
                   } catch (err) {
                     setError(err.message || "Failed to upload video.");
-                  } finally {
-                    setSending(false);
-                  }
+                  } finally { setSending(false); }
                 }} 
               />
               <button type="submit" disabled={!draft.trim() || sending || !visitorToken}>{sending ? "..." : <Send size={18}/>}</button>
@@ -728,12 +877,26 @@ function GwamoBrainWidget({ apiUrl }) {
                   <>
                     <div className="gbw-adminmessages" ref={adminScrollRef}>
                       {adminMessages.map((message) => {
-                        const isVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
+                        const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && (message.media_url || message.mediaUrl);
                         const videoUrl = message.media_url || message.mediaUrl;
 
                         return (
-                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}>
-                            {isVideo && (
+                          <div 
+                            key={message.id} 
+                            className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                            onPointerDown={() => handlePointerDown(message.id)}
+                            onPointerUp={handlePointerUp}
+                            onPointerLeave={handlePointerUp}
+                          >
+                            {/* Long press delete overlay */}
+                            {deletingMessageId === message.id && (
+                              <div className="delete-overlay">
+                                <button className="delete-btn" onClick={() => confirmDeleteMessage(message.id)}>Delete</button>
+                                <button className="cancel-delete-btn" onClick={() => setDeletingMessageId(null)}>Cancel</button>
+                              </div>
+                            )}
+
+                            {isMsgVideo && (
                               <video 
                                 src={videoUrl} 
                                 controls 
@@ -748,10 +911,19 @@ function GwamoBrainWidget({ apiUrl }) {
                       })}
                     </div>
                     
+                    {/* Background Video Deletion Option */}
+                    {mediaUrl && (
+                      <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255, 92, 112, 0.1)" }}>
+                        <span style={{ fontSize: "12px", color: "#ff8e9c" }}>Background Video Active</span>
+                        <button onClick={deleteBackgroundVideo} className="gbw-iconbtn danger" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      </div>
+                    )}
+
                     <form className="gbw-form" onSubmit={sendHelperReply} style={{ position: 'relative' }}>
                       <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write your reply..." maxLength={4000} required />
                       
-                      {/* Helper Video Uploader */}
                       <button 
                         type="button" 
                         onClick={() => document.getElementById('helper-video-upload').click()} 
@@ -801,7 +973,7 @@ function GwamoBrainWidget({ apiUrl }) {
                 )}
               </div>
             </div>
-            {adminError && <div className="gbw-status" role="status" style={{ color: '#ffc0b8', padding: '10px' }}>{adminError}</div>}
+            {adminError && <div className="gbw-status" role="status" style={{ color: '#ffc0b8', padding: '10px', background: 'rgba(255, 92, 112, 0.1)', textAlign: 'center' }}>{adminError}</div>}
             <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminAuthed(false); setAdminPin(""); setAdminError(""); }}>← Return to visitor chat</button>
           </>
         )}
@@ -809,6 +981,7 @@ function GwamoBrainWidget({ apiUrl }) {
     </div>
   );
 }
+
 // ==========================================
 // MAIN HOME COMPONENT
 // ==========================================
@@ -819,6 +992,7 @@ function Home() {
   const isMountedRef = useRef(true);
   const postRefCallbackCache = useRef(new Map());
   const videoRefCallbackCache = useRef(new Map());
+
   const getPostRefCallback = useCallback((index) => {
     if (!postRefCallbackCache.current.has(index)) {
       postRefCallbackCache.current.set(index, (ref) => {
@@ -828,6 +1002,7 @@ function Home() {
     }
     return postRefCallbackCache.current.get(index);
   }, []);
+
   const getVideoRefCallback = useCallback((index) => {
     if (!videoRefCallbackCache.current.has(index)) {
       videoRefCallbackCache.current.set(index, (ref) => {
@@ -837,9 +1012,11 @@ function Home() {
     }
     return videoRefCallbackCache.current.get(index);
   }, []);
+
   // User state
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
   // UI state
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -911,6 +1088,7 @@ function Home() {
   const toastTimerRef = useRef(null);
   const notifiedMessageKeysRef = useRef(new Set());
   const previousTotalUnreadRef = useRef(0);
+
   // Editor state
   const [newCreatorName, setNewCreatorName] = useState("");
   const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
@@ -953,6 +1131,7 @@ function Home() {
       objectUrlsRef.current.delete(url);
     }
   }, []);
+
   const readJsonSafely = useCallback(async (response) => {
     const responseText = await response.text();
     if (!responseText) {
@@ -967,6 +1146,7 @@ function Home() {
       throw new Error(responseText || `Server returned ${response.status} ${response.statusText}`);
     }
   }, []);
+
   // Session Management
   const getSessionToken = useCallback(() => {
     try { return localStorage.getItem(SESSION_TOKEN_KEY) || ""; } catch { return ""; }
@@ -989,12 +1169,14 @@ function Home() {
       else localStorage.removeItem(USER_DATA_KEY);
     } catch { /* ignore */ }
   }, []);
+
   const authFetch = useCallback(async (path, options = {}) => {
     const token = getSessionToken();
     const headers = { ...(options.headers || {}) };
     if (token) headers["Authorization"] = `Bearer ${token}`;
     return fetch(`${API_URL}${path}`, { cache: "no-store", ...options, headers });
   }, [getSessionToken]);
+
   const restoreSession = useCallback(async () => {
     const token = getSessionToken();
     if (!token) return false;
@@ -1019,6 +1201,7 @@ function Home() {
     setIsLoggedIn(false);
     return false;
   }, [getSessionToken, readJsonSafely, setSessionToken, setUserData]);
+
   useEffect(() => {
     if (!isLoggedIn) return undefined;
     const refreshProfile = async () => {
@@ -1050,6 +1233,7 @@ function Home() {
       document.removeEventListener("visibilitychange", handleVisible);
     };
   }, [isLoggedIn, getSessionToken, readJsonSafely, setUserData]);
+
   // Auth functions
   const openServiceForm = useCallback((provider, initialPostType = "offer") => {
     if (provider) {
@@ -1064,6 +1248,7 @@ function Home() {
     setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview("");
     setMediaPreviewType(""); setEditingServicePost(null); setShowEditor(true);
   }, [logoPreview, mediaPreview, revokeObjectUrl]);
+
   const handleRegister = useCallback(async () => {
     const phone = normalizeWhatsAppNumber(authPhone);
     const fullName = authFullName.trim();
@@ -1109,6 +1294,7 @@ function Home() {
       setAuthError(error.message || "Registration failed. Please try again.");
     } finally { setAuthLoading(false); }
   }, [authPhone, authFullName, authPin, authConfirmPin, readJsonSafely, setSessionToken, setUserData]);
+
   const handleLogin = useCallback(async () => {
     const phone = normalizeWhatsAppNumber(authPhone);
     if (!phone) return setAuthError("Please enter your registered phone number.");
@@ -1155,11 +1341,13 @@ function Home() {
       setAuthError(error.message || "Login failed. Please try again.");
     } finally { setAuthLoading(false); }
   }, [authPhone, authPin, readJsonSafely, setSessionToken, setUserData]);
+
   const openActivationModal = useCallback(() => {
     setShowAuthModal(false); setActivationPhone(authPhone); setActivationCode("");
     setActivationNewPin(""); setActivationConfirmPin(""); setActivationError("");
     setShowActivationModal(true);
   }, [authPhone]);
+
   const submitActivationCode = useCallback(async () => {
     const phone = normalizeWhatsAppNumber(activationPhone);
     if (!phone) return setActivationError("Enter your registered telephone number.");
@@ -1191,6 +1379,7 @@ function Home() {
       setActivationError(error.message || "Could not activate your account.");
     } finally { setActivationLoading(false); }
   }, [activationPhone, activationCode, activationNewPin, activationConfirmPin, readJsonSafely, setSessionToken, setUserData]);
+
   const handleLogout = useCallback(async () => {
     const token = getSessionToken();
     try {
@@ -1200,26 +1389,32 @@ function Home() {
     } catch { /* Local logout must still complete when the network is unavailable. */ }
     setSessionToken(""); setUserData(null); setUser(null); setIsLoggedIn(false); setMyConversations([]);
   }, [getSessionToken, setSessionToken, setUserData]);
+
   const openAuthModal = useCallback((mode = "login", pendingAction = null) => {
     pendingAuthActionRef.current = pendingAction;
     setAuthMode(mode); setAuthPhone(""); setAuthFullName(""); setAuthPin("");
     setAuthConfirmPin(""); setAuthError(""); setAuthSuccessMessage("");
     setAuthLoading(false); setShowAuthModal(true);
   }, []);
+
   const requireAuthForTv = useCallback(() => { openAuthModal("login"); }, [openAuthModal]);
   const requireAuthForConnect = useCallback(() => { openAuthModal("login"); }, [openAuthModal]);
+  
   const closeAuthModal = useCallback(() => {
     pendingAuthActionRef.current = null;
     setShowAuthModal(false); setAuthError(""); setAuthSuccessMessage("");
   }, []);
+
   const openPinReset = useCallback(() => {
     setShowAuthModal(false); setShowPinResetModal(true); setPinResetStep("request");
     setPinResetPhone(authPhone); setPinResetRequest(null); setPinResetNewPin("");
     setPinResetConfirmPin(""); setPinResetError("");
   }, [authPhone]);
+
   const closePinReset = useCallback(() => {
     setShowPinResetModal(false); setPinResetLoading(false); setPinResetError("");
   }, []);
+
   const requestPinReset = useCallback(async () => {
     const phone = normalizeWhatsAppNumber(pinResetPhone);
     if (!phone) return setPinResetError("Enter your registered telephone number.");
@@ -1243,6 +1438,7 @@ function Home() {
       setPinResetError(error.message || "Could not request a PIN reset.");
     } finally { setPinResetLoading(false); }
   }, [pinResetPhone, readJsonSafely]);
+
   const checkPinResetStatus = useCallback(async ({ silent = false } = {}) => {
     if (!pinResetRequest?.id) {
       if (!silent) setPinResetError("This reset request is missing. Please start again.");
@@ -1267,6 +1463,7 @@ function Home() {
       if (!silent) setPinResetLoading(false);
     }
   }, [pinResetRequest, readJsonSafely]);
+
   useEffect(() => {
     if (!showPinResetModal || pinResetStep !== "waiting") return undefined;
     const intervalId = setInterval(() => { if (!document.hidden) checkPinResetStatus({ silent: true }); }, PIN_RESET_STATUS_POLL_INTERVAL_MS);
@@ -1277,6 +1474,7 @@ function Home() {
       document.removeEventListener("visibilitychange", handleVisible);
     };
   }, [showPinResetModal, pinResetStep, checkPinResetStatus]);
+
   const completePinReset = useCallback(async () => {
     if (!PERSONAL_PIN_PATTERN.test(pinResetNewPin)) return setPinResetError("Create a new 8-digit personal PIN.");
     if (pinResetNewPin !== pinResetConfirmPin) return setPinResetError("The two PIN entries do not match.");
@@ -1297,6 +1495,7 @@ function Home() {
       setPinResetError(error.message || "Could not save the new PIN.");
     } finally { setPinResetLoading(false); }
   }, [pinResetNewPin, pinResetConfirmPin, pinResetRequest, pinResetPhone, readJsonSafely, closePinReset, openAuthModal]);
+
   const handleOfferTime = useCallback((requestedPostType = "offer") => {
     const initialPostType = ["offer", "need", "exchange", "moment"].includes(requestedPostType) ? requestedPostType : "offer";
     if (!isLoggedIn || !user) {
@@ -1313,6 +1512,7 @@ function Home() {
     setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview(""); setMediaPreviewType("");
     setEditingServicePost(null); setShowEditor(true);
   }, [isLoggedIn, user, openAuthModal, revokeObjectUrl, logoPreview, mediaPreview]);
+
   const fetchAbortRef = useRef(null);
   const fetchInFlightRef = useRef(false);
   const fetchHomeData = useCallback(async ({ append = false, cursor = null } = {}) => {
@@ -1344,10 +1544,12 @@ function Home() {
       if (isMountedRef.current) { setLoading(false); setLoadingMore(false); }
     }
   }, [readJsonSafely]);
+
   const loadMorePosts = useCallback(() => {
     if (!hasMore || loadingMore || !nextCursor) return;
     fetchHomeData({ append: true, cursor: nextCursor });
   }, [hasMore, loadingMore, nextCursor, fetchHomeData]);
+
   useEffect(() => {
     try {
       const origin = new URL(API_URL).origin;
@@ -1358,6 +1560,7 @@ function Home() {
       }
     } catch { /* non-critical, safe to skip */ }
   }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     const init = async () => { await Promise.all([restoreSession(), fetchHomeData()]); };
@@ -1369,6 +1572,7 @@ function Home() {
       if (controller) controller.abort();
     };
   }, []);
+
   useEffect(() => {
     if (!posts.length) return undefined;
     if (observerRef.current) observerRef.current.disconnect();
@@ -1391,6 +1595,7 @@ function Home() {
     Object.values(postRefs.current).forEach((post) => { if (post) observer.observe(post); });
     return () => { observer.disconnect(); };
   }, [posts]);
+
   const handleMediaAspectRatio = useCallback((postId, ratio) => {
     if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
     setMediaAspectRatios((current) => {
@@ -1398,10 +1603,12 @@ function Home() {
       return { ...current, [postId]: ratio };
     });
   }, []);
+
   const reactionPollInFlightRef = useRef(false);
   const reactionEndpointUnavailableRef = useRef(false);
   const postsRef = useRef(posts);
   useEffect(() => { postsRef.current = posts; }, [posts]);
+
   useEffect(() => {
     let intervalId = null;
     const pollReactionCounts = async () => {
@@ -1431,13 +1638,16 @@ function Home() {
       document.removeEventListener("visibilitychange", handleVisible);
     };
   }, [readJsonSafely]);
+
   const pauseAllVideos = useCallback(() => {
     Object.entries(videoRefs.current).forEach(([postId, video]) => { if (video && !video.paused) video.pause(); });
   }, []);
+
   const openEditor = useCallback(() => {
     if (!isLoggedIn || !user) { openAuthModal("login"); return; }
     pauseAllVideos(); setShowEditor(true);
   }, [isLoggedIn, user, openAuthModal, pauseAllVideos]);
+
   const closeEditor = useCallback(() => {
     setShowEditor(false); setUploadProgress(0); setNewCreatorName(""); setNewCreatorIdentity("");
     setNewMediaUrl(""); setNewTitle(""); setSubtitle(""); setNewLogoFile(null);
@@ -1445,6 +1655,7 @@ function Home() {
     setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview(""); setMediaPreviewType("");
     setEditingServicePost(null);
   }, [logoPreview, mediaPreview, revokeObjectUrl]);
+
   const handleLogoChange = useCallback(async (file) => {
     revokeObjectUrl(logoPreview);
     if (!file) { setNewLogoFile(null); setLogoPreview(""); return; }
@@ -1458,6 +1669,7 @@ function Home() {
       alert("This image could not be processed. Please try a different photo.");
     } finally { setCompressingMedia(false); }
   }, [logoPreview, revokeObjectUrl, trackObjectUrl]);
+
   const handleProfilePhotoChange = useCallback(async (file) => {
     revokeObjectUrl(profilePhotoPreview);
     if (!file) { setProfilePhotoFile(null); setProfilePhotoPreview(""); return; }
@@ -1470,10 +1682,12 @@ function Home() {
       alert("This image could not be processed. Please try a different photo.");
     }
   }, [profilePhotoPreview, revokeObjectUrl, trackObjectUrl]);
+
   const removeProfilePhoto = useCallback(() => {
     revokeObjectUrl(profilePhotoPreview);
     setProfilePhotoFile("remove"); setProfilePhotoPreview("");
   }, [profilePhotoPreview, revokeObjectUrl]);
+
   const handleMediaFileChange = useCallback(async (file) => {
     revokeObjectUrl(mediaPreview);
     if (!file) { setNewMediaFile(null); setMediaPreview(""); setMediaPreviewType(""); return; }
@@ -1491,6 +1705,7 @@ function Home() {
       alert("This image could not be processed. Please try a different photo.");
     } finally { setCompressingMedia(false); }
   }, [mediaPreview, revokeObjectUrl, trackObjectUrl]);
+
   const applyChanges = useCallback(async () => {
     const providerName = newCreatorName.trim();
     const contactInfo = newCreatorIdentity.trim();
@@ -1574,6 +1789,7 @@ function Home() {
       if (isMountedRef.current) { setSaving(false); setUploadProgress(0); }
     }
   }, [closeEditor, fetchHomeData, newCreatorName, newCreatorIdentity, newLogoFile, newMediaFile, newMediaUrl, newTitle, subtitle, postType, postHeadline, serviceCategory, postLocation, priceUnit, availability, exchangeNeed, allowCashBalance, momentKind, getSessionToken, user]);
+
   const openServiceEdit = useCallback((post) => {
     setEditingServicePost(post);
     setNewCreatorName(post.service_provider_name || post.creator_name || "");
@@ -1599,6 +1815,7 @@ function Home() {
     }
     setShowMyServices(false); setShowEditor(true);
   }, [logoPreview, mediaPreview, revokeObjectUrl]);
+
   const saveServiceEdit = useCallback(async () => {
     if (!editingServicePost) return;
     const chargeText = newTitle.trim();
@@ -1643,12 +1860,14 @@ function Home() {
       if (isMountedRef.current) { setSaving(false); setUploadProgress(0); }
     }
   }, [editingServicePost, newTitle, subtitle, newMediaFile, newMediaUrl, authFetch, readJsonSafely, closeEditor]);
+
   const showToast = useCallback((message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ id: `${Date.now()}`, message });
     toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, TOAST_DURATION_MS);
   }, []);
   useEffect(() => { return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }; }, []);
+
   const conversationsInFlightRef = useRef(false);
   const fetchMyConversations = useCallback(async ({ silent = false } = {}) => {
     if (!isLoggedIn || conversationsInFlightRef.current) return;
@@ -1690,6 +1909,7 @@ function Home() {
       if (isMountedRef.current && !silent) setMyConversationsLoading(false);
     }
   }, [isLoggedIn, authFetch, readJsonSafely, user, showToast]);
+
   useEffect(() => {
     if (isLoggedIn) {
       previousTotalUnreadRef.current = null;
@@ -1700,6 +1920,7 @@ function Home() {
       previousTotalUnreadRef.current = 0;
     }
   }, [isLoggedIn, fetchMyConversations]);
+
   useEffect(() => {
     if (!isLoggedIn) return undefined;
     let intervalId = setInterval(() => { if (!document.hidden) fetchMyConversations({ silent: true }); }, INBOX_POLL_INTERVAL_MS);
@@ -1707,6 +1928,7 @@ function Home() {
     document.addEventListener("visibilitychange", handleVisible);
     return () => { clearInterval(intervalId); document.removeEventListener("visibilitychange", handleVisible); };
   }, [isLoggedIn, fetchMyConversations]);
+
   const unreadCountsByPost = useMemo(() => {
     const counts = {};
     for (const conversation of myConversations) {
@@ -1717,16 +1939,21 @@ function Home() {
     }
     return counts;
   }, [myConversations]);
+
   const totalUnreadCount = useMemo(() => myConversations.reduce((total, conversation) => total + Number(conversation.unread_count || 0), 0), [myConversations]);
+
   const openMyInbox = useCallback((filterPostId = null) => {
     if (!isLoggedIn || !user) { openAuthModal("login", { type: "inbox", filterPostId }); return; }
     setMyInboxFilterPostId(filterPostId); setShowMyInbox(true); fetchMyConversations();
   }, [isLoggedIn, user, openAuthModal, fetchMyConversations]);
+
   const openInboxFromRail = useCallback(() => { openMyInbox(null); }, [openMyInbox]);
+
   const closeChat = useCallback(() => {
     setShowChat(false); setChatPartner(null);
     if (isLoggedIn) fetchMyConversations();
   }, [isLoggedIn, fetchMyConversations]);
+
   const startChatWithPost = useCallback((post) => {
     setChatPartner({
       servicePostId: String(post.id),
@@ -1742,12 +1969,14 @@ function Home() {
     });
     setShowChat(true); pauseAllVideos();
   }, [pauseAllVideos]);
+
   const callProvider = useCallback((post) => {
     const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
     if (!callPhone) return;
     if (!isLoggedIn || !user) { openAuthModal("login", { type: "call", post }); return; }
     window.location.href = `tel:+${callPhone}`;
   }, [isLoggedIn, user, openAuthModal]);
+
   const openInboxForPost = useCallback((post) => {
     if (isLoggedIn && user && isSameProviderAsPost(post, user)) {
       showToast("This is your post. Open the envelope Inbox to reply to customers.");
@@ -1764,6 +1993,7 @@ function Home() {
     }) : null;
     startChatWithPost(existingConversation ? { ...post, conversation_id: existingConversation.id } : post);
   }, [isLoggedIn, user, myConversations, showToast, startChatWithPost, openAuthModal]);
+
   const openConversationFromInbox = useCallback((conversation) => {
     const iAmProvider = String(conversation.provider_id) === String(user?.id);
     const partnerName = iAmProvider ? conversation.customer_full_name || "Customer" : conversation.provider_full_name || conversation.service_provider_name || "Provider";
@@ -1782,8 +2012,10 @@ function Home() {
     });
     setShowMyInbox(false); setShowChat(true); pauseAllVideos();
   }, [user, pauseAllVideos]);
+
   const openProviderProfile = useCallback((post) => { setProviderProfileTarget(post); setShowProviderProfile(true); }, []);
   const closeProviderProfile = useCallback(() => { setShowProviderProfile(false); setProviderProfileTarget(null); }, []);
+
   const openMyProfile = useCallback((contextPost = null) => {
     if (!user) return;
     setProfileFullName(user.full_name || ""); setProfileServiceName(user.service_provider_name || "");
@@ -1791,6 +2023,7 @@ function Home() {
     setProfilePhotoFile(null); setProfilePhotoPreview(""); setProfileEditContextPost(contextPost);
     setShowMyProfile(true);
   }, [user]);
+
   const saveMyProfile = useCallback(async () => {
     setProfileSaving(true); setProfileError("");
     try {
@@ -1821,6 +2054,7 @@ function Home() {
       if (isMountedRef.current) setProfileSaving(false);
     }
   }, [authFetch, readJsonSafely, user, profileFullName, profileServiceName, profileServicesOffered, profilePhotoFile, setUserData]);
+
   const deleteMyProviderAccount = useCallback(async () => {
     try {
       const response = await authFetch("/api/time-market/profile", { method: "DELETE" });
@@ -1832,10 +2066,12 @@ function Home() {
       setProfileError(error.message || "Could not delete your provider profile.");
     } finally { setProfileDeleteConfirming(false); }
   }, [authFetch, readJsonSafely, setSessionToken, setUserData, user]);
+
   const openEditListingFromProfile = useCallback(() => {
     if (!profileEditContextPost) return;
     setShowMyProfile(false); openServiceEdit(profileEditContextPost);
   }, [profileEditContextPost, openServiceEdit]);
+
   const fetchMyServices = useCallback(async () => {
     setMyServicesLoading(true); setMyServicesError("");
     try {
@@ -1849,10 +2085,12 @@ function Home() {
       if (isMountedRef.current) setMyServicesLoading(false);
     }
   }, [authFetch, readJsonSafely]);
+
   const openMyServices = useCallback(() => {
     if (!isLoggedIn || !user) { openAuthModal("login"); return; }
     setShowMyServices(true); fetchMyServices();
   }, [isLoggedIn, user, openAuthModal, fetchMyServices]);
+
   const deleteMyService = useCallback(async (postId) => {
     if (!window.confirm("Delete this service? This cannot be undone.")) return;
     try {
@@ -1865,10 +2103,12 @@ function Home() {
       setPosts((current) => current.filter((item) => String(item.id) !== String(postId)));
     } catch (error) { alert(error.message || "Could not delete this service."); }
   }, [authFetch, readJsonSafely]);
+
   const getReactedStorageKey = useCallback((providerId) => `time-market-reacted:${providerId || "anon"}`, []);
   const loadReactedFromStorage = useCallback((providerId) => {
     try { const raw = localStorage.getItem(getReactedStorageKey(providerId)); const parsed = raw ? JSON.parse(raw) : {}; return parsed && typeof parsed === "object" ? parsed : {}; } catch { return {}; }
   }, [getReactedStorageKey]);
+
   const persistReacted = useCallback((providerId, postId) => {
     try {
       const key = getReactedStorageKey(providerId);
@@ -1877,6 +2117,7 @@ function Home() {
       localStorage.setItem(key, JSON.stringify(current));
     } catch { /* ignore */ }
   }, [getReactedStorageKey, loadReactedFromStorage]);
+
   const sendReaction = useCallback(async (post) => {
     const postId = String(post?.id ?? "");
     if (!postId || !user?.phone) return;
@@ -1904,12 +2145,14 @@ function Home() {
       devError("Failed to react:", error); alert("Failed to react to this service. Please try again.");
     } finally { if (isMountedRef.current) setReactingPostId(null); }
   }, [readJsonSafely, user, persistReacted]);
+
   const reactToPost = useCallback((post) => {
     if (!isLoggedIn || !user) { openAuthModal("login", { type: "react", post }); return; }
     const postId = String(post?.id ?? "");
     if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
     sendReaction(post);
   }, [isLoggedIn, user, openAuthModal, reactedPosts, reactingPostId, sendReaction]);
+
   useEffect(() => {
     if (!pendingAuthResolution || !isLoggedIn || !user) return;
     const { action, provider } = pendingAuthResolution;
@@ -1920,6 +2163,7 @@ function Home() {
     if (action.type === "inbox") { openMyInbox(action.filterPostId || null); return; }
     if (action.type === "react" && action.post) { sendReaction(action.post); }
   }, [pendingAuthResolution, isLoggedIn, user, openServiceForm, openInboxForPost, callProvider, openMyInbox, sendReaction]);
+
   useEffect(() => {
     if (!user?.id || !posts.length) return;
     const stored = loadReactedFromStorage(user.id);
@@ -1930,6 +2174,7 @@ function Home() {
     }, {});
     if (Object.keys(relevant).length) setReactedPosts((current) => ({ ...relevant, ...current }));
   }, [user, posts, loadReactedFromStorage]);
+
   const sharePost = useCallback((post) => {
     const title = String(post?.title || "Market service").trim();
     const message = String(post?.subtitle || "").trim();
@@ -1937,6 +2182,7 @@ function Home() {
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   }, []);
+
   const memoizedPosts = useMemo(() => {
     return posts.filter((post) => {
       const type = getPostType(post);
@@ -1945,7 +2191,9 @@ function Home() {
       return type === "offer" || type === "exchange";
     });
   }, [posts, activeCategory]);
+
   const emptySectionAction = activeCategory === "social-life" ? { label: "Ask for help", postType: "need" } : activeCategory === "tv" ? { label: "Share your moment", postType: "moment" } : { label: "Offer work or trade skills", postType: "offer" };
+
   let mainContent;
   
   // REPLACED MARKET TAB WITH GWAMO BRAIN
@@ -1984,6 +2232,7 @@ function Home() {
       </>
     );
   }
+
   return (
     <div className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}${activeCategory === "social-life" ? " is-social-life-mode" : ""}`}>
       <TimeMarketTopBar activeCategory={activeCategory} isLoggedIn={isLoggedIn} user={user} onAuth={openAuthModal} onLogout={handleLogout} onOpenMyProfile={() => (isLoggedIn ? openMyProfile() : openAuthModal("login"))} onOpenMyServices={openMyServices} onOpenMyTime={() => setShowMyTime(true)} onOpenMyInbox={() => openMyInbox(null)} unreadCount={totalUnreadCount} onOpenInfo={(topic) => setShowInfoModal(topic)} />
@@ -2064,6 +2313,7 @@ function Home() {
     </div>
   );
 }
+
 // ==========================================
 // SUB-COMPONENTS & MODALS
 // ==========================================
@@ -2079,6 +2329,7 @@ const FeedSkeleton = memo(function FeedSkeleton() {
   );
 });
 FeedSkeleton.displayName = "FeedSkeleton";
+
 const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, unreadCount, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
   const closeMenu = () => setShowMenu(false);
@@ -2156,6 +2407,7 @@ const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLog
   );
 });
 TimeMarketTopBar.displayName = "TimeMarketTopBar";
+
 const ComingSoonPanel = memo(({ category, onBack }) => {
   const meta = CATEGORY_META[category] || { label: "This section", blurb: "This section is coming soon." };
   return (
@@ -2167,6 +2419,7 @@ const ComingSoonPanel = memo(({ category, onBack }) => {
   );
 });
 ComingSoonPanel.displayName = "ComingSoonPanel";
+
 const ServicePost = memo(function ServicePost({
   post, index, postId, isActive, reacted, reacting, unreadCount, mediaAspectRatio,
   onMediaAspectRatio, isOwner, postRefCallback, videoRefCallback, onVideoPlay,
@@ -2281,6 +2534,7 @@ const ServicePost = memo(function ServicePost({
   );
 });
 ServicePost.displayName = "ServicePost";
+
 const ServiceEditorModal = memo(({
   newCreatorName, setNewCreatorName, newCreatorIdentity, setNewCreatorIdentity,
   newTitle, setNewTitle, newMediaUrl, setNewMediaUrl, subtitle, setSubtitle,
@@ -2426,6 +2680,7 @@ const ServiceEditorModal = memo(({
   );
 });
 ServiceEditorModal.displayName = "ServiceEditorModal";
+
 const AuthModal = memo(({ isOpen, mode, phone, setPhone, fullName, setFullName, pin, setPin, confirmPin, setConfirmPin, error, successMessage, loading, onRegister, onLogin, onClose, onSwitchMode, onForgotPin, onOpenActivation }) => {
   useEscapeToClose(onClose, isOpen);
   if (!isOpen) return null;
@@ -2469,6 +2724,7 @@ const AuthModal = memo(({ isOpen, mode, phone, setPhone, fullName, setFullName, 
   );
 });
 AuthModal.displayName = "AuthModal";
+
 const PinResetModal = memo(({ step, phone, setPhone, request, newPin, setNewPin, confirmPin, setConfirmPin, error, loading, onRequest, onCheckStatus, onComplete, onRestart, onClose }) => {
   useEscapeToClose(onClose);
   return (
@@ -2519,6 +2775,7 @@ const PinResetModal = memo(({ step, phone, setPhone, request, newPin, setNewPin,
   );
 });
 PinResetModal.displayName = "PinResetModal";
+
 const PendingPhoneReviewModal = memo(({ review, onClose }) => {
   useEscapeToClose(onClose);
   return (
@@ -2537,6 +2794,7 @@ const PendingPhoneReviewModal = memo(({ review, onClose }) => {
   );
 });
 PendingPhoneReviewModal.displayName = "PendingPhoneReviewModal";
+
 const ActivationCodeModal = memo(({ phone, setPhone, code, setCode, newPin, setNewPin, confirmPin, setConfirmPin, error, loading, onSubmit, onClose }) => {
   useEscapeToClose(onClose);
   return (
@@ -2572,6 +2830,7 @@ const ActivationCodeModal = memo(({ phone, setPhone, code, setCode, newPin, setN
   );
 });
 ActivationCodeModal.displayName = "ActivationCodeModal";
+
 const RejectedAccountModal = memo(({ info, onClose, onRegisterAgain }) => {
   useEscapeToClose(onClose);
   return (
@@ -2589,6 +2848,7 @@ const RejectedAccountModal = memo(({ info, onClose, onRegisterAgain }) => {
   );
 });
 RejectedAccountModal.displayName = "RejectedAccountModal";
+
 const ChatModal = memo(({ partner, currentUser, getSessionToken, apiUrl, onClose, onZoomImage, onRequireAuth }) => {
   useEscapeToClose(onClose);
   const draftKey = `${CHAT_DRAFT_PREFIX}${partner.servicePostId || partner.conversationId || "new"}`;
@@ -2926,6 +3186,7 @@ const ChatModal = memo(({ partner, currentUser, getSessionToken, apiUrl, onClose
   );
 });
 ChatModal.displayName = "ChatModal";
+
 const ZOOM_MIN_SCALE = 1;
 const ZOOM_MAX_SCALE = 4;
 const ZOOM_DOUBLE_TAP_SCALE = 2.75;
@@ -3015,6 +3276,7 @@ const ZoomableImageViewer = memo(({ src, alt = "Photo", onClose }) => {
   );
 });
 ZoomableImageViewer.displayName = "ZoomableImageViewer";
+
 const ProviderProfileSheet = memo(({ post, isOwner = false, onClose, onMessage, onShare }) => {
   useEscapeToClose(onClose);
   const info = getVerificationStatus(post);
@@ -3050,6 +3312,7 @@ const ProviderProfileSheet = memo(({ post, isOwner = false, onClose, onMessage, 
   );
 });
 ProviderProfileSheet.displayName = "ProviderProfileSheet";
+
 const ProfileEditModal = memo(({
   user, fullName, setFullName, serviceName, setServiceName, servicesOffered, setServicesOffered,
   photoPreview, onPhotoChange, onRemovePhoto, photoRemoved, contextPost, onEditListing,
@@ -3133,6 +3396,7 @@ const ProfileEditModal = memo(({
   );
 });
 ProfileEditModal.displayName = "ProfileEditModal";
+
 const MyServicesSheet = memo(({ services, loading, error, onEdit, onDelete, onClose, onCreateNew }) => {
   useEscapeToClose(onClose);
   return (
@@ -3177,6 +3441,7 @@ const MyServicesSheet = memo(({ services, loading, error, onEdit, onDelete, onCl
   );
 });
 MyServicesSheet.displayName = "MyServicesSheet";
+
 const MyTimeSheet = memo(({ onClose }) => {
   useEscapeToClose(onClose);
   return (
@@ -3197,6 +3462,7 @@ const MyTimeSheet = memo(({ onClose }) => {
   );
 });
 MyTimeSheet.displayName = "MyTimeSheet";
+
 const MyInboxSheet = memo(({ conversations, loading, error, currentUserId, filterServicePostId, onOpenConversation, onClose }) => {
   useEscapeToClose(onClose);
   const [searchTerm, setSearchTerm] = useState("");
@@ -3274,6 +3540,7 @@ const MyInboxSheet = memo(({ conversations, loading, error, currentUserId, filte
   );
 });
 MyInboxSheet.displayName = "MyInboxSheet";
+
 const InfoModal = memo(({ topic, onClose }) => {
   useEscapeToClose(onClose);
   const content = INFO_CONTENT[topic] || INFO_CONTENT.about;
@@ -3304,6 +3571,7 @@ const InfoModal = memo(({ topic, onClose }) => {
   );
 });
 InfoModal.displayName = "InfoModal";
+
 function HomeStylesInner() {
   return (
     <style>{`
