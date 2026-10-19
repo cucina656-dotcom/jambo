@@ -671,7 +671,7 @@ function GwamoBrainWidget({ apiUrl }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("conversation_id", selectedConversation || "");
+      formData.append("conversation_id", selectedConversation || "global"); // FIX: Fallback to "global"
       const uploadRes = await fetch(`${api}/admin/upload`, {
         method: "POST", headers: { "X-Admin-Pin": adminPin }, body: formData,
       });
