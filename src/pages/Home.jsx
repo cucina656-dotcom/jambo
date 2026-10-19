@@ -732,40 +732,290 @@ function GwamoBrainWidget({ apiUrl }) {
   return (
     <div className="gwamo-brain-container">
       <style>{`
-        .gwamo-brain-container{position:relative;isolation:isolate;display:flex;flex-direction:column;align-items:center;width:100%;max-width:860px;margin:0 auto;height:calc(100svh - var(--nav-h,64px));min-height:420px;padding:calc(var(--top-offset,60px) + 8px) 12px 12px;box-sizing:border-box}
-        @supports(height:100dvh){.gwamo-brain-container{height:calc(100dvh - var(--nav-h,64px))}}
-        .gbw-page-background{position:absolute;inset:0;z-index:-1;overflow:hidden;background:#0d1320}
-        .gbw-page-background video,.gbw-page-background img{width:100%;height:100%;display:block;object-fit:cover;opacity:.62}
-        .gbw-page-background:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,15,28,.5),rgba(8,15,28,.82))}
-        .gbw-panel{position:relative;width:100%;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:24px;background:rgba(13,19,32,.48);box-shadow:0 18px 60px rgba(0,0,0,.24);backdrop-filter:blur(12px);font-family:var(--font-body,system-ui,sans-serif);color:var(--text,#f7f9fc)}
-        .gbw-head{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.14);background:rgba(9,15,27,.42)}
-        .gbw-logo{width:42px;height:42px;flex-shrink:0;display:grid;place-items:center;border-radius:14px;color:#102315;background:#b8f36b;box-shadow:0 0 24px rgba(184,243,107,.15)}
-        .gbw-headcopy{flex:1;min-width:0}.gbw-headcopy strong{display:block;color:#fff;font-size:17px;font-weight:750;letter-spacing:-.02em}.gbw-headcopy small{display:block;margin-top:3px;color:rgba(239,245,255,.72);font-size:12px}
-        .gbw-welcome{position:relative;z-index:1;margin:12px 16px 0;padding:11px 14px;border:1px solid rgba(184,243,107,.2);border-radius:14px;color:#f5ffe9;background:rgba(57,82,41,.56);font-size:14px;line-height:1.5}
-        .gbw-messages,.gbw-adminmessages{position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;overscroll-behavior:contain}
-        .gbw-messages::-webkit-scrollbar,.gbw-adminmessages::-webkit-scrollbar,.gbw-convos::-webkit-scrollbar{width:5px}.gbw-messages::-webkit-scrollbar-thumb,.gbw-adminmessages::-webkit-scrollbar-thumb,.gbw-convos::-webkit-scrollbar-thumb{border-radius:10px;background:rgba(255,255,255,.2)}
-        .gbw-bubble{position:relative;max-width:82%;padding:10px 13px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:default;box-shadow:0 3px 12px rgba(0,0,0,.1)}
-        .gbw-bubble.visitor{align-self:flex-end;border:1px solid rgba(184,243,107,.18);border-radius:18px 18px 5px 18px;color:#14230b;background:linear-gradient(135deg,#c9f98d,#a9e65c)}
-        .gbw-bubble.helper{align-self:flex-start;border:1px solid rgba(255,255,255,.12);border-radius:18px 18px 18px 5px;color:#f7f9ff;background:rgba(26,38,57,.88)}
-        .gbw-time{display:block;margin-top:5px;font-size:10.5px;text-align:right;opacity:.72}.gbw-hold-hint{font-size:11px;color:rgba(255,255,255,.65);text-align:center;padding:0 8px 7px}
-        .gbw-compose{position:relative;z-index:1;display:flex;align-items:center;gap:9px;padding:11px 13px;border-top:1px solid rgba(255,255,255,.14);background:rgba(9,15,27,.7);backdrop-filter:blur(12px)}
-        .gbw-compose input,.gbw-admin-compose textarea,.gbw-adminlogin input,.gbw-search{flex:1;width:100%;min-width:0;box-sizing:border-box;padding:12px 15px;border:1px solid rgba(255,255,255,.17);border-radius:15px;outline:none;color:#fff;background:rgba(255,255,255,.075);font:inherit;font-size:14px;transition:border-color .15s,background .15s}
-        .gbw-compose input:focus,.gbw-admin-compose textarea:focus,.gbw-adminlogin input:focus,.gbw-search:focus{border-color:#b8f36b;background:rgba(255,255,255,.1)}
-        .gbw-compose input::placeholder,.gbw-admin-compose textarea::placeholder,.gbw-adminlogin input::placeholder,.gbw-search::placeholder{color:rgba(235,241,250,.6)}
-        .gbw-send,.gbw-primary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:0 17px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer;transition:transform .15s,filter .15s;white-space:nowrap}
-        .gbw-send{width:46px;min-width:46px;padding:0;border-radius:50%}.gbw-send:hover:not(:disabled),.gbw-primary:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}.gbw-send:disabled,.gbw-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
-        .gbw-helperlink,.gbw-back{position:relative;z-index:1;align-self:center;padding:8px 12px 11px;border:0;color:rgba(235,241,250,.65);background:transparent;font-size:12px;cursor:pointer}.gbw-helperlink:hover,.gbw-back:hover{color:#fff}
-        .gbw-empty{padding:30px 18px;color:rgba(240,245,255,.72);font-size:13.5px;line-height:1.55;text-align:center}.gbw-error{position:relative;z-index:2;padding:10px 14px;color:#ffd9de;background:rgba(145,31,51,.52);font-size:12.5px;text-align:center}
+        .gwamo-brain-container {
+          position: relative;
+          isolation: isolate;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 100%;
+          max-width: 860px;
+          margin: 0 auto;
+          height: calc(100svh - var(--nav-h, 64px));
+          min-height: 420px;
+          padding: calc(var(--top-offset, 60px) + 8px) 12px 12px;
+          box-sizing: border-box;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        @supports (height: 100dvh) {
+          .gwamo-brain-container {
+            height: calc(100dvh - var(--nav-h, 64px));
+          }
+        }
+
+        /* Structural Panel Container */
+        .gbw-panel {
+          position: relative;
+          width: 100%;
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 24px;
+          background: #090f1b;
+          box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
+          color: #ffffff;
+        }
+
+        /* Header Card */
+        .gbw-head {
+          position: relative;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 18px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          background: #0c1322;
+        }
+        .gbw-logo {
+          width: 44px;
+          height: 44px;
+          flex-shrink: 0;
+          display: grid;
+          place-items: center;
+          border-radius: 14px;
+          color: #ff0040;
+          background: transparent;
+          border: 2px solid #ff0040;
+          box-shadow: 0 0 15px rgba(255, 0, 64, 0.7);
+        }
+        .gbw-headcopy {
+          flex: 1;
+          min-width: 0;
+        }
+        .gbw-headcopy strong {
+          display: block;
+          color: #ffffff;
+          font-size: 18px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+        }
+        .gbw-headcopy small {
+          display: block;
+          margin-top: 3px;
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 13px;
+        }
+
+        /* Scaled Video Viewport (Positioned between Header and Compose Box) */
+        .gbw-video-viewport {
+          position: relative;
+          flex: 1;
+          min-height: 0;
+          width: 100%;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+        .gbw-page-background {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          background: #000000;
+        }
+        .gbw-page-background video,
+        .gbw-page-background img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+          opacity: 0.85;
+        }
+
+        /* Welcome Bar Overlay */
+        .gbw-welcome {
+          position: relative;
+          z-index: 5;
+          margin: 12px 16px 0;
+          padding: 12px 18px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 16px;
+          color: #ffffff;
+          background: rgba(12, 19, 34, 0.65);
+          backdrop-filter: blur(8px);
+          font-size: 15px;
+          font-weight: 500;
+          text-align: center;
+        }
+
+        /* Chat Message Area Over Video */
+        .gbw-messages,
+        .gbw-adminmessages {
+          position: relative;
+          z-index: 5;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          scroll-behavior: smooth;
+          overscroll-behavior: contain;
+        }
+        .gbw-messages::-webkit-scrollbar,
+        .gbw-adminmessages::-webkit-scrollbar,
+        .gbw-convos::-webkit-scrollbar {
+          width: 5px;
+        }
+        .gbw-messages::-webkit-scrollbar-thumb,
+        .gbw-adminmessages::-webkit-scrollbar-thumb,
+        .gbw-convos::-webkit-scrollbar-thumb {
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Neon Blue Chat Bubbles - White Bold Text */
+        .gbw-bubble {
+          position: relative;
+          max-width: 82%;
+          padding: 9px 14px;
+          font-size: 15px;
+          font-weight: 700;
+          line-height: 1.4;
+          color: #ffffff;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          touch-action: pan-y;
+          user-select: none;
+          -webkit-user-select: none;
+          cursor: default;
+        }
+        .gbw-bubble.visitor {
+          align-self: flex-end;
+          border: 1px solid rgba(0, 229, 255, 0.9);
+          border-radius: 18px 18px 5px 18px;
+          background: linear-gradient(135deg, #00b0ff, #0078ff);
+          box-shadow: 0 0 14px rgba(0, 176, 255, 0.65);
+        }
+        .gbw-bubble.helper {
+          align-self: flex-start;
+          border: 1px solid rgba(0, 176, 255, 0.7);
+          border-radius: 18px 18px 18px 5px;
+          background: rgba(8, 24, 52, 0.82);
+          box-shadow: 0 0 10px rgba(0, 176, 255, 0.35);
+        }
+        .gbw-time {
+          display: block;
+          margin-top: 3px;
+          font-size: 11px;
+          font-weight: 400;
+          text-align: right;
+          color: rgba(255, 255, 255, 0.85);
+        }
+
+        .gbw-hold-hint {
+          position: relative;
+          z-index: 5;
+          font-size: 11.5px;
+          color: rgba(255, 255, 255, 0.7);
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+          text-align: center;
+          padding: 0 8px 6px;
+        }
+
+        /* Bottom Message Composer Card */
+        .gbw-compose {
+          position: relative;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          background: #090f1b;
+        }
+        .gbw-compose input {
+          flex: 1;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+          padding: 12px 18px;
+          border: 1.5px solid #00b0ff;
+          border-radius: 20px;
+          outline: none;
+          color: #ffffff;
+          background: rgba(13, 22, 38, 0.8);
+          font-family: inherit;
+          font-size: 14.5px;
+          box-shadow: 0 0 10px rgba(0, 176, 255, 0.2);
+        }
+        .gbw-compose input:focus {
+          border-color: #00e5ff;
+          box-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+        }
+        .gbw-compose input::placeholder {
+          color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Red Glow Send Action Button */
+        .gbw-send {
+          width: 48px;
+          height: 48px;
+          min-width: 48px;
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 50%;
+          color: #ffffff;
+          background: #ff0040;
+          box-shadow: 0 0 18px rgba(255, 0, 64, 0.8);
+          cursor: pointer;
+          transition: transform 0.15s, filter 0.15s;
+        }
+        .gbw-send:hover:not(:disabled) {
+          transform: scale(1.05);
+          filter: brightness(1.1);
+        }
+        .gbw-send:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+
+        /* Helper Link & Misc */
+        .gbw-helperlink, .gbw-back {
+          position: relative;
+          z-index: 10;
+          align-self: center;
+          padding: 8px 12px 12px;
+          border: 0;
+          color: rgba(255, 255, 255, 0.6);
+          background: transparent;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .gbw-helperlink:hover, .gbw-back:hover { color: #ffffff; }
+        .gbw-empty { padding: 30px 18px; color: rgba(255, 255, 255, 0.8); font-size: 14px; text-align: center; }
+        .gbw-error { position: relative; z-index: 10; padding: 10px 14px; color: #ffd9de; background: rgba(255, 0, 64, 0.4); font-size: 12.5px; text-align: center; }
+
+        /* Helper / Admin UI (unchanged from the previous version) */
+        .gbw-admin-compose textarea,.gbw-adminlogin input,.gbw-search{flex:1;width:100%;min-width:0;box-sizing:border-box;padding:12px 15px;border:1px solid rgba(255,255,255,.17);border-radius:15px;outline:none;color:#fff;background:rgba(255,255,255,.075);font:inherit;font-size:14px;transition:border-color .15s,background .15s}
+        .gbw-admin-compose textarea:focus,.gbw-adminlogin input:focus,.gbw-search:focus{border-color:#b8f36b;background:rgba(255,255,255,.1)}
+        .gbw-admin-compose textarea::placeholder,.gbw-adminlogin input::placeholder,.gbw-search::placeholder{color:rgba(235,241,250,.6)}
+        .gbw-primary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:0 17px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer;transition:transform .15s,filter .15s;white-space:nowrap}
+        .gbw-primary:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}.gbw-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
         .gbw-adminlogin{position:relative;z-index:1;width:min(100%,390px);height:100%;box-sizing:border-box;margin:0 auto;padding:28px 22px;display:flex;flex-direction:column;justify-content:center;gap:13px}.gbw-adminlogin h3{margin:0;color:#fff;font-size:25px;letter-spacing:-.03em;text-align:center}.gbw-login-mark{width:60px;height:60px;display:grid;place-items:center;align-self:center;border-radius:20px;color:#14230b;background:#b8f36b}.gbw-login-copy{margin:0 0 8px;color:rgba(239,245,255,.72);font-size:13px;line-height:1.5;text-align:center}
         .gbw-admin{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,275px) minmax(0,1fr)}.gbw-convo-side{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.13);background:rgba(8,14,25,.42)}.gbw-convo-heading{padding:14px 13px 10px}.gbw-convo-heading strong{display:block;color:#fff;font-size:15px}.gbw-convo-heading small{display:block;margin-top:4px;color:rgba(235,241,250,.6);font-size:11px}.gbw-search{margin-top:11px;padding:10px 12px;border-radius:12px;font-size:12.5px}.gbw-convos{flex:1;min-height:0;overflow-y:auto}.gbw-convo{display:block;width:100%;box-sizing:border-box;padding:13px;border:0;border-bottom:1px solid rgba(255,255,255,.08);border-left:3px solid transparent;color:#fff;background:transparent;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}.gbw-convo:hover{background:rgba(255,255,255,.055)}.gbw-convo.active{border-left-color:#b8f36b;background:rgba(184,243,107,.12)}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:13px;font-weight:750}.gbw-convo small{margin-top:4px;color:#c5f78e;font-size:10.5px;text-transform:capitalize}.gbw-convo span{margin-top:5px;color:rgba(235,241,250,.65);font-size:11.5px}.gbw-adminright{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;background:rgba(13,20,33,.18)}.gbw-chat-toolbar{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.35)}.gbw-chat-toolbar-copy{flex:1;min-width:0}.gbw-chat-toolbar strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#fff}.gbw-chat-toolbar small{display:block;margin-top:3px;color:rgba(235,241,250,.6);font-size:10.5px}.gbw-iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:11px;color:#f5f7fb;background:rgba(255,255,255,.07);font-size:11.5px;font-weight:650;cursor:pointer}.gbw-iconbtn:hover{background:rgba(255,255,255,.13)}.gbw-iconbtn.danger{color:#ffd6db;border-color:rgba(255,116,135,.24);background:rgba(255,92,112,.13)}
         .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-settings-editor{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:9px;padding:12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.42)}.gbw-settings-editor strong{font-size:12px;color:#fff}.gbw-settings-editor label{display:grid;gap:5px;color:rgba(241,246,255,.72);font-size:11px}.gbw-settings-editor input,.gbw-settings-editor textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(255,255,255,.16);border-radius:11px;color:#fff;background:rgba(255,255,255,.07);font:inherit;font-size:13px;outline:none}.gbw-settings-editor textarea{min-height:58px;resize:vertical}.gbw-settings-editor input:focus,.gbw-settings-editor textarea:focus{border-color:#b8f36b}.gbw-settings-save{justify-self:start;min-height:36px;padding:0 13px;border:0;border-radius:10px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer}.gbw-settings-save:disabled{opacity:.55;cursor:wait}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
         @media(max-width:650px){.gwamo-brain-container{padding:calc(var(--top-offset,60px) + 4px) 0 0;min-height:380px}.gbw-panel{border-width:1px 0 0;border-radius:22px 22px 0 0}.gbw-admin{grid-template-columns:minmax(0,1fr)}.gbw-admin.show-chat .gbw-convo-side{display:none}.gbw-admin:not(.show-chat) .gbw-adminright{display:none}.gbw-mobile-back{display:inline-flex}.gbw-bubble{max-width:88%}.gbw-head{padding:11px 13px}.gbw-admin-compose{gap:6px;padding:9px}.gbw-admin-compose .gbw-primary{padding:0 11px;font-size:12px}.gbw-background-status{flex-wrap:wrap}.gbw-background-hint{width:100%}}
         @media(prefers-reduced-motion:reduce){.gbw-messages,.gbw-adminmessages{scroll-behavior:auto}.gbw-send,.gbw-primary{transition:none}}
       `}</style>
-
-      <div className="gbw-page-background" aria-hidden="true">
-        {mediaUrl && isVideo ? <video src={mediaUrl} autoPlay loop muted playsInline /> : mediaUrl ? <img src={mediaUrl} alt="" /> : null}
-      </div>
 
       <section className="gbw-panel">
         <header className="gbw-head">
@@ -784,26 +1034,32 @@ function GwamoBrainWidget({ apiUrl }) {
 
         {!helperMode ? (
           <>
-            <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
-            <div className="gbw-messages" ref={scrollRef} aria-live="polite">
-              {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
-              {visibleMessages(messages).map((message) => {
-                const videoUrl = message.media_url || message.mediaUrl;
-                const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
-                return (
-                  <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                    onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
-                    onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
-                    onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your view">
-                    {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
-                    {message.text_content}
-                    <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                  </div>
-                );
-              })}
-              {!loading && visibleMessages(messages).length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
+            {/* Video Viewport: strictly bounded between Header and Compose Box */}
+            <div className="gbw-video-viewport">
+              <div className="gbw-page-background" aria-hidden="true">
+                {mediaUrl && isVideo ? <video src={mediaUrl} autoPlay loop muted playsInline /> : mediaUrl ? <img src={mediaUrl} alt="" /> : null}
+              </div>
+              <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
+              <div className="gbw-messages" ref={scrollRef} aria-live="polite">
+                {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
+                {visibleMessages(messages).map((message) => {
+                  const videoUrl = message.media_url || message.mediaUrl;
+                  const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
+                  return (
+                    <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                      onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
+                      onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
+                      onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your view">
+                      {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
+                      {message.text_content}
+                      <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                    </div>
+                  );
+                })}
+                {!loading && visibleMessages(messages).length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
+              </div>
+              <div className="gbw-hold-hint">Tip: press and hold a message to remove it from your view.</div>
             </div>
-            <div className="gbw-hold-hint">Tip: press and hold a message to remove it from your view.</div>
             {error && <div className="gbw-error" role="status">{error}</div>}
             <form className="gbw-compose" onSubmit={sendVisitorMessage}>
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
