@@ -1,4 +1,8 @@
-﻿import TvMedia from "../components/tv/TvMedia";
+﻿
+src/pages/Home.jsx
+
+
+import TvMedia from "../components/tv/TvMedia";
 import TvConversationOverlay from "../components/tv/TvConversationOverlay";
 import ConnectExperience from "../components/connect/ConnectExperience";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
@@ -365,6 +369,9 @@ function GwamoBrainWidget({ apiUrl }) {
     welcome_message: "Hello! How can I help you today?",
     media_url: "",
   });
+  const [settingsTitleDraft, setSettingsTitleDraft] = useState("Gwamo Brain");
+  const [settingsSubtitleDraft, setSettingsSubtitleDraft] = useState("Human support · Private conversation");
+  const [settingsWelcomeDraft, setSettingsWelcomeDraft] = useState("Hello! How can I help you today?");
   const [visitorToken, setVisitorToken] = useState("");
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -418,7 +425,12 @@ function GwamoBrainWidget({ apiUrl }) {
     try {
       const response = await fetch(`${api}/settings`, { cache: "no-store" });
       const data = await readResponse(response);
-      if (data.settings) setSettings((current) => ({ ...current, ...data.settings }));
+      if (data.settings) {
+        setSettings((current) => ({ ...current, ...data.settings }));
+        setSettingsTitleDraft(String(data.settings.title || "Gwamo Brain"));
+        setSettingsSubtitleDraft(String(data.settings.subtitle || "Human support · Private conversation"));
+        setSettingsWelcomeDraft(String(data.settings.welcome_message || "Hello! How can I help you today?"));
+      }
     } catch (err) {
       console.warn("Could not load Gwamo Brain settings", err);
     }
@@ -616,6 +628,33 @@ function GwamoBrainWidget({ apiUrl }) {
     }
   }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
 
+  const saveBrainDisplaySettings = async (event) => {
+    event?.preventDefault();
+    if (!adminAuthed || adminBusy) return;
+    const title = settingsTitleDraft.trim();
+    const subtitle = settingsSubtitleDraft.trim();
+    const welcome_message = settingsWelcomeDraft.trim();
+    if (!title || !subtitle || !welcome_message) {
+      setAdminError("Please enter both a chat title and a welcome message.");
+      return;
+    }
+    setAdminBusy(true);
+    setAdminError("");
+    try {
+      const response = await fetch(`${api}/admin/settings`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ title, subtitle, welcome_message, media_url: settings.media_url || "" }),
+      });
+      await readResponse(response);
+      setSettings((current) => ({ ...current, title, subtitle, welcome_message }));
+    } catch (err) {
+      setAdminError(err.message || "Could not save the chat title and welcome message.");
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
   // Only the authorized Gwamo helper can upload or remove the shared Home-screen background.
   const uploadHelperBackgroundVideo = async (file) => {
     if (!file) return;
@@ -723,7 +762,7 @@ function GwamoBrainWidget({ apiUrl }) {
         .gbw-empty{padding:30px 18px;color:rgba(240,245,255,.72);font-size:13.5px;line-height:1.55;text-align:center}.gbw-error{position:relative;z-index:2;padding:10px 14px;color:#ffd9de;background:rgba(145,31,51,.52);font-size:12.5px;text-align:center}
         .gbw-adminlogin{position:relative;z-index:1;width:min(100%,390px);height:100%;box-sizing:border-box;margin:0 auto;padding:28px 22px;display:flex;flex-direction:column;justify-content:center;gap:13px}.gbw-adminlogin h3{margin:0;color:#fff;font-size:25px;letter-spacing:-.03em;text-align:center}.gbw-login-mark{width:60px;height:60px;display:grid;place-items:center;align-self:center;border-radius:20px;color:#14230b;background:#b8f36b}.gbw-login-copy{margin:0 0 8px;color:rgba(239,245,255,.72);font-size:13px;line-height:1.5;text-align:center}
         .gbw-admin{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,275px) minmax(0,1fr)}.gbw-convo-side{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.13);background:rgba(8,14,25,.42)}.gbw-convo-heading{padding:14px 13px 10px}.gbw-convo-heading strong{display:block;color:#fff;font-size:15px}.gbw-convo-heading small{display:block;margin-top:4px;color:rgba(235,241,250,.6);font-size:11px}.gbw-search{margin-top:11px;padding:10px 12px;border-radius:12px;font-size:12.5px}.gbw-convos{flex:1;min-height:0;overflow-y:auto}.gbw-convo{display:block;width:100%;box-sizing:border-box;padding:13px;border:0;border-bottom:1px solid rgba(255,255,255,.08);border-left:3px solid transparent;color:#fff;background:transparent;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}.gbw-convo:hover{background:rgba(255,255,255,.055)}.gbw-convo.active{border-left-color:#b8f36b;background:rgba(184,243,107,.12)}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:13px;font-weight:750}.gbw-convo small{margin-top:4px;color:#c5f78e;font-size:10.5px;text-transform:capitalize}.gbw-convo span{margin-top:5px;color:rgba(235,241,250,.65);font-size:11.5px}.gbw-adminright{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;background:rgba(13,20,33,.18)}.gbw-chat-toolbar{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.35)}.gbw-chat-toolbar-copy{flex:1;min-width:0}.gbw-chat-toolbar strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#fff}.gbw-chat-toolbar small{display:block;margin-top:3px;color:rgba(235,241,250,.6);font-size:10.5px}.gbw-iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:11px;color:#f5f7fb;background:rgba(255,255,255,.07);font-size:11.5px;font-weight:650;cursor:pointer}.gbw-iconbtn:hover{background:rgba(255,255,255,.13)}.gbw-iconbtn.danger{color:#ffd6db;border-color:rgba(255,116,135,.24);background:rgba(255,92,112,.13)}
-        .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
+        .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-settings-editor{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:9px;padding:12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.42)}.gbw-settings-editor strong{font-size:12px;color:#fff}.gbw-settings-editor label{display:grid;gap:5px;color:rgba(241,246,255,.72);font-size:11px}.gbw-settings-editor input,.gbw-settings-editor textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(255,255,255,.16);border-radius:11px;color:#fff;background:rgba(255,255,255,.07);font:inherit;font-size:13px;outline:none}.gbw-settings-editor textarea{min-height:58px;resize:vertical}.gbw-settings-editor input:focus,.gbw-settings-editor textarea:focus{border-color:#b8f36b}.gbw-settings-save{justify-self:start;min-height:36px;padding:0 13px;border:0;border-radius:10px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer}.gbw-settings-save:disabled{opacity:.55;cursor:wait}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
         @media(max-width:650px){.gwamo-brain-container{padding:calc(var(--top-offset,60px) + 4px) 0 0;min-height:380px}.gbw-panel{border-width:1px 0 0;border-radius:22px 22px 0 0}.gbw-admin{grid-template-columns:minmax(0,1fr)}.gbw-admin.show-chat .gbw-convo-side{display:none}.gbw-admin:not(.show-chat) .gbw-adminright{display:none}.gbw-mobile-back{display:inline-flex}.gbw-bubble{max-width:88%}.gbw-head{padding:11px 13px}.gbw-admin-compose{gap:6px;padding:9px}.gbw-admin-compose .gbw-primary{padding:0 11px;font-size:12px}.gbw-background-status{flex-wrap:wrap}.gbw-background-hint{width:100%}}
         @media(prefers-reduced-motion:reduce){.gbw-messages,.gbw-adminmessages{scroll-behavior:auto}.gbw-send,.gbw-primary{transition:none}}
       `}</style>
@@ -737,7 +776,7 @@ function GwamoBrainWidget({ apiUrl }) {
           <div className="gbw-logo" aria-hidden="true"><MessageSquare size={22} strokeWidth={2.2} /></div>
           <div className="gbw-headcopy">
             <strong>{helperMode ? "Gwamo Brain Helper" : (settings.title || "Gwamo Brain")}</strong>
-            <small>{helperMode ? (adminAuthed ? "Private helper inbox · Live updates" : "Authorized helper access") : "Human support · Private conversation"}</small>
+            <small>{helperMode ? (adminAuthed ? "Private helper inbox · Live updates" : "Authorized helper access") : (settings.subtitle || "Human support · Private conversation")}</small>
           </div>
           {helperMode && adminAuthed && (
             <button className="gbw-iconbtn" type="button" onClick={() => {
@@ -788,6 +827,19 @@ function GwamoBrainWidget({ apiUrl }) {
           </form>
         ) : (
           <>
+          <form className="gbw-settings-editor" onSubmit={saveBrainDisplaySettings}>
+            <strong>Customize the visitor chat</strong>
+            <label>Chat title
+              <input value={settingsTitleDraft} onChange={(event) => setSettingsTitleDraft(event.target.value)} maxLength={80} required placeholder="Gwamo Brain" />
+            </label>
+            <label>Subtitle
+              <input value={settingsSubtitleDraft} onChange={(event) => setSettingsSubtitleDraft(event.target.value)} maxLength={120} required placeholder="Human support · Private conversation" />
+            </label>
+            <label>Welcome message
+              <textarea value={settingsWelcomeDraft} onChange={(event) => setSettingsWelcomeDraft(event.target.value)} maxLength={500} required placeholder="Hello! How can I help you?" />
+            </label>
+            <button className="gbw-settings-save" type="submit" disabled={adminBusy}>{adminBusy ? "Saving…" : "Save chat appearance"}</button>
+          </form>
           <div className="gbw-background-status" onPointerDown={startBackgroundHold} onPointerUp={endBackgroundHold} onPointerLeave={endBackgroundHold} onPointerCancel={endBackgroundHold} onContextMenu={(event) => { if (mediaUrl) event.preventDefault(); }}>
             <span>{mediaUrl ? "Home-screen background video is active" : "No Home-screen background video set"}</span>
             {mediaUrl && <button className="gbw-iconbtn danger" type="button" onClick={deleteBackgroundVideo} disabled={adminBusy}><Trash2 size={14} /> Remove video</button>}
@@ -2147,9 +2199,7 @@ function Home() {
       {showChat && chatPartner && (
         <ChatModal partner={chatPartner} currentUser={user} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={() => openAuthModal("login")} />
       )}
-      {showProviderProfile && providerProfileTarget && (
-        <ProviderProfileSheet post={providerProfileTarget} isOwner={Boolean(isLoggedIn && user && isSameProviderAsPost(providerProfileTarget, user))} onClose={closeProviderProfile} onMessage={() => { const target = providerProfileTarget; closeProviderProfile(); openInboxForPost(target); }} onShare={() => sharePost(providerProfileTarget)} />
-      )}
+      {/* Provider profile sheet intentionally hidden as requested. */}
       {showMyProfile && (
         <ProfileEditModal user={user} fullName={profileFullName} setFullName={setProfileFullName} serviceName={profileServiceName} setServiceName={setProfileServiceName} servicesOffered={profileServicesOffered} setServicesOffered={setProfileServicesOffered} photoPreview={profilePhotoPreview} onPhotoChange={handleProfilePhotoChange} onRemovePhoto={removeProfilePhoto} photoRemoved={profilePhotoFile === "remove"} contextPost={profileEditContextPost} onEditListing={openEditListingFromProfile} onOpenServices={() => { setShowMyProfile(false); openMyServices(); }} onLogout={() => { setShowMyProfile(false); handleLogout(); }} deleteConfirming={profileDeleteConfirming} setDeleteConfirming={setProfileDeleteConfirming} onDeleteAccount={deleteMyProviderAccount} saving={profileSaving} error={profileError} onSave={saveMyProfile} onClose={() => { setShowMyProfile(false); revokeObjectUrl(profilePhotoPreview); setProfilePhotoFile(null); setProfilePhotoPreview(""); setProfileDeleteConfirming(false); }} />
       )}
