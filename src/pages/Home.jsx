@@ -388,6 +388,9 @@ function GwamoBrainWidget({ apiUrl }) {
   const [showConversationList, setShowConversationList] = useState(true);
   const [hiddenMessageIds, setHiddenMessageIds] = useState([]);
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [adminNotice, setAdminNotice] = useState("");
+
   const scrollRef = useRef(null);
   const adminScrollRef = useRef(null);
   const visitorTokenRef = useRef("");
@@ -651,15 +654,20 @@ function GwamoBrainWidget({ apiUrl }) {
     }
   };
 
-  // Only the authorized Gwamo helper can upload or remove the shared Home-screen background.
+  const settingsPayload = (media_url) => JSON.stringify({
+    title: settings.title || settingsTitleDraft,
+    subtitle: settings.subtitle || settingsSubtitleDraft,
+    welcome_message: settings.welcome_message || settingsWelcomeDraft,
+    media_url,
+  });
+
   const uploadHelperBackgroundVideo = async (file) => {
     if (!file) return;
     if (!file.type.startsWith("video/")) {
       setAdminError("Choose a video file for the Home-screen background.");
       return;
     }
-    setAdminBusy(true);
-    setAdminError("");
+    setAdminBusy(true); setAdminError(""); setAdminNotice("Uploading video… keep this screen open.");
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -668,18 +676,16 @@ function GwamoBrainWidget({ apiUrl }) {
         method: "POST", headers: { "X-Admin-Pin": adminPin }, body: formData,
       });
       const uploadData = await readResponse(uploadRes);
-      if (!uploadData.url) throw new Error("Upload failed: no video URL was returned.");
+      const url = uploadData.url || uploadData.media_url;
+      if (!url) throw new Error("Upload failed: no video URL was returned.");
       const settingsRes = await fetch(`${api}/admin/settings`, {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({
-          title: settings.title,
-          welcome_message: settings.welcome_message,
-          media_url: uploadData.url,
-        }),
+        method: "POST", headers: adminHeaders(), body: settingsPayload(url),
       });
       await readResponse(settingsRes);
-      setSettings((current) => ({ ...current, media_url: uploadData.url }));
+      setSettings((current) => ({ ...current, media_url: url }));
+      setAdminNotice("Background video updated.");
     } catch (err) {
+      setAdminNotice("");
       setAdminError(err.message || "Failed to set the Home-screen background video.");
     } finally {
       setAdminBusy(false);
@@ -688,15 +694,14 @@ function GwamoBrainWidget({ apiUrl }) {
 
   const deleteBackgroundVideo = async () => {
     if (!window.confirm("Remove the background video from the Gwamo Home screen for everyone?")) return;
+    setAdminBusy(true); setAdminError(""); setAdminNotice("");
     try {
-      setAdminBusy(true);
-      setAdminError("");
       const response = await fetch(`${api}/admin/settings`, {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({ title: settings.title, welcome_message: settings.welcome_message, media_url: "" }),
+        method: "POST", headers: adminHeaders(), body: settingsPayload(""),
       });
       await readResponse(response);
       setSettings((current) => ({ ...current, media_url: "" }));
+      setAdminNotice("Background video removed.");
     } catch (err) {
       setAdminError(err.message || "Failed to remove the background video.");
     } finally {
@@ -717,7 +722,9 @@ function GwamoBrainWidget({ apiUrl }) {
   };
 
   const mediaUrl = String(settings.media_url || "").trim();
-  const isVideo = /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(mediaUrl);
+  const isImageMedia = /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(mediaUrl);
+  const isVideo = Boolean(mediaUrl) && !isImageMedia;
+  
   const visibleMessages = (list) => (Array.isArray(list) ? list : []).filter((message) =>
     !hiddenMessageIds.includes(String(message.id))
   );
@@ -1015,6 +1022,11 @@ function GwamoBrainWidget({ apiUrl }) {
         .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-settings-editor{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:9px;padding:12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.42)}.gbw-settings-editor strong{font-size:12px;color:#fff}.gbw-settings-editor label{display:grid;gap:5px;color:rgba(241,246,255,.72);font-size:11px}.gbw-settings-editor input,.gbw-settings-editor textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(255,255,255,.16);border-radius:11px;color:#fff;background:rgba(255,255,255,.07);font:inherit;font-size:13px;outline:none}.gbw-settings-editor textarea{min-height:58px;resize:vertical}.gbw-settings-editor input:focus,.gbw-settings-editor textarea:focus{border-color:#b8f36b}.gbw-settings-save{justify-self:start;min-height:36px;padding:0 13px;border:0;border-radius:10px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer}.gbw-settings-save:disabled{opacity:.55;cursor:wait}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
         @media(max-width:650px){.gwamo-brain-container{padding:calc(var(--top-offset,60px) + 4px) 0 0;min-height:380px}.gbw-panel{border-width:1px 0 0;border-radius:22px 22px 0 0}.gbw-admin{grid-template-columns:minmax(0,1fr)}.gbw-admin.show-chat .gbw-convo-side{display:none}.gbw-admin:not(.show-chat) .gbw-adminright{display:none}.gbw-mobile-back{display:inline-flex}.gbw-bubble{max-width:88%}.gbw-head{padding:11px 13px}.gbw-admin-compose{gap:6px;padding:9px}.gbw-admin-compose .gbw-primary{padding:0 11px;font-size:12px}.gbw-background-status{flex-wrap:wrap}.gbw-background-hint{width:100%}}
         @media(prefers-reduced-motion:reduce){.gbw-messages,.gbw-adminmessages{scroll-behavior:auto}.gbw-send,.gbw-primary{transition:none}}
+        
+        .gbw-admin{grid-template-rows:minmax(0,1fr)}
+        .gbw-helper-bar{position:relative;z-index:10;flex-shrink:0;display:flex;justify-content:flex-end;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#0c1322}
+        .gbw-settings-panel{position:relative;z-index:10;flex-shrink:0;max-height:40svh;overflow-y:auto}
+        .gbw-notice{position:relative;z-index:10;flex-shrink:0;padding:8px 14px;color:#d6f5ff;background:rgba(0,176,255,.25);font-size:12.5px;text-align:center}
       `}</style>
 
       <section className="gbw-panel">
@@ -1079,90 +1091,102 @@ function GwamoBrainWidget({ apiUrl }) {
           </form>
         ) : (
           <>
-          <form className="gbw-settings-editor" onSubmit={saveBrainDisplaySettings}>
-            <strong>Customize the visitor chat</strong>
-            <label>Chat title
-              <input value={settingsTitleDraft} onChange={(event) => setSettingsTitleDraft(event.target.value)} maxLength={80} required placeholder="Gwamo Brain" />
-            </label>
-            <label>Subtitle
-              <input value={settingsSubtitleDraft} onChange={(event) => setSettingsSubtitleDraft(event.target.value)} maxLength={120} required placeholder="Human support · Private conversation" />
-            </label>
-            <label>Welcome message
-              <textarea value={settingsWelcomeDraft} onChange={(event) => setSettingsWelcomeDraft(event.target.value)} maxLength={500} required placeholder="Hello! How can I help you?" />
-            </label>
-            <button className="gbw-settings-save" type="submit" disabled={adminBusy}>{adminBusy ? "Saving…" : "Save chat appearance"}</button>
-          </form>
-          <div className="gbw-background-status" onPointerDown={startBackgroundHold} onPointerUp={endBackgroundHold} onPointerLeave={endBackgroundHold} onPointerCancel={endBackgroundHold} onContextMenu={(event) => { if (mediaUrl) event.preventDefault(); }}>
-            <span>{mediaUrl ? "Home-screen background video is active" : "No Home-screen background video set"}</span>
-            {mediaUrl && <button className="gbw-iconbtn danger" type="button" onClick={deleteBackgroundVideo} disabled={adminBusy}><Trash2 size={14} /> Remove video</button>}
-            <label className="gbw-upload-label" title="Upload Home-screen background video" aria-label="Upload Home-screen background video">
-              <Video size={19} />
-              <input type="file" accept="video/*" disabled={adminBusy} style={{ display: "none" }} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) uploadHelperBackgroundVideo(file); }} />
-            </label>
-            <small className="gbw-background-hint">Only the helper can change this video. Press and hold this bar to remove the active background.</small>
-          </div>
-          <div className={`gbw-admin ${selectedConversation && !showConversationList ? "show-chat" : ""}`}>
-            <aside className="gbw-convo-side" aria-label="Visitor conversations">
-              <div className="gbw-convo-heading">
-                <strong>Visitor inbox</strong>
-                <small>{conversations.length} conversation{conversations.length === 1 ? "" : "s"} · refreshes automatically</small>
-                <input className="gbw-search" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search visitors or messages…" aria-label="Search conversations" />
-              </div>
-              <div className="gbw-convos">
-                {filteredConversations.length === 0 && <div className="gbw-empty">{conversationSearch ? "No conversations match your search." : "No conversations yet."}</div>}
-                {filteredConversations.map((conversation) => (
-                  <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
-                    setSelectedConversation(conversation.id); setAdminError(""); setShowConversationList(false);
-                    try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); }
-                  }}>
-                    <strong>{conversation.visitor_label || "Visitor"}</strong>
-                    <small>{conversation.status || "open"}</small>
-                    <span>{conversation.last_message || "No messages yet"}</span>
-                  </button>
-                ))}
-              </div>
-            </aside>
-
-            <div className="gbw-adminright">
-              {!selectedConversation ? (
-                <div className="gbw-empty">Choose a visitor on the left to read their messages and reply.<br /><br />You can manage many separate visitor conversations from this inbox.</div>
-              ) : (
-                <>
-                  <div className="gbw-chat-toolbar">
-                    <button className="gbw-iconbtn gbw-mobile-back" type="button" onClick={() => setShowConversationList(true)}>← Inbox</button>
-                    <div className="gbw-chat-toolbar-copy">
-                      <strong>{selectedConversationData?.visitor_label || "Visitor conversation"}</strong>
-                      <small>{selectedConversationData?.status || "Conversation selected"} · Press and hold a message to hide it from your helper view</small>
-                    </div>
-                  </div>
-                  <div className="gbw-adminmessages" ref={adminScrollRef}>
-                    {visibleMessages(adminMessages).map((message) => {
-                      const videoUrl = message.media_url || message.mediaUrl;
-                      const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
-                      return (
-                        <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                          onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
-                          onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
-                          onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your helper view">
-                          {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
-                          {message.text_content}
-                          <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                        </div>
-                      );
-                    })}
-                    {visibleMessages(adminMessages).length === 0 && <div className="gbw-empty">No visible messages in this conversation.</div>}
-                  </div>
-
-
-                  <form className="gbw-admin-compose" onSubmit={sendHelperReply}>
-                    <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write a helpful reply…" maxLength={4000} required aria-label="Helper reply" />
-                    <button className="gbw-primary" type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending…" : <><Send size={15} /> Reply</>}</button>
-                  </form>
-                </>
-              )}
-              {adminError && <div className="gbw-error" role="status">{adminError}</div>}
+            <div className="gbw-helper-bar">
+              <button className="gbw-iconbtn" type="button" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>
+                <Pencil size={14} /> {showSettings ? "Hide chat settings" : "Chat settings & video"}
+              </button>
             </div>
-          </div>
+            {adminError && <div className="gbw-error" role="status">{adminError}</div>}
+            {adminNotice && !adminError && <div className="gbw-notice" role="status">{adminNotice}</div>}
+
+            {showSettings && (
+              <div className="gbw-settings-panel">
+                <form className="gbw-settings-editor" onSubmit={saveBrainDisplaySettings}>
+                  <strong>Customize the visitor chat</strong>
+                  <label>Chat title
+                    <input value={settingsTitleDraft} onChange={(e) => setSettingsTitleDraft(e.target.value)} maxLength={80} required placeholder="Gwamo Brain" />
+                  </label>
+                  <label>Subtitle
+                    <input value={settingsSubtitleDraft} onChange={(e) => setSettingsSubtitleDraft(e.target.value)} maxLength={120} required placeholder="Human support · Private conversation" />
+                  </label>
+                  <label>Welcome message
+                    <textarea value={settingsWelcomeDraft} onChange={(e) => setSettingsWelcomeDraft(e.target.value)} maxLength={500} required placeholder="Hello! How can I help you?" />
+                  </label>
+                  <button className="gbw-settings-save" type="submit" disabled={adminBusy}>{adminBusy ? "Saving…" : "Save chat appearance"}</button>
+                </form>
+                <div className="gbw-background-status" onPointerDown={startBackgroundHold} onPointerUp={endBackgroundHold} onPointerLeave={endBackgroundHold} onPointerCancel={endBackgroundHold} onContextMenu={(e) => { if (mediaUrl) e.preventDefault(); }}>
+                  <span>{mediaUrl ? "Home-screen background video is active" : "No Home-screen background video set"}</span>
+                  {mediaUrl && <button className="gbw-iconbtn danger" type="button" onClick={deleteBackgroundVideo} disabled={adminBusy}><Trash2 size={14} /> Remove video</button>}
+                  <label className="gbw-upload-label" title="Upload Home-screen background video" aria-label="Upload Home-screen background video">
+                    <Video size={19} />
+                    <input type="file" accept="video/*" disabled={adminBusy} style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) uploadHelperBackgroundVideo(file); }} />
+                  </label>
+                  <small className="gbw-background-hint">Only the helper can change this video. Press and hold this bar to remove the active background.</small>
+                </div>
+              </div>
+            )}
+
+            <div className={`gbw-admin ${selectedConversation && !showConversationList ? "show-chat" : ""}`}>
+              <aside className="gbw-convo-side" aria-label="Visitor conversations">
+                <div className="gbw-convo-heading">
+                  <strong>Visitor inbox</strong>
+                  <small>{conversations.length} conversation{conversations.length === 1 ? "" : "s"} · refreshes automatically</small>
+                  <input className="gbw-search" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search visitors or messages…" aria-label="Search conversations" />
+                </div>
+                <div className="gbw-convos">
+                  {filteredConversations.length === 0 && <div className="gbw-empty">{conversationSearch ? "No conversations match your search." : "No conversations yet."}</div>}
+                  {filteredConversations.map((conversation) => (
+                    <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
+                      setSelectedConversation(conversation.id); setAdminError(""); setShowConversationList(false);
+                      try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); }
+                    }}>
+                      <strong>{conversation.visitor_label || "Visitor"}</strong>
+                      <small>{conversation.status || "open"}</small>
+                      <span>{conversation.last_message || "No messages yet"}</span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <div className="gbw-adminright">
+                {!selectedConversation ? (
+                  <div className="gbw-empty">Choose a visitor on the left to read their messages and reply.<br /><br />You can manage many separate visitor conversations from this inbox.</div>
+                ) : (
+                  <>
+                    <div className="gbw-chat-toolbar">
+                      <button className="gbw-iconbtn gbw-mobile-back" type="button" onClick={() => setShowConversationList(true)}>← Inbox</button>
+                      <div className="gbw-chat-toolbar-copy">
+                        <strong>{selectedConversationData?.visitor_label || "Visitor conversation"}</strong>
+                        <small>{selectedConversationData?.status || "Conversation selected"} · Press and hold a message to hide it from your helper view</small>
+                      </div>
+                    </div>
+                    <div className="gbw-adminmessages" ref={adminScrollRef}>
+                      {visibleMessages(adminMessages).map((message) => {
+                        const videoUrl = message.media_url || message.mediaUrl;
+                        const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
+                        return (
+                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
+                            onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
+                            onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
+                            onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your helper view">
+                            {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
+                            {message.text_content}
+                            <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                          </div>
+                        );
+                      })}
+                      {visibleMessages(adminMessages).length === 0 && <div className="gbw-empty">No visible messages in this conversation.</div>}
+                    </div>
+
+
+                    <form className="gbw-admin-compose" onSubmit={sendHelperReply}>
+                      <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write a helpful reply…" maxLength={4000} required aria-label="Helper reply" />
+                      <button className="gbw-primary" type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending…" : <><Send size={15} /> Reply</>}</button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
           </>
         )}
       </section>
