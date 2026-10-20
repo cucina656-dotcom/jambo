@@ -2699,7 +2699,7 @@ const ServicePost = memo(function ServicePost({
   const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
   const callHref = callPhone ? `tel:+${callPhone}` : "";
   return (
-    <section ref={postRefCallback} data-index={index} className="home-post service-reel-card">
+    <section ref={postRefCallback} data-index={index} className={`home-post service-reel-card${isActive ? " is-active-reel" : ""}`}>
       <TvMedia mediaUrl={mediaUrl} embedUrl={getEmbedUrl(mediaUrl)} isTvTab={isTvTab} isImage={isImage} isVideo={isVideo} isEmbed={isEmbed} isActive={isActive} aspectClass={aspectClass} mediaAspectRatio={mediaAspectRatio} serviceName={serviceName} tagline={tagline} index={index} postId={postId} videoRefCallback={videoRefCallback} onImageLoad={handleImageLoad} onImageError={handleImageError} onVideoPlay={onVideoPlay} onVideoPause={onVideoPause} onVideoLoadedMetadata={handleVideoLoadedMetadata} onVideoTap={handleVideoTap} />
       <div className="service-card-gradient" aria-hidden="true" />
       
@@ -4056,19 +4056,21 @@ function HomeStylesInner() {
       .bottom-nav-plus:hover { background: transparent; }
       .bottom-nav-plus:active { transform: scale(0.94); }
       /* ------------------------------- FEED -------------------------------- */
-      .home-feed { width: min(100%, 520px); margin: 0 auto; padding: calc(var(--top-offset) + 10px) 0 10px; }
+      .home-feed { width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16))); margin: 0 auto; padding: calc(var(--top-offset) + 10px) 0 10px; }
       .service-reel-card {
         position: relative;
         isolation: isolate;
-        width: 100%;
-        height: var(--reel-h);
-        min-height: 520px;
-        margin: 0;
+        width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16)));
+        aspect-ratio: 9 / 16;
+        height: auto;
+        min-height: 0;
+        margin: 0 auto;
         overflow: hidden;
         background: var(--ink);
         scroll-snap-align: start;
+        scroll-margin-top: calc(var(--top-offset) + 10px);
         content-visibility: auto;
-        contain-intrinsic-size: 360px 720px;
+        contain-intrinsic-size: auto 640px;
       }
       .service-reel-card .media-card,
       .service-reel-card .media-viewport,
@@ -4451,7 +4453,7 @@ function HomeStylesInner() {
       .zoom-reset-button { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 11001; min-height: 42px; padding: 0 18px; border: 0; border-radius: 999px; color: #fff; background: rgba(30, 40, 64, 0.92); font-size: 14px; font-weight: 700; transform: translateX(-50%); cursor: pointer; }
 
       /* -------------------------- TV MODE (immersive) ------------------------ */
-      .home-page.is-tv-mode .home-feed { width: min(100%, 520px); }
+      .home-page.is-tv-mode .home-feed { width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16))); }
       .home-page.is-tv-mode .service-reel-card .media-layer { background: radial-gradient(circle at 50% 42%, rgba(42, 163, 255, 0.12), transparent 62%), var(--surface); }
       .home-page.is-tv-mode .service-reel-card img.home-media,
       .home-page.is-tv-mode .service-reel-card video.home-media { object-fit: cover; object-position: center; background: transparent; }
@@ -4471,7 +4473,7 @@ function HomeStylesInner() {
       .home-page.is-tv-mode .service-card-gradient { background: linear-gradient(to bottom, rgba(13, 19, 32, 0.5) 0%, transparent 22%, transparent 55%, rgba(13, 19, 32, 0.45) 78%, rgba(13, 19, 32, 0.92) 100%); }
       .home-page.is-tv-mode .post-info-block { left: 14px; right: 14px; bottom: 76px; max-height: min(26svh, 190px); }
 
-      .tv-live-anchor { position: absolute; z-index: 45; top: calc(var(--top-offset) + 4px); left: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.55); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; pointer-events: none; }
+      .tv-live-anchor { position: absolute; z-index: 45; top: 12px; left: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.55); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; pointer-events: none; }
       .tv-live-anchor .tv-live-watchers { font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0; }
       .tv-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff4560; animation: tvLivePulse 1.4s ease-in-out infinite; }
       @keyframes tvLivePulse { 0%, 100% { opacity: 0.55; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
@@ -4513,6 +4515,35 @@ function HomeStylesInner() {
       .tv-view-count { min-width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(21, 29, 46, 0.78); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
       .tv-private-contact-cta { position: absolute; z-index: 44; right: 14px; bottom: 14px; }
       .social-life-call-cta { position: absolute; z-index: 44; right: 14px; bottom: 60px; }
+
+      /* LIVE belongs only to the reel that is currently active */
+      .service-reel-card:not(.is-active-reel) .tv-live-anchor { display: none; }
+
+      /* Compact neon Zap (gold) and Eye (cyan): no card, no border, no big container */
+      .tv-public-conversation-cta,
+      .tv-public-conversation-cta.is-social-life,
+      .tv-visibility-toggle,
+      .tv-view-count {
+        width: auto; height: auto; min-width: 28px; min-height: 28px;
+        display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        padding: 0 2px; border: 0; border-radius: 0;
+        background: transparent; box-shadow: none; animation: none;
+        font-size: 17px; line-height: 1;
+      }
+      .tv-public-conversation-cta:hover,
+      .tv-public-conversation-cta.is-social-life:hover,
+      .tv-visibility-toggle:hover { background: transparent; }
+      .tv-public-conversation-cta svg, .tv-public-conversation-bolt,
+      .tv-visibility-toggle svg, .tv-view-count svg { width: 17px; height: 17px; flex: 0 0 17px; }
+      .tv-public-conversation-cta, .tv-public-conversation-cta.is-social-life, .tv-public-conversation-bolt { color: #ffd54a; }
+      .tv-public-conversation-cta svg, .tv-public-conversation-bolt {
+        filter: drop-shadow(0 0 2px #ffe27a) drop-shadow(0 0 6px rgba(255, 200, 40, 0.85)) drop-shadow(0 0 12px rgba(255, 176, 0, 0.55));
+      }
+      .tv-visibility-toggle, .tv-view-count svg { color: #3df2ff; }
+      .tv-visibility-toggle svg, .tv-view-count svg {
+        filter: drop-shadow(0 0 2px #9ffaff) drop-shadow(0 0 6px rgba(40, 220, 255, 0.85)) drop-shadow(0 0 12px rgba(0, 160, 255, 0.55));
+      }
+      .tv-view-count { color: #fff; font-size: 12px; }
 
       .tv-typing-presence { position: absolute; left: 0; bottom: 56px; min-width: 82px; max-width: 170px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 5px 9px 5px 5px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.6); pointer-events: auto; }
       .tv-typing-avatar { position: relative; grid-row: 1 / 3; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
