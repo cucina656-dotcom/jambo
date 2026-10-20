@@ -4041,9 +4041,9 @@ function HomeStylesInner() {
       .bottom-nav-item.is-active { color: var(--text); font-weight: 700; }
       .bottom-nav-item.is-active .bottom-nav-icon { color: var(--amber); background: var(--amber-soft); }
       .bottom-nav-plus-wrap { display: grid; place-items: center; }
-            .bottom-nav-plus {
-        width: 48px; height: 48px;
-        margin-top: -16px;
+      .bottom-nav-plus {
+        width: 20px; height: 20px;
+        margin-top: -10px;
         display: grid; place-items: center;
         padding: 0;
         border: 3px solid var(--ink);
