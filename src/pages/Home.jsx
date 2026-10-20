@@ -2501,7 +2501,7 @@ function Home() {
                 onClick={() => { setActivePostIndex(0); setActiveCategory(tab.key); window.scrollTo(0, 0); }}
                 aria-current={isActive ? "page" : undefined}
               >
-                <span className="bottom-nav-icon"><TabIcon size={22} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
+                               <span className="bottom-nav-icon"><TabIcon size={20} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
                 <span>{tab.label}</span>
               </button>
             );
@@ -2511,7 +2511,7 @@ function Home() {
                 {navItem}
                 <div className="bottom-nav-plus-wrap">
                   <button type="button" className="bottom-nav-plus" onClick={() => handleOfferTime(emptySectionAction.postType)} aria-label={emptySectionAction.label} title={emptySectionAction.label}>
-                    <Plus size={26} strokeWidth={2.6} aria-hidden="true" />
+                   <Plus size={22} strokeWidth={2.6} aria-hidden="true" />
                   </button>
                 </div>
               </Fragment>
@@ -3831,7 +3831,7 @@ function HomeStylesInner() {
         --top-h: 60px;
         --top-offset: calc(var(--top-h) + env(safe-area-inset-top, 0px));
         --nav-h: calc(64px + env(safe-area-inset-bottom, 0px));
-        --reel-h: calc(100svh - var(--nav-h));
+        --reel-h: calc(100svh - var(--top-offset) - var(--nav-h));
         --r-sheet: 28px;
         --r-card: 16px;
         --r-field: 14px;
@@ -4016,41 +4016,41 @@ function HomeStylesInner() {
         background: rgba(13, 19, 32, 0.98);
         border-top: 1px solid var(--line);
       }
-      .bottom-nav-scroll {
+        .bottom-nav-scroll {
         width: min(100%, 520px);
-        height: 64px;
+        height: 58px;
         margin: 0 auto;
-        padding: 0 6px;
+        padding: 0 4px;
         display: grid;
-        grid-template-columns: 1fr 1fr 78px 1fr 1fr;
+        grid-template-columns: 1fr 1fr 64px 1fr 1fr;
         align-items: center;
       }
-      .bottom-nav-item {
+           .bottom-nav-item {
         height: 100%;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
         padding: 0;
         border: 0;
         color: var(--text-dim);
         background: transparent;
-        font-size: 11.5px; font-weight: 600; line-height: 1;
+        font-size: 10px; font-weight: 600; line-height: 1;
         cursor: pointer;
         transition: color 160ms ease;
       }
-      .bottom-nav-icon { width: 56px; height: 30px; display: grid; place-items: center; border-radius: 15px; transition: background 180ms ease, color 180ms ease; }
+      .bottom-nav-icon { width: 44px; height: 26px; display: grid; place-items: center; border-radius: 13px; transition: background 180ms ease, color 180ms ease; }
       .bottom-nav-item:hover { color: var(--text); }
       .bottom-nav-item.is-active { color: var(--text); font-weight: 700; }
       .bottom-nav-item.is-active .bottom-nav-icon { color: var(--amber); background: var(--amber-soft); }
       .bottom-nav-plus-wrap { display: grid; place-items: center; }
-           .bottom-nav-plus {
-        width: 56px; height: 56px;
-        margin-top: -20px;
+            .bottom-nav-plus {
+        width: 48px; height: 48px;
+        margin-top: -16px;
         display: grid; place-items: center;
         padding: 0;
-        border: 4px solid var(--ink);
-        border-radius: 22px;
+        border: 3px solid var(--ink);
+        border-radius: 18px;
         color: #ff0040;
         background: var(--amber);
-        box-shadow: 0 6px 18px rgba(255, 185, 56, 0.28);
+        box-shadow: 0 4px 14px rgba(255, 185, 56, 0.25);
         cursor: pointer;
         transition: transform 160ms ease, background 160ms ease;
       }
