@@ -65,9 +65,6 @@ function devWarn(...args) {
 function devError(...args) {
   if (IS_DEV) console.error(...args);
 }
-function devError(...args) {
-  if (IS_DEV) console.error(...args);
-}
 
 // ==========================================
 // NOTIFICATION RING (Web Audio API)
