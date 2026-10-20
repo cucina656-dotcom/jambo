@@ -4593,12 +4593,10 @@ function HomeStylesInner() {
       .tv-guide-self-avatar span { position: absolute; right: -4px; bottom: -3px; font-size: 10px; }
             .tv-composer-error { margin-top: 8px; padding: 6px 10px; border-radius: 8px; color: #ff9ba7; background: rgba(255, 92, 112, 0.12); font-size: 11.5px; font-weight: 600; }
 
-      /* Hide floating global inbox and sound buttons on TV & Heart tabs so they don't block the bottom nav */
+      /* Hide floating global inbox on TV & Heart tabs so it doesn't block the bottom nav */
       .is-tv-mode .inbox-unread-badge,
       .is-tv-mode .topbar-icon-button,
-      .is-tv-mode .romantic-sound-fab,
-      .is-social-life-mode .topbar-icon-button,
-      .is-social-life-mode .romantic-sound-fab {
+      .is-social-life-mode .topbar-icon-button {
         display: none !important;
       }
       /* ------------------------------ RESPONSIVE ----------------------------- */

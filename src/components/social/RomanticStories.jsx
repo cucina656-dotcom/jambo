@@ -1483,11 +1483,11 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           line-height: 1.5;
         }
 
-        .romantic-sound-fab {
+  .romantic-sound-fab {
   position: fixed;
   right: 16px;
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  z-index: 30;
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  z-index: 9999;
   width: 48px;
   height: 48px;
   display: flex;
