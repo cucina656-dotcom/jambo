@@ -2707,8 +2707,8 @@ const ServicePost = memo(function ServicePost({
         <TvConversationOverlay postId={postId} isActive={isActive} apiUrl={API_URL} mode={conversationMode} viewCount={isTvTab ? viewCount : null} currentUser={currentUser} getSessionToken={getSessionToken} onRequireAuth={onRequireAuth} onZoomImage={onZoomImage} compressImageFile={compressImageFile} defaultLogo={DEFAULT_LOGO} />
       )}
       
-      <div className="post-info-block">
-        <div className="post-provider-row">
+            <div className={`post-info-block${showLiveConversation ? " is-hidden-by-eye" : ""}`}>
+           <div className="post-provider-row">   
           <button type="button" className={`service-avatar-badge ${verificationInfo.className}`} onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)} aria-label={`View ${providerName}'s profile photo`}>
             <img src={post.logo_url || DEFAULT_LOGO} alt="" loading="lazy" decoding="async" onError={handleProfileImageError} />
           </button>
@@ -4041,14 +4041,14 @@ function HomeStylesInner() {
       .bottom-nav-item.is-active { color: var(--text); font-weight: 700; }
       .bottom-nav-item.is-active .bottom-nav-icon { color: var(--amber); background: var(--amber-soft); }
       .bottom-nav-plus-wrap { display: grid; place-items: center; }
-      .bottom-nav-plus {
+           .bottom-nav-plus {
         width: 56px; height: 56px;
         margin-top: -20px;
         display: grid; place-items: center;
         padding: 0;
         border: 4px solid var(--ink);
         border-radius: 22px;
-        color: var(--amber-ink);
+        color: #ff0040;
         background: var(--amber);
         box-shadow: 0 6px 18px rgba(255, 185, 56, 0.28);
         cursor: pointer;
@@ -4088,10 +4088,11 @@ function HomeStylesInner() {
         background: linear-gradient(to bottom, rgba(13, 19, 32, 0.55) 0%, transparent 20%, transparent 46%, rgba(13, 19, 32, 0.6) 74%, rgba(13, 19, 32, 0.97) 100%);
       }
 
-         .post-info-block { position: absolute; z-index: 40; left: 12px; right: 70px; bottom: 75px; max-height: min(30svh, 220px); }
+      .post-info-block { position: absolute; z-index: 40; left: 12px; right: 70px; bottom: 75px; max-height: min(30svh, 220px); transition: opacity 0.2s ease, visibility 0.2s ease; }
+      .post-info-block.is-hidden-by-eye { opacity: 0; visibility: hidden; pointer-events: none; }
       .post-provider-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
       .post-provider-copy { min-width: 0; flex: 1; padding-top: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
-      .service-avatar-badge {
+            .service-avatar-badge {
         --ring: var(--amber);
         position: relative;
         width: 34px; height: 34px; flex: 0 0 34px;
@@ -4099,7 +4100,7 @@ function HomeStylesInner() {
         border: 0;
         border-radius: 50%;
         background: var(--surface-2);
-        box-shadow: 0 0 0 2px var(--ring), 0 0 0 3px rgba(13, 19, 32, 0.55);
+        box-shadow: none;
         cursor: pointer;
       }
       .service-avatar-badge.status-verified { --ring: var(--verified); }
@@ -4492,9 +4493,9 @@ function HomeStylesInner() {
       .tv-message-paused-mark { position: absolute; top: -2px; right: -18px; color: rgba(255, 255, 255, 0.64); font-size: 9px; letter-spacing: -2px; }
 
       .tv-public-action-dock { position: absolute; z-index: 47; left: 14px; bottom: 14px; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
-      .tv-public-conversation-cta, .tv-visibility-toggle, .tv-private-contact-cta, .social-life-call-cta {
+            .tv-public-conversation-cta, .tv-visibility-toggle, .tv-private-contact-cta, .social-life-call-cta {
         position: relative;
-        width: 48px; height: 48px;
+        width: 38px; height: 38px;
         display: grid; place-items: center;
         padding: 0;
         border: 1px solid var(--line-strong);
@@ -4506,14 +4507,14 @@ function HomeStylesInner() {
       }
       .tv-public-conversation-cta { color: var(--amber-ink); border-color: transparent; background: var(--amber); animation: tvPublicCtaBreath 2.8s ease-in-out infinite; }
       .tv-public-conversation-cta:hover { background: var(--amber-strong); }
-      .tv-public-conversation-bolt { color: var(--amber-ink); }
+      .tv-public-conversation-bolt { color: #ff0040; }
       @keyframes tvPublicCtaBreath { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 185, 56, 0.45); } 50% { box-shadow: 0 0 0 8px rgba(255, 185, 56, 0); } }
       .tv-visibility-toggle { width: 42px; height: 42px; border-radius: 50%; }
       .tv-visibility-toggle:hover, .tv-private-contact-cta:hover, .social-life-call-cta:hover { background: var(--surface-3); }
       .tv-public-conversation-cta.is-social-life { color: var(--amber-ink); background: var(--amber); }
       .tv-view-count { min-width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(21, 29, 46, 0.78); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
       .tv-private-contact-cta { position: absolute; z-index: 44; right: 14px; bottom: 14px; }
-      .social-life-call-cta { position: absolute; z-index: 44; right: 14px; bottom: 72px; }
+      .social-life-call-cta { position: absolute; z-index: 44; right: 14px; bottom: 60px; }
 
       .tv-typing-presence { position: absolute; left: 0; bottom: 56px; min-width: 82px; max-width: 170px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 5px 9px 5px 5px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.6); pointer-events: auto; }
       .tv-typing-avatar { position: relative; grid-row: 1 / 3; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
