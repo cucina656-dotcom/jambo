@@ -65,7 +65,39 @@ function devWarn(...args) {
 function devError(...args) {
   if (IS_DEV) console.error(...args);
 }
+function devError(...args) {
+  if (IS_DEV) console.error(...args);
+}
 
+// ==========================================
+// NOTIFICATION RING (Web Audio API)
+// ==========================================
+let audioCtx;
+function playNotificationRing() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    
+    const playTone = (freq, startTime, duration) => {
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime + startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + startTime);
+      osc.stop(audioCtx.currentTime + startTime + duration);
+    };
+
+    // A pleasant 2-tone "ding-dong" ring
+    playTone(880, 0, 0.4);    // A5
+    playTone(1174.66, 0.2, 0.6); // D6
+  } catch (err) {
+    devWarn("Could not play notification ring", err);
+  }
+}
 function getDisplayPostTitle(value = "") {
   const title = String(value || "").trim();
   if (!title) return "";
@@ -2105,10 +2137,11 @@ function Home() {
           
           if (candidate) {
             const dedupeKey = `${candidate.id}:${candidate.last_message_at || candidate.updated_at || ""}`;
-            if (!notifiedMessageKeysRef.current.has(dedupeKey)) {
+                      if (!notifiedMessageKeysRef.current.has(dedupeKey)) {
               notifiedMessageKeysRef.current.add(dedupeKey);
               const iAmProvider = String(candidate.provider_id) === String(user?.id);
               const partnerName = iAmProvider ? candidate.customer_full_name || "Someone" : candidate.provider_full_name || candidate.service_provider_name || "Someone";
+              playNotificationRing();
               showToast(`New message from ${partnerName}`);
             }
           }
