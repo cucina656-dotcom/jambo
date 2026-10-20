@@ -4497,7 +4497,7 @@ function HomeStylesInner() {
       .tv-message-name { order: 1; max-width: 100%; overflow: hidden; color: var(--tv-neon, #ffc766); font-size: 11.5px; font-weight: 800; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); }
       .tv-message-text { order: 2; max-width: 100%; color: #fff; font-size: 12.5px; font-weight: 520; line-height: 1.34; overflow-wrap: anywhere; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
       .tv-message-paused-mark { position: absolute; top: -2px; right: -18px; color: rgba(255, 255, 255, 0.64); font-size: 9px; letter-spacing: -2px; }
-            .tv-public-action-dock { position: absolute; z-index: 9999; left: 14px; bottom: 65px; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+             .tv-public-action-dock { position: absolute; z-index: 9999; left: 14px; bottom: 110px; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
             .tv-public-conversation-cta, .tv-visibility-toggle, .tv-private-contact-cta, .social-life-call-cta {
         position: relative;
         width: 38px; height: 38px;
@@ -4518,8 +4518,8 @@ function HomeStylesInner() {
       .tv-visibility-toggle:hover, .tv-private-contact-cta:hover, .social-life-call-cta:hover { background: var(--surface-3); }
       .tv-public-conversation-cta.is-social-life { color: var(--amber-ink); background: var(--amber); }
       .tv-view-count { min-width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(21, 29, 46, 0.78); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
-           .tv-private-contact-cta { position: absolute; z-index: 9999; left: 92px; bottom: 65px; }
-      .social-life-call-cta { position: absolute; z-index: 9999; left: 140px; bottom: 65px; }
+      .tv-private-contact-cta { position: absolute; z-index: 9999; left: 92px; bottom: 110px; }
+      .social-life-call-cta { position: absolute; z-index: 9999; left: 140px; bottom: 110px; }
 
       /* LIVE belongs only to the reel that is currently active */
       .service-reel-card:not(.is-active-reel) .tv-live-anchor { display: none; }
