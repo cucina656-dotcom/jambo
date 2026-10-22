@@ -1483,22 +1483,22 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           line-height: 1.5;
         }
 
-  .romantic-sound-fab {
+        .romantic-sound-fab {
   position: fixed;
   right: 16px;
-  bottom: calc(90px + env(safe-area-inset-bottom));
+  bottom: calc(85px + env(safe-area-inset-bottom));
   z-index: 9999;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,177,211,.45);
+  border: none;
   border-radius: 50%;
   color: #fff;
-  background: rgba(60,14,36,.92);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 24px rgba(0,0,0,.42), 0 0 18px rgba(255,72,150,.20);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
