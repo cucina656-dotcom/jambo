@@ -417,7 +417,7 @@ function GwamoBrainWidget({ apiUrl }) {
   const [showConversationList, setShowConversationList] = useState(true);
   const [hiddenMessageIds, setHiddenMessageIds] = useState([]);
 
-  const [showSettings, setShowSettings] = useState(false);
+   const [showSettings, setShowSettings] = useState(false);
   const [adminNotice, setAdminNotice] = useState("");
 
   const scrollRef = useRef(null);
@@ -515,9 +515,31 @@ function GwamoBrainWidget({ apiUrl }) {
 
   useEffect(() => {
     if (helperMode || !visitorToken) return undefined;
+    
+    // Poll for new messages
     const id = window.setInterval(() => loadVisitorMessages(false), 3000);
-    return () => window.clearInterval(id);
-  }, [helperMode, visitorToken, loadVisitorMessages]);
+    
+    // Send heartbeat every 5 seconds so the helper knows we are online
+    const pingId = window.setInterval(() => {
+      fetch(`${api}/ping`, {
+        method: "POST",
+        headers: { "X-Gwamo-Visitor-Token": visitorTokenRef.current, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }, 5000);
+
+    // Send one immediately on load
+    fetch(`${api}/ping`, {
+      method: "POST",
+      headers: { "X-Gwamo-Visitor-Token": visitorTokenRef.current, "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    }).catch(() => {});
+
+    return () => {
+      window.clearInterval(id);
+      window.clearInterval(pingId);
+    };
+  }, [helperMode, visitorToken, loadVisitorMessages, api]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -621,7 +643,7 @@ function GwamoBrainWidget({ apiUrl }) {
     }
   }, [api, adminPin, readResponse]);
 
-  useEffect(() => {
+     useEffect(() => {
     if (!helperMode || !adminAuthed) return undefined;
     const id = window.setInterval(async () => {
       try {
@@ -1076,10 +1098,7 @@ function GwamoBrainWidget({ apiUrl }) {
         {!helperMode ? (
           <>
             {/* Video Viewport: strictly bounded between Header and Compose Box */}
-            <div className="gbw-video-viewport">
-              <div className="gbw-page-background" aria-hidden="true">
-                {mediaUrl && isVideo ? <video src={mediaUrl} autoPlay loop muted playsInline /> : mediaUrl ? <img src={mediaUrl} alt="" /> : null}
-              </div>
+                        <div className="gbw-video-viewport">
               <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
               <div className="gbw-messages" ref={scrollRef} aria-live="polite">
                 {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
@@ -1143,15 +1162,7 @@ function GwamoBrainWidget({ apiUrl }) {
                   </label>
                   <button className="gbw-settings-save" type="submit" disabled={adminBusy}>{adminBusy ? "Saving…" : "Save chat appearance"}</button>
                 </form>
-                <div className="gbw-background-status" onPointerDown={startBackgroundHold} onPointerUp={endBackgroundHold} onPointerLeave={endBackgroundHold} onPointerCancel={endBackgroundHold} onContextMenu={(e) => { if (mediaUrl) e.preventDefault(); }}>
-                  <span>{mediaUrl ? "Home-screen background video is active" : "No Home-screen background video set"}</span>
-                  {mediaUrl && <button className="gbw-iconbtn danger" type="button" onClick={deleteBackgroundVideo} disabled={adminBusy}><Trash2 size={14} /> Remove video</button>}
-                  <label className="gbw-upload-label" title="Upload Home-screen background video" aria-label="Upload Home-screen background video">
-                    <Video size={19} />
-                    <input type="file" accept="video/*" disabled={adminBusy} style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) uploadHelperBackgroundVideo(file); }} />
-                  </label>
-                  <small className="gbw-background-hint">Only the helper can change this video. Press and hold this bar to remove the active background.</small>
-                </div>
+                                {/* Video upload feature removed by request */}
               </div>
             )}
 
@@ -1165,11 +1176,16 @@ function GwamoBrainWidget({ apiUrl }) {
                 <div className="gbw-convos">
                   {filteredConversations.length === 0 && <div className="gbw-empty">{conversationSearch ? "No conversations match your search." : "No conversations yet."}</div>}
                   {filteredConversations.map((conversation) => (
-                    <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
+                                       <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
                       setSelectedConversation(conversation.id); setAdminError(""); setShowConversationList(false);
                       try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); }
                     }}>
-                      <strong>{conversation.visitor_label || "Visitor"}</strong>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {conversation.visitor_label || "Visitor"}
+                        {conversation.updated_at && (Date.now() - new Date(conversation.updated_at).getTime() < 20000) && (
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3ddc97', display: 'inline-block', boxShadow: '0 0 6px #3ddc97' }} title="Online"></span>
+                        )}
+                      </strong>
                       <small>{conversation.status || "open"}</small>
                       <span>{conversation.last_message || "No messages yet"}</span>
                     </button>
