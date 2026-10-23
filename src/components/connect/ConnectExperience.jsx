@@ -549,6 +549,7 @@ export default function ConnectExperience({
   user: suppliedUser = null,
   isLoggedIn: suppliedLoggedIn,
   onRequireAuth,
+  resumeSignal = 0,
 } = {}) {
   const [lang, setLang] = useState(() => readLocal(CONNECT_LANGUAGE_KEY, "rw"));
   const [side, setSide] = useState(() => readLocal(CONNECT_SIDE_KEY, "need"));
@@ -689,13 +690,27 @@ export default function ConnectExperience({
     });
   }
 
-  function requireLogin() {
+    const pendingIntentRef = useRef(null);
+  function requireLogin(intent = null) {
+    pendingIntentRef.current = intent;
     if (typeof onRequireAuth === "function") {
-      onRequireAuth({ type: "connect" });
+      onRequireAuth({ type: "connect", intent });
       return;
     }
     setError(t.loginRequired);
   }
+
+  useEffect(() => {
+    if (!resumeSignal || !loggedIn) return;
+    const intent = pendingIntentRef.current;
+    pendingIntentRef.current = null;
+    if (intent === "publish" && selected) {
+      publishSelection();
+    } else if (intent === "recent") {
+      loadRecent();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSignal, loggedIn]);
 
   function pickPhoto(file) {
     setError("");
@@ -724,8 +739,8 @@ export default function ConnectExperience({
 
   async function publishSelection() {
     if (!selected) return;
-    if (!loggedIn) {
-      requireLogin();
+      if (!loggedIn) {
+      requireLogin("publish");
       return;
     }
     if (!location.trim()) {
@@ -774,10 +789,10 @@ export default function ConnectExperience({
     }
   }
 
-  async function loadRecent() {
+    async function loadRecent() {
     setShowRecent(true);
     if (!loggedIn) {
-      requireLogin();
+      requireLogin("recent");
       return;
     }
     try {
@@ -908,8 +923,8 @@ export default function ConnectExperience({
 
             {!sessionChecked ? (
               <button type="button" className="connect-primary" disabled>{t.loading}</button>
-            ) : !loggedIn ? (
-              <button type="button" className="connect-primary" onClick={requireLogin}>{t.login}</button>
+                      ) : !loggedIn ? (
+              <button type="button" className="connect-primary" onClick={() => requireLogin("publish")}>{t.login}</button>
             ) : (
               <button type="button" className="connect-primary" disabled={publishing || !available} onClick={publishSelection}>
                 {publishing ? t.loading : side === "need" ? t.publishNeed : t.publishOffer}
