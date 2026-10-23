@@ -4547,31 +4547,34 @@ function HomeStylesInner() {
       .tv-message-name { order: 1; max-width: 100%; overflow: hidden; color: var(--tv-neon, #ffc766); font-size: 11.5px; font-weight: 800; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); }
       .tv-message-text { order: 2; max-width: 100%; color: #fff; font-size: 12.5px; font-weight: 520; line-height: 1.34; overflow-wrap: anywhere; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
       .tv-message-paused-mark { position: absolute; top: -2px; right: -18px; color: rgba(255, 255, 255, 0.64); font-size: 9px; letter-spacing: -2px; }
-           .tv-public-action-dock { position: absolute; z-index: 9999; right: 22px; left: auto; bottom: 130px; display: flex; flex-direction: column; align-items: center; gap: 14px; pointer-events: auto; }
+          .tv-public-action-dock { position: absolute; z-index: 9999; right: 10px; left: auto; bottom: 130px; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: auto; }
             .tv-public-conversation-cta, .tv-visibility-toggle, .tv-private-contact-cta, .social-life-call-cta {
         position: relative;
-        width: 34px; height: 34px;
+        width: 32px; height: 32px;
         display: grid; place-items: center;
         padding: 0;
-        border: 1px solid var(--line-strong);
-        border-radius: var(--r-field);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
         color: #fff;
-        background: rgba(21, 29, 46, 0.62);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
+        background: rgba(13, 19, 32, 0.4);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         cursor: pointer;
-        transition: background 150ms ease;
+        transition: background 150ms ease, transform 150ms ease;
       }
-      .tv-public-conversation-cta { color: var(--amber-ink); border-color: transparent; background: rgba(255, 185, 56, 0.85); animation: tvPublicCtaBreath 2.8s ease-in-out infinite; }
+      .tv-public-conversation-cta:active, .tv-visibility-toggle:active, .tv-private-contact-cta:active {
+        transform: scale(0.92);
+      }
+      .tv-public-conversation-cta { color: var(--amber-ink); border-color: transparent; background: rgba(255, 185, 56, 0.9); animation: tvPublicCtaBreath 2.8s ease-in-out infinite; }
       .tv-public-conversation-cta:hover { background: var(--amber-strong); }
       .tv-public-conversation-bolt { color: #ff0040; }
       @keyframes tvPublicCtaBreath { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 185, 56, 0.45); } 50% { box-shadow: 0 0 0 8px rgba(255, 185, 56, 0); } }
-      .tv-visibility-toggle { width: 38px; height: 38px; border-radius: 50%; }
-      .tv-visibility-toggle:hover, .tv-private-contact-cta:hover, .social-life-call-cta:hover { background: var(--surface-3); }
+      .tv-visibility-toggle { width: 34px; height: 34px; border-radius: 50%; }
+      .tv-visibility-toggle:hover, .tv-private-contact-cta:hover, .social-life-call-cta:hover { background: rgba(13, 19, 32, 0.7); }
       .tv-public-conversation-cta.is-social-life { color: var(--amber-ink); background: var(--amber); }
-      .tv-view-count { min-width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border-radius: 999px; color: #fff; background: rgba(21, 29, 46, 0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
-           .tv-private-contact-cta { position: absolute; z-index: 9999; right: 22px; left: auto; bottom: 70px; }
-      .social-life-call-cta { position: absolute; z-index: 9999; right: 22px; left: auto; bottom: 180px; }
+      .tv-view-count { min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
+           .tv-private-contact-cta { position: absolute; z-index: 9999; right: 10px; left: auto; bottom: 70px; }
+      .social-life-call-cta { position: absolute; z-index: 9999; right: 10px; left: auto; bottom: 180px; }
       /* LIVE belongs only to the reel that is currently active */
       .service-reel-card:not(.is-active-reel) .tv-live-anchor { display: none; }
 
