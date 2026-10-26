@@ -152,9 +152,9 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
   const remoteTypingTimersRef = useRef(new Map());
   const publicViewerId = useMemo(() => getOrCreateTvPublicViewerId(), []);
   const identityKey = TV_PUBLIC_IDENTITY_KEY;
-  const identityComplete = Boolean(
-    tvIdentity.name && tvIdentity.photoUrl && tvIdentity.countryCode,
-  );
+ const identityComplete = Boolean(
+  tvIdentity.name && tvIdentity.countryCode,
+);
   const filteredCountries = useMemo(() => {
     const query = countrySearch.trim().toLowerCase();
     if (!query) return TV_COUNTRY_OPTIONS;
@@ -1039,13 +1039,13 @@ const TvConversationOverlay = memo(function TvConversationOverlay({
 
           {introStep === "message" && (
             <div className="tv-guide-message-row">
-              <button
-                type="button"
-                className="tv-guide-self-avatar"
-                onClick={() => onZoomImage?.(tvIdentity.photoUrl || defaultLogo)}
-                aria-label="View your public profile picture"
-              >
-                <img src={tvIdentity.photoUrl || defaultLogo} alt="" />
+             <button
+  type="button"
+  className={`tv-guide-self-avatar ${!tvIdentity.photoUrl ? "is-placeholder" : ""}`}
+  onClick={() => onZoomImage?.(tvIdentity.photoUrl || defaultLogo)}
+  aria-label="View your public profile picture"
+>
+  <img src={tvIdentity.photoUrl || defaultLogo} alt="" />
                 <span aria-hidden="true">
                   {countryCodeToFlagEmoji(tvIdentity.countryCode)}
                 </span>

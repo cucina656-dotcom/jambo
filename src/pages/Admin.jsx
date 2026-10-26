@@ -716,7 +716,7 @@ export default function Admin() {
 
       if (!payload.tv_post_id) return showStatus("Choose the TV post first.", "error");
       if (!payload.user_name) return showStatus("Enter the name that should appear on TV.", "error");
-      if (!payload.profile_image) return showStatus("Upload the profile picture first.", "error");
+      
       if (!payload.country_code) return showStatus("Choose the country.", "error");
       if (!payload.message) return showStatus("Write the TV conversation message.", "error");
 
@@ -1720,7 +1720,6 @@ function ConversationsView({ conversations, openConversation }) {
     </div>
   );
 }
- 
 function TvConversationsView({
   conversations,
   tvPosts,
@@ -1740,6 +1739,15 @@ function TvConversationsView({
 
   const selectedPost = postById.get(String(draft.tv_post_id)) || null;
 
+  // Check if the form is completely filled out
+  const isFormValid = Boolean(
+    draft.tv_post_id &&
+    draft.user_name.trim() &&
+    draft.profile_image &&
+    draft.country_code &&
+    draft.message.trim()
+  );
+
   return (
     <div className="tv-admin-grid">
       <section className="tv-admin-create">
@@ -1755,7 +1763,15 @@ function TvConversationsView({
           <Video size={24} />
         </div>
 
-        <form className="tv-admin-form" onSubmit={saveConversation}>
+        <form 
+          className="tv-admin-form" 
+          onSubmit={(e) => {
+            e.preventDefault(); // Prevents page reload
+            if (isFormValid && !saving) {
+              saveConversation(e);
+            }
+          }}
+        >
           <label>
             TV post
             <select
@@ -1779,7 +1795,7 @@ function TvConversationsView({
 
           {!tvPosts.length ? (
             <div className="tv-admin-hint">
-              No TV posts are available yet.
+              No TV posts are available yet. You need to create a "Moment" service on the main app first.
             </div>
           ) : null}
 
@@ -1915,17 +1931,13 @@ function TvConversationsView({
           </div>
 
           <button
-            type="submit"
+            type="button" // Changed to type="button" so it NEVER accidentally submits and reloads the page
             className="tv-admin-send"
-            disabled={
-              saving ||
-              photoUploading ||
-              !draft.tv_post_id ||
-              !draft.user_name.trim() ||
-              !draft.profile_image ||
-              !draft.country_code ||
-              !draft.message.trim()
-            }
+            onClick={(e) => {
+              e.preventDefault();
+              if (isFormValid) saveConversation(e);
+            }}
+            disabled={saving || photoUploading || !isFormValid}
           >
             {saving ? (
               <Loader2 className="spin" size={18} />

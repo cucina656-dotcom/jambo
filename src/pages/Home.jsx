@@ -398,7 +398,9 @@ function GwamoBrainWidget({ apiUrl }) {
   const [settingsSubtitleDraft, setSettingsSubtitleDraft] = useState("Human support · Private conversation");
   const [settingsWelcomeDraft, setSettingsWelcomeDraft] = useState("Hello! How can I help you today?");
   const [visitorToken, setVisitorToken] = useState("");
-  const [messages, setMessages] = useState([]);
+ const [messages, setMessages] = useState([]);
+ const previousMessagesLengthRef = useRef(0);
+
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -516,8 +518,8 @@ function GwamoBrainWidget({ apiUrl }) {
   useEffect(() => {
     if (helperMode || !visitorToken) return undefined;
     
-    // Poll for new messages
-    const id = window.setInterval(() => loadVisitorMessages(false), 3000);
+    // Poll faster (1.5 seconds) for instant appearance
+    const id = window.setInterval(() => loadVisitorMessages(false), 1500);
     
     // Send heartbeat every 5 seconds so the helper knows we are online
     const pingId = window.setInterval(() => {
@@ -541,9 +543,18 @@ function GwamoBrainWidget({ apiUrl }) {
     };
   }, [helperMode, visitorToken, loadVisitorMessages, api]);
 
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, hiddenMessageIds]);
+ useEffect(() => {
+  if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  
+  // Ring only if a NEW message came IN (not on initial load)
+  if (messages.length > previousMessagesLengthRef.current && previousMessagesLengthRef.current !== 0) {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.sender === "helper") {
+      playNotificationRing();
+    }
+  }
+  previousMessagesLengthRef.current = messages.length;
+}, [messages, hiddenMessageIds]);
 
   useEffect(() => {
     if (adminScrollRef.current) adminScrollRef.current.scrollTop = adminScrollRef.current.scrollHeight;
@@ -595,7 +606,10 @@ function GwamoBrainWidget({ apiUrl }) {
         body: JSON.stringify({ text }),
       });
       const data = await readResponse(response);
-      if (data.message) setMessages((current) => [...current, data.message]);
+      if (data.message) {
+  setMessages((current) => [...current, data.message]);
+  playNotificationRing();
+}
       setDraft("");
       await loadVisitorMessages(false);
     } catch (err) {
@@ -4542,6 +4556,25 @@ function HomeStylesInner() {
       @keyframes tvMessageRise { 0% { opacity: 0; transform: translate3d(0, 18px, 0); } 14% { opacity: 0; transform: translate3d(0, 18px, 0); } 20% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; transform: translate3d(0, -72svh, 0); } }
       .tv-message-avatar { position: relative; width: 32px; height: 32px; margin-top: 3px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
       .tv-message-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.7); }
+      .tv-message-avatar.is-placeholder {
+  box-shadow: 0 0 15px #ff0040, inset 0 0 10px #ff0040 !important;
+  background: #ffffff !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.tv-message-avatar.is-placeholder img {
+  display: none;
+}
+.tv-message-avatar.is-placeholder::after {
+  content: "";
+  width: 60%;
+  height: 60%;
+  background: #111827;
+  border-radius: 50%;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>') center/contain no-repeat;
+}
       .tv-message-flag { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 13px; display: grid; place-items: center; overflow: hidden; border: 0; border-radius: 2px; background: transparent; font-size: 13px; line-height: 1; }
       .tv-message-body { position: relative; min-width: 0; width: fit-content; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 5px 6px 6px 0; text-align: left; }
       .tv-message-name { order: 1; max-width: 100%; overflow: hidden; color: var(--tv-neon, #ffc766); font-size: 11.5px; font-weight: 800; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); }
@@ -4644,6 +4677,23 @@ function HomeStylesInner() {
       .tv-country-flag { flex: 0 0 auto; font-size: 17px; line-height: 1; }
       .tv-guide-self-avatar { position: relative; width: 38px; height: 38px; flex: 0 0 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
       .tv-guide-self-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.62); }
+      .tv-guide-self-avatar.is-placeholder {
+  box-shadow: 0 0 10px #ff0040, inset 0 0 6px #ff0040 !important;
+  background: #ffffff !important;
+  display: grid;
+  place-items: center;
+}
+.tv-guide-self-avatar.is-placeholder img {
+  display: none !important;
+}
+.tv-guide-self-avatar.is-placeholder::after {
+  content: "";
+  width: 65%;
+  height: 65%;
+  background: #111827;
+  border-radius: 50%;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>') center/contain no-repeat;
+}
       .tv-guide-self-avatar span { position: absolute; right: -4px; bottom: -3px; font-size: 10px; }
             .tv-composer-error { margin-top: 8px; padding: 6px 10px; border-radius: 8px; color: #ff9ba7; background: rgba(255, 92, 112, 0.12); font-size: 11.5px; font-weight: 600; }
 
