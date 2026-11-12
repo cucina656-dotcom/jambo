@@ -19,8 +19,6 @@ import {
   Menu,
   Send,
   MessageSquare,
-  LogIn,
-  LogOut,
   User,
   Pencil,
   Check,
@@ -1285,9 +1283,9 @@ function Home() {
     return videoRefCallbackCache.current.get(index);
   }, []);
 
-  // User state
-  const [user, setUser] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // User state - Hardcoded to null because auth is removed
+  const user = null; 
+  const isLoggedIn = false;
 
   // UI state
   const [posts, setPosts] = useState([]);
@@ -1300,35 +1298,6 @@ function Home() {
   const [showEditor, setShowEditor] = useState(false);
   const [editingServicePost, setEditingServicePost] = useState(null);
   
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
-  const [authPhone, setAuthPhone] = useState("");
-  const [authFullName, setAuthFullName] = useState("");
-  const [authPin, setAuthPin] = useState("");
-  const [authConfirmPin, setAuthConfirmPin] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authSuccessMessage, setAuthSuccessMessage] = useState("");
-  
-  const [showPinResetModal, setShowPinResetModal] = useState(false);
-  const [pinResetStep, setPinResetStep] = useState("request");
-  const [pinResetPhone, setPinResetPhone] = useState("");
-  const [pinResetRequest, setPinResetRequest] = useState(null);
-  const [pinResetNewPin, setPinResetNewPin] = useState("");
-  const [pinResetConfirmPin, setPinResetConfirmPin] = useState("");
-  const [pinResetError, setPinResetError] = useState("");
-  const [pinResetLoading, setPinResetLoading] = useState(false);
-  
-  const [pendingPhoneReview, setPendingPhoneReview] = useState(null);
-  
-  const [showActivationModal, setShowActivationModal] = useState(false);
-  const [activationPhone, setActivationPhone] = useState("");
-  const [activationCode, setActivationCode] = useState("");
-  const [activationNewPin, setActivationNewPin] = useState("");
-  const [activationConfirmPin, setActivationConfirmPin] = useState("");
-  const [activationError, setActivationError] = useState("");
-  const [activationLoading, setActivationLoading] = useState(false);
-  const [rejectedAccountInfo, setRejectedAccountInfo] = useState(null);
   const [showChat, setShowChat] = useState(false);
   const [chatPartner, setChatPartner] = useState(null);
   const [showProviderProfile, setShowProviderProfile] = useState(false);
@@ -1389,8 +1358,6 @@ function Home() {
   const [mediaAspectRatios, setMediaAspectRatios] = useState({});
   const [reactedPosts, setReactedPosts] = useState({});
   const [reactingPostId, setReactingPostId] = useState(null);
-  const pendingAuthActionRef = useRef(null);
-  const [pendingAuthResolution, setPendingAuthResolution] = useState(null);
   
   const objectUrlsRef = useRef(new Set());
   const trackObjectUrl = useCallback((url) => {
@@ -1449,344 +1416,15 @@ function Home() {
     return fetch(`${API_URL}${path}`, { cache: "no-store", ...options, headers });
   }, [getSessionToken]);
 
-  const restoreSession = useCallback(async () => {
-    const token = getSessionToken();
-    if (!token) return false;
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await readJsonSafely(response);
-        const provider = data.provider || data.user;
-        if (data.success && provider) {
-          setUser(provider);
-          setIsLoggedIn(true);
-          setUserData(provider);
-          return true;
-        }
-      }
-    } catch (error) { devWarn("Session restore failed:", error); }
-    setSessionToken("");
-    setUserData(null);
-    setUser(null);
-    setIsLoggedIn(false);
-    return false;
-  }, [getSessionToken, readJsonSafely, setSessionToken, setUserData]);
-
-  useEffect(() => {
-    if (!isLoggedIn) return undefined;
-    const refreshProfile = async () => {
-      if (document.hidden) return;
-      const token = getSessionToken();
-      if (!token) return;
-      try {
-        const response = await fetch(`${API_URL}/api/time-market/me`, {
-          headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-        });
-        if (!response.ok || !isMountedRef.current) return;
-        const data = await readJsonSafely(response);
-        if (data.success && data.provider && isMountedRef.current) {
-          setUser(data.provider);
-          setUserData(data.provider);
-          setPosts((current) => current.map((post) =>
-            String(post.provider_id) === String(data.provider.id)
-              ? { ...post, verification_status: data.provider.verification_status, verified: data.provider.verified }
-              : post
-          ));
-        }
-      } catch { /* Transient network issues shouldn't sign the person out. */ }
-    };
-    const intervalId = setInterval(refreshProfile, VERIFICATION_REFRESH_INTERVAL_MS);
-    const handleVisible = () => { if (!document.hidden) refreshProfile(); };
-    document.addEventListener("visibilitychange", handleVisible);
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisible);
-    };
-  }, [isLoggedIn, getSessionToken, readJsonSafely, setUserData]);
-
-  // Auth functions
+  // Auth functions removed. 
   const openServiceForm = useCallback((provider, initialPostType = "offer") => {
-    if (provider) {
-      setNewCreatorName(provider.service_provider_name || provider.full_name || "");
-      setNewCreatorIdentity(provider.phone || "");
-    }
-    setNewMediaUrl(""); setNewTitle(""); setSubtitle("");
-    setPostType(initialPostType); setPostHeadline(""); setServiceCategory("");
-    setPostLocation(""); setPriceUnit("job"); setAvailability("today");
-    setExchangeNeed(""); setAllowCashBalance(true); setMomentKind("story");
-    setNewLogoFile(null); revokeObjectUrl(logoPreview); setLogoPreview("");
-    setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview("");
-    setMediaPreviewType(""); setEditingServicePost(null); setShowEditor(true);
-  }, [logoPreview, mediaPreview, revokeObjectUrl]);
-
-  const handleRegister = useCallback(async () => {
-    const phone = normalizeWhatsAppNumber(authPhone);
-    const fullName = authFullName.trim();
-    if (!phone) return setAuthError("Please enter a valid phone number with country code.");
-    if (!fullName) return setAuthError("Please enter your full name.");
-    if (!PERSONAL_PIN_PATTERN.test(authPin)) return setAuthError("Create an 8-digit personal PIN.");
-    if (authPin !== authConfirmPin) return setAuthError("The two PIN entries do not match.");
-    setAuthLoading(true); setAuthError(""); setAuthSuccessMessage("");
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, full_name: fullName, pin: authPin, auth_method: PIN_AUTH_METHOD }),
-      });
-      const data = await readJsonSafely(response);
-      if (data.already_registered) {
-        setAuthMode("login");
-        setAuthError("This number is already registered. Please press Login.");
-        return;
-      }
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Registration failed.");
-      
-      if (data.requires_admin_approval || data.account_status === "pending_phone_review") {
-        setPendingPhoneReview({ phone, fullName });
-        setShowAuthModal(false); setAuthPhone(""); setAuthFullName(""); setAuthPin(""); setAuthConfirmPin("");
-        pendingAuthActionRef.current = null;
-        return;
-      }
-      
-      const provider = data.provider || data.user;
-      const token = data.session_token || data.token;
-      if (provider && token) {
-        setUser(provider); setIsLoggedIn(true); setSessionToken(token); setUserData(provider);
-        setShowAuthModal(false); setAuthPhone(""); setAuthFullName(""); setAuthPin(""); setAuthConfirmPin("");
-        setAuthError(""); setAuthSuccessMessage("Registration successful! 🎉");
-        const action = pendingAuthActionRef.current;
-        pendingAuthActionRef.current = null;
-        if (action) setPendingAuthResolution({ action, provider });
-        return;
-      }
-      setAuthError(data.error || data.message || "Registration failed.");
-    } catch (error) {
-      setAuthError(error.message || "Registration failed. Please try again.");
-    } finally { setAuthLoading(false); }
-  }, [authPhone, authFullName, authPin, authConfirmPin, readJsonSafely, setSessionToken, setUserData]);
-
-  const handleLogin = useCallback(async () => {
-    const phone = normalizeWhatsAppNumber(authPhone);
-    if (!phone) return setAuthError("Please enter your registered phone number.");
-    if (!PERSONAL_PIN_PATTERN.test(authPin)) return setAuthError("Enter your 8-digit personal PIN.");
-    setAuthLoading(true); setAuthError(""); setAuthSuccessMessage("");
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, pin: authPin, auth_method: PIN_AUTH_METHOD }),
-      });
-      const data = await readJsonSafely(response);
-      
-      if (!response.ok || !data.success) {
-        if (data.requires_activation_code) {
-          setShowAuthModal(false); setActivationPhone(authPhone); setActivationCode("");
-          setActivationNewPin(""); setActivationConfirmPin(""); setActivationError("");
-          setShowActivationModal(true); setAuthLoading(false);
-          return;
-        }
-        if (data.account_rejected) {
-          setShowAuthModal(false);
-          setRejectedAccountInfo({ message: data.error || data.message || "Your registration could not be approved." });
-          setAuthLoading(false);
-          return;
-        }
-        setAuthError(data.error || data.message || "This number is not registered. Please register first.");
-        setAuthLoading(false);
-        return;
-      }
-      
-      const provider = data.provider || data.user;
-      const token = data.session_token || data.token;
-      if (provider && token) {
-        setUser(provider); setIsLoggedIn(true); setSessionToken(token); setUserData(provider);
-        setShowAuthModal(false); setAuthPhone(""); setAuthPin(""); setAuthError(""); setAuthSuccessMessage("Login successful! 👋");
-        const action = pendingAuthActionRef.current;
-        pendingAuthActionRef.current = null;
-        if (action) setPendingAuthResolution({ action, provider });
-        return;
-      }
-      setAuthError(data.error || data.message || "Login failed.");
-    } catch (error) {
-      setAuthError(error.message || "Login failed. Please try again.");
-    } finally { setAuthLoading(false); }
-  }, [authPhone, authPin, readJsonSafely, setSessionToken, setUserData]);
-
-  const openActivationModal = useCallback(() => {
-    setShowAuthModal(false); setActivationPhone(authPhone); setActivationCode("");
-    setActivationNewPin(""); setActivationConfirmPin(""); setActivationError("");
-    setShowActivationModal(true);
-  }, [authPhone]);
-
-  const submitActivationCode = useCallback(async () => {
-    const phone = normalizeWhatsAppNumber(activationPhone);
-    if (!phone) return setActivationError("Enter your registered telephone number.");
-    if (!/^\d{6}$/.test(activationCode)) return setActivationError("Enter the 6-digit activation code.");
-    if (!PERSONAL_PIN_PATTERN.test(activationNewPin)) return setActivationError("Create an 8-digit personal PIN.");
-    if (activationNewPin !== activationConfirmPin) return setActivationError("The two PIN entries do not match.");
-    setActivationLoading(true); setActivationError("");
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/activate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: activationCode, new_pin: activationNewPin }),
-        cache: "no-store",
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not activate your account.");
-      const provider = data.provider || data.user;
-      const token = data.session_token || data.token;
-      setShowActivationModal(false); setActivationCode(""); setActivationNewPin(""); setActivationConfirmPin("");
-      
-      if (provider && token) {
-        setUser(provider); setIsLoggedIn(true); setSessionToken(token); setUserData(provider);
-        setAuthPhone(""); setAuthPin(""); setAuthSuccessMessage("Account activated! 🎉");
-        const action = pendingAuthActionRef.current;
-        pendingAuthActionRef.current = null;
-        if (action) setPendingAuthResolution({ action, provider });
-      }
-    } catch (error) {
-      setActivationError(error.message || "Could not activate your account.");
-    } finally { setActivationLoading(false); }
-  }, [activationPhone, activationCode, activationNewPin, activationConfirmPin, readJsonSafely, setSessionToken, setUserData]);
-
-  const handleLogout = useCallback(async () => {
-    const token = getSessionToken();
-    try {
-      if (token) {
-        await fetch(`${API_URL}/api/time-market/logout`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-      }
-    } catch { /* Local logout must still complete when the network is unavailable. */ }
-    setSessionToken(""); setUserData(null); setUser(null); setIsLoggedIn(false); setMyConversations([]);
-  }, [getSessionToken, setSessionToken, setUserData]);
-
-  const openAuthModal = useCallback((mode = "login", pendingAction = null) => {
-    pendingAuthActionRef.current = pendingAction;
-    setAuthMode(mode); setAuthPhone(""); setAuthFullName(""); setAuthPin("");
-    setAuthConfirmPin(""); setAuthError(""); setAuthSuccessMessage("");
-    setAuthLoading(false); setShowAuthModal(true);
+    // Alert user that they can't do this since auth is removed.
+    alert("Provider registration and login has been removed from this build.");
   }, []);
-
-  const requireAuthForTv = useCallback(() => { openAuthModal("login"); }, [openAuthModal]);
- const [connectResumeToken, setConnectResumeToken] = useState(0);
-const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
-  openAuthModal("login", action);
-}, [openAuthModal]);
-  
-  const closeAuthModal = useCallback(() => {
-    pendingAuthActionRef.current = null;
-    setShowAuthModal(false); setAuthError(""); setAuthSuccessMessage("");
-  }, []);
-
-  const openPinReset = useCallback(() => {
-    setShowAuthModal(false); setShowPinResetModal(true); setPinResetStep("request");
-    setPinResetPhone(authPhone); setPinResetRequest(null); setPinResetNewPin("");
-    setPinResetConfirmPin(""); setPinResetError("");
-  }, [authPhone]);
-
-  const closePinReset = useCallback(() => {
-    setShowPinResetModal(false); setPinResetLoading(false); setPinResetError("");
-  }, []);
-
-  const requestPinReset = useCallback(async () => {
-    const phone = normalizeWhatsAppNumber(pinResetPhone);
-    if (!phone) return setPinResetError("Enter your registered telephone number.");
-    setPinResetLoading(true); setPinResetError("");
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/pin-reset/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }), cache: "no-store",
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not request a PIN reset.");
-      setPinResetRequest({
-        id: data.request_id || data.request?.id || "",
-        verificationCode: data.verification_code || data.request?.verification_code || "",
-        expiresAt: data.expires_at || data.request?.expires_at || "",
-        recoveryToken: "",
-      });
-      setPinResetStep("waiting");
-    } catch (error) {
-      setPinResetError(error.message || "Could not request a PIN reset.");
-    } finally { setPinResetLoading(false); }
-  }, [pinResetPhone, readJsonSafely]);
-
-  const checkPinResetStatus = useCallback(async ({ silent = false } = {}) => {
-    if (!pinResetRequest?.id) {
-      if (!silent) setPinResetError("This reset request is missing. Please start again.");
-      return;
-    }
-    if (!silent) { setPinResetLoading(true); setPinResetError(""); }
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/pin-reset/status?request_id=${encodeURIComponent(pinResetRequest.id)}`, { cache: "no-store" });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not check the reset request.");
-      if (data.approved && data.pin_delivered) {
-        setPinResetError(""); setPinResetStep("delivered"); return;
-      }
-      if (!data.approved) {
-        if (!silent || data.status === "rejected") {
-          setPinResetError(data.status === "rejected" ? "This reset request was rejected." : "Gwamo has not approved this reset yet. Keep the code open and wait for the call.");
-        }
-      }
-    } catch (error) {
-      if (!silent) setPinResetError(error.message || "Could not check the reset request.");
-    } finally {
-      if (!silent) setPinResetLoading(false);
-    }
-  }, [pinResetRequest, readJsonSafely]);
-
-  useEffect(() => {
-    if (!showPinResetModal || pinResetStep !== "waiting") return undefined;
-    const intervalId = setInterval(() => { if (!document.hidden) checkPinResetStatus({ silent: true }); }, PIN_RESET_STATUS_POLL_INTERVAL_MS);
-    const handleVisible = () => { if (!document.hidden) checkPinResetStatus({ silent: true }); };
-    document.addEventListener("visibilitychange", handleVisible);
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisible);
-    };
-  }, [showPinResetModal, pinResetStep, checkPinResetStatus]);
-
-  const completePinReset = useCallback(async () => {
-    if (!PERSONAL_PIN_PATTERN.test(pinResetNewPin)) return setPinResetError("Create a new 8-digit personal PIN.");
-    if (pinResetNewPin !== pinResetConfirmPin) return setPinResetError("The two PIN entries do not match.");
-    if (!pinResetRequest?.id || !pinResetRequest?.recoveryToken) return setPinResetError("The approved reset session is missing. Please start again.");
-    setPinResetLoading(true); setPinResetError("");
-    try {
-      const response = await fetch(`${API_URL}/api/time-market/pin-reset/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_id: pinResetRequest.id, recovery_token: pinResetRequest.recoveryToken, new_pin: pinResetNewPin }),
-        cache: "no-store",
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not save the new PIN.");
-      closePinReset(); openAuthModal("login"); setAuthPhone(pinResetPhone);
-      setAuthSuccessMessage("Your PIN was changed. Login with the new PIN.");
-    } catch (error) {
-      setPinResetError(error.message || "Could not save the new PIN.");
-    } finally { setPinResetLoading(false); }
-  }, [pinResetNewPin, pinResetConfirmPin, pinResetRequest, pinResetPhone, readJsonSafely, closePinReset, openAuthModal]);
 
   const handleOfferTime = useCallback((requestedPostType = "offer") => {
-    const initialPostType = ["offer", "need", "exchange", "moment"].includes(requestedPostType) ? requestedPostType : "offer";
-    if (!isLoggedIn || !user) {
-      openAuthModal("login", { type: "offer", postType: initialPostType });
-      return;
-    }
-    setNewCreatorName(user.service_provider_name || user.full_name || "");
-    setNewCreatorIdentity(user.phone || "");
-    setNewMediaUrl(""); setNewTitle(""); setSubtitle("");
-    setPostType(initialPostType); setPostHeadline(""); setServiceCategory("");
-    setPostLocation(""); setPriceUnit("job"); setAvailability("today"); setExchangeNeed("");
-    setAllowCashBalance(true); setMomentKind("story");
-    setNewLogoFile(null); revokeObjectUrl(logoPreview); setLogoPreview("");
-    setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview(""); setMediaPreviewType("");
-    setEditingServicePost(null); setShowEditor(true);
-  }, [isLoggedIn, user, openAuthModal, revokeObjectUrl, logoPreview, mediaPreview]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const fetchAbortRef = useRef(null);
   const fetchInFlightRef = useRef(false);
@@ -1838,7 +1476,7 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
 
   useEffect(() => {
     isMountedRef.current = true;
-    const init = async () => { await Promise.all([restoreSession(), fetchHomeData()]); };
+    const init = async () => { await Promise.all([fetchHomeData()]); };
     init();
     return () => {
       isMountedRef.current = false;
@@ -1919,9 +1557,8 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
   }, []);
 
   const openEditor = useCallback(() => {
-    if (!isLoggedIn || !user) { openAuthModal("login"); return; }
-    pauseAllVideos(); setShowEditor(true);
-  }, [isLoggedIn, user, openAuthModal, pauseAllVideos]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const closeEditor = useCallback(() => {
     setShowEditor(false); setUploadProgress(0); setNewCreatorName(""); setNewCreatorIdentity("");
@@ -1982,159 +1619,16 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
   }, [mediaPreview, revokeObjectUrl, trackObjectUrl]);
 
   const applyChanges = useCallback(async () => {
-    const providerName = newCreatorName.trim();
-    const contactInfo = newCreatorIdentity.trim();
-    const headline = postHeadline.trim();
-    const enteredValue = newTitle.trim();
-    const baseDescription = subtitle.trim();
-    const wantedExchange = exchangeNeed.trim();
-    const mediaToSave = newMediaUrl.trim();
-    if (!providerName) return alert("Please enter your service provider name.");
-    if (!contactInfo) return alert("Please enter your phone number or website.");
-    if (!headline) return alert(postType === "offer" ? "Please say what work you can do." : postType === "need" ? "Please say what help you need." : postType === "exchange" ? "Please say what service you can give." : "Please add a short title for your moment.");
-    if (!baseDescription) return alert(postType === "moment" ? "Please write your saying, story, or thought." : "Please add a short description.");
-    if (postType === "exchange" && !wantedExchange) return alert("Please say what service you need in return.");
-    if (!mediaToSave && !newMediaFile) return alert("Please upload a photo/video or enter a media link.");
-    let detectedMediaType = "";
-    if (newMediaFile) detectedMediaType = newMediaFile.type.startsWith("image/") ? "image" : "video";
-    else if (isImageUrl(mediaToSave)) detectedMediaType = "image";
-    else if (isDirectVideoUrl(mediaToSave)) detectedMediaType = "video";
-    else if (mediaToSave) detectedMediaType = "embed";
-    const detailLines = [baseDescription];
-    if (postType !== "exchange") {
-      if (serviceCategory && postType !== "moment") detailLines.push(`Category: ${serviceCategory}`);
-      if (postLocation && postType !== "moment") detailLines.push(`Location: ${postLocation}`);
-      if (postType === "offer") detailLines.push(`Available: ${availability}`);
-      if (postType === "need") detailLines.push(`Needed: ${availability}`);
-    }
-    const workDescription = detailLines.join("\n");
-    
-    const cardValue = postType === "offer" ? headline : postType === "need" ? (enteredValue ? `Budget: ${enteredValue}` : "Budget: Let us agree") : postType === "exchange" ? "Trade skills" : momentKind === "song" ? "Song saying" : momentKind === "movie" ? "Movie saying" : momentKind === "recommend" ? "Recommendation" : "My story";
-    try {
-      setSaving(true); setUploadProgress(1);
-      const formData = new FormData();
-      formData.append("creator_name", providerName); formData.append("creator_identity", contactInfo);
-      formData.append("title", cardValue); formData.append("subtitle", workDescription);
-      formData.append("post_type", postType); formData.append("service_name", headline);
-      formData.append("service_category", serviceCategory.trim()); formData.append("location", postLocation.trim());
-      formData.append("availability", availability); formData.append("price_unit", priceUnit);
-      formData.append("exchange_offer", postType === "exchange" ? headline : "");
-      formData.append("exchange_need", postType === "exchange" ? wantedExchange : "");
-      formData.append("allow_cash_balance", allowCashBalance ? "1" : "0");
-      formData.append("moment_kind", postType === "moment" ? momentKind : "");
-      formData.append("media_type", detectedMediaType); formData.append("is_new_service", "true");
-      if (user && user.id) formData.append("provider_id", user.id);
-      if (mediaToSave) formData.append("media_url", mediaToSave);
-      if (newLogoFile) formData.append("logo_file", newLogoFile);
-      if (newMediaFile) formData.append("media_file", newMediaFile);
-      const token = getSessionToken();
-      const { status, statusText, responseText } = await new Promise((resolve, reject) => {
-        const request = new XMLHttpRequest();
-        request.open("POST", `${API_URL}/api/time-market/services`);
-        request.timeout = 180000;
-        request.setRequestHeader("Authorization", `Bearer ${token}`);
-        request.upload.onprogress = (event) => {
-          if (!event.lengthComputable || !isMountedRef.current) return;
-          const percentage = Math.min(95, Math.max(1, Math.round((event.loaded / event.total) * 95)));
-          setUploadProgress(percentage);
-        };
-        request.upload.onload = () => { if (isMountedRef.current) setUploadProgress(96); };
-        request.onload = () => resolve({ status: request.status, statusText: request.statusText, responseText: request.responseText });
-        request.onerror = () => reject(new Error("Network error while uploading the service."));
-        request.ontimeout = () => reject(new Error("The upload took too long. Please try again."));
-        request.onabort = () => reject(new Error("The upload was cancelled."));
-        request.send(formData);
-      });
-      let data;
-      try { data = responseText ? JSON.parse(responseText) : { success: status >= 200 && status < 300 }; } catch {
-        throw new Error(responseText || `Server returned ${status} ${statusText}`);
-      }
-      if (status < 200 || status >= 300 || !data.success) throw new Error(data.error || data.message || `Failed to create service (${status})`);
-      
-      if (isMountedRef.current) setUploadProgress(100);
-      const createdPost = data.post || data.service;
-      if (createdPost && isMountedRef.current) {
-        setPosts((current) => [createdPost, ...current.filter((item) => String(item.id) !== String(createdPost.id))]);
-      } else { await fetchHomeData(); }
-      closeEditor(); alert(data.message || "Your post was created successfully!");
-    } catch (error) {
-      devError("Failed to create service:", error);
-      alert(error.message || "Failed to create service.");
-    } finally {
-      if (isMountedRef.current) { setSaving(false); setUploadProgress(0); }
-    }
-  }, [closeEditor, fetchHomeData, newCreatorName, newCreatorIdentity, newLogoFile, newMediaFile, newMediaUrl, newTitle, subtitle, postType, postHeadline, serviceCategory, postLocation, priceUnit, availability, exchangeNeed, allowCashBalance, momentKind, getSessionToken, user]);
+    alert("Provider registration and login has been removed. You cannot post.");
+  }, []);
 
   const openServiceEdit = useCallback((post) => {
-    setEditingServicePost(post);
-    setNewCreatorName(post.service_provider_name || post.creator_name || "");
-    setNewCreatorIdentity(post.creator_identity || "");
-    setNewTitle("");
-    setSubtitle(post.work_description || post.subtitle || "");
-    setPostType(post.post_type || "offer");
-    setPostHeadline(post.service_name || post.service_title || "");
-    setServiceCategory(post.service_category || post.category || "");
-    setPostLocation(post.location || "");
-    setPriceUnit(post.price_unit || "job");
-    setAvailability(post.availability || "today");
-    setExchangeNeed(post.exchange_need || "");
-    setAllowCashBalance(post.allow_cash_balance !== 0);
-    setMomentKind(post.moment_kind || "story");
-    setNewLogoFile(null); revokeObjectUrl(logoPreview); setLogoPreview("");
-    setNewMediaFile(null); revokeObjectUrl(mediaPreview);
-    
-    if (post.media_type === "embed") {
-      setMediaPreview(""); setMediaPreviewType(""); setNewMediaUrl(post.media_url || "");
-    } else {
-      setMediaPreview(post.media_url || ""); setMediaPreviewType(post.media_type === "video" ? "video" : "image"); setNewMediaUrl("");
-    }
-    setShowMyServices(false); setShowEditor(true);
-  }, [logoPreview, mediaPreview, revokeObjectUrl]);
+    alert("Provider registration and login has been removed. You cannot edit.");
+  }, []);
 
   const saveServiceEdit = useCallback(async () => {
-    if (!editingServicePost) return;
-    const chargeText = newTitle.trim();
-    const workDescription = subtitle.trim();
-    if (!workDescription) return alert("Please describe your service.");
-    setSaving(true); setUploadProgress(1);
-    
-    try {
-      let mediaUrl = editingServicePost.media_url || "";
-      let mediaType = editingServicePost.media_type || "";
-      if (newMediaFile) {
-        const uploadForm = new FormData();
-        uploadForm.append("file", newMediaFile);
-        uploadForm.append("kind", newMediaFile.type.startsWith("image/") ? "post_image" : "video");
-        const uploadResponse = await authFetch("/api/home/upload", { method: "POST", body: uploadForm });
-        const uploadData = await readJsonSafely(uploadResponse);
-        if (!uploadResponse.ok || !uploadData.success) throw new Error(uploadData.error || uploadData.message || "Could not upload new media.");
-        mediaUrl = uploadData.url; mediaType = newMediaFile.type.startsWith("image/") ? "image" : "video"; setUploadProgress(70);
-      } else if (newMediaUrl.trim() && newMediaUrl.trim() !== editingServicePost.media_url) {
-        mediaUrl = newMediaUrl.trim();
-        mediaType = isImageUrl(mediaUrl) ? "image" : isDirectVideoUrl(mediaUrl) ? "video" : "embed";
-      }
-      const response = await authFetch("/api/time-market/services", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ post_id: editingServicePost.id, work_description: workDescription, media_url: mediaUrl, media_type: mediaType }),
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not update this service.");
-      
-      setUploadProgress(100);
-      const updated = data.service;
-      if (updated) {
-        setPosts((current) => current.map((item) => String(item.id) === String(updated.id) ? updated : item));
-        setMyServices((current) => current.map((item) => String(item.id) === String(updated.id) ? updated : item));
-      }
-      closeEditor();
-    } catch (error) {
-      devError("Failed to update service:", error);
-      alert(error.message || "Could not update this service.");
-    } finally {
-      if (isMountedRef.current) { setSaving(false); setUploadProgress(0); }
-    }
-  }, [editingServicePost, newTitle, subtitle, newMediaFile, newMediaUrl, authFetch, readJsonSafely, closeEditor]);
+    alert("Provider registration and login has been removed. You cannot save.");
+  }, []);
 
   const showToast = useCallback((message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -2145,90 +1639,29 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
 
   const conversationsInFlightRef = useRef(false);
   const fetchMyConversations = useCallback(async ({ silent = false } = {}) => {
-    if (!isLoggedIn || conversationsInFlightRef.current) return;
-    conversationsInFlightRef.current = true;
-    if (!silent) { setMyConversationsLoading(true); setMyConversationsError(""); }
-    try {
-      const response = await authFetch("/api/time-market/conversations");
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not load your conversations.");
-      
-      if (isMountedRef.current) {
-        const nextConversations = Array.isArray(data.conversations) ? data.conversations : [];
-        setMyConversations(nextConversations);
-        
-        const nextTotalUnread = nextConversations.reduce((total, conversation) => total + Number(conversation.unread_count || 0), 0);
-        if (previousTotalUnreadRef.current !== null && nextTotalUnread > previousTotalUnreadRef.current) {
-          const candidate = [...nextConversations].filter((conversation) => Number(conversation.unread_count || 0) > 0).sort((a, b) => {
-            const aTime = Date.parse(a.last_message_at || a.updated_at || a.created_at || 0) || 0;
-            const bTime = Date.parse(b.last_message_at || b.updated_at || b.created_at || 0) || 0;
-            return bTime - aTime;
-          })[0];
-          
-          if (candidate) {
-            const dedupeKey = `${candidate.id}:${candidate.last_message_at || candidate.updated_at || ""}`;
-                      if (!notifiedMessageKeysRef.current.has(dedupeKey)) {
-              notifiedMessageKeysRef.current.add(dedupeKey);
-              const iAmProvider = String(candidate.provider_id) === String(user?.id);
-              const partnerName = iAmProvider ? candidate.customer_full_name || "Someone" : candidate.provider_full_name || candidate.service_provider_name || "Someone";
-              playNotificationRing();
-              showToast(`New message from ${partnerName}`);
-            }
-          }
-        }
-        previousTotalUnreadRef.current = nextTotalUnread;
-      }
-    } catch (error) {
-      if (isMountedRef.current && !silent) setMyConversationsError(error.message || "Could not load your conversations.");
-    } finally {
-      conversationsInFlightRef.current = false;
-      if (isMountedRef.current && !silent) setMyConversationsLoading(false);
-    }
-  }, [isLoggedIn, authFetch, readJsonSafely, user, showToast]);
+    // Removed because we are not logged in.
+  }, []);
 
   useEffect(() => {
-    if (isLoggedIn) {
-      previousTotalUnreadRef.current = null;
-      notifiedMessageKeysRef.current = new Set();
-      fetchMyConversations();
-    } else {
-      setMyConversations([]);
-      previousTotalUnreadRef.current = 0;
-    }
-  }, [isLoggedIn, fetchMyConversations]);
+    // Removed because we are not logged in.
+  }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) return undefined;
-    let intervalId = setInterval(() => { if (!document.hidden) fetchMyConversations({ silent: true }); }, INBOX_POLL_INTERVAL_MS);
-    const handleVisible = () => { if (!document.hidden) fetchMyConversations({ silent: true }); };
-    document.addEventListener("visibilitychange", handleVisible);
-    return () => { clearInterval(intervalId); document.removeEventListener("visibilitychange", handleVisible); };
-  }, [isLoggedIn, fetchMyConversations]);
+    // Removed because we are not logged in.
+  }, []);
 
-  const unreadCountsByPost = useMemo(() => {
-    const counts = {};
-    for (const conversation of myConversations) {
-      const postId = String(conversation.service_post_id || "");
-      if (!postId) continue;
-      const unread = Number(conversation.unread_count || 0);
-      counts[postId] = (counts[postId] || 0) + unread;
-    }
-    return counts;
-  }, [myConversations]);
-
-  const totalUnreadCount = useMemo(() => myConversations.reduce((total, conversation) => total + Number(conversation.unread_count || 0), 0), [myConversations]);
+  const unreadCountsByPost = useMemo(() => ({}), []);
+  const totalUnreadCount = useMemo(() => 0, []);
 
   const openMyInbox = useCallback((filterPostId = null) => {
-    if (!isLoggedIn || !user) { openAuthModal("login", { type: "inbox", filterPostId }); return; }
-    setMyInboxFilterPostId(filterPostId); setShowMyInbox(true); fetchMyConversations();
-  }, [isLoggedIn, user, openAuthModal, fetchMyConversations]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const openInboxFromRail = useCallback(() => { openMyInbox(null); }, [openMyInbox]);
 
   const closeChat = useCallback(() => {
     setShowChat(false); setChatPartner(null);
-    if (isLoggedIn) fetchMyConversations();
-  }, [isLoggedIn, fetchMyConversations]);
+  }, []);
 
   const startChatWithPost = useCallback((post) => {
     setChatPartner({
@@ -2249,136 +1682,47 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
   const callProvider = useCallback((post) => {
     const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
     if (!callPhone) return;
-    if (!isLoggedIn || !user) { openAuthModal("login", { type: "call", post }); return; }
     window.location.href = `tel:+${callPhone}`;
-  }, [isLoggedIn, user, openAuthModal]);
+  }, []);
 
   const openInboxForPost = useCallback((post) => {
-    if (isLoggedIn && user && isSameProviderAsPost(post, user)) {
-      showToast("This is your post. Open the envelope Inbox to reply to customers.");
-      return;
-    }
-    if (!isLoggedIn || !user) { openAuthModal("login", { type: "message", post }); return; }
-    const viewerId = String(user?.id || "").trim();
-    const ownerId = String(post.provider_id || "").trim();
-    const existingConversation = isLoggedIn ? myConversations.find((conversation) => {
-      if (String(conversation.service_post_id || "") !== String(post.id || "")) return false;
-      const buyerId = String(conversation.customer_provider_id || "").trim();
-      const sellerId = String(conversation.provider_id || "").trim();
-      return Boolean(viewerId && buyerId === viewerId && (!ownerId || sellerId === ownerId));
-    }) : null;
-    startChatWithPost(existingConversation ? { ...post, conversation_id: existingConversation.id } : post);
-  }, [isLoggedIn, user, myConversations, showToast, startChatWithPost, openAuthModal]);
+    startChatWithPost(post);
+  }, [startChatWithPost]);
 
   const openConversationFromInbox = useCallback((conversation) => {
-    const iAmProvider = String(conversation.provider_id) === String(user?.id);
-    const partnerName = iAmProvider ? conversation.customer_full_name || "Customer" : conversation.provider_full_name || conversation.service_provider_name || "Provider";
-    const partnerAvatar = iAmProvider ? conversation.customer_profile_image_url || "" : conversation.provider_profile_image_url || "";
-    const partnerVerified = iAmProvider ? conversation.customer_verification_status === "verified" : conversation.provider_verification_status === "verified";
-    const partnerPhone = normalizeWhatsAppNumber((iAmProvider ? conversation.customer_phone : conversation.provider_phone) || "");
-    setChatPartner({
-      conversationId: String(conversation.id),
-      servicePostId: String(conversation.service_post_id || ""),
-      name: partnerName, avatar: partnerAvatar,
-      headline: conversation.service_charge_per_minute || "",
-      serviceName: conversation.service_name || "",
-      serviceMediaUrl: conversation.service_media_url || "",
-      verified: Boolean(partnerVerified),
-      providerPhone: partnerPhone,
-    });
-    setShowMyInbox(false); setShowChat(true); pauseAllVideos();
-  }, [user, pauseAllVideos]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const openProviderProfile = useCallback((post) => { setProviderProfileTarget(post); setShowProviderProfile(true); }, []);
   const closeProviderProfile = useCallback(() => { setShowProviderProfile(false); setProviderProfileTarget(null); }, []);
 
   const openMyProfile = useCallback((contextPost = null) => {
-    if (!user) return;
-    setProfileFullName(user.full_name || ""); setProfileServiceName(user.service_provider_name || "");
-    setProfileServicesOffered(user.services_offered || ""); setProfileError("");
-    setProfilePhotoFile(null); setProfilePhotoPreview(""); setProfileEditContextPost(contextPost);
-    setShowMyProfile(true);
-  }, [user]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const saveMyProfile = useCallback(async () => {
-    setProfileSaving(true); setProfileError("");
-    try {
-      let profileImageUrl = user?.profile_image_url || "";
-      if (profilePhotoFile === "remove") {
-        profileImageUrl = "";
-      } else if (profilePhotoFile) {
-        const uploadForm = new FormData();
-        uploadForm.append("file", profilePhotoFile); uploadForm.append("kind", "profile_image");
-        const uploadResponse = await authFetch("/api/home/upload", { method: "POST", body: uploadForm });
-        const uploadData = await readJsonSafely(uploadResponse);
-        if (!uploadResponse.ok || !uploadData.success || !uploadData.url) throw new Error(uploadData.error || uploadData.message || "Could not upload your profile photo.");
-        profileImageUrl = uploadData.url;
-      }
-      const response = await authFetch("/api/time-market/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: profileFullName.trim(), service_provider_name: profileServiceName.trim(), services_offered: profileServicesOffered.trim(), profile_image_url: profileImageUrl }),
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not update your profile.");
-      setUser(data.provider); setUserData(data.provider);
-      setPosts((current) => current.map((post) => String(post.provider_id) === String(data.provider.id) ? { ...post, creator_name: data.provider.service_provider_name, service_provider_name: data.provider.service_provider_name, logo_url: data.provider.profile_image_url || profileImageUrl || "" } : post));
-      setShowMyProfile(false);
-    } catch (error) {
-      setProfileError(error.message || "Could not update your profile.");
-    } finally {
-      if (isMountedRef.current) setProfileSaving(false);
-    }
-  }, [authFetch, readJsonSafely, user, profileFullName, profileServiceName, profileServicesOffered, profilePhotoFile, setUserData]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const deleteMyProviderAccount = useCallback(async () => {
-    try {
-      const response = await authFetch("/api/time-market/profile", { method: "DELETE" });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not delete your provider profile.");
-      setShowMyProfile(false); setSessionToken(""); setUserData(null); setUser(null); setIsLoggedIn(false);
-      setPosts((current) => current.filter((post) => String(post.provider_id) !== String(user?.id)));
-    } catch (error) {
-      setProfileError(error.message || "Could not delete your provider profile.");
-    } finally { setProfileDeleteConfirming(false); }
-  }, [authFetch, readJsonSafely, setSessionToken, setUserData, user]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const openEditListingFromProfile = useCallback(() => {
-    if (!profileEditContextPost) return;
-    setShowMyProfile(false); openServiceEdit(profileEditContextPost);
-  }, [profileEditContextPost, openServiceEdit]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const fetchMyServices = useCallback(async () => {
-    setMyServicesLoading(true); setMyServicesError("");
-    try {
-      const response = await authFetch("/api/time-market/services");
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not load your services.");
-      if (isMountedRef.current) setMyServices(Array.isArray(data.services) ? data.services : []);
-    } catch (error) {
-      if (isMountedRef.current) setMyServicesError(error.message || "Could not load your services.");
-    } finally {
-      if (isMountedRef.current) setMyServicesLoading(false);
-    }
-  }, [authFetch, readJsonSafely]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const openMyServices = useCallback(() => {
-    if (!isLoggedIn || !user) { openAuthModal("login"); return; }
-    setShowMyServices(true); fetchMyServices();
-  }, [isLoggedIn, user, openAuthModal, fetchMyServices]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const deleteMyService = useCallback(async (postId) => {
-    if (!window.confirm("Delete this service? This cannot be undone.")) return;
-    try {
-      const response = await authFetch("/api/time-market/services", {
-        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId }),
-      });
-      const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not delete this service.");
-      setMyServices((current) => current.filter((item) => String(item.id) !== String(postId)));
-      setPosts((current) => current.filter((item) => String(item.id) !== String(postId)));
-    } catch (error) { alert(error.message || "Could not delete this service."); }
-  }, [authFetch, readJsonSafely]);
+    alert("Provider registration and login has been removed from this build.");
+  }, []);
 
   const getReactedStorageKey = useCallback((providerId) => `time-market-reacted:${providerId || "anon"}`, []);
   const loadReactedFromStorage = useCallback((providerId) => {
@@ -2396,17 +1740,16 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
 
   const sendReaction = useCallback(async (post) => {
     const postId = String(post?.id ?? "");
-    if (!postId || !user?.phone) return;
+    if (!postId) return;
     setReactingPostId(postId);
     try {
       const response = await fetch(`${API_URL}/api/home/react`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId, phone: user.phone }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId, phone: "" }), // phone is required by server, so it will fail gracefully
       });
       const data = await readJsonSafely(response);
       
       if (data.already_reacted) {
         setReactedPosts((current) => ({ ...current, [postId]: true }));
-        persistReacted(user.id, postId);
         if (data.real_reactions !== undefined || data.displayed_reactions !== undefined) {
           setPosts((currentPosts) => currentPosts.map((item) => String(item.id) === postId ? { ...item, real_reactions: data.real_reactions ?? item.real_reactions, manual_reactions: data.manual_reactions ?? item.manual_reactions, displayed_reactions: data.displayed_reactions ?? item.displayed_reactions } : item));
         }
@@ -2415,42 +1758,17 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
       if (!data.success) { alert(data.error || data.message || "Failed to react to this service."); return; }
       
       setReactedPosts((current) => ({ ...current, [postId]: true }));
-      persistReacted(user.id, postId);
       setPosts((currentPosts) => currentPosts.map((item) => String(item.id) === postId ? { ...item, real_reactions: data.real_reactions, manual_reactions: data.manual_reactions, displayed_reactions: data.displayed_reactions } : item));
     } catch (error) {
       devError("Failed to react:", error); alert("Failed to react to this service. Please try again.");
     } finally { if (isMountedRef.current) setReactingPostId(null); }
-  }, [readJsonSafely, user, persistReacted]);
+  }, [readJsonSafely]);
 
   const reactToPost = useCallback((post) => {
-    if (!isLoggedIn || !user) { openAuthModal("login", { type: "react", post }); return; }
     const postId = String(post?.id ?? "");
     if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
     sendReaction(post);
-  }, [isLoggedIn, user, openAuthModal, reactedPosts, reactingPostId, sendReaction]);
-
-  useEffect(() => {
-    if (!pendingAuthResolution || !isLoggedIn || !user) return;
-    const { action, provider } = pendingAuthResolution;
-    setPendingAuthResolution(null);
-    if (action.type === "offer") { openServiceForm(provider || user, action.postType || "offer"); return; }
-    if (action.type === "message" && action.post) { openInboxForPost(action.post); return; }
-    if (action.type === "call" && action.post) { callProvider(action.post); return; }
-    if (action.type === "inbox") { openMyInbox(action.filterPostId || null); return; }
-    if (action.type === "react" && action.post) { sendReaction(action.post); return; }
-    if (action.type === "connect") { setConnectResumeToken((n) => n + 1); }
-  }, [pendingAuthResolution, isLoggedIn, user, openServiceForm, openInboxForPost, callProvider, openMyInbox, sendReaction]);
-
-  useEffect(() => {
-    if (!user?.id || !posts.length) return;
-    const stored = loadReactedFromStorage(user.id);
-    const relevant = posts.reduce((acc, post) => {
-      const postId = String(post.id);
-      if (stored[postId]) acc[postId] = true;
-      return acc;
-    }, {});
-    if (Object.keys(relevant).length) setReactedPosts((current) => ({ ...relevant, ...current }));
-  }, [user, posts, loadReactedFromStorage]);
+  }, [reactedPosts, reactingPostId, sendReaction]);
 
   const sharePost = useCallback((post) => {
     const title = String(post?.title || "Market service").trim();
@@ -2479,7 +1797,7 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
   } else if (activeCategory === "social-life") {
     mainContent = <SocialLifeLanding />;
 } else if (activeCategory === "connect") {
-    mainContent = <ConnectExperience user={user} isLoggedIn={isLoggedIn} onRequireAuth={requireAuthForConnect} resumeSignal={connectResumeToken} />;
+    mainContent = <ConnectExperience user={user} isLoggedIn={isLoggedIn} onRequireAuth={noop} resumeSignal={0} />;
   } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
@@ -2495,9 +1813,9 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
         <main className="home-feed">
           {memoizedPosts.map((post, index) => {
             const postId = String(post.id ?? index);
-            const isOwner = isLoggedIn && user && String(post.provider_id ?? "") === String(user.id);
+            const isOwner = false; // Removed isLoggedIn check
             return (
-              <ServicePost key={postId} post={post} index={index} postId={postId} isActive={activePostIndex === index} reacted={Boolean(reactedPosts[postId])} reacting={reactingPostId === postId} unreadCount={unreadCountsByPost[postId] || 0} mediaAspectRatio={mediaAspectRatios[postId]} onMediaAspectRatio={handleMediaAspectRatio} isOwner={isOwner} postRefCallback={getPostRefCallback(index)} videoRefCallback={getVideoRefCallback(index)} onVideoPlay={noop} onVideoPause={noop} onViewProfile={openProviderProfile} onSellTime={handleOfferTime} onContactProvider={openInboxForPost} onCallProvider={callProvider} onOpenInbox={openInboxFromRail} onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"} isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"} conversationMode={activeCategory === "social-life" ? "social-life" : "tv"} currentUser={isLoggedIn ? user : null} getSessionToken={getSessionToken} onRequireAuth={requireAuthForTv} />
+              <ServicePost key={postId} post={post} index={index} postId={postId} isActive={activePostIndex === index} reacted={Boolean(reactedPosts[postId])} reacting={reactingPostId === postId} unreadCount={0} mediaAspectRatio={mediaAspectRatios[postId]} onMediaAspectRatio={handleMediaAspectRatio} isOwner={isOwner} postRefCallback={getPostRefCallback(index)} videoRefCallback={getVideoRefCallback(index)} onVideoPlay={noop} onVideoPause={noop} onViewProfile={openProviderProfile} onSellTime={handleOfferTime} onContactProvider={openInboxForPost} onCallProvider={callProvider} onOpenInbox={openInboxFromRail} onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"} isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"} conversationMode={activeCategory === "social-life" ? "social-life" : "tv"} currentUser={null} getSessionToken={getSessionToken} onRequireAuth={noop} />
             );
           })}
         </main>
@@ -2512,43 +1830,14 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
 
   return (
     <div className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}${activeCategory === "social-life" ? " is-social-life-mode" : ""}`}>
-      <TimeMarketTopBar activeCategory={activeCategory} isLoggedIn={isLoggedIn} user={user} onAuth={openAuthModal} onLogout={handleLogout} onOpenMyProfile={() => (isLoggedIn ? openMyProfile() : openAuthModal("login"))} onOpenMyServices={openMyServices} onOpenMyTime={() => setShowMyTime(true)} onOpenMyInbox={() => openMyInbox(null)} unreadCount={totalUnreadCount} onOpenInfo={(topic) => setShowInfoModal(topic)} />
+      <TimeMarketTopBar activeCategory={activeCategory} onOpenInfo={(topic) => setShowInfoModal(topic)} />
       {mainContent}
       {toast && <div className="gwamo-toast" role="status" aria-live="polite">{toast.message}</div>}
-      {showEditor && (
-        <ServiceEditorModal newCreatorName={newCreatorName} setNewCreatorName={setNewCreatorName} newCreatorIdentity={newCreatorIdentity} setNewCreatorIdentity={setNewCreatorIdentity} newTitle={newTitle} setNewTitle={setNewTitle} newMediaUrl={newMediaUrl} setNewMediaUrl={setNewMediaUrl} subtitle={subtitle} setSubtitle={setSubtitle} postType={postType} setPostType={setPostType} postHeadline={postHeadline} setPostHeadline={setPostHeadline} serviceCategory={serviceCategory} setServiceCategory={setServiceCategory} postLocation={postLocation} setPostLocation={setPostLocation} priceUnit={priceUnit} setPriceUnit={setPriceUnit} availability={availability} setAvailability={setAvailability} exchangeNeed={exchangeNeed} setExchangeNeed={setExchangeNeed} allowCashBalance={allowCashBalance} setAllowCashBalance={setAllowCashBalance} momentKind={momentKind} setMomentKind={setMomentKind} handleLogoChange={handleLogoChange} logoPreview={logoPreview} handleMediaFileChange={handleMediaFileChange} mediaPreview={mediaPreview} mediaPreviewType={mediaPreviewType} applyChanges={editingServicePost ? saveServiceEdit : applyChanges} closeEditor={closeEditor} saving={saving} uploadProgress={uploadProgress} compressingMedia={compressingMedia} isEdit={Boolean(editingServicePost)} />
-      )}
-      {showAuthModal && (
-        <AuthModal isOpen={showAuthModal} mode={authMode} phone={authPhone} setPhone={setAuthPhone} fullName={authFullName} setFullName={setAuthFullName} pin={authPin} setPin={setAuthPin} confirmPin={authConfirmPin} setConfirmPin={setAuthConfirmPin} error={authError} successMessage={authSuccessMessage} loading={authLoading} onRegister={handleRegister} onLogin={handleLogin} onClose={closeAuthModal} onForgotPin={openPinReset} onOpenActivation={openActivationModal} onSwitchMode={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(""); setAuthSuccessMessage(""); setAuthPin(""); setAuthConfirmPin(""); }} />
-      )}
-      {showPinResetModal && (
-        <PinResetModal step={pinResetStep} phone={pinResetPhone} setPhone={setPinResetPhone} request={pinResetRequest} newPin={pinResetNewPin} setNewPin={setPinResetNewPin} confirmPin={pinResetConfirmPin} setConfirmPin={setPinResetConfirmPin} error={pinResetError} loading={pinResetLoading} onRequest={requestPinReset} onCheckStatus={checkPinResetStatus} onComplete={completePinReset} onRestart={() => { setPinResetStep("request"); setPinResetRequest(null); setPinResetError(""); setPinResetNewPin(""); setPinResetConfirmPin(""); }} onClose={closePinReset} />
-      )}
-      {pendingPhoneReview && (
-        <PendingPhoneReviewModal review={pendingPhoneReview} onClose={() => setPendingPhoneReview(null)} />
-      )}
-      {showActivationModal && (
-        <ActivationCodeModal phone={activationPhone} setPhone={setActivationPhone} code={activationCode} setCode={setActivationCode} newPin={activationNewPin} setNewPin={setActivationNewPin} confirmPin={activationConfirmPin} setConfirmPin={setActivationConfirmPin} error={activationError} loading={activationLoading} onSubmit={submitActivationCode} onClose={() => { setShowActivationModal(false); setActivationCode(""); setActivationNewPin(""); setActivationConfirmPin(""); setActivationError(""); }} />
-      )}
-      {rejectedAccountInfo && (
-        <RejectedAccountModal info={rejectedAccountInfo} onClose={() => setRejectedAccountInfo(null)} onRegisterAgain={() => { setRejectedAccountInfo(null); openAuthModal("register"); }} />
-      )}
       {zoomImage && (
         <ZoomableImageViewer src={zoomImage} alt="Profile" onClose={() => setZoomImage("")} />
       )}
       {showChat && chatPartner && (
-        <ChatModal partner={chatPartner} currentUser={user} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={() => openAuthModal("login")} />
-      )}
-      {/* Provider profile sheet intentionally hidden as requested. */}
-      {showMyProfile && (
-        <ProfileEditModal user={user} fullName={profileFullName} setFullName={setProfileFullName} serviceName={profileServiceName} setServiceName={setProfileServiceName} servicesOffered={profileServicesOffered} setServicesOffered={setProfileServicesOffered} photoPreview={profilePhotoPreview} onPhotoChange={handleProfilePhotoChange} onRemovePhoto={removeProfilePhoto} photoRemoved={profilePhotoFile === "remove"} contextPost={profileEditContextPost} onEditListing={openEditListingFromProfile} onOpenServices={() => { setShowMyProfile(false); openMyServices(); }} onLogout={() => { setShowMyProfile(false); handleLogout(); }} deleteConfirming={profileDeleteConfirming} setDeleteConfirming={setProfileDeleteConfirming} onDeleteAccount={deleteMyProviderAccount} saving={profileSaving} error={profileError} onSave={saveMyProfile} onClose={() => { setShowMyProfile(false); revokeObjectUrl(profilePhotoPreview); setProfilePhotoFile(null); setProfilePhotoPreview(""); setProfileDeleteConfirming(false); }} />
-      )}
-      {showMyServices && (
-        <MyServicesSheet services={myServices} loading={myServicesLoading} error={myServicesError} onEdit={openServiceEdit} onDelete={deleteMyService} onClose={() => setShowMyServices(false)} onCreateNew={() => { setShowMyServices(false); handleOfferTime(); }} />
-      )}
-      {showMyTime && <MyTimeSheet onClose={() => setShowMyTime(false)} />}
-      {showMyInbox && (
-        <MyInboxSheet conversations={myConversations} loading={myConversationsLoading} error={myConversationsError} currentUserId={user?.id} filterServicePostId={myInboxFilterPostId} onOpenConversation={openConversationFromInbox} onClose={() => { setShowMyInbox(false); setMyInboxFilterPostId(null); }} />
+        <ChatModal partner={chatPartner} currentUser={null} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={noop} />
       )}
       {showInfoModal && (
         <InfoModal topic={showInfoModal} onClose={() => setShowInfoModal(null)} />
@@ -2565,7 +1854,7 @@ const requireAuthForConnect = useCallback((action = { type: "connect" }) => {
                 onClick={() => { setActivePostIndex(0); setActiveCategory(tab.key); window.scrollTo(0, 0); }}
                 aria-current={isActive ? "page" : undefined}
               >
-                               <span className="bottom-nav-icon"><TabIcon size={20} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
+                <span className="bottom-nav-icon"><TabIcon size={20} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
                 <span>{tab.label}</span>
               </button>
             );
@@ -2605,13 +1894,11 @@ const FeedSkeleton = memo(function FeedSkeleton() {
 });
 FeedSkeleton.displayName = "FeedSkeleton";
 
-const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, unreadCount, onOpenInfo }) => {
+const TimeMarketTopBar = memo(({ activeCategory, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
   const closeMenu = () => setShowMenu(false);
   const run = (action) => () => { closeMenu(); action(); };
-  const signedIn = Boolean(isLoggedIn && user);
-  const verification = signedIn ? getVerificationStatus(user) : null;
-  const displayName = user?.service_provider_name || user?.full_name || "My account";
+
   return (
     <header className={`feedx-topbar${activeCategory === "tv" ? " is-tv-mode" : ""}`}>
       <div className="feedx-topbar-inner">
@@ -2620,60 +1907,15 @@ const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLog
           <span className="gwamo-tagline">Your time has value</span>
         </div>
         <div className="topbar-actions">
-          {signedIn ? (
-            <>
-              <button type="button" className="topbar-icon-button" onClick={onOpenMyInbox} aria-label={unreadCount > 0 ? `Inbox, ${unreadCount} unread` : "Inbox"}>
-                <span className="inbox-icon-wrap">
-                  <Inbox size={23} strokeWidth={2} aria-hidden="true" />
-                  {unreadCount > 0 && <span className="inbox-unread-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-                </span>
-              </button>
-              <button type="button" className={`account-avatar-button ${verification.className}`} onClick={onOpenMyProfile} aria-label="My profile">
-                <img src={user?.profile_image_url || DEFAULT_LOGO} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-              </button>
-            </>
-          ) : (
-            <button type="button" className="login-pill" onClick={() => onAuth("login")}>
-              <LogIn size={16} aria-hidden="true" />
-              <span>Log in</span>
-            </button>
-          )}
           <button type="button" className="menu-button" onClick={() => setShowMenu((value) => !value)} aria-label="Menu" aria-haspopup="true" aria-expanded={showMenu}>
             <Menu size={24} strokeWidth={2} />
           </button>
           {showMenu && <div className="dropdown-backdrop" onClick={closeMenu} aria-hidden="true" />}
           {showMenu && (
             <div className="dropdown-menu account-dropdown">
-              {signedIn ? (
-                <>
-                  <div className="account-dropdown-header">
-                    <span className="account-dropdown-name">{displayName}</span>
-                    <VerificationTag info={verification} size={13} />
-                  </div>
-                  <button type="button" className="dropdown-item" onClick={run(onOpenMyProfile)}><User size={18} aria-hidden="true" />My profile</button>
-                  <button type="button" className="dropdown-item" onClick={run(onOpenMyInbox)}>
-                    <Inbox size={18} aria-hidden="true" />Inbox
-                    {unreadCount > 0 && <span className="dropdown-item-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-                  </button>
-                  <button type="button" className="dropdown-item" onClick={run(onOpenMyServices)}><ShoppingBasket size={18} aria-hidden="true" />My services</button>
-                  <button type="button" className="dropdown-item" onClick={run(onOpenMyTime)}><Wallet size={18} aria-hidden="true" />My time</button>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="dropdown-item" onClick={run(() => onAuth("login"))}><LogIn size={18} aria-hidden="true" />Log in</button>
-                  <button type="button" className="dropdown-item" onClick={run(() => onAuth("register"))}><Plus size={18} aria-hidden="true" />Create an account</button>
-                </>
-              )}
-              <div className="dropdown-divider" />
               <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("about"))}><Info size={18} aria-hidden="true" />About Gwamo</button>
               <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("help"))}><HelpCircle size={18} aria-hidden="true" />Help</button>
               <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("privacy"))}><ShieldCheck size={18} aria-hidden="true" />Privacy policy</button>
-              {signedIn && (
-                <>
-                  <div className="dropdown-divider" />
-                  <button type="button" className="dropdown-item dropdown-item-danger" onClick={run(onLogout)}><LogOut size={18} aria-hidden="true" />Log out</button>
-                </>
-              )}
             </div>
           )}
         </div>
@@ -2955,174 +2197,6 @@ const ServiceEditorModal = memo(({
   );
 });
 ServiceEditorModal.displayName = "ServiceEditorModal";
-
-const AuthModal = memo(({ isOpen, mode, phone, setPhone, fullName, setFullName, pin, setPin, confirmPin, setConfirmPin, error, successMessage, loading, onRegister, onLogin, onClose, onSwitchMode, onForgotPin, onOpenActivation }) => {
-  useEscapeToClose(onClose, isOpen);
-  if (!isOpen) return null;
-  return (
-    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
-      <div className="modal-card auth-modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{mode === "login" ? "Login" : "Register"}</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        {successMessage && <div className="auth-success-message">{successMessage}</div>}
-        <div className="form-section">
-          <label htmlFor="auth-phone">Telephone Number</label>
-          <input id="auth-phone" type="tel" inputMode="tel" autoComplete="tel" autoFocus placeholder="+250 788 123 456" value={phone} onChange={(event) => setPhone(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && mode === "login") onLogin(); }} />
-        </div>
-        {mode === "register" && (
-          <div className="form-section">
-            <label htmlFor="auth-name">Full Name</label>
-            <input id="auth-name" type="text" autoComplete="name" placeholder="e.g. John Doe" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-          </div>
-        )}
-        <div className={`form-section${mode === "login" ? " form-section-last" : ""}`}>
-          <label htmlFor="auth-pin">Personal PIN</label>
-          <input id="auth-pin" type="password" inputMode="numeric" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="8-digit PIN" maxLength={8} pattern="[0-9]{8}" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))} onKeyDown={(event) => { if (event.key === "Enter" && mode === "login") onLogin(); }} />
-        </div>
-        {mode === "register" && (
-          <div className="form-section form-section-last">
-            <label htmlFor="auth-confirm-pin">Confirm PIN</label>
-            <input id="auth-confirm-pin" type="password" inputMode="numeric" autoComplete="new-password" placeholder="Repeat the 8-digit PIN" maxLength={8} pattern="[0-9]{8}" value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 8))} onKeyDown={(event) => { if (event.key === "Enter") onRegister(); }} />
-            <small className="auth-helper-text">Use a PIN you can remember. Gwamo staff should never ask you to reveal it.</small>
-          </div>
-        )}
-        {error && <p className="auth-error">{error}</p>}
-        <button type="button" className="save-button" onClick={mode === "login" ? onLogin : onRegister} disabled={loading}>{loading ? "Loading..." : mode === "login" ? "Login" : "Register"}</button>
-        {mode === "login" && <button type="button" className="forgot-pin-button" onClick={onForgotPin} disabled={loading}>Forgot PIN?</button>}
-        {mode === "login" && <button type="button" className="forgot-pin-button" onClick={onOpenActivation} disabled={loading}>Have an activation code from the admin?</button>}
-        <button type="button" className="switch-mode-button" onClick={onSwitchMode}>{mode === "login" ? "Don't have an account? Register" : "Already have an account? Login"}</button>
-        <button type="button" onClick={onClose} className="cancel-button">Cancel</button>
-      </div>
-    </div>
-  );
-});
-AuthModal.displayName = "AuthModal";
-
-const PinResetModal = memo(({ step, phone, setPhone, request, newPin, setNewPin, confirmPin, setConfirmPin, error, loading, onRequest, onCheckStatus, onComplete, onRestart, onClose }) => {
-  useEscapeToClose(onClose);
-  return (
-    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
-      <div className="modal-card auth-modal-card pin-reset-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <h2>Reset personal PIN</h2>
-            <p className="modal-header-note">Protected by a call to your registered number</p>
-          </div>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        
-        {step === "request" && (
-          <>
-            <p className="pin-reset-intro">Enter the telephone number on your account. An admin will call that same number and ask for the one-time verification code shown here.</p>
-            <div className="form-section form-section-last">
-              <label htmlFor="pin-reset-phone">Registered telephone number</label>
-              <input id="pin-reset-phone" type="tel" inputMode="tel" autoComplete="tel" autoFocus placeholder="+250 788 123 456" value={phone} onChange={(event) => setPhone(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onRequest(); }} />
-            </div>
-            {error && <p className="auth-error">{error}</p>}
-            <button type="button" className="save-button" onClick={onRequest} disabled={loading}>{loading ? "Requesting..." : "Request PIN reset"}</button>
-          </>
-        )}
-        {step === "waiting" && (
-          <>
-            <div className="pin-verification-panel" role="status" aria-live="polite">
-              <span>Your verification code</span>
-              <strong>{request?.verificationCode || request?.verification_code || request?.code || "-----"}</strong>
-            </div>
-            <p className="pin-reset-intro">Do not send this code in chat. Wait for the admin to call your registered number, then read the code during that call. The admin must approve it before you continue.</p>
-            {error && <p className="auth-error">{error}</p>}
-            <button type="button" className="save-button" onClick={() => onCheckStatus()} disabled={loading}>{loading ? "Checking..." : "Check approval"}</button>
-            <p className="field-help" style={{ marginTop: 10, marginBottom: 0 }}>This checks automatically every few seconds while this screen is open.</p>
-            <button type="button" className="switch-mode-button" onClick={onRestart}>Use a different number</button>
-          </>
-        )}
-        {step === "delivered" && (
-          <>
-            <div className="auth-success-message">Telephone ownership approved and a new PIN was generated.</div>
-            <p className="pin-reset-intro">For your safety, the new PIN is never shown in the app. Gwamo will share it with you directly by phone call or SMS to your registered number. Once you have it, log in with your telephone number and that PIN.</p>
-            <button type="button" className="save-button" onClick={onClose}>Done</button>
-          </>
-        )}
-        <button type="button" onClick={onClose} className="cancel-button">Cancel</button>
-      </div>
-    </div>
-  );
-});
-PinResetModal.displayName = "PinResetModal";
-
-const PendingPhoneReviewModal = memo(({ review, onClose }) => {
-  useEscapeToClose(onClose);
-  return (
-    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
-      <div className="modal-card auth-modal-card pin-reset-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>You're almost in!</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <p className="pin-reset-intro">Thank you for joining Gwamo. Your registration is now with our team for a quick review to confirm you're a real person with a genuine account.</p>
-        <p className="pin-reset-intro">We're currently working through quite a few new sign-ups, so this can take anywhere from about 5 minutes up to a full day depending on how many people registered just ahead of you. Hang tight - you're in good hands, and we're moving through the list as quickly as we can.</p>
-        {review?.phone && <p className="auth-helper-text">We'll be in touch on the number you registered with once it's your turn.</p>}
-        <button type="button" className="save-button" onClick={onClose}>Got it, I'll check back soon</button>
-      </div>
-    </div>
-  );
-});
-PendingPhoneReviewModal.displayName = "PendingPhoneReviewModal";
-
-const ActivationCodeModal = memo(({ phone, setPhone, code, setCode, newPin, setNewPin, confirmPin, setConfirmPin, error, loading, onSubmit, onClose }) => {
-  useEscapeToClose(onClose);
-  return (
-    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
-      <div className="modal-card auth-modal-card pin-reset-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Activate your account</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <p className="pin-reset-intro">Your account was approved. You don't need to remember the PIN you typed when you registered - just enter your telephone number, the 6-digit code the admin gave you, and a PIN to use from now on.</p>
-        <div className="form-section">
-          <label htmlFor="activation-phone">Telephone number</label>
-          <input id="activation-phone" type="tel" inputMode="tel" autoComplete="tel" autoFocus placeholder="+250 788 123 456" value={phone} onChange={(event) => setPhone(event.target.value)} />
-        </div>
-        <div className="form-section">
-          <label htmlFor="activation-code">Activation code</label>
-          <input id="activation-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" placeholder="6-digit code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
-        </div>
-        <div className="form-section">
-          <label htmlFor="activation-new-pin">Personal PIN</label>
-          <input id="activation-new-pin" type="password" inputMode="numeric" autoComplete="new-password" placeholder="8-digit PIN" maxLength={8} pattern="[0-9]{8}" value={newPin} onChange={(event) => setNewPin(event.target.value.replace(/\D/g, "").slice(0, 8))} />
-          <small className="auth-helper-text">You can reuse the PIN you tried at registration, or set a new one - whichever you'll remember.</small>
-        </div>
-        <div className="form-section form-section-last">
-          <label htmlFor="activation-confirm-pin">Confirm PIN</label>
-          <input id="activation-confirm-pin" type="password" inputMode="numeric" autoComplete="new-password" placeholder="Repeat the 8-digit PIN" maxLength={8} pattern="[0-9]{8}" value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 8))} onKeyDown={(event) => { if (event.key === "Enter") onSubmit(); }} />
-        </div>
-        {error && <p className="auth-error">{error}</p>}
-        <button type="button" className="save-button" onClick={onSubmit} disabled={loading}>{loading ? "Activating..." : "Activate my account"}</button>
-        <button type="button" onClick={onClose} className="cancel-button">Cancel</button>
-      </div>
-    </div>
-  );
-});
-ActivationCodeModal.displayName = "ActivationCodeModal";
-
-const RejectedAccountModal = memo(({ info, onClose, onRegisterAgain }) => {
-  useEscapeToClose(onClose);
-  return (
-    <div className="modal-overlay auth-modal-overlay" onClick={onClose}>
-      <div className="modal-card auth-modal-card pin-reset-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Registration not approved</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <p className="pin-reset-intro">{info?.message}</p>
-        <button type="button" className="save-button" onClick={onRegisterAgain}>Register again</button>
-        <button type="button" onClick={onClose} className="cancel-button">Close</button>
-      </div>
-    </div>
-  );
-});
-RejectedAccountModal.displayName = "RejectedAccountModal";
 
 const ChatModal = memo(({ partner, currentUser, getSessionToken, apiUrl, onClose, onZoomImage, onRequireAuth }) => {
   useEscapeToClose(onClose);
