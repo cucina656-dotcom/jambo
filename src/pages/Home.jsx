@@ -1,12 +1,9 @@
 ﻿import TvMedia from "../components/tv/TvMedia";
-import TvConversationOverlay from "../components/tv/TvConversationOverlay";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
-// GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 import {
   Fragment,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -28,11 +25,6 @@ import {
   Inbox,
   Mail,
   Plus,
-  Newspaper,
-  UtensilsCrossed,
-  Users,
-  Tv,
-  Tag,
   Star,
   Paperclip,
   Image as ImageIcon,
@@ -51,7 +43,6 @@ import {
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-const DEFAULT_MEDIA_LABEL = "Service media";
 const IS_DEV = Boolean(
   typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV,
 );
@@ -71,7 +62,6 @@ function playNotificationRing() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
-    
     const playTone = (freq, startTime, duration) => {
       const osc = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -84,76 +74,34 @@ function playNotificationRing() {
       osc.start(audioCtx.currentTime + startTime);
       osc.stop(audioCtx.currentTime + startTime + duration);
     };
-
-    // A pleasant 2-tone "ding-dong" ring
-    playTone(880, 0, 0.4);    // A5
-    playTone(1174.66, 0.2, 0.6); // D6
+    playTone(880, 0, 0.4);
+    playTone(1174.66, 0.2, 0.6);
   } catch (err) {
     devWarn("Could not play notification ring", err);
   }
 }
-function getDisplayPostTitle(value = "") {
-  const title = String(value || "").trim();
-  if (!title) return "";
-  const automaticTitles = new Set(["pepper", "chillax"]);
-  return automaticTitles.has(title.toLowerCase()) ? "" : title;
-}
+
 function getPostType(post = {}) {
   const explicitType = String(post.post_type || "").trim().toLowerCase();
-  if (["offer", "need", "exchange", "moment"].includes(explicitType)) {
-    return explicitType;
-  }
-  const title = String(post.title || post.service_charge_per_minute || "")
-    .trim()
-    .toLowerCase();
-  const details = String(
-    post.subtitle || post.service_description || post.description || "",
-  ).toLowerCase();
-  if (
-    post.moment_kind ||
-    ["song saying", "movie saying", "recommendation", "my story"].includes(
-      title,
-    )
-  ) {
-    return "moment";
-  }
-  if (
-    post.exchange_need ||
-    title === "trade skills" ||
-    details.includes("i can give:") ||
-    details.includes("i need:")
-  ) {
-    return "exchange";
-  }
-  if (
-    title.startsWith("budget:") ||
-    details.includes("\nneeded:") ||
-    details.startsWith("needed:")
-  ) {
-    return "need";
-  }
+  if (["offer", "need", "exchange", "moment"].includes(explicitType)) return explicitType;
+  const title = String(post.title || post.service_charge_per_minute || "").trim().toLowerCase();
+  const details = String(post.subtitle || post.service_description || post.description || "").toLowerCase();
+  if (post.moment_kind || ["song saying", "movie saying", "recommendation", "my story"].includes(title)) return "moment";
+  if (post.exchange_need || title === "trade skills" || details.includes("i can give:") || details.includes("i need:")) return "exchange";
+  if (title.startsWith("budget:") || details.includes("\nneeded:") || details.startsWith("needed:")) return "need";
   return "offer";
 }
 
-const DEFAULT_LOGO =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
-const IMAGE_FALLBACK_SRC =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
+const DEFAULT_LOGO = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
+const IMAGE_FALLBACK_SRC = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
 
 const INITIAL_PAGE_LIMIT = 5;
 const LOAD_MORE_LIMIT = 5;
-const MAX_WATCH_SECONDS_PER_REQUEST = 30;
 const SESSION_TOKEN_KEY = "time-market-session-token";
 const USER_DATA_KEY = "time-market-user-data";
 const MESSAGE_POLL_INTERVAL_MS = 2000;
-const VERIFICATION_REFRESH_INTERVAL_MS = 60000;
 const REACTION_COUNTS_POLL_INTERVAL_MS = 12000;
-const INBOX_POLL_INTERVAL_MS = 5000;
-const PIN_RESET_STATUS_POLL_INTERVAL_MS = 4000;
 const TOAST_DURATION_MS = 4200;
-const PERSONAL_PIN_PATTERN = /^\d{8}$/;
-const PIN_AUTH_METHOD = "phone_pin";
-const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 const noop = () => {};
 
 const CATEGORY_TABS = [
@@ -161,13 +109,6 @@ const CATEGORY_TABS = [
   { key: "social-life", label: "Heart", icon: Heart },
   { key: "tv", label: "TV", icon: Tv },
 ];
-
-const CATEGORY_META = {
-  "social-news": { label: "Social News", blurb: "Open Social News at social.com." },
-  kitchen: { label: "Kitchen", blurb: "Food and kitchen services are coming to Gwamo." },
-  tv: { label: "TV", blurb: "Video and media content are coming to Gwamo." },
-  deals: { label: "Deals", blurb: "Offers, discounts and useful local deals are coming to Gwamo." },
-};
 
 const INFO_CONTENT = {
   about: {
@@ -193,36 +134,20 @@ const INFO_CONTENT = {
 
 function isDirectVideoUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
-  return (
-    clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".ogg") ||
-    clean.endsWith(".mov") || clean.endsWith(".m4v") || clean.endsWith(".mkv") ||
-    clean.endsWith(".avi")
-  );
+  return clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".ogg") || clean.endsWith(".mov") || clean.endsWith(".m4v") || clean.endsWith(".mkv") || clean.endsWith(".avi");
 }
 function isImageUrl(url = "") {
   const clean = String(url).toLowerCase().split("?")[0].split("#")[0];
-  return (
-    clean.endsWith(".jpg") || clean.endsWith(".jpeg") || clean.endsWith(".png") ||
-    clean.endsWith(".gif") || clean.endsWith(".webp") || clean.endsWith(".bmp") ||
-    clean.endsWith(".svg")
-  );
+  return clean.endsWith(".jpg") || clean.endsWith(".jpeg") || clean.endsWith(".png") || clean.endsWith(".gif") || clean.endsWith(".webp") || clean.endsWith(".bmp") || clean.endsWith(".svg");
 }
 function getEmbedUrl(url = "") {
   if (!url) return "";
-  const youtubeMatch = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-  );
-  if (youtubeMatch) {
-    return `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${youtubeMatch[1]}&controls=1&rel=0&modestbranding=1`;
-  }
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${ytMatch[1]}&controls=1&rel=0&modestbranding=1`;
   const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-  if (shortsMatch) {
-    return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&modestbranding=1`;
-  }
+  if (shortsMatch) return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1&mute=0&loop=1&playlist=${shortsMatch[1]}&controls=1&rel=0&modestbranding=1`;
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
-  if (vimeoMatch) {
-    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
-  }
+  if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=0&loop=1&background=0`;
   if (url.includes("/embed/") || url.includes("player.")) return url;
   return url;
 }
@@ -232,40 +157,8 @@ function formatCount(value = 0) {
   if (number >= 1000) return `${(number / 1000).toFixed(1).replace(".0", "")}K`;
   return String(number);
 }
-
-const DESCRIPTION_PREVIEW_LENGTH = 96;
-function makeDescriptionPreview(value = "", maxLength = DESCRIPTION_PREVIEW_LENGTH) {
-  const text = String(value || "").trim();
-  if (text.length <= maxLength) return text;
-  const words = text.split(/\s+/);
-  let preview = "";
-  for (const word of words) {
-    const candidate = preview ? `${preview} ${word}` : word;
-    if (candidate.length > maxLength && preview) break;
-    preview = candidate;
-    if (preview.length >= maxLength) break;
-  }
-  return preview;
-}
-
-function renderDescriptionWithLinks(value = "") {
-  return String(value || "")
-    .split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi)
-    .filter(Boolean)
-    .map((part, index) => {
-      if (!/^(?:https?:\/\/|www\.)/i.test(part)) return part;
-      const href = /^https?:\/\//i.test(part) ? part : `https://${part}`;
-      return (
-        <a key={`${part}-${index}`} className="description-link" href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
-          {part}
-        </a>
-      );
-    });
-}
-
 function normalizeWhatsAppNumber(value = "") {
-  const raw = String(value || "").trim();
-  const compact = raw.replace(/[\s().-]/g, "");
+  const compact = String(value || "").trim().replace(/[\s().-]/g, "");
   if (/^07[2389]\d{7}$/.test(compact)) return `250${compact.slice(1)}`;
   if (/^\+2507[2389]\d{7}$/.test(compact)) return compact.slice(1);
   if (/^2507[2389]\d{7}$/.test(compact)) return compact;
@@ -273,977 +166,213 @@ function normalizeWhatsAppNumber(value = "") {
   if (/^[1-9]\d{7,14}$/.test(compact)) return compact;
   return "";
 }
-
-function isSameProviderAsPost(post = {}, provider = null) {
-  if (!provider) return false;
-  const ownerId = String(post.provider_id || "").trim();
-  const viewerId = String(provider.id || "").trim();
-  if (ownerId && viewerId) return ownerId === viewerId;
-  const ownerPhone = normalizeWhatsAppNumber(post.creator_identity || "");
-  const viewerPhone = normalizeWhatsAppNumber(provider.phone || "");
-  return Boolean(ownerPhone && viewerPhone && ownerPhone === viewerPhone);
+function getVerificationStatus(entity) {
+  const raw = String(entity?.verification_status || "").trim().toLowerCase();
+  let status = "pending";
+  if (raw === "verified" || raw === "approved" || entity?.verified === true || entity?.verified === 1 || entity?.verified === "1") status = "verified";
+  else if (raw === "rejected" || raw === "blocked") status = "rejected";
+  return { status, label: status === "verified" ? "Verified" : status === "rejected" ? "Rejected" : "Pending", verified: status === "verified", className: `status-${status}` };
 }
-
 function useEscapeToClose(onClose, isOpen = true) {
   useEffect(() => {
     if (!isOpen || !onClose) return undefined;
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
-    };
+    const handleKeyDown = (event) => { if (event.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 }
-
 async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } = {}) {
   if (!file || !file.type || !file.type.startsWith("image/")) return file;
   try {
     const bitmap = await createImageBitmap(file);
     let { width, height } = bitmap;
-    const widthLimit = maxWidth || width;
-    const heightLimit = maxHeight || height;
-    const scale = Math.min(1, widthLimit / width, heightLimit / height);
-    const targetWidth = Math.max(1, Math.round(width * scale));
-    const targetHeight = Math.max(1, Math.round(height * scale));
+    const scale = Math.min(1, (maxWidth || width) / width, (maxHeight || height) / height);
     const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
-    const blob = await new Promise((resolve) => {
-      canvas.toBlob((result) => resolve(result), "image/webp", quality);
-    });
-    if (!blob) return file;
-    const newName = file.name ? file.name.replace(/\.[^/.]+$/, "") + ".webp" : "upload.webp";
-    return new File([blob], newName, { type: "image/webp" });
-  } catch (error) {
-    devWarn("Image compression failed, using original file:", error);
-    return file;
-  }
-}
-
-function getVerificationStatus(entity) {
-  const rawStatus = String(entity?.verification_status || "").trim().toLowerCase();
-  let status = "pending";
-  if (
-    rawStatus === "verified" || rawStatus === "approved" || entity?.verified === true ||
-    entity?.verified === 1 || entity?.verified === "1" || entity?.is_verified === true ||
-    entity?.is_verified === 1 || entity?.is_verified === "1"
-  ) {
-    status = "verified";
-  } else if (rawStatus === "rejected" || rawStatus === "blocked") {
-    status = "rejected";
-  }
-  const labels = { verified: "Verified", pending: "Verification Pending", rejected: "Not Approved" };
-  return { status, label: labels[status], verified: status === "verified", className: `status-${status}` };
-}
-
-const VerificationTag = memo(function VerificationTag({ info, size = 14 }) {
-  const Icon = info.status === "verified" ? CheckCircle : info.status === "rejected" ? ShieldX : Clock;
-  return (
-    <span className={`verification-tag ${info.className}`}>
-      <Icon size={size} aria-hidden="true" />
-      <span>{info.label}</span>
-    </span>
-  );
-});
-VerificationTag.displayName = "VerificationTag";
-
-function isSameCalendarDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function formatDayLabel(dateInput) {
-  const date = new Date(dateInput);
-  if (Number.isNaN(date.getTime())) return "";
-  const now = new Date();
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (isSameCalendarDay(date, now)) return "Today";
-  if (isSameCalendarDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString([], {
-    month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-  });
-}
-
-function attachmentPreviewLabel(messageType) {
-  switch (messageType) {
-    case "image": return "Photo";
-    case "video": return "Video";
-    case "voice": return "Voice message";
-    case "document": return "Document";
-    default: return "Sent a message";
-  }
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+    return new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: "image/webp" });
+  } catch { return file; }
 }
 
 // ==========================================
-// GWAMO BRAIN WIDGET (INTEGRATED DIRECTLY)
+// GWAMO BRAIN WIDGET
 // ==========================================
 function GwamoBrainWidget({ apiUrl }) {
-  const [settings, setSettings] = useState({
-    title: "Gwamo Brain",
-    welcome_message: "Hello! How can I help you today?",
-    media_url: "",
-  });
-  const [settingsTitleDraft, setSettingsTitleDraft] = useState("Gwamo Brain");
-  const [settingsSubtitleDraft, setSettingsSubtitleDraft] = useState("Human support · Private conversation");
-  const [settingsWelcomeDraft, setSettingsWelcomeDraft] = useState("Hello! How can I help you today?");
+  const [settings, setSettings] = useState({ title: "Gwamo Brain", welcome_message: "Hello!", media_url: "" });
   const [visitorToken, setVisitorToken] = useState("");
- const [messages, setMessages] = useState([]);
- const previousMessagesLengthRef = useRef(0);
-
+  const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [helperMode, setHelperMode] = useState(false);
-  const [adminPin, setAdminPin] = useState("");
-  const [adminAuthed, setAdminAuthed] = useState(false);
-  const [conversations, setConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState("");
-  const [adminMessages, setAdminMessages] = useState([]);
-  const [adminDraft, setAdminDraft] = useState("");
-  const [adminError, setAdminError] = useState("");
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [conversationSearch, setConversationSearch] = useState("");
-  const [showConversationList, setShowConversationList] = useState(true);
-  const [hiddenMessageIds, setHiddenMessageIds] = useState([]);
-
-   const [showSettings, setShowSettings] = useState(false);
-  const [adminNotice, setAdminNotice] = useState("");
-
   const scrollRef = useRef(null);
-  const adminScrollRef = useRef(null);
   const visitorTokenRef = useRef("");
-  const holdTimerRef = useRef(null);
-  const backgroundHoldTimerRef = useRef(null);
-
   const api = `${apiUrl}/api/brain`;
-  const currentHiddenKey = helperMode
-    ? `gwamo-brain-hidden-helper-${selectedConversation || "none"}`
-    : `gwamo-brain-hidden-visitor-${visitorToken || "guest"}`;
 
-  const visitorHeaders = useCallback(() => ({
-    "X-Gwamo-Visitor-Token": visitorTokenRef.current,
-  }), []);
-
-  const adminHeaders = useCallback(() => ({
-    "Content-Type": "application/json",
-    "X-Admin-Pin": adminPin,
-  }), [adminPin]);
-
-  const readResponse = useCallback(async (response) => {
+  const readResponse = async (response) => {
     let data = {};
-    try { data = await response.json(); } catch { /* handled below */ }
-    if (!response.ok || data.success === false) {
-      throw new Error(data.error || data.message || `Request failed (${response.status})`);
-    }
+    try { data = await response.json(); } catch {}
+    if (!response.ok || data.success === false) throw new Error(data.error || data.message || `Request failed`);
     return data;
-  }, []);
+  };
 
-  const loadSettings = useCallback(async () => {
-    try {
-      const response = await fetch(`${api}/settings`, { cache: "no-store" });
-      const data = await readResponse(response);
-      if (data.settings) {
-        setSettings((current) => ({ ...current, ...data.settings }));
-        setSettingsTitleDraft(String(data.settings.title || "Gwamo Brain"));
-        setSettingsSubtitleDraft(String(data.settings.subtitle || "Human support · Private conversation"));
-        setSettingsWelcomeDraft(String(data.settings.welcome_message || "Hello! How can I help you today?"));
-      }
-    } catch (err) {
-      console.warn("Could not load Gwamo Brain settings", err);
-    }
-  }, [api, readResponse]);
-
-  const loadVisitorMessages = useCallback(async (showSpinner = false) => {
+  const loadVisitorMessages = useCallback(async () => {
     if (!visitorTokenRef.current) return;
-    if (showSpinner) setLoading(true);
     try {
-      const response = await fetch(`${api}/messages`, {
-        headers: visitorHeaders(), cache: "no-store",
-      });
-      const data = await readResponse(response);
+      const res = await fetch(`${api}/messages`, { headers: { "X-Gwamo-Visitor-Token": visitorTokenRef.current }, cache: "no-store" });
+      const data = await readResponse(res);
       setMessages(Array.isArray(data.messages) ? data.messages : []);
-      setError("");
-    } catch (err) {
-      setError(err.message || "Could not load your support messages.");
-    } finally {
-      if (showSpinner) setLoading(false);
-    }
-  }, [api, visitorHeaders, readResponse]);
-
-  const initializeVisitor = useCallback(async () => {
-    try {
-      await loadSettings();
-      let savedToken = "";
-      try { savedToken = localStorage.getItem("gwamo-brain-visitor-token") || ""; } catch { /* storage unavailable */ }
-      const headers = savedToken ? { "X-Gwamo-Visitor-Token": savedToken } : {};
-      const response = await fetch(`${api}/conversation`, {
-        method: "POST", headers, cache: "no-store",
-      });
-      const data = await readResponse(response);
-      const token = String(data.visitor_token || savedToken || "");
-      if (!token) throw new Error("The support service did not return a visitor token.");
-      visitorTokenRef.current = token;
-      setVisitorToken(token);
-      try { localStorage.setItem("gwamo-brain-visitor-token", token); } catch { /* storage unavailable */ }
-      await loadVisitorMessages(true);
-    } catch (err) {
-      setError(err.message || "Support chat is temporarily unavailable.");
-    }
-  }, [api, loadSettings, loadVisitorMessages, readResponse]);
-
-  useEffect(() => { initializeVisitor(); }, [initializeVisitor]);
+    } catch (err) { setError(err.message); }
+  }, [api]);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(currentHiddenKey);
-      setHiddenMessageIds(saved ? JSON.parse(saved) : []);
-    } catch {
-      setHiddenMessageIds([]);
-    }
-  }, [currentHiddenKey]);
-
-  useEffect(() => {
-    if (helperMode || !visitorToken) return undefined;
-    
-    // Poll faster (1.5 seconds) for instant appearance
-    const id = window.setInterval(() => loadVisitorMessages(false), 1500);
-    
-    // Send heartbeat every 5 seconds so the helper knows we are online
-    const pingId = window.setInterval(() => {
-      fetch(`${api}/ping`, {
-        method: "POST",
-        headers: { "X-Gwamo-Visitor-Token": visitorTokenRef.current, "Content-Type": "application/json" },
-        body: JSON.stringify({})
-      }).catch(() => {});
-    }, 5000);
-
-    // Send one immediately on load
-    fetch(`${api}/ping`, {
-      method: "POST",
-      headers: { "X-Gwamo-Visitor-Token": visitorTokenRef.current, "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    }).catch(() => {});
-
-    return () => {
-      window.clearInterval(id);
-      window.clearInterval(pingId);
-    };
-  }, [helperMode, visitorToken, loadVisitorMessages, api]);
-
- useEffect(() => {
-  if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  
-  // Ring only if a NEW message came IN (not on initial load)
-  if (messages.length > previousMessagesLengthRef.current && previousMessagesLengthRef.current !== 0) {
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg && lastMsg.sender === "helper") {
-      playNotificationRing();
-    }
-  }
-  previousMessagesLengthRef.current = messages.length;
-}, [messages, hiddenMessageIds]);
-
-  useEffect(() => {
-    if (adminScrollRef.current) adminScrollRef.current.scrollTop = adminScrollRef.current.scrollHeight;
-  }, [adminMessages, hiddenMessageIds]);
-
-  useEffect(() => () => {
-    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
-    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
-  }, []);
-
-  const persistHiddenMessages = useCallback((nextIds) => {
-    setHiddenMessageIds(nextIds);
-    try { localStorage.setItem(currentHiddenKey, JSON.stringify(nextIds)); } catch { /* storage unavailable */ }
-  }, [currentHiddenKey]);
-
-  const deleteMessageFromThisView = useCallback((message) => {
-    if (!message || message.id == null) return;
-    const label = helperMode ? "this helper inbox" : "your chat";
-    if (!window.confirm(`Remove this message from ${label}? It will be hidden only in this view.`)) return;
-    const id = String(message.id);
-    persistHiddenMessages((hiddenMessageIds || []).includes(id)
-      ? hiddenMessageIds
-      : [...hiddenMessageIds, id]);
-  }, [helperMode, hiddenMessageIds, persistHiddenMessages]);
-
-  const startMessageHold = (message) => (event) => {
-    if (event?.pointerType === "mouse" && event.button !== 0) return;
-    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
-    holdTimerRef.current = window.setTimeout(() => {
-      deleteMessageFromThisView(message);
-    }, 750);
-  };
-
-  const endMessageHold = () => {
-    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
-    holdTimerRef.current = null;
-  };
-
-  const sendVisitorMessage = useCallback(async (event) => {
-    event?.preventDefault();
-    const text = draft.trim();
-    if (!text || sending || !visitorTokenRef.current) return;
-    setSending(true);
-    setError("");
-    try {
-      const response = await fetch(`${api}/message`, {
-        method: "POST",
-        headers: { ...visitorHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await readResponse(response);
-      if (data.message) {
-  setMessages((current) => [...current, data.message]);
-  playNotificationRing();
-}
-      setDraft("");
-      await loadVisitorMessages(false);
-    } catch (err) {
-      setError(err.message || "Your message could not be sent.");
-    } finally {
-      setSending(false);
-    }
-  }, [api, draft, sending, visitorHeaders, readResponse, loadVisitorMessages]);
-
-  const loadAdminConversations = useCallback(async () => {
-    const response = await fetch(`${api}/admin/conversations`, {
-      headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
-    });
-    const data = await readResponse(response);
-    setConversations(Array.isArray(data.conversations) ? data.conversations : []);
-  }, [api, adminPin, readResponse]);
-
-  const loadAdminMessages = useCallback(async (conversationId) => {
-    if (!conversationId) { setAdminMessages([]); return; }
-    const response = await fetch(`${api}/admin/messages?conversation_id=${encodeURIComponent(conversationId)}`, {
-      headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
-    });
-    const data = await readResponse(response);
-    setAdminMessages(Array.isArray(data.messages) ? data.messages : []);
-  }, [api, adminPin, readResponse]);
-
-  const loginHelper = useCallback(async (event) => {
-    event?.preventDefault();
-    setAdminError("");
-    setAdminBusy(true);
-    try {
-      const response = await fetch(`${api}/admin/conversations`, {
-        headers: { "X-Admin-Pin": adminPin }, cache: "no-store",
-      });
-      const data = await readResponse(response);
-      setConversations(Array.isArray(data.conversations) ? data.conversations : []);
-      setAdminAuthed(true);
-      setSelectedConversation("");
-      setAdminMessages([]);
-      setShowConversationList(true);
-    } catch (err) {
-      setAdminError(err.message || "Admin PIN was not accepted.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }, [api, adminPin, readResponse]);
-
-     useEffect(() => {
-    if (!helperMode || !adminAuthed) return undefined;
-    const id = window.setInterval(async () => {
+    async function init() {
       try {
-        await loadAdminConversations();
-        if (selectedConversation) await loadAdminMessages(selectedConversation);
-      } catch (err) {
-        setAdminError(err.message || "Could not refresh helper inbox.");
-      }
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, [helperMode, adminAuthed, selectedConversation, loadAdminConversations, loadAdminMessages]);
+        const res = await fetch(`${api}/settings`);
+        const data = await readResponse(res);
+        if (data.settings) setSettings(data.settings);
+        let token = localStorage.getItem("gwamo-brain-visitor-token") || "";
+        const convRes = await fetch(`${api}/conversation`, { method: "POST", headers: token ? { "X-Gwamo-Visitor-Token": token } : {} });
+        const convData = await readResponse(convRes);
+        visitorTokenRef.current = convData.visitor_token;
+        setVisitorToken(convData.visitor_token);
+        localStorage.setItem("gwamo-brain-visitor-token", convData.visitor_token);
+        setLoading(false);
+        loadVisitorMessages();
+      } catch (err) { setError(err.message); setLoading(false); }
+    }
+    init();
+  }, [api, loadVisitorMessages]);
 
-  const sendHelperReply = useCallback(async (event) => {
-    event?.preventDefault();
-    const text = adminDraft.trim();
-    if (!text || !selectedConversation || adminBusy) return;
-    setAdminBusy(true);
-    setAdminError("");
+  useEffect(() => {
+    if (!visitorToken) return;
+    const id = setInterval(loadVisitorMessages, 1500);
+    return () => clearInterval(id);
+  }, [visitorToken, loadVisitorMessages]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!draft.trim()) return;
     try {
-      const response = await fetch(`${api}/admin/reply`, {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({ conversation_id: selectedConversation, text }),
-      });
-      const data = await readResponse(response);
-      if (data.message) setAdminMessages((current) => [...current, data.message]);
-      setAdminDraft("");
-      await loadAdminConversations();
-    } catch (err) {
-      setAdminError(err.message || "Reply could not be sent.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }, [api, adminDraft, selectedConversation, adminBusy, adminHeaders, readResponse, loadAdminConversations]);
-
-  const saveBrainDisplaySettings = async (event) => {
-    event?.preventDefault();
-    if (!adminAuthed || adminBusy) return;
-    const title = settingsTitleDraft.trim();
-    const subtitle = settingsSubtitleDraft.trim();
-    const welcome_message = settingsWelcomeDraft.trim();
-    if (!title || !subtitle || !welcome_message) {
-      setAdminError("Please enter both a chat title and a welcome message.");
-      return;
-    }
-    setAdminBusy(true);
-    setAdminError("");
-    try {
-      const response = await fetch(`${api}/admin/settings`, {
-        method: "POST",
-        headers: adminHeaders(),
-        body: JSON.stringify({ title, subtitle, welcome_message, media_url: settings.media_url || "" }),
-      });
-      await readResponse(response);
-      setSettings((current) => ({ ...current, title, subtitle, welcome_message }));
-    } catch (err) {
-      setAdminError(err.message || "Could not save the chat title and welcome message.");
-    } finally {
-      setAdminBusy(false);
-    }
+      await fetch(`${api}/message`, { method: "POST", headers: { "Content-Type": "application/json", "X-Gwamo-Visitor-Token": visitorTokenRef.current }, body: JSON.stringify({ text: draft }) });
+      setDraft("");
+      loadVisitorMessages();
+    } catch (err) { setError(err.message); }
   };
-
-  const settingsPayload = (media_url) => JSON.stringify({
-    title: settings.title || settingsTitleDraft,
-    subtitle: settings.subtitle || settingsSubtitleDraft,
-    welcome_message: settings.welcome_message || settingsWelcomeDraft,
-    media_url,
-  });
-
-  const uploadHelperBackgroundVideo = async (file) => {
-    if (!file) return;
-    if (!file.type.startsWith("video/")) {
-      setAdminError("Choose a video file for the Home-screen background.");
-      return;
-    }
-    setAdminBusy(true); setAdminError(""); setAdminNotice("Uploading video… keep this screen open.");
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("conversation_id", selectedConversation || "global"); // FIX: Fallback to "global"
-      const uploadRes = await fetch(`${api}/admin/upload`, {
-        method: "POST", headers: { "X-Admin-Pin": adminPin }, body: formData,
-      });
-      const uploadData = await readResponse(uploadRes);
-      const url = uploadData.url || uploadData.media_url;
-      if (!url) throw new Error("Upload failed: no video URL was returned.");
-      const settingsRes = await fetch(`${api}/admin/settings`, {
-        method: "POST", headers: adminHeaders(), body: settingsPayload(url),
-      });
-      await readResponse(settingsRes);
-      setSettings((current) => ({ ...current, media_url: url }));
-      setAdminNotice("Background video updated.");
-    } catch (err) {
-      setAdminNotice("");
-      setAdminError(err.message || "Failed to set the Home-screen background video.");
-    } finally {
-      setAdminBusy(false);
-    }
-  };
-
-  const deleteBackgroundVideo = async () => {
-    if (!window.confirm("Remove the background video from the Gwamo Home screen for everyone?")) return;
-    setAdminBusy(true); setAdminError(""); setAdminNotice("");
-    try {
-      const response = await fetch(`${api}/admin/settings`, {
-        method: "POST", headers: adminHeaders(), body: settingsPayload(""),
-      });
-      await readResponse(response);
-      setSettings((current) => ({ ...current, media_url: "" }));
-      setAdminNotice("Background video removed.");
-    } catch (err) {
-      setAdminError(err.message || "Failed to remove the background video.");
-    } finally {
-      setAdminBusy(false);
-    }
-  };
-
-  const startBackgroundHold = (event) => {
-    if (!helperMode || !adminAuthed || !settings.media_url || (event?.pointerType === "mouse" && event.button !== 0)) return;
-    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
-    backgroundHoldTimerRef.current = window.setTimeout(() => {
-      deleteBackgroundVideo();
-    }, 900);
-  };
-  const endBackgroundHold = () => {
-    if (backgroundHoldTimerRef.current) window.clearTimeout(backgroundHoldTimerRef.current);
-    backgroundHoldTimerRef.current = null;
-  };
-
-  const mediaUrl = String(settings.media_url || "").trim();
-  const isImageMedia = /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(mediaUrl);
-  const isVideo = Boolean(mediaUrl) && !isImageMedia;
-  
-  const visibleMessages = (list) => (Array.isArray(list) ? list : []).filter((message) =>
-    !hiddenMessageIds.includes(String(message.id))
-  );
-  const filteredConversations = conversations.filter((conversation) => {
-    const query = conversationSearch.trim().toLowerCase();
-    if (!query) return true;
-    return [conversation.visitor_label, conversation.last_message, conversation.status, conversation.id]
-      .some((value) => String(value || "").toLowerCase().includes(query));
-  });
-  const selectedConversationData = conversations.find((conversation) => String(conversation.id) === String(selectedConversation));
 
   return (
-    <div className="gwamo-brain-container">
-      <style>{`
-        .gwamo-brain-container {
-          position: relative;
-          isolation: isolate;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          width: 100%;
-          max-width: 860px;
-          margin: 0 auto;
-          height: calc(100svh - var(--nav-h, 64px));
-          min-height: 420px;
-          padding: calc(var(--top-offset, 60px) + 8px) 12px 12px;
-          box-sizing: border-box;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        @supports (height: 100dvh) {
-          .gwamo-brain-container {
-            height: calc(100dvh - var(--nav-h, 64px));
-          }
-        }
-
-        /* Structural Panel Container */
-        .gbw-panel {
-          position: relative;
-          width: 100%;
-          flex: 1;
-          min-height: 0;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 24px;
-          background: #090f1b;
-          box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
-          color: #ffffff;
-        }
-
-        /* Header Card */
-        .gbw-head {
-          position: relative;
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 14px 18px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          background: #0c1322;
-        }
-        .gbw-logo {
-          width: 44px;
-          height: 44px;
-          flex-shrink: 0;
-          display: grid;
-          place-items: center;
-          border-radius: 14px;
-          color: #ff0040;
-          background: transparent;
-          border: 2px solid #ff0040;
-          box-shadow: 0 0 15px rgba(255, 0, 64, 0.7);
-        }
-        .gbw-headcopy {
-          flex: 1;
-          min-width: 0;
-        }
-        .gbw-headcopy strong {
-          display: block;
-          color: #ffffff;
-          font-size: 18px;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-        }
-        .gbw-headcopy small {
-          display: block;
-          margin-top: 3px;
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 13px;
-        }
-
-        /* Scaled Video Viewport (Positioned between Header and Compose Box) */
-        .gbw-video-viewport {
-          position: relative;
-          flex: 1;
-          min-height: 0;
-          width: 100%;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        .gbw-page-background {
-          position: absolute;
-          inset: 0;
-          z-index: 0;
-          overflow: hidden;
-          background: #000000;
-        }
-        .gbw-page-background video,
-        .gbw-page-background img {
-          width: 100%;
-          height: 100%;
-          display: block;
-          object-fit: cover;
-          opacity: 0.85;
-        }
-
-        /* Welcome Bar Overlay */
-        .gbw-welcome {
-          position: relative;
-          z-index: 5;
-          margin: 12px 16px 0;
-          padding: 12px 18px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 16px;
-          color: #ffffff;
-          background: rgba(12, 19, 34, 0.65);
-          backdrop-filter: blur(8px);
-          font-size: 15px;
-          font-weight: 500;
-          text-align: center;
-        }
-
-        /* Chat Message Area Over Video */
-        .gbw-messages,
-        .gbw-adminmessages {
-          position: relative;
-          z-index: 5;
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          padding: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          scroll-behavior: smooth;
-          overscroll-behavior: contain;
-        }
-        .gbw-messages::-webkit-scrollbar,
-        .gbw-adminmessages::-webkit-scrollbar,
-        .gbw-convos::-webkit-scrollbar {
-          width: 5px;
-        }
-        .gbw-messages::-webkit-scrollbar-thumb,
-        .gbw-adminmessages::-webkit-scrollbar-thumb,
-        .gbw-convos::-webkit-scrollbar-thumb {
-          border-radius: 10px;
-          background: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Neon Blue Chat Bubbles - White Bold Text */
-        .gbw-bubble {
-          position: relative;
-          max-width: 82%;
-          padding: 9px 14px;
-          font-size: 15px;
-          font-weight: 700;
-          line-height: 1.4;
-          color: #ffffff;
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
-          touch-action: pan-y;
-          user-select: none;
-          -webkit-user-select: none;
-          cursor: default;
-        }
-        .gbw-bubble.visitor {
-          align-self: flex-end;
-          border: 1px solid rgba(0, 229, 255, 0.9);
-          border-radius: 18px 18px 5px 18px;
-          background: linear-gradient(135deg, #00b0ff, #0078ff);
-          box-shadow: 0 0 14px rgba(0, 176, 255, 0.65);
-        }
-        .gbw-bubble.helper {
-          align-self: flex-start;
-          border: 1px solid rgba(0, 176, 255, 0.7);
-          border-radius: 18px 18px 18px 5px;
-          background: rgba(8, 24, 52, 0.82);
-          box-shadow: 0 0 10px rgba(0, 176, 255, 0.35);
-        }
-        .gbw-time {
-          display: block;
-          margin-top: 3px;
-          font-size: 11px;
-          font-weight: 400;
-          text-align: right;
-          color: rgba(255, 255, 255, 0.85);
-        }
-
-        .gbw-hold-hint {
-          position: relative;
-          z-index: 5;
-          font-size: 11.5px;
-          color: rgba(255, 255, 255, 0.7);
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-          text-align: center;
-          padding: 0 8px 6px;
-        }
-
-        /* Bottom Message Composer Card */
-        .gbw-compose {
-          position: relative;
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-          background: #090f1b;
-        }
-        .gbw-compose input {
-          flex: 1;
-          width: 100%;
-          min-width: 0;
-          box-sizing: border-box;
-          padding: 12px 18px;
-          border: 1.5px solid #00b0ff;
-          border-radius: 20px;
-          outline: none;
-          color: #ffffff;
-          background: rgba(13, 22, 38, 0.8);
-          font-family: inherit;
-          font-size: 14.5px;
-          box-shadow: 0 0 10px rgba(0, 176, 255, 0.2);
-        }
-        .gbw-compose input:focus {
-          border-color: #00e5ff;
-          box-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
-        }
-        .gbw-compose input::placeholder {
-          color: rgba(255, 255, 255, 0.5);
-        }
-
-        /* Red Glow Send Action Button */
-        .gbw-send {
-          width: 48px;
-          height: 48px;
-          min-width: 48px;
-          padding: 0;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border: 0;
-          border-radius: 50%;
-          color: #ffffff;
-          background: #ff0040;
-          box-shadow: 0 0 18px rgba(255, 0, 64, 0.8);
-          cursor: pointer;
-          transition: transform 0.15s, filter 0.15s;
-        }
-        .gbw-send:hover:not(:disabled) {
-          transform: scale(1.05);
-          filter: brightness(1.1);
-        }
-        .gbw-send:disabled {
-          opacity: 0.45;
-          cursor: not-allowed;
-        }
-
-        /* Helper Link & Misc */
-        .gbw-helperlink, .gbw-back {
-          position: relative;
-          z-index: 10;
-          align-self: center;
-          padding: 8px 12px 12px;
-          border: 0;
-          color: rgba(255, 255, 255, 0.6);
-          background: transparent;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        .gbw-helperlink:hover, .gbw-back:hover { color: #ffffff; }
-        .gbw-empty { padding: 30px 18px; color: rgba(255, 255, 255, 0.8); font-size: 14px; text-align: center; }
-        .gbw-error { position: relative; z-index: 10; padding: 10px 14px; color: #ffd9de; background: rgba(255, 0, 64, 0.4); font-size: 12.5px; text-align: center; }
-
-        /* Helper / Admin UI (unchanged from the previous version) */
-        .gbw-admin-compose textarea,.gbw-adminlogin input,.gbw-search{flex:1;width:100%;min-width:0;box-sizing:border-box;padding:12px 15px;border:1px solid rgba(255,255,255,.17);border-radius:15px;outline:none;color:#fff;background:rgba(255,255,255,.075);font:inherit;font-size:14px;transition:border-color .15s,background .15s}
-        .gbw-admin-compose textarea:focus,.gbw-adminlogin input:focus,.gbw-search:focus{border-color:#b8f36b;background:rgba(255,255,255,.1)}
-        .gbw-admin-compose textarea::placeholder,.gbw-adminlogin input::placeholder,.gbw-search::placeholder{color:rgba(235,241,250,.6)}
-        .gbw-primary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:0 17px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer;transition:transform .15s,filter .15s;white-space:nowrap}
-        .gbw-primary:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}.gbw-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
-        .gbw-adminlogin{position:relative;z-index:1;width:min(100%,390px);height:100%;box-sizing:border-box;margin:0 auto;padding:28px 22px;display:flex;flex-direction:column;justify-content:center;gap:13px}.gbw-adminlogin h3{margin:0;color:#fff;font-size:25px;letter-spacing:-.03em;text-align:center}.gbw-login-mark{width:60px;height:60px;display:grid;place-items:center;align-self:center;border-radius:20px;color:#14230b;background:#b8f36b}.gbw-login-copy{margin:0 0 8px;color:rgba(239,245,255,.72);font-size:13px;line-height:1.5;text-align:center}
-        .gbw-admin{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,275px) minmax(0,1fr)}.gbw-convo-side{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.13);background:rgba(8,14,25,.42)}.gbw-convo-heading{padding:14px 13px 10px}.gbw-convo-heading strong{display:block;color:#fff;font-size:15px}.gbw-convo-heading small{display:block;margin-top:4px;color:rgba(235,241,250,.6);font-size:11px}.gbw-search{margin-top:11px;padding:10px 12px;border-radius:12px;font-size:12.5px}.gbw-convos{flex:1;min-height:0;overflow-y:auto}.gbw-convo{display:block;width:100%;box-sizing:border-box;padding:13px;border:0;border-bottom:1px solid rgba(255,255,255,.08);border-left:3px solid transparent;color:#fff;background:transparent;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}.gbw-convo:hover{background:rgba(255,255,255,.055)}.gbw-convo.active{border-left-color:#b8f36b;background:rgba(184,243,107,.12)}.gbw-convo strong,.gbw-convo small,.gbw-convo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gbw-convo strong{font-size:13px;font-weight:750}.gbw-convo small{margin-top:4px;color:#c5f78e;font-size:10.5px;text-transform:capitalize}.gbw-convo span{margin-top:5px;color:rgba(235,241,250,.65);font-size:11.5px}.gbw-adminright{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;background:rgba(13,20,33,.18)}.gbw-chat-toolbar{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.35)}.gbw-chat-toolbar-copy{flex:1;min-width:0}.gbw-chat-toolbar strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#fff}.gbw-chat-toolbar small{display:block;margin-top:3px;color:rgba(235,241,250,.6);font-size:10.5px}.gbw-iconbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:11px;color:#f5f7fb;background:rgba(255,255,255,.07);font-size:11.5px;font-weight:650;cursor:pointer}.gbw-iconbtn:hover{background:rgba(255,255,255,.13)}.gbw-iconbtn.danger{color:#ffd6db;border-color:rgba(255,116,135,.24);background:rgba(255,92,112,.13)}
-        .gbw-admin-compose{display:flex;align-items:flex-end;gap:8px;padding:11px 12px;border-top:1px solid rgba(255,255,255,.12);background:rgba(9,15,27,.7)}.gbw-admin-compose textarea{resize:vertical;min-height:44px;max-height:120px;border-radius:13px}.gbw-upload-label{width:44px;height:44px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#eaf5dc;background:rgba(255,255,255,.08);cursor:pointer}.gbw-upload-label:hover{background:rgba(255,255,255,.15)}.gbw-settings-editor{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:9px;padding:12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.42)}.gbw-settings-editor strong{font-size:12px;color:#fff}.gbw-settings-editor label{display:grid;gap:5px;color:rgba(241,246,255,.72);font-size:11px}.gbw-settings-editor input,.gbw-settings-editor textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(255,255,255,.16);border-radius:11px;color:#fff;background:rgba(255,255,255,.07);font:inherit;font-size:13px;outline:none}.gbw-settings-editor textarea{min-height:58px;resize:vertical}.gbw-settings-editor input:focus,.gbw-settings-editor textarea:focus{border-color:#b8f36b}.gbw-settings-save{justify-self:start;min-height:36px;padding:0 13px;border:0;border-radius:10px;color:#13220b;background:#b8f36b;font-weight:750;cursor:pointer}.gbw-settings-save:disabled{opacity:.55;cursor:wait}.gbw-background-status{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.1);color:rgba(241,246,255,.78);background:rgba(7,12,21,.38);font-size:11.5px}.gbw-background-status span{flex:1}.gbw-background-hint{font-size:10px;color:rgba(241,246,255,.55)}.gbw-mobile-back{display:none}
-        @media(max-width:650px){.gwamo-brain-container{padding:calc(var(--top-offset,60px) + 4px) 0 0;min-height:380px}.gbw-panel{border-width:1px 0 0;border-radius:22px 22px 0 0}.gbw-admin{grid-template-columns:minmax(0,1fr)}.gbw-admin.show-chat .gbw-convo-side{display:none}.gbw-admin:not(.show-chat) .gbw-adminright{display:none}.gbw-mobile-back{display:inline-flex}.gbw-bubble{max-width:88%}.gbw-head{padding:11px 13px}.gbw-admin-compose{gap:6px;padding:9px}.gbw-admin-compose .gbw-primary{padding:0 11px;font-size:12px}.gbw-background-status{flex-wrap:wrap}.gbw-background-hint{width:100%}}
-        @media(prefers-reduced-motion:reduce){.gbw-messages,.gbw-adminmessages{scroll-behavior:auto}.gbw-send,.gbw-primary{transition:none}}
-        
-        .gbw-admin{grid-template-rows:minmax(0,1fr)}
-        .gbw-helper-bar{position:relative;z-index:10;flex-shrink:0;display:flex;justify-content:flex-end;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#0c1322}
-        .gbw-settings-panel{position:relative;z-index:10;flex-shrink:0;max-height:40svh;overflow-y:auto}
-        .gbw-notice{position:relative;z-index:10;flex-shrink:0;padding:8px 14px;color:#d6f5ff;background:rgba(0,176,255,.25);font-size:12.5px;text-align:center}
-      `}</style>
-
-      <section className="gbw-panel">
-        <header className="gbw-head">
-          <div className="gbw-logo" aria-hidden="true"><MessageSquare size={22} strokeWidth={2.2} /></div>
-          <div className="gbw-headcopy">
-            <strong>{helperMode ? "Gwamo Brain Helper" : (settings.title || "Gwamo Brain")}</strong>
-            <small>{helperMode ? (adminAuthed ? "Private helper inbox · Live updates" : "Authorized helper access") : (settings.subtitle || "Human support · Private conversation")}</small>
+    <div className="gbw-panel" style={{ height: "100svh", display: "flex", flexDirection: "column", background: "#090f1b", color: "#fff" }}>
+      <header style={{ padding: "14px", borderBottom: "1px solid #ffffff1a", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ width: "40px", height: "40px", borderRadius: "12px", border: "2px solid #ff0040", display: "grid", placeItems: "center", color: "#ff0040" }}><MessageSquare size={20} /></div>
+        <div><strong style={{ display: "block" }}>{settings.title}</strong><small style={{ color: "#9ca3af" }}>{settings.subtitle || "Private"}</small></div>
+      </header>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        {loading && <div style={{ textAlign: "center", color: "#9ca3af" }}>Loading...</div>}
+        {messages.map((m) => (
+          <div key={m.id} style={{ alignSelf: m.sender === "visitor" ? "flex-end" : "flex-start", maxWidth: "80%", padding: "10px 14px", borderRadius: "16px", background: m.sender === "visitor" ? "linear-gradient(135deg,#00b0ff,#0078ff)" : "#1f2937", fontSize: "14px" }}>
+            {m.text_content}
           </div>
-          {helperMode && adminAuthed && (
-            <button className="gbw-iconbtn" type="button" onClick={() => {
-              setAdminAuthed(false); setAdminPin(""); setConversations([]); setAdminMessages([]);
-              setSelectedConversation(""); setShowConversationList(true);
-            }}><LogOut size={14} /> Log out</button>
-          )}
-        </header>
-
-        {!helperMode ? (
-          <>
-            {/* Video Viewport: strictly bounded between Header and Compose Box */}
-                        <div className="gbw-video-viewport">
-              <div className="gbw-welcome">{settings.welcome_message || "Hello! How can I help you?"}</div>
-              <div className="gbw-messages" ref={scrollRef} aria-live="polite">
-                {loading && messages.length === 0 && <div className="gbw-empty">Loading your conversation...</div>}
-                {visibleMessages(messages).map((message) => {
-                  const videoUrl = message.media_url || message.mediaUrl;
-                  const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
-                  return (
-                    <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                      onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
-                      onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
-                      onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your view">
-                      {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
-                      {message.text_content}
-                      <span className="gbw-time">{message.sender === "helper" ? "Gwamo helper" : "You"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                    </div>
-                  );
-                })}
-                {!loading && visibleMessages(messages).length === 0 && <div className="gbw-empty">Send a message to start. You do not need an account.</div>}
-              </div>
-              <div className="gbw-hold-hint">Tip: press and hold a message to remove it from your view.</div>
-            </div>
-            {error && <div className="gbw-error" role="status">{error}</div>}
-            <form className="gbw-compose" onSubmit={sendVisitorMessage}>
-              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message..." maxLength={4000} aria-label="Your support message" />
-              <button className="gbw-send" type="submit" disabled={!draft.trim() || sending || !visitorToken} aria-label="Send message">{sending ? "…" : <Send size={18} />}</button>
-            </form>
-            <button className="gbw-helperlink" type="button" onClick={() => { setHelperMode(true); setAdminError(""); }}>Gwamo helper login</button>
-          </>
-        ) : !adminAuthed ? (
-          <form className="gbw-adminlogin" onSubmit={loginHelper}>
-            <div className="gbw-login-mark"><ShieldCheck size={29} /></div>
-            <h3>Helper sign in</h3>
-            <p className="gbw-login-copy">Use your authorized PIN to open the private inbox and reply to visitors.</p>
-            <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Enter helper PIN" autoComplete="current-password" required />
-            <button className="gbw-primary" type="submit" disabled={!adminPin || adminBusy}>{adminBusy ? "Checking PIN…" : <><LogIn size={16} /> Open helper inbox</>}</button>
-            <button className="gbw-back" type="button" onClick={() => { setHelperMode(false); setAdminError(""); }}>← Back to visitor chat</button>
-            {adminError && <div className="gbw-error" role="status">{adminError}</div>}
-          </form>
-        ) : (
-          <>
-            <div className="gbw-helper-bar">
-              <button className="gbw-iconbtn" type="button" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>
-                <Pencil size={14} /> {showSettings ? "Hide chat settings" : "Chat settings & video"}
-              </button>
-            </div>
-            {adminError && <div className="gbw-error" role="status">{adminError}</div>}
-            {adminNotice && !adminError && <div className="gbw-notice" role="status">{adminNotice}</div>}
-
-            {showSettings && (
-              <div className="gbw-settings-panel">
-                <form className="gbw-settings-editor" onSubmit={saveBrainDisplaySettings}>
-                  <strong>Customize the visitor chat</strong>
-                  <label>Chat title
-                    <input value={settingsTitleDraft} onChange={(e) => setSettingsTitleDraft(e.target.value)} maxLength={80} required placeholder="Gwamo Brain" />
-                  </label>
-                  <label>Subtitle
-                    <input value={settingsSubtitleDraft} onChange={(e) => setSettingsSubtitleDraft(e.target.value)} maxLength={120} required placeholder="Human support · Private conversation" />
-                  </label>
-                  <label>Welcome message
-                    <textarea value={settingsWelcomeDraft} onChange={(e) => setSettingsWelcomeDraft(e.target.value)} maxLength={500} required placeholder="Hello! How can I help you?" />
-                  </label>
-                  <button className="gbw-settings-save" type="submit" disabled={adminBusy}>{adminBusy ? "Saving…" : "Save chat appearance"}</button>
-                </form>
-                                {/* Video upload feature removed by request */}
-              </div>
-            )}
-
-            <div className={`gbw-admin ${selectedConversation && !showConversationList ? "show-chat" : ""}`}>
-              <aside className="gbw-convo-side" aria-label="Visitor conversations">
-                <div className="gbw-convo-heading">
-                  <strong>Visitor inbox</strong>
-                  <small>{conversations.length} conversation{conversations.length === 1 ? "" : "s"} · refreshes automatically</small>
-                  <input className="gbw-search" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search visitors or messages…" aria-label="Search conversations" />
-                </div>
-                <div className="gbw-convos">
-                  {filteredConversations.length === 0 && <div className="gbw-empty">{conversationSearch ? "No conversations match your search." : "No conversations yet."}</div>}
-                  {filteredConversations.map((conversation) => (
-                                       <button type="button" key={conversation.id} className={`gbw-convo ${String(selectedConversation) === String(conversation.id) ? "active" : ""}`} onClick={async () => {
-                      setSelectedConversation(conversation.id); setAdminError(""); setShowConversationList(false);
-                      try { await loadAdminMessages(conversation.id); } catch (err) { setAdminError(err.message || "Could not load messages."); }
-                    }}>
-                      <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {conversation.visitor_label || "Visitor"}
-                        {conversation.updated_at && (Date.now() - new Date(conversation.updated_at).getTime() < 20000) && (
-                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3ddc97', display: 'inline-block', boxShadow: '0 0 6px #3ddc97' }} title="Online"></span>
-                        )}
-                      </strong>
-                      <small>{conversation.status || "open"}</small>
-                      <span>{conversation.last_message || "No messages yet"}</span>
-                    </button>
-                  ))}
-                </div>
-              </aside>
-
-              <div className="gbw-adminright">
-                {!selectedConversation ? (
-                  <div className="gbw-empty">Choose a visitor on the left to read their messages and reply.<br /><br />You can manage many separate visitor conversations from this inbox.</div>
-                ) : (
-                  <>
-                    <div className="gbw-chat-toolbar">
-                      <button className="gbw-iconbtn gbw-mobile-back" type="button" onClick={() => setShowConversationList(true)}>← Inbox</button>
-                      <div className="gbw-chat-toolbar-copy">
-                        <strong>{selectedConversationData?.visitor_label || "Visitor conversation"}</strong>
-                        <small>{selectedConversationData?.status || "Conversation selected"} · Press and hold a message to hide it from your helper view</small>
-                      </div>
-                    </div>
-                    <div className="gbw-adminmessages" ref={adminScrollRef}>
-                      {visibleMessages(adminMessages).map((message) => {
-                        const videoUrl = message.media_url || message.mediaUrl;
-                        const isMsgVideo = (message.media_type === "video" || message.message_type === "video") && videoUrl;
-                        return (
-                          <div key={message.id} className={`gbw-bubble ${message.sender === "visitor" ? "visitor" : "helper"}`}
-                            onPointerDown={startMessageHold(message)} onPointerUp={endMessageHold}
-                            onPointerLeave={endMessageHold} onPointerCancel={endMessageHold}
-                            onContextMenu={(event) => event.preventDefault()} title="Press and hold to remove this message from your helper view">
-                            {isMsgVideo && <video src={videoUrl} controls playsInline style={{ width: "100%", borderRadius: "12px", marginBottom: "8px", display: "block" }} />}
-                            {message.text_content}
-                            <span className="gbw-time">{message.sender === "helper" ? "You" : "Visitor"} · {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                          </div>
-                        );
-                      })}
-                      {visibleMessages(adminMessages).length === 0 && <div className="gbw-empty">No visible messages in this conversation.</div>}
-                    </div>
-
-
-                    <form className="gbw-admin-compose" onSubmit={sendHelperReply}>
-                      <textarea value={adminDraft} onChange={(event) => setAdminDraft(event.target.value)} placeholder="Write a helpful reply…" maxLength={4000} required aria-label="Helper reply" />
-                      <button className="gbw-primary" type="submit" disabled={!adminDraft.trim() || adminBusy}>{adminBusy ? "Sending…" : <><Send size={15} /> Reply</>}</button>
-                    </form>
-                  </>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </section>
+        ))}
+      </div>
+      {error && <div style={{ color: "#ff8e9c", padding: "10px", textAlign: "center" }}>{error}</div>}
+      <form onSubmit={sendMessage} style={{ padding: "12px", display: "flex", gap: "8px", borderTop: "1px solid #ffffff1a" }}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message..." style={{ flex: 1, padding: "12px", borderRadius: "999px", border: "1px solid #00b0ff", background: "transparent", color: "#fff" }} />
+        <button type="submit" style={{ width: "44px", height: "44px", borderRadius: "50%", background: "#ff0040", color: "#fff", border: "none", display: "grid", placeItems: "center" }}><Send size={18} /></button>
+      </form>
     </div>
   );
 }
 
+// ==========================================
+// TV COMMENT CAROUSEL
+// ==========================================
+const VerticalCommentCarousel = ({ messages, onZoomImage }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (isPaused || !messages || messages.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % messages.length);
+      setExpanded(false);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [isPaused, messages.length]);
+
+  if (!messages || messages.length === 0) {
+    return <div style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "#9ca3af" }}>No conversations yet.</div>;
+  }
+
+  const current = messages[currentIndex];
+  const next = messages[(currentIndex + 1) % messages.length];
+  const prev = messages[(currentIndex - 1 + messages.length) % messages.length];
+
+  return (
+    <div 
+      style={{ padding: "12px", display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between", background: "#151d2e", overflow: "hidden" }}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      {/* Top small preview */}
+      <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(-4px)" }}>
+        {prev.user_name || "User"} · {prev.message?.slice(0, 30)}...
+      </div>
+
+      {/* Current Active Message */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", animation: "slideUpIn 0.4s ease-out forwards" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+          <button onClick={() => onZoomImage?.(current.profile_image || DEFAULT_LOGO)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
+            <img src={current.profile_image || DEFAULT_LOGO} alt="" style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover", border: "1px solid #ffffff33" }} />
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#9ca3af" }}>
+            <strong style={{ color: "#fff" }}>{current.user_name || "Anonymous"}</strong>
+            <span>{current.country_code || "🌍"}</span>
+          </div>
+        </div>
+        
+        <p className={`reel-comment-body ${expanded ? "expanded" : ""}`}>
+          {current.message}
+        </p>
+        
+        {current.message?.length > 80 && (
+          <button className="reel-comment-readmore" onClick={() => setExpanded(!expanded)}>
+            {expanded ? "Show less" : "Read more"}
+          </button>
+        )}
+      </div>
+
+      {/* Bottom small preview */}
+      <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(4px)" }}>
+        {next.user_name || "User"} · {next.message?.slice(0, 30)}...
+      </div>
+    </div>
+  );
+};
+
+const TvCommentFetcher = ({ postId, onZoomImage }) => {
+  const [messages, setMessages] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const fetchComments = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/tv/conversation?post_id=${encodeURIComponent(postId)}&limit=15`);
+        const data = await res.json();
+        if (alive && data.success && data.messages) setMessages(data.messages);
+      } catch {}
+    };
+    fetchComments();
+    const interval = setInterval(fetchComments, 7000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [postId]);
+
+  return <VerticalCommentCarousel messages={messages} onZoomImage={onZoomImage} />;
+};
 
 // ==========================================
 // MAIN HOME COMPONENT
@@ -1253,34 +382,10 @@ function Home() {
   const postRefs = useRef({});
   const observerRef = useRef(null);
   const isMountedRef = useRef(true);
-  const postRefCallbackCache = useRef(new Map());
-  const videoRefCallbackCache = useRef(new Map());
 
-  const getPostRefCallback = useCallback((index) => {
-    if (!postRefCallbackCache.current.has(index)) {
-      postRefCallbackCache.current.set(index, (ref) => {
-        if (ref) postRefs.current[index] = ref;
-        else delete postRefs.current[index];
-      });
-    }
-    return postRefCallbackCache.current.get(index);
-  }, []);
-
-  const getVideoRefCallback = useCallback((index) => {
-    if (!videoRefCallbackCache.current.has(index)) {
-      videoRefCallbackCache.current.set(index, (ref) => {
-        if (ref) videoRefs.current[index] = ref;
-        else delete videoRefs.current[index];
-      });
-    }
-    return videoRefCallbackCache.current.get(index);
-  }, []);
-
-  // User state - Hardcoded to null because auth is removed
   const user = null; 
   const isLoggedIn = false;
 
-  // UI state
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1288,13 +393,10 @@ function Home() {
   const [hasMore, setHasMore] = useState(false);
   const [activePostIndex, setActivePostIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState("time-market");
-  const [showEditor, setShowEditor] = useState(false);
-  const [editingServicePost, setEditingServicePost] = useState(null);
   
   const [showChat, setShowChat] = useState(false);
   const [chatPartner, setChatPartner] = useState(null);
-  const [showProviderProfile, setShowProviderProfile] = useState(false);
-  const [providerProfileTarget, setProviderProfileTarget] = useState(null);
+  
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [profileFullName, setProfileFullName] = useState("");
   const [profileServiceName, setProfileServiceName] = useState("");
@@ -1312,119 +414,39 @@ function Home() {
   const [myServicesError, setMyServicesError] = useState("");
   const [showMyTime, setShowMyTime] = useState(false);
   
-  const [showMyInbox, setShowMyInbox] = useState(false);
-  const [myInboxFilterPostId, setMyInboxFilterPostId] = useState(null);
-  const [myConversations, setMyConversations] = useState([]);
-  const [myConversationsLoading, setMyConversationsLoading] = useState(false);
-  const [myConversationsError, setMyConversationsError] = useState("");
   const [showInfoModal, setShowInfoModal] = useState(null);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
-  const notifiedMessageKeysRef = useRef(new Set());
-  const previousTotalUnreadRef = useRef(0);
 
-  // Editor state
-  const [newCreatorName, setNewCreatorName] = useState("");
-  const [newCreatorIdentity, setNewCreatorIdentity] = useState("");
-  const [newMediaUrl, setNewMediaUrl] = useState("");
-  const [newTitle, setNewTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [postType, setPostType] = useState("offer");
-  const [postHeadline, setPostHeadline] = useState("");
-  const [serviceCategory, setServiceCategory] = useState("");
-  const [postLocation, setPostLocation] = useState("");
-  const [priceUnit, setPriceUnit] = useState("job");
-  const [availability, setAvailability] = useState("today");
-  const [exchangeNeed, setExchangeNeed] = useState("");
-  const [allowCashBalance, setAllowCashBalance] = useState(true);
-  const [momentKind, setMomentKind] = useState("story");
-  const [newLogoFile, setNewLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState("");
-  const [newMediaFile, setNewMediaFile] = useState(null);
-  const [mediaPreview, setMediaPreview] = useState("");
-  const [mediaPreviewType, setMediaPreviewType] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [compressingMedia, setCompressingMedia] = useState(false);
-  
   const [zoomImage, setZoomImage] = useState("");
   const [mediaAspectRatios, setMediaAspectRatios] = useState({});
   const [reactedPosts, setReactedPosts] = useState({});
   const [reactingPostId, setReactingPostId] = useState(null);
   
   const objectUrlsRef = useRef(new Set());
-  const trackObjectUrl = useCallback((url) => {
-    if (url) objectUrlsRef.current.add(url);
-    return url;
-  }, []);
-  const revokeObjectUrl = useCallback((url) => {
-    if (url && objectUrlsRef.current.has(url)) {
-      URL.revokeObjectURL(url);
-      objectUrlsRef.current.delete(url);
-    }
-  }, []);
 
   const readJsonSafely = useCallback(async (response) => {
-    const responseText = await response.text();
-    if (!responseText) {
-      return {
-        success: response.ok,
-        message: response.ok ? "" : `Server returned ${response.status} ${response.statusText}`,
-      };
-    }
-    try {
-      return JSON.parse(responseText);
-    } catch {
-      throw new Error(responseText || `Server returned ${response.status} ${response.statusText}`);
-    }
+    const text = await response.text();
+    if (!text) return { success: response.ok };
+    try { return JSON.parse(text); } catch { throw new Error(text); }
   }, []);
 
-  // Session Management
-  const getSessionToken = useCallback(() => {
-    try { return localStorage.getItem(SESSION_TOKEN_KEY) || ""; } catch { return ""; }
-  }, []);
-  const setSessionToken = useCallback((token) => {
-    try {
-      if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
-      else localStorage.removeItem(SESSION_TOKEN_KEY);
-    } catch { /* ignore */ }
-  }, []);
-  const getUserData = useCallback(() => {
-    try {
-      const data = localStorage.getItem(USER_DATA_KEY);
-      return data ? JSON.parse(data) : null;
-    } catch { return null; }
-  }, []);
-  const setUserData = useCallback((userData) => {
-    try {
-      if (userData) localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-      else localStorage.removeItem(USER_DATA_KEY);
-    } catch { /* ignore */ }
-  }, []);
+  const getSessionToken = useCallback(() => localStorage.getItem(SESSION_TOKEN_KEY) || "", []);
+  const setSessionToken = useCallback((token) => { if (token) localStorage.setItem(SESSION_TOKEN_KEY, token); else localStorage.removeItem(SESSION_TOKEN_KEY); }, []);
+  const setUserData = useCallback((userData) => { if (userData) localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData)); else localStorage.removeItem(USER_DATA_KEY); }, []);
 
-  const authFetch = useCallback(async (path, options = {}) => {
-    const token = getSessionToken();
-    const headers = { ...(options.headers || {}) };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(`${API_URL}${path}`, { cache: "no-store", ...options, headers });
-  }, [getSessionToken]);
-
-  // Repurposed to open direct chat with support
   const handleOfferTime = useCallback((requestedPostType = "offer") => {
+    if (activeCategory === "tv" || requestedPostType === "moment") {
+      setToast({ id: Date.now(), message: "TV moments are published by Gwamo. Check back soon." });
+      toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+      return;
+    }
     setChatPartner({
-      servicePostId: "", 
-      conversationId: "",
-      providerId: "", 
-      providerPhone: "250788484366", // Support WhatsApp Number
-      name: "Gwamo Support",
-      avatar: DEFAULT_LOGO,
-      headline: "Direct Support",
-      serviceName: "",
-      serviceMediaUrl: "",
-      verified: true,
+      servicePostId: "", conversationId: "", providerId: "", providerPhone: "250788484366",
+      name: "Gwamo Support", avatar: DEFAULT_LOGO, headline: "Direct Support", serviceName: "", serviceMediaUrl: "", verified: true,
     });
     setShowChat(true);
-  }, []);
+  }, [activeCategory]);
 
   const fetchAbortRef = useRef(null);
   const fetchInFlightRef = useRef(false);
@@ -1441,8 +463,7 @@ function Home() {
       if (cursor) params.set("cursor", cursor);
       const response = await fetch(`${API_URL}/api/home?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const data = await readJsonSafely(response);
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || `Failed to load services (${response.status})`);
-      
+      if (!response.ok || !data.success) throw new Error(data.error || `Failed to load`);
       const receivedPosts = Array.isArray(data.posts) ? data.posts : [];
       if (isMountedRef.current) {
         setPosts((current) => append ? [...current, ...receivedPosts] : receivedPosts);
@@ -1451,7 +472,7 @@ function Home() {
       }
     } catch (error) {
       if (error?.name === "AbortError") return;
-      devError("Failed to fetch services:", error);
+      devError(error);
     } finally {
       if (fetchAbortRef.current === controller) { fetchAbortRef.current = null; fetchInFlightRef.current = false; }
       if (isMountedRef.current) { setLoading(false); setLoadingMore(false); }
@@ -1464,27 +485,10 @@ function Home() {
   }, [hasMore, loadingMore, nextCursor, fetchHomeData]);
 
   useEffect(() => {
-    try {
-      const origin = new URL(API_URL).origin;
-      if (!document.querySelector(`link[rel="preconnect"][href="${origin}"]`)) {
-        const link = document.createElement("link");
-        link.rel = "preconnect"; link.href = origin; link.crossOrigin = "anonymous";
-        document.head.appendChild(link);
-      }
-    } catch { /* non-critical, safe to skip */ }
-  }, []);
-
-  useEffect(() => {
     isMountedRef.current = true;
-    const init = async () => { await Promise.all([fetchHomeData()]); };
-    init();
-    return () => {
-      isMountedRef.current = false;
-      const controller = fetchAbortRef.current;
-      fetchAbortRef.current = null; fetchInFlightRef.current = false;
-      if (controller) controller.abort();
-    };
-  }, []);
+    fetchHomeData();
+    return () => { isMountedRef.current = false; };
+  }, [fetchHomeData]);
 
   useEffect(() => {
     if (!posts.length) return undefined;
@@ -1503,7 +507,6 @@ function Home() {
         }
       });
     }, { threshold: [0.6], rootMargin: "0px 0px -10% 0px" });
-    
     observerRef.current = observer;
     Object.values(postRefs.current).forEach((post) => { if (post) observer.observe(post); });
     return () => { observer.disconnect(); };
@@ -1511,144 +514,47 @@ function Home() {
 
   const handleMediaAspectRatio = useCallback((postId, ratio) => {
     if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
-    setMediaAspectRatios((current) => {
-      if (current[postId] === ratio) return current;
-      return { ...current, [postId]: ratio };
-    });
+    setMediaAspectRatios((current) => current[postId] === ratio ? current : { ...current, [postId]: ratio });
   }, []);
-
-  const reactionPollInFlightRef = useRef(false);
-  const reactionEndpointUnavailableRef = useRef(false);
-  const postsRef = useRef(posts);
-  useEffect(() => { postsRef.current = posts; }, [posts]);
-
-  useEffect(() => {
-    let intervalId = null;
-    const pollReactionCounts = async () => {
-      if (document.hidden || reactionPollInFlightRef.current || reactionEndpointUnavailableRef.current) return;
-      const ids = postsRef.current.map((post) => String(post.id)).filter(Boolean);
-      if (!ids.length) return;
-      reactionPollInFlightRef.current = true;
-      try {
-        const response = await fetch(`${API_URL}/api/home/reaction-counts?post_ids=${encodeURIComponent(ids.slice(0, 60).join(","))}`, { cache: "no-store" });
-        if (response.status === 404) { reactionEndpointUnavailableRef.current = true; return; }
-        if (!response.ok) return;
-        const data = await readJsonSafely(response);
-        if (!data || !data.success || !data.counts) return;
-        if (!isMountedRef.current) return;
-        setPosts((current) => current.map((post) => {
-          const counts = data.counts[String(post.id)];
-          if (!counts) return post;
-          return { ...post, real_reactions: counts.real_reactions, manual_reactions: counts.manual_reactions, displayed_reactions: counts.displayed_reactions };
-        }));
-      } catch { /* Network hiccup */ } finally { reactionPollInFlightRef.current = false; }
-    };
-    intervalId = setInterval(pollReactionCounts, REACTION_COUNTS_POLL_INTERVAL_MS);
-    const handleVisible = () => { if (!document.hidden) pollReactionCounts(); };
-    document.addEventListener("visibilitychange", handleVisible);
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisible);
-    };
-  }, [readJsonSafely]);
 
   const pauseAllVideos = useCallback(() => {
     Object.entries(videoRefs.current).forEach(([postId, video]) => { if (video && !video.paused) video.pause(); });
   }, []);
 
-  const closeEditor = useCallback(() => {
-    setShowEditor(false); setUploadProgress(0); setNewCreatorName(""); setNewCreatorIdentity("");
-    setNewMediaUrl(""); setNewTitle(""); setSubtitle(""); setNewLogoFile(null);
-    revokeObjectUrl(logoPreview); setLogoPreview("");
-    setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview(""); setMediaPreviewType("");
-    setEditingServicePost(null);
-  }, [logoPreview, mediaPreview, revokeObjectUrl]);
-
-  const closeChat = useCallback(() => {
-    setShowChat(false); setChatPartner(null);
-  }, []);
+  const closeChat = useCallback(() => { setShowChat(false); setChatPartner(null); }, []);
 
   const startChatWithPost = useCallback((post) => {
     setChatPartner({
-      servicePostId: String(post.id),
-      conversationId: post.conversation_id ? String(post.conversation_id) : "",
-      providerId: String(post.provider_id || "").trim(),
-      providerPhone: normalizeWhatsAppNumber(post.creator_identity || ""),
-      name: post.creator_name || post.service_provider_name || "Provider",
-      avatar: post.logo_url || "",
-      headline: post.service_charge_per_minute || post.title || "",
-      serviceName: post.service_name || post.service_title || "",
-      serviceMediaUrl: post.media_url || "",
-      verified: Boolean(post.verified),
+      servicePostId: String(post.id), conversationId: post.conversation_id ? String(post.conversation_id) : "",
+      providerId: String(post.provider_id || "").trim(), providerPhone: normalizeWhatsAppNumber(post.creator_identity || ""),
+      name: post.creator_name || "Provider", avatar: post.logo_url || "", headline: post.service_charge_per_minute || post.title || "",
+      serviceName: post.service_name || "", serviceMediaUrl: post.media_url || "", verified: Boolean(post.verified),
     });
     setShowChat(true); pauseAllVideos();
   }, [pauseAllVideos]);
 
   const callProvider = useCallback((post) => {
-    const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
-    if (!callPhone) return;
-    window.location.href = `tel:+${callPhone}`;
+    const phone = normalizeWhatsAppNumber(post.creator_identity || "");
+    if (phone) window.location.href = `tel:+${phone}`;
   }, []);
 
-  const openInboxForPost = useCallback((post) => {
-    startChatWithPost(post);
-  }, [startChatWithPost]);
+  const openInboxForPost = useCallback((post) => { startChatWithPost(post); }, [startChatWithPost]);
 
-  const openProviderProfile = useCallback((post) => { setProviderProfileTarget(post); setShowProviderProfile(true); }, []);
-
-  const getReactedStorageKey = useCallback((providerId) => `time-market-reacted:${providerId || "anon"}`, []);
-  const loadReactedFromStorage = useCallback((providerId) => {
-    try { const raw = localStorage.getItem(getReactedStorageKey(providerId)); const parsed = raw ? JSON.parse(raw) : {}; return parsed && typeof parsed === "object" ? parsed : {}; } catch { return {}; }
-  }, [getReactedStorageKey]);
-
-  const persistReacted = useCallback((providerId, postId) => {
-    try {
-      const key = getReactedStorageKey(providerId);
-      const current = loadReactedFromStorage(providerId);
-      current[postId] = true;
-      localStorage.setItem(key, JSON.stringify(current));
-    } catch { /* ignore */ }
-  }, [getReactedStorageKey, loadReactedFromStorage]);
-
-  const sendReaction = useCallback(async (post) => {
-    const postId = String(post?.id ?? "");
-    if (!postId) return;
-    setReactingPostId(postId);
-    try {
-      const response = await fetch(`${API_URL}/api/home/react`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId, phone: "" }), // phone is required by server, so it will fail gracefully
-      });
-      const data = await readJsonSafely(response);
-      
-      if (data.already_reacted) {
-        setReactedPosts((current) => ({ ...current, [postId]: true }));
-        if (data.real_reactions !== undefined || data.displayed_reactions !== undefined) {
-          setPosts((currentPosts) => currentPosts.map((item) => String(item.id) === postId ? { ...item, real_reactions: data.real_reactions ?? item.real_reactions, manual_reactions: data.manual_reactions ?? item.manual_reactions, displayed_reactions: data.displayed_reactions ?? item.displayed_reactions } : item));
-        }
-        return;
-      }
-      if (!data.success) { alert(data.error || data.message || "Failed to react to this service."); return; }
-      
-      setReactedPosts((current) => ({ ...current, [postId]: true }));
-      setPosts((currentPosts) => currentPosts.map((item) => String(item.id) === postId ? { ...item, real_reactions: data.real_reactions, manual_reactions: data.manual_reactions, displayed_reactions: data.displayed_reactions } : item));
-    } catch (error) {
-      devError("Failed to react:", error); alert("Failed to react to this service. Please try again.");
-    } finally { if (isMountedRef.current) setReactingPostId(null); }
-  }, [readJsonSafely]);
-
-  const reactToPost = useCallback((post) => {
+  const reactToPost = useCallback(async (post) => {
     const postId = String(post?.id ?? "");
     if (!postId || reactedPosts[postId] || reactingPostId === postId) return;
-    sendReaction(post);
-  }, [reactedPosts, reactingPostId, sendReaction]);
-
-  const sharePost = useCallback((post) => {
-    const title = String(post?.title || "Market service").trim();
-    const message = String(post?.subtitle || "").trim();
-    const shareText = [title, message, window.location.href].filter(Boolean).join("\n\n");
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-  }, []);
+    setReactingPostId(postId);
+    try {
+      const res = await fetch(`${API_URL}/api/home/react`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId, phone: "" }) });
+      const data = await readJsonSafely(res);
+      if (data.already_reacted || data.success) {
+        setReactedPosts((p) => ({ ...p, [postId]: true }));
+        if (data.real_reactions !== undefined) {
+          setPosts((p) => p.map((item) => String(item.id) === postId ? { ...item, real_reactions: data.real_reactions, displayed_reactions: data.displayed_reactions } : item));
+        }
+      }
+    } catch { } finally { if (isMountedRef.current) setReactingPostId(null); }
+  }, [readJsonSafely, reactedPosts, reactingPostId]);
 
   const memoizedPosts = useMemo(() => {
     return posts.filter((post) => {
@@ -1663,7 +569,6 @@ function Home() {
 
   let mainContent;
   
-  // REPLACED MARKET TAB WITH GWAMO BRAIN
   if (activeCategory === "time-market") {
     mainContent = <GwamoBrainWidget apiUrl={API_URL} />;
   } else if (activeCategory === "social-life") {
@@ -1681,17 +586,22 @@ function Home() {
     mainContent = (
       <>
         <main className="home-feed">
-          {memoizedPosts.map((post, index) => {
-            const postId = String(post.id ?? index);
-            const isOwner = false; // Removed isLoggedIn check
-            return (
-              <ServicePost key={postId} post={post} index={index} postId={postId} isActive={activePostIndex === index} reacted={Boolean(reactedPosts[postId])} reacting={reactingPostId === postId} unreadCount={0} mediaAspectRatio={mediaAspectRatios[postId]} onMediaAspectRatio={handleMediaAspectRatio} isOwner={isOwner} postRefCallback={getPostRefCallback(index)} videoRefCallback={getVideoRefCallback(index)} onVideoPlay={noop} onVideoPause={noop} onViewProfile={openProviderProfile} onSellTime={handleOfferTime} onContactProvider={openInboxForPost} onCallProvider={callProvider} onOpenInbox={noop} onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"} isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"} conversationMode={activeCategory === "social-life" ? "social-life" : "tv"} currentUser={null} getSessionToken={getSessionToken} onRequireAuth={noop} />
-            );
-          })}
+          {memoizedPosts.map((post, index) => (
+            <ServicePost 
+              key={String(post.id ?? index)} post={post} index={index} postId={String(post.id ?? index)}
+              isActive={activePostIndex === index} reacted={Boolean(reactedPosts[String(post.id)])}
+              reacting={reactingPostId === String(post.id)} mediaAspectRatio={mediaAspectRatios[String(post.id)]}
+              onMediaAspectRatio={handleMediaAspectRatio} postRefCallback={(ref) => { if (ref) postRefs.current[index] = ref; }}
+              videoRefCallback={(ref) => { if (ref) videoRefs.current[index] = ref; }}
+              onViewProfile={noop} onContactProvider={openInboxForPost} onCallProvider={callProvider}
+              onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"}
+              isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"}
+            />
+          ))}
         </main>
         {hasMore && (
           <div className="load-more-wrap">
-            <button type="button" className="load-more-button" onClick={loadMorePosts} disabled={loadingMore}>{loadingMore ? "Loading..." : "Load more services"}</button>
+            <button type="button" className="load-more-button" onClick={loadMorePosts} disabled={loadingMore}>{loadingMore ? "Loading..." : "Load more"}</button>
           </div>
         )}
       </>
@@ -1702,42 +612,26 @@ function Home() {
     <div className={`home-page${activeCategory === "tv" ? " is-tv-mode" : ""}${activeCategory === "social-life" ? " is-social-life-mode" : ""}`}>
       <TimeMarketTopBar activeCategory={activeCategory} onOpenInfo={(topic) => setShowInfoModal(topic)} />
       {mainContent}
-      {toast && <div className="gwamo-toast" role="status" aria-live="polite">{toast.message}</div>}
-      {zoomImage && (
-        <ZoomableImageViewer src={zoomImage} alt="Profile" onClose={() => setZoomImage("")} />
-      )}
-      {showChat && chatPartner && (
-        <ChatModal partner={chatPartner} currentUser={null} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={noop} />
-      )}
-      {showInfoModal && (
-        <InfoModal topic={showInfoModal} onClose={() => setShowInfoModal(null)} />
-      )}
+      {toast && <div className="gwamo-toast" role="status">{toast.message}</div>}
+      {zoomImage && <ZoomableImageViewer src={zoomImage} onClose={() => setZoomImage("")} />}
+      {showChat && chatPartner && <ChatModal partner={chatPartner} currentUser={null} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={noop} />}
+      {showInfoModal && <InfoModal topic={showInfoModal} onClose={() => setShowInfoModal(null)} />}
+      
       <nav className="bottom-nav" aria-label="Primary">
         <div className="bottom-nav-scroll">
-          {CATEGORY_TABS.map((tab, tabIndex) => {
+          {CATEGORY_TABS.map((tab) => {
             const TabIcon = tab.icon;
             const isActive = activeCategory === tab.key;
-            const navItem = (
+            return (
               <button
+                key={tab.key}
                 type="button"
                 className={`bottom-nav-item${isActive ? " is-active" : ""}`}
                 onClick={() => { setActivePostIndex(0); setActiveCategory(tab.key); window.scrollTo(0, 0); }}
-                aria-current={isActive ? "page" : undefined}
               >
-                <span className="bottom-nav-icon"><TabIcon size={20} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
+                <span className="bottom-nav-icon"><TabIcon size={20} strokeWidth={isActive ? 2.4 : 2} /></span>
                 <span>{tab.label}</span>
               </button>
-            );
-            if (tabIndex !== 1) return <Fragment key={tab.key}>{navItem}</Fragment>;
-            return (
-              <Fragment key={tab.key}>
-                {navItem}
-                <div className="bottom-nav-plus-wrap">
-                  <button type="button" className="bottom-nav-plus" onClick={() => handleOfferTime("chat")} aria-label="Chat with Support" title="Chat with Support">
-                   <MessageSquare size={22} strokeWidth={2.6} aria-hidden="true" />
-                  </button>
-                </div>
-              </Fragment>
             );
           })}
         </div>
@@ -1748,27 +642,18 @@ function Home() {
   );
 }
 
-// ==========================================
-// SUB-COMPONENTS & MODALS
-// ==========================================
-const FeedSkeleton = memo(function FeedSkeleton() {
-  return (
-    <main className="home-feed" aria-hidden="true">
-      {[0, 1].map((key) => (
-        <div className="service-reel-card skeleton-card" key={key}>
-          <div className="skeleton-shimmer" />
-        </div>
-      ))}
-    </main>
-  );
-});
-FeedSkeleton.displayName = "FeedSkeleton";
+const FeedSkeleton = memo(() => (
+  <main className="home-feed">
+    {[0, 1].map((key) => (
+      <div className="service-reel-card skeleton-card" key={key}><div className="skeleton-shimmer" /></div>
+    ))}
+  </main>
+));
 
 const TimeMarketTopBar = memo(({ activeCategory, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
   const closeMenu = () => setShowMenu(false);
   const run = (action) => () => { closeMenu(); action(); };
-
   return (
     <header className={`feedx-topbar${activeCategory === "tv" ? " is-tv-mode" : ""}`}>
       <div className="feedx-topbar-inner">
@@ -1777,15 +662,15 @@ const TimeMarketTopBar = memo(({ activeCategory, onOpenInfo }) => {
           <span className="gwamo-tagline">Your time has value</span>
         </div>
         <div className="topbar-actions">
-          <button type="button" className="menu-button" onClick={() => setShowMenu((value) => !value)} aria-label="Menu" aria-haspopup="true" aria-expanded={showMenu}>
+          <button type="button" className="menu-button" onClick={() => setShowMenu((v) => !v)}>
             <Menu size={24} strokeWidth={2} />
           </button>
-          {showMenu && <div className="dropdown-backdrop" onClick={closeMenu} aria-hidden="true" />}
+          {showMenu && <div className="dropdown-backdrop" onClick={closeMenu} />}
           {showMenu && (
             <div className="dropdown-menu account-dropdown">
-              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("about"))}><Info size={18} aria-hidden="true" />About Gwamo</button>
-              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("help"))}><HelpCircle size={18} aria-hidden="true" />Help</button>
-              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("privacy"))}><ShieldCheck size={18} aria-hidden="true" />Privacy policy</button>
+              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("about"))}><Info size={18} />About Gwamo</button>
+              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("help"))}><HelpCircle size={18} />Help</button>
+              <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("privacy"))}><ShieldCheck size={18} />Privacy policy</button>
             </div>
           )}
         </div>
@@ -1793,1880 +678,281 @@ const TimeMarketTopBar = memo(({ activeCategory, onOpenInfo }) => {
     </header>
   );
 });
-TimeMarketTopBar.displayName = "TimeMarketTopBar";
-
-const ComingSoonPanel = memo(({ category, onBack }) => {
-  const meta = CATEGORY_META[category] || { label: "This section", blurb: "This section is coming soon." };
-  return (
-    <div className="coming-soon-panel">
-      <h2>{meta.label}</h2>
-      <p>{meta.blurb}</p>
-      <button type="button" className="empty-button" onClick={onBack}>Back to Market</button>
-    </div>
-  );
-});
-ComingSoonPanel.displayName = "ComingSoonPanel";
 
 const ServicePost = memo(function ServicePost({
-  post, index, postId, isActive, reacted, reacting, unreadCount, mediaAspectRatio,
-  onMediaAspectRatio, isOwner, postRefCallback, videoRefCallback, onVideoPlay,
-  onVideoPause, onViewProfile, onSellTime, onContactProvider, onCallProvider,
-  onOpenInbox, onReact, onZoomImage, isTvTab, isSocialLife, showLiveConversation,
-  conversationMode, currentUser, getSessionToken, onRequireAuth,
+  post, index, postId, isActive, reacted, reacting, mediaAspectRatio,
+  onMediaAspectRatio, postRefCallback, videoRefCallback, onContactProvider, onCallProvider,
+  onReact, onZoomImage, isTvTab, isSocialLife, showLiveConversation,
 }) {
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
   const mediaType = post.media_type || "";
   const isImage = mediaType === "image" || (!mediaType && isImageUrl(mediaUrl));
   const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
   const isEmbed = mediaType === "embed" || (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
-  
   const verificationInfo = getVerificationStatus(post);
-  const providerName = post.service_provider_name || post.creator_name || post.provider_name || "Provider";
-  const isMomentPost = getPostType(post) === "moment";
-  const postKind = getPostType(post);
-  const explicitServiceName = String(post.service_name || post.service_title || "").trim();
-  const fullDescription = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "").trim();
-  const serviceName = explicitServiceName.slice(0, 80);
-  const tagline = fullDescription && fullDescription.toLowerCase() !== serviceName.toLowerCase() ? fullDescription : "";
-  const exchangeOfferText = postKind === "exchange" ? String(post.exchange_offer || post.service_name || "").trim() : "";
-  const exchangeNeedText = postKind === "exchange" ? String(post.exchange_need || "").trim() : "";
-  const hasStructuredTrade = postKind === "exchange" && Boolean(exchangeOfferText || exchangeNeedText);
+  const providerName = post.service_provider_name || post.creator_name || "Provider";
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const descriptionNeedsToggle = tagline.length > DESCRIPTION_PREVIEW_LENGTH;
-  const visibleDescription = isDescriptionExpanded ? tagline : makeDescriptionPreview(tagline);
-  
   const reactionCount = Number(post.displayed_reactions || 0);
-  const viewCount = Number(post.displayed_views ?? post.view_count ?? post.views ?? post.total_views ?? post.real_views ?? 0);
-  const aspectClass = mediaAspectRatio && mediaAspectRatio < 0.85 ? "is-portrait" : mediaAspectRatio && mediaAspectRatio > 1.2 ? "is-landscape" : "is-square";
-  const handleImageError = useCallback((event) => { event.currentTarget.onerror = null; event.currentTarget.src = IMAGE_FALLBACK_SRC; }, []);
-  const handleProfileImageError = useCallback((event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }, []);
-  const handleImageLoad = useCallback((event) => { const image = event.currentTarget; const width = image.naturalWidth; const height = image.naturalHeight; if (width && height) onMediaAspectRatio(postId, width / height); }, [onMediaAspectRatio, postId]);
-  const handleVideoLoadedMetadata = useCallback((event) => { const video = event.currentTarget; const width = video.videoWidth; const height = video.videoHeight; if (width && height) onMediaAspectRatio(postId, width / height); }, [onMediaAspectRatio, postId]);
-  const handleVideoTap = useCallback((event) => { const video = event.currentTarget; if (video.paused) video.play().catch(() => {}); else video.pause(); }, []);
-  const descriptionBlock = tagline ? (
-    <div className="post-tagline-wrap">
-      <p className={`post-tagline${isDescriptionExpanded ? " is-expanded" : ""}`}>
-        {renderDescriptionWithLinks(visibleDescription)}
-        {descriptionNeedsToggle && !isDescriptionExpanded ? "... " : " "}
-        {descriptionNeedsToggle && (
-          <button type="button" className="tagline-toggle-button" onClick={() => setIsDescriptionExpanded((current) => !current)} aria-expanded={isDescriptionExpanded}>
-            {isDescriptionExpanded ? "less" : "more"}
-          </button>
-        )}
-      </p>
-    </div>
-  ) : null;
-  const tradeSkillsBlock = hasStructuredTrade ? (
-    <div className="trade-skills-blocks">
-      {exchangeOfferText ? (
-        <div className="trade-skill-block">
-          <span className="trade-skill-label">I can give</span>
-          <span className="trade-skill-value">{renderDescriptionWithLinks(exchangeOfferText)}</span>
-        </div>
-      ) : null}
-      {exchangeNeedText ? (
-        <div className="trade-skill-block">
-          <span className="trade-skill-label">I need</span>
-          <span className="trade-skill-value">{renderDescriptionWithLinks(exchangeNeedText)}</span>
-        </div>
-      ) : null}
-    </div>
-  ) : null;
+  
+  const handleVideoLoadedMetadata = useCallback((event) => { const v = event.currentTarget; if (v.videoWidth && v.videoHeight) onMediaAspectRatio(postId, v.videoWidth / v.videoHeight); }, [onMediaAspectRatio, postId]);
   const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
-  const callHref = callPhone ? `tel:+${callPhone}` : "";
+
   return (
-    <section ref={postRefCallback} data-index={index} className={`home-post service-reel-card${isActive ? " is-active-reel" : ""}`}>
-      <TvMedia mediaUrl={mediaUrl} embedUrl={getEmbedUrl(mediaUrl)} isTvTab={isTvTab} isImage={isImage} isVideo={isVideo} isEmbed={isEmbed} isActive={isActive} aspectClass={aspectClass} mediaAspectRatio={mediaAspectRatio} serviceName={serviceName} tagline={tagline} index={index} postId={postId} videoRefCallback={videoRefCallback} onImageLoad={handleImageLoad} onImageError={handleImageError} onVideoPlay={onVideoPlay} onVideoPause={onVideoPause} onVideoLoadedMetadata={handleVideoLoadedMetadata} onVideoTap={handleVideoTap} />
-      <div className="service-card-gradient" aria-hidden="true" />
+    <section ref={postRefCallback} data-index={index} className={`home-post service-reel-card${isActive ? " is-active-reel" : ""}`} style={{ display: "flex", flexDirection: "column" }}>
       
-      {showLiveConversation && (
-        <TvConversationOverlay postId={postId} isActive={isActive} apiUrl={API_URL} mode={conversationMode} viewCount={isTvTab ? viewCount : null} currentUser={currentUser} getSessionToken={getSessionToken} onRequireAuth={onRequireAuth} onZoomImage={onZoomImage} compressImageFile={compressImageFile} defaultLogo={DEFAULT_LOGO} />
-      )}
-      
-            <div className={`post-info-block${showLiveConversation ? " is-hidden-by-eye" : ""}`}>
-           <div className="post-provider-row">   
-          <button type="button" className={`service-avatar-badge ${verificationInfo.className}`} onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)} aria-label={`View ${providerName}'s profile photo`}>
-            <img src={post.logo_url || DEFAULT_LOGO} alt="" loading="lazy" decoding="async" onError={handleProfileImageError} />
-          </button>
-          <div className="post-provider-copy">
-            <button type="button" className="creator-name" onClick={() => onViewProfile(post)}>
-              <span>{providerName}</span>
-              {verificationInfo.status === "verified" && (
-                <span className="verified-check-badge" role="img" aria-label="Verified"><Check size={11} strokeWidth={3.5} aria-hidden="true" /></span>
-              )}
+      {/* Media Section (65%) */}
+      <div className="reel-media-wrapper" style={{ flex: "0 0 65%", position: "relative", background: "#000", overflow: "hidden" }}>
+        <TvMedia mediaUrl={mediaUrl} embedUrl={getEmbedUrl(mediaUrl)} isTvTab={isTvTab} isImage={isImage} isVideo={isVideo} isEmbed={isEmbed} isActive={isActive} mediaAspectRatio={mediaAspectRatio} postId={postId} videoRefCallback={videoRefCallback} onVideoLoadedMetadata={handleVideoLoadedMetadata} />
+        <div className="service-card-gradient" />
+        
+        <div className="post-info-block">
+          <div className="post-provider-row">
+            <button type="button" className={`service-avatar-badge ${verificationInfo.className}`} onClick={() => onZoomImage(post.logo_url || DEFAULT_LOGO)}>
+              <img src={post.logo_url || DEFAULT_LOGO} alt="" onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }} />
             </button>
-            {serviceName && <h2 className="service-name">{serviceName}</h2>}
-            {tradeSkillsBlock}
-            {descriptionBlock}
+            <div className="post-provider-copy">
+              <span className="creator-name">{providerName}</span>
+              {post.service_name && <h2 className="service-name">{post.service_name}</h2>}
+            </div>
           </div>
         </div>
+        
+        {!showLiveConversation && (
+          <div className="service-social-rail" style={{ bottom: "20px" }}>
+            <button type="button" className={`rail-action star-action${reacted ? " is-active" : ""}`} onClick={() => onReact(post)} disabled={reacting || reacted}>
+              <Star className="gold-star" size={34} fill="currentColor" />
+              <span>{formatCount(reactionCount)}</span>
+            </button>
+          </div>
+        )}
+        {showLiveConversation && (
+          <button type="button" className="tv-private-contact-cta" style={{ bottom: "20px" }} onClick={() => onContactProvider(post)}><Mail size={20} /></button>
+        )}
       </div>
-      {!showLiveConversation && (
-        <div className="service-social-rail" aria-label="Service engagement">
-          <button type="button" className={`rail-action star-action${reacted ? " is-active" : ""}`} onClick={() => onReact(post)} disabled={reacting || reacted} aria-label={`React to this service, currently ${formatCount(reactionCount)} stars`} aria-pressed={reacted}>
-            <Star className="gold-star" size={34} fill="currentColor" aria-hidden="true" />
-            <span>{formatCount(reactionCount)}</span>
+
+      {/* Comments Section (35%) - Only on TV/Heart */}
+      {showLiveConversation ? (
+        <div style={{ flex: 1, background: "#151d2e", borderTop: "1px solid #ffffff1a", overflow: "hidden", position: "relative" }}>
+          <TvCommentFetcher postId={postId} onZoomImage={onZoomImage} />
+        </div>
+      ) : (
+        <div style={{ flex: 1, background: "#151d2e", borderTop: "1px solid #ffffff1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button type="button" className="contact-me-cta" style={{ position: "relative", width: "90%", left: "auto", right: "auto" }} onClick={() => onContactProvider(post)}>
+            <Send size={20} /><span>Contact me</span>
           </button>
         </div>
-      )}
-      {showLiveConversation ? (
-        <button type="button" className="tv-private-contact-cta" onClick={() => onContactProvider(post)} aria-label={`Privately contact ${providerName}`} title="Private contact"><Mail size={20} aria-hidden="true" /></button>
-      ) : (
-        <button type="button" className="contact-me-cta" onClick={() => onContactProvider(post)}><Send size={20} aria-hidden="true" /><span>Contact me</span></button>
-      )}
-      {(isSocialLife || !showLiveConversation) && callHref && (
-        <button type="button" className={isSocialLife ? "social-life-call-cta" : "call-me-button"} onClick={() => onCallProvider(post)} aria-label={`Call ${providerName}`} title={isSocialLife ? "Call" : undefined}><Phone size={20} aria-hidden="true" /></button>
       )}
     </section>
   );
 });
-ServicePost.displayName = "ServicePost";
 
-const ServiceEditorModal = memo(({
-  newCreatorName, setNewCreatorName, newCreatorIdentity, setNewCreatorIdentity,
-  newTitle, setNewTitle, newMediaUrl, setNewMediaUrl, subtitle, setSubtitle,
-  postType, setPostType, postHeadline, setPostHeadline, serviceCategory,
-  setServiceCategory, postLocation, setPostLocation, priceUnit, setPriceUnit,
-  availability, setAvailability, exchangeNeed, setExchangeNeed, allowCashBalance,
-  setAllowCashBalance, momentKind, setMomentKind, handleLogoChange, logoPreview,
-  handleMediaFileChange, mediaPreview, mediaPreviewType, applyChanges, closeEditor,
-  saving, uploadProgress, compressingMedia, isEdit = false,
-}) => {
-  useEscapeToClose(closeEditor);
-  return (
-    <div className="modal-overlay" onClick={closeEditor}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{isEdit ? "✎ Edit Post" : "＋ What are you posting?"}</h2>
-          <button type="button" onClick={closeEditor} className="modal-close" aria-label="Close">×</button>
-        </div>
-        
-        {!isEdit && (
-          <div className="form-section post-type-section">
-            <div className="section-heading">Choose one</div>
-            <div className="post-type-grid" role="radiogroup" aria-label="Post type">
-              {[
-                ["offer", "🛠️", "Offer Work", "Show what you can do"],
-                ["exchange", "🔄", "Trade Skills", "Give work, get work"],
-                ["moment", "✨", "Share a Moment", "Story, song or movie saying"],
-              ].map(([value, icon, label, help]) => (
-                <button key={value} type="button" role="radio" aria-checked={postType === value} className={`post-type-choice${postType === value ? " is-selected" : ""}`} onClick={() => setPostType(value)}>
-                  <span className="post-type-icon" aria-hidden="true">{icon}</span>
-                  <strong>{label}</strong>
-                  <small>{help}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="form-section">
-          <div className="section-heading">
-            {postType === "offer" ? "Your work" : postType === "need" ? "Help you need" : postType === "exchange" ? "Your trade" : "Your moment"}
-          </div>
-          {postType === "moment" && (
-            <>
-              <label>What kind of moment?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="Moment type">
-                {[["story", "My story"], ["song", "Song saying"], ["movie", "Movie saying"], ["recommend", "Recommend someone"]].map(([value, label]) => (
-                  <button key={value} type="button" role="radio" aria-checked={momentKind === value} className={`choice-pill${momentKind === value ? " is-selected" : ""}`} onClick={() => setMomentKind(value)}>{label}</button>
-                ))}
-              </div>
-            </>
-          )}
-          {postType === "exchange" ? (
-            <div className="trade-skills-fields">
-              <div className="form-field">
-                <label htmlFor="field-exchange-give">What skill/service can you give?</label>
-                <input id="field-exchange-give" type="text" value={postHeadline} onChange={(event) => setPostHeadline(event.target.value)} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="field-exchange-need">What skill/service do you need?</label>
-                <input id="field-exchange-need" type="text" value={exchangeNeed} onChange={(event) => setExchangeNeed(event.target.value)} />
-              </div>
-            </div>
-          ) : (
-            <>
-              <label htmlFor="field-post-headline">{postType === "offer" ? "What work can you do?" : postType === "need" ? "What help do you need?" : "Short title"}</label>
-              <input id="field-post-headline" type="text" value={postHeadline} onChange={(event) => setPostHeadline(event.target.value)} />
-            </>
-          )}
-          {postType !== "moment" && postType !== "exchange" && (
-            <>
-              <label htmlFor="field-category">Category</label>
-              <input id="field-category" type="text" value={serviceCategory} onChange={(event) => setServiceCategory(event.target.value)} />
-            </>
-          )}
-          <label htmlFor="field-description">{postType === "offer" ? "Tell people about your work" : postType === "need" ? "Explain the problem" : postType === "exchange" ? "Explain your exchange (optional)" : "Write your saying, story, or thought"}</label>
-          <textarea id="field-description" value={subtitle} onChange={(event) => setSubtitle(event.target.value)} />
-          {postType !== "moment" && postType !== "exchange" && (
-            <>
-              <label htmlFor="field-location">Where?</label>
-              <input id="field-location" type="text" value={postLocation} onChange={(event) => setPostLocation(event.target.value)} />
-            </>
-          )}
-          {postType === "exchange" && (
-            <>
-              <label>Can cash balance the difference?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="Allow cash balance">
-                <button type="button" role="radio" aria-checked={allowCashBalance} className={`choice-pill${allowCashBalance ? " is-selected" : ""}`} onClick={() => setAllowCashBalance(true)}>Yes</button>
-                <button type="button" role="radio" aria-checked={!allowCashBalance} className={`choice-pill${!allowCashBalance ? " is-selected" : ""}`} onClick={() => setAllowCashBalance(false)}>No</button>
-              </div>
-            </>
-          )}
-          {(postType === "offer" || postType === "need") && (
-            <>
-              <label>When?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="When">
-                {[["today", "Today"], ["this week", "This week"], ["choose date", "Choose date later"]].map(([value, label]) => (
-                  <button key={value} type="button" role="radio" aria-checked={availability === value} className={`choice-pill${availability === value ? " is-selected" : ""}`} onClick={() => setAvailability(value)}>{label}</button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-        <div className={`form-section${isEdit ? " form-section-last" : ""}`}>
-          <div className="section-heading">Photo or video</div>
-          <label className="file-picker" htmlFor="field-media-upload">
-            <span>{compressingMedia ? "Processing..." : postType === "moment" ? "▣ Add a photo or short video" : "▣ Show the work, need, or skill"}</span>
-            <input id="field-media-upload" type="file" accept="image/*,video/*" disabled={compressingMedia} onChange={(event) => handleMediaFileChange(event.target.files?.[0] || null)} />
-          </label>
-          {mediaPreview && (
-            <div className="preview-wrap">
-              {mediaPreviewType === "image" ? <img src={mediaPreview} alt="Selected media" className="media-preview" /> : <video src={mediaPreview} className="media-preview" controls muted playsInline />}
-            </div>
-          )}
-          <label htmlFor="field-media-link">Media link (Optional)</label>
-          <input id="field-media-link" type="text" value={newMediaUrl} onChange={(event) => setNewMediaUrl(event.target.value)} />
-          <p className="field-help">Upload media or paste a supported link.</p>
-        </div>
-        {!isEdit && (
-          <div className="form-section form-section-last">
-            <div className="section-heading">Your picture (Optional)</div>
-            <label className="file-picker" htmlFor="field-profile-photo">
-              <span>{compressingMedia ? "Processing..." : "◎ Add or change your profile photo"}</span>
-              <input id="field-profile-photo" type="file" accept="image/*" disabled={compressingMedia} onChange={(event) => handleLogoChange(event.target.files?.[0] || null)} />
-            </label>
-            {logoPreview && <div className="preview-wrap"><img src={logoPreview} alt="Profile preview" className="logo-preview" /></div>}
-          </div>
-        )}
-        {saving && (
-          <div className="upload-progress-wrap" role="status" aria-live="polite">
-            <div className="upload-progress-text">
-              <span>{uploadProgress < 96 ? (isEdit ? "Saving changes..." : "Uploading your post...") : "Finishing up..."}</span>
-              <strong>{uploadProgress}%</strong>
-            </div>
-            <div className="upload-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress}><span style={{ width: `${uploadProgress}%` }} /></div>
-          </div>
-        )}
-        <button type="button" onClick={applyChanges} className="save-button" disabled={saving || compressingMedia}>
-          {saving ? (isEdit ? `Saving... ${uploadProgress}%` : `Creating Post... ${uploadProgress}%`) : isEdit ? "Save Changes" : postType === "offer" ? "Post my work" : postType === "need" ? "Post my request" : postType === "exchange" ? "Post my trade" : "Share my moment"}
-        </button>
-        <button type="button" onClick={closeEditor} className="cancel-button">Cancel</button>
-      </div>
-    </div>
-  );
-});
-ServiceEditorModal.displayName = "ServiceEditorModal";
-
-const ChatModal = memo(({ partner, currentUser, getSessionToken, apiUrl, onClose, onZoomImage, onRequireAuth }) => {
+const ChatModal = memo(({ partner, currentUser, onClose, onZoomImage }) => {
   useEscapeToClose(onClose);
-  const draftKey = `${CHAT_DRAFT_PREFIX}${partner.servicePostId || partner.conversationId || "new"}`;
-  const [conversationId, setConversationId] = useState(partner.conversationId || "");
-  const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState(() => { try { return window.sessionStorage.getItem(draftKey) || ""; } catch { return ""; } });
-  const [loading, setLoading] = useState(Boolean(partner.conversationId && currentUser));
-  const [sending, setSending] = useState(false);
-  const [loadError, setLoadError] = useState("");
-  const [pendingFailedText, setPendingFailedText] = useState(null);
-  const [pendingFailedAttachment, setPendingFailedAttachment] = useState(null);
-  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const [attachError, setAttachError] = useState("");
-  const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
-  const messagesEndRef = useRef(null);
-  const messagesListRef = useRef(null);
-  const pollRef = useRef(null);
-  const isNearBottomRef = useRef(true);
-  const isMountedRef = useRef(true);
-  const photoInputRef = useRef(null);
-  const videoInputRef = useRef(null);
-  const documentInputRef = useRef(null);
-  const pendingSendAfterAuthRef = useRef(false);
-  const pendingAttachmentAfterAuthRef = useRef(null);
-  const objectUrlsRef = useRef([]);
-  const lastMessageCountRef = useRef(0);
-  const trackObjectUrl = useCallback((url) => { objectUrlsRef.current.push(url); return url; }, []);
-  const normalizeMessage = useCallback((raw) => ({
-    id: String(raw.id),
-    senderId: String(raw.sender_provider_id ?? raw.senderId ?? ""),
-    text: raw.text_content ?? raw.text ?? "",
-    type: raw.message_type ?? raw.type ?? "text",
-    mediaUrl: raw.media_url ?? raw.mediaUrl ?? "",
-    fileName: raw.file_name ?? raw.fileName ?? "Document",
-    createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
-    readAt: raw.read_at ?? raw.readAt ?? null,
-    deliveredAt: raw.delivered_at ?? raw.deliveredAt ?? null,
-    pending: Boolean(raw.pending),
-    failed: Boolean(raw.failed),
-  }), []);
-  const authHeaders = useCallback(() => { const token = getSessionToken(); return token ? { Authorization: `Bearer ${token}` } : {}; }, [getSessionToken]);
-  useEffect(() => {
-    try {
-      if (inputText) window.sessionStorage.setItem(draftKey, inputText);
-      else window.sessionStorage.removeItem(draftKey);
-    } catch { /* A disabled storage API must never block messaging. */ }
-  }, [draftKey, inputText]);
-  const ensureConversation = useCallback(async () => {
-    if (conversationId) return conversationId;
-    const token = getSessionToken();
-    if (!currentUser || !token) throw new Error("Login with your telephone and personal PIN to send.");
-    
-    const response = await fetch(`${apiUrl}/api/time-market/conversations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ service_post_id: partner.servicePostId, provider_id: partner.providerId || undefined, provider_phone: partner.providerPhone || undefined }),
-    });
-    
-    const text = await response.text();
-    let data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(text || "Could not start this conversation."); }
-    if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not start this conversation.");
-    
-    const id = String(data.conversation?.id || "");
-    if (!id) throw new Error("Could not start this conversation.");
-    setConversationId(id);
-    return id;
-  }, [apiUrl, conversationId, currentUser, getSessionToken, partner.providerId, partner.providerPhone, partner.servicePostId]);
-  const loadMessages = useCallback(async (id, { silent = false } = {}) => {
-    if (!id) return;
-    if (!silent) setLoading(true);
-    try {
-      const response = await fetch(`${apiUrl}/api/time-market/messages?conversation_id=${encodeURIComponent(id)}`, { headers: { ...authHeaders() }, cache: "no-store" });
-      const text = await response.text();
-      let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(text || "Could not load messages."); }
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not load messages.");
-      if (!isMountedRef.current) return;
-      
-      const normalized = (data.messages || []).map(normalizeMessage);
-      setMessages((current) => {
-        const pendingOnes = current.filter((message) => message.pending);
-        const knownIds = new Set(normalized.map((message) => message.id));
-        const merged = [...normalized];
-        pendingOnes.forEach((pendingMessage) => { if (!knownIds.has(pendingMessage.id)) merged.push(pendingMessage); });
-        return merged;
-      });
-      setLoadError("");
-    } catch (error) {
-      if (!silent && isMountedRef.current) setLoadError(error.message || "Could not load messages.");
-    } finally { if (!silent && isMountedRef.current) setLoading(false); }
-  }, [apiUrl, authHeaders, normalizeMessage]);
-  useEffect(() => {
-    isMountedRef.current = true;
-    if (partner.conversationId && currentUser) loadMessages(String(partner.conversationId)).catch(() => {});
-    else { setLoading(false); setLoadError(""); }
-    return () => { isMountedRef.current = false; };
-  }, [currentUser, loadMessages, partner.conversationId]);
-  useEffect(() => {
-    if (!conversationId) return undefined;
-    const startPolling = () => {
-      if (pollRef.current) return;
-      pollRef.current = setInterval(() => { if (document.hidden) return; loadMessages(conversationId, { silent: true }); }, MESSAGE_POLL_INTERVAL_MS);
-    };
-    const stopPolling = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
-    const handleVisibility = () => {
-      if (document.hidden) stopPolling();
-      else { loadMessages(conversationId, { silent: true }); startPolling(); }
-    };
-    startPolling();
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => { stopPolling(); document.removeEventListener("visibilitychange", handleVisibility); };
-  }, [conversationId, loadMessages]);
-  useEffect(() => {
-    const grew = messages.length > lastMessageCountRef.current;
-    lastMessageCountRef.current = messages.length;
-    if (isNearBottomRef.current) {
-      if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ block: "end" });
-      setShowNewMessagesButton(false);
-      return;
-    }
-    if (grew) {
-      const lastMessage = messages[messages.length - 1];
-      const isOwnMessage = lastMessage && String(lastMessage.senderId) === String(currentUser?.id);
-      if (!isOwnMessage) setShowNewMessagesButton(true);
-    }
-  }, [messages, currentUser]);
-  const handleScroll = useCallback(() => {
-    const node = messagesListRef.current;
-    if (!node) return;
-    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-    isNearBottomRef.current = distanceFromBottom < 120;
-    if (isNearBottomRef.current) setShowNewMessagesButton(false);
-  }, []);
-  const scrollToBottom = useCallback(() => {
-    isNearBottomRef.current = true; setShowNewMessagesButton(false);
-    messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, []);
-  const sendMessage = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text || sending) return;
-    if (!currentUser || !getSessionToken()) { pendingSendAfterAuthRef.current = true; onRequireAuth?.(); return; }
-    setInputText(""); setPendingFailedText(null);
-    
-    const tempId = `pending-${Date.now()}`;
-    const optimisticMessage = { id: tempId, senderId: String(currentUser?.id || ""), text, type: "text", mediaUrl: "", createdAt: new Date().toISOString(), readAt: null, pending: true, failed: false };
-    setMessages((current) => [...current, optimisticMessage]);
-    isNearBottomRef.current = true; setSending(true);
-    
-    try {
-      const id = await ensureConversation();
-      const response = await fetch(`${apiUrl}/api/time-market/messages`, {
-        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ conversation_id: id, message_type: "text", text }),
-      });
-      const responseText = await response.text();
-      let data = {};
-      try { data = responseText ? JSON.parse(responseText) : {}; } catch { throw new Error(responseText || "Could not send message."); }
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not send message.");
-      
-      const confirmed = normalizeMessage(data.message);
-      setMessages((current) => current.map((message) => message.id === tempId ? confirmed : message));
-    } catch (error) {
-      setMessages((current) => current.map((message) => message.id === tempId ? { ...message, pending: false, failed: true } : message));
-      setPendingFailedText({ text, tempId });
-    } finally { if (isMountedRef.current) setSending(false); }
-  }, [inputText, sending, ensureConversation, apiUrl, authHeaders, currentUser, getSessionToken, normalizeMessage, onRequireAuth]);
-  useEffect(() => {
-    if (!currentUser || !pendingSendAfterAuthRef.current || !inputText.trim()) return;
-    pendingSendAfterAuthRef.current = false; sendMessage();
-  }, [currentUser, inputText, sendMessage]);
-  const retryFailedText = useCallback(() => {
-    if (!pendingFailedText) return;
-    setInputText(pendingFailedText.text); setPendingFailedText(null);
-    setMessages((current) => current.filter((message) => message.id !== pendingFailedText.tempId));
-  }, [pendingFailedText]);
-  const sendAttachment = useCallback(async (file, typeHint) => {
-    if (!file) return;
-    setAttachMenuOpen(false); setAttachError("");
-    if (!currentUser || !getSessionToken()) { pendingAttachmentAfterAuthRef.current = { file, typeHint }; onRequireAuth?.(); return; }
-    
-    const tempId = `pending-${Date.now()}`;
-    const previewUrl = trackObjectUrl(URL.createObjectURL(file));
-    const optimisticMessage = { id: tempId, senderId: String(currentUser?.id || ""), text: "", type: typeHint, mediaUrl: previewUrl, fileName: file.name || "Attachment", createdAt: new Date().toISOString(), readAt: null, pending: true, failed: false };
-    setMessages((current) => [...current, optimisticMessage]);
-    isNearBottomRef.current = true; setSending(true);
-    
-    try {
-      const id = await ensureConversation();
-      const formData = new FormData();
-      formData.append("conversation_id", id); formData.append("file", file); formData.append("message_type", typeHint);
-      
-      const response = await fetch(`${apiUrl}/api/time-market/messages`, { method: "POST", headers: { ...authHeaders() }, body: formData });
-      const responseText = await response.text();
-      let data = {};
-      try { data = responseText ? JSON.parse(responseText) : {}; } catch { throw new Error(responseText || "Could not send attachment."); }
-      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Could not send attachment.");
-      
-      const confirmed = normalizeMessage(data.message);
-      setMessages((current) => current.map((message) => message.id === tempId ? confirmed : message));
-    } catch (error) {
-      setMessages((current) => current.map((message) => message.id === tempId ? { ...message, pending: false, failed: true } : message));
-      setAttachError(error.message || "Could not send attachment."); setPendingFailedAttachment({ file, typeHint, tempId });
-    } finally { if (isMountedRef.current) setSending(false); }
-  }, [apiUrl, authHeaders, currentUser, ensureConversation, getSessionToken, normalizeMessage, onRequireAuth, trackObjectUrl]);
-  useEffect(() => {
-    if (!currentUser || !pendingAttachmentAfterAuthRef.current) return;
-    const pending = pendingAttachmentAfterAuthRef.current;
-    pendingAttachmentAfterAuthRef.current = null; sendAttachment(pending.file, pending.typeHint);
-  }, [currentUser, sendAttachment]);
-  const retryFailedAttachment = useCallback(() => {
-    if (!pendingFailedAttachment) return;
-    const pending = pendingFailedAttachment;
-    setPendingFailedAttachment(null); setAttachError("");
-    setMessages((current) => current.filter((message) => message.id !== pending.tempId));
-    sendAttachment(pending.file, pending.typeHint);
-  }, [pendingFailedAttachment, sendAttachment]);
-  const handlePickPhoto = useCallback((event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) sendAttachment(file, "image"); }, [sendAttachment]);
-  const handlePickVideo = useCallback((event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) sendAttachment(file, "video"); }, [sendAttachment]);
-  const handlePickDocument = useCallback((event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) sendAttachment(file, "document"); }, [sendAttachment]);
-  const callPhone = partner.providerPhone || "";
-  const callHref = callPhone ? `tel:+${callPhone}` : "";
-  useEffect(() => { return () => { objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)); }; }, []);
-  const groupedMessages = useMemo(() => {
-    const groups = [];
-    let currentLabel = null;
-    for (const message of messages) {
-      const label = formatDayLabel(message.createdAt);
-      if (label !== currentLabel) { groups.push({ type: "separator", label, key: `sep-${message.id}` }); currentLabel = label; }
-      groups.push({ type: "message", message });
-    }
-    return groups;
-  }, [messages]);
   return (
     <div className="chat-modal-overlay" onClick={onClose}>
-      <div className="chat-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
         <div className="chat-header">
-          <button className="chat-back" onClick={onClose} aria-label="Close chat"><X size={20} /></button>
-          <img className="chat-header-avatar" src={partner.avatar || DEFAULT_LOGO} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
+          <button className="chat-back" onClick={onClose}><X size={20} /></button>
+          <img className="chat-header-avatar" src={partner.avatar || DEFAULT_LOGO} alt="" />
           <div className="chat-header-copy">
-            <strong className="chat-header-name">
-              {partner.name}
-              {partner.verified && <span className="verified-check-badge chat-header-verified" role="img" aria-label="Verified"><Check size={10} strokeWidth={3.5} aria-hidden="true" /></span>}
-            </strong>
-            {partner.serviceName || partner.headline ? <small>{partner.serviceName || partner.headline}</small> : null}
-            <small className="chat-privacy-note">Private conversation · Privacy Policy applies</small>
+            <strong className="chat-header-name">{partner.name}</strong>
+            <small className="chat-privacy-note">Private conversation</small>
           </div>
         </div>
-        
-        <div className="chat-messages" ref={messagesListRef} onScroll={handleScroll}>
-          {loading ? (
-            <div className="chat-loading">Loading messages...</div>
-          ) : loadError ? (
-            <div className="chat-empty">{loadError}</div>
-          ) : messages.length === 0 ? (
-            <div className="chat-welcome">
-              <img src={partner.avatar || DEFAULT_LOGO} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-              <strong>Message {partner.name || "provider"}</strong>
-              <p>{currentUser ? "Ask about this service or send the first message below." : "Write your message below. Login with telephone + PIN only when you press Send."}</p>
-            </div>
-          ) : (
-            groupedMessages.map((entry) => {
-              if (entry.type === "separator") return <div className="chat-date-separator" key={entry.key}><span>{entry.label}</span></div>;
-              const msg = entry.message;
-              const isOwn = String(msg.senderId) === String(currentUser?.id);
-              return (
-                <div key={msg.id} className={`chat-message ${isOwn ? "sent" : "received"}${msg.pending ? " is-pending" : ""}${msg.failed ? " is-failed" : ""}`}>
-                  {msg.type === "image" && msg.mediaUrl ? <img src={msg.mediaUrl} alt="Attachment" className="chat-image-attachment" onClick={() => onZoomImage?.(msg.mediaUrl)} /> : null}
-                  {msg.type === "video" && msg.mediaUrl ? <video src={msg.mediaUrl} controls playsInline preload="metadata" /> : null}
-                  {msg.type === "voice" && msg.mediaUrl ? <audio src={msg.mediaUrl} controls preload="none" /> : null}
-                  {msg.type === "document" && msg.mediaUrl ? (
-                    <a className="chat-document-link" href={msg.mediaUrl} target="_blank" rel="noreferrer" download>
-                      <FileText size={19} aria-hidden="true" /><span>{msg.fileName || "Open document"}</span>
-                    </a>
-                  ) : null}
-                  {msg.text ? <p>{msg.text}</p> : null}
-                  <time>
-                    {msg.pending ? "Sending..." : msg.failed ? "Not delivered" : new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    {isOwn && !msg.pending && !msg.failed && (
-                      <span className={`chat-read-status${msg.readAt ? " is-read" : ""}`} aria-label={msg.readAt ? "Read" : msg.deliveredAt ? "Delivered" : "Sent"}>
-                        {msg.readAt || msg.deliveredAt ? <CheckCheck size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
-                      </span>
-                    )}
-                  </time>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        {showNewMessagesButton && <button type="button" className="chat-new-messages-button" onClick={scrollToBottom}>New messages</button>}
-        
-        {pendingFailedText ? (
-          <div className="chat-retry-banner">
-            <span>Message not sent.</span>
-            <button type="button" onClick={retryFailedText}>Tap to retry</button>
-          </div>
-        ) : null}
-        {attachError ? (
-          <div className="chat-retry-banner">
-            <span>{attachError}</span>
-            <button type="button" onClick={pendingFailedAttachment ? retryFailedAttachment : () => setAttachError("")}>{pendingFailedAttachment ? "Tap to retry" : "Dismiss"}</button>
-          </div>
-        ) : null}
-        <div className="chat-composer">
-          <div className="chat-attach-wrap">
-            <button type="button" className="chat-attach-button" onClick={() => setAttachMenuOpen((value) => !value)} aria-label="Attach a photo, video or document" aria-haspopup="true" aria-expanded={attachMenuOpen}>
-              <Paperclip size={20} aria-hidden="true" />
-            </button>
-            {attachMenuOpen && (
-              <>
-                <div className="chat-attach-backdrop" onClick={() => setAttachMenuOpen(false)} aria-hidden="true" />
-                <div className="chat-attach-menu">
-                  <button type="button" onClick={() => photoInputRef.current?.click()}><ImageIcon size={18} aria-hidden="true" /> Photo</button>
-                  <button type="button" onClick={() => videoInputRef.current?.click()}><Video size={18} aria-hidden="true" /> Video</button>
-                  <button type="button" onClick={() => documentInputRef.current?.click()}><FileText size={18} aria-hidden="true" /> Document</button>
-                </div>
-              </>
-            )}
-            <input ref={photoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePickPhoto} />
-            <input ref={videoInputRef} type="file" accept="video/*" style={{ display: "none" }} onChange={handlePickVideo} />
-            <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,application/pdf" style={{ display: "none" }} onChange={handlePickDocument} />
-          </div>
-          <input type="text" placeholder={`Message ${partner.name || "provider"}...`} autoFocus value={inputText} onChange={(event) => setInputText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendMessage(); }} />
-          {inputText.trim() ? (
-            <button className="chat-send" onClick={sendMessage} disabled={sending || loading} aria-label="Send message"><Send size={20} aria-hidden="true" /></button>
-          ) : callHref ? (
-            <a className="chat-send" href={callHref} aria-label={`Call ${partner.name || "provider"}`}><Phone size={20} aria-hidden="true" /></a>
-          ) : (
-            <button type="button" className="chat-send" disabled aria-label="No phone number available for this provider"><Phone size={20} aria-hidden="true" /></button>
-          )}
+        <div className="chat-messages" style={{ display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#9ca3af" }}>
+          <p>Login has been removed. Please contact support via WhatsApp.</p>
         </div>
       </div>
     </div>
   );
 });
-ChatModal.displayName = "ChatModal";
 
-const ZOOM_MIN_SCALE = 1;
-const ZOOM_MAX_SCALE = 4;
-const ZOOM_DOUBLE_TAP_SCALE = 2.75;
-const ZoomableImageViewer = memo(({ src, alt = "Photo", onClose }) => {
-  useEscapeToClose(onClose);
-  const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const containerRef = useRef(null);
-  const pointersRef = useRef(new Map());
-  const gestureRef = useRef(null);
-  const clampTranslate = useCallback((nextScale, x, y) => {
-    const node = containerRef.current;
-    if (!node) return { x, y };
-    const rect = node.getBoundingClientRect();
-    const maxX = Math.max(0, (rect.width * (nextScale - 1)) / 2);
-    const maxY = Math.max(0, (rect.height * (nextScale - 1)) / 2);
-    return { x: Math.min(maxX, Math.max(-maxX, x)), y: Math.min(maxY, Math.max(-maxY, y)) };
-  }, []);
-  const resetZoom = useCallback(() => { setScale(1); setTranslate({ x: 0, y: 0 }); }, []);
-  const zoomAt = useCallback((clientX, clientY, nextScale) => {
-    const node = containerRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    const originX = clientX - rect.left - rect.width / 2;
-    const originY = clientY - rect.top - rect.height / 2;
-    const clamped = Math.min(ZOOM_MAX_SCALE, Math.max(ZOOM_MIN_SCALE, nextScale));
-    setScale((prevScale) => {
-      const ratio = clamped / prevScale;
-      setTranslate((prevTranslate) => clampTranslate(clamped, originX - (originX - prevTranslate.x) * ratio, originY - (originY - prevTranslate.y) * ratio));
-      return clamped;
-    });
-  }, [clampTranslate]);
-  const handleDoubleClick = useCallback((event) => {
-    event.stopPropagation();
-    if (scale > 1) resetZoom();
-    else zoomAt(event.clientX, event.clientY, ZOOM_DOUBLE_TAP_SCALE);
-  }, [scale, resetZoom, zoomAt]);
-  const handleWheel = useCallback((event) => {
-    event.preventDefault();
-    zoomAt(event.clientX, event.clientY, scale - event.deltaY * 0.0015 * scale);
-  }, [scale, zoomAt]);
-  const handlePointerDown = useCallback((event) => {
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    
-    if (pointersRef.current.size === 1) {
-      gestureRef.current = { mode: "pan", startX: event.clientX, startY: event.clientY, startTranslate: translate };
-    } else if (pointersRef.current.size === 2) {
-      const pts = Array.from(pointersRef.current.values());
-      const distance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-      gestureRef.current = { mode: "pinch", startDistance: distance, startScale: scale, midpoint: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } };
-    }
-  }, [translate, scale]);
-  const handlePointerMove = useCallback((event) => {
-    if (!pointersRef.current.has(event.pointerId)) return;
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    const gesture = gestureRef.current;
-    if (!gesture) return;
-    
-    if (gesture.mode === "pan" && scale > 1) {
-      setTranslate(clampTranslate(scale, gesture.startTranslate.x + (event.clientX - gesture.startX), gesture.startTranslate.y + (event.clientY - gesture.startY)));
-    } else if (gesture.mode === "pinch" && pointersRef.current.size === 2) {
-      const pts = Array.from(pointersRef.current.values());
-      const distance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-      zoomAt(gesture.midpoint.x, gesture.midpoint.y, gesture.startScale * (distance / gesture.startDistance));
-    }
-  }, [scale, clampTranslate, zoomAt]);
-  const handlePointerUp = useCallback((event) => {
-    pointersRef.current.delete(event.pointerId);
-    if (pointersRef.current.size === 0) {
-      gestureRef.current = null;
-      setScale((current) => { if (current < 1.02) { setTranslate({ x: 0, y: 0 }); return 1; } return current; });
-    } else if (pointersRef.current.size === 1) {
-      const [[, point]] = Array.from(pointersRef.current.entries());
-      gestureRef.current = { mode: "pan", startX: point.x, startY: point.y, startTranslate: translate };
-    }
-  }, [translate]);
-  useEffect(() => { resetZoom(); }, [src]);
-  return (
-    <div className="zoom-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Photo preview">
-      <button type="button" className="zoom-close-button" onClick={onClose} aria-label="Close photo preview"><X size={26} strokeWidth={2.4} aria-hidden="true" /></button>
-      <div className="zoom-image-shell" ref={containerRef} onClick={(event) => event.stopPropagation()} onDoubleClick={handleDoubleClick} onWheel={handleWheel} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} role="presentation">
-        <img src={src} alt={alt} className="zoom-image" decoding="async" draggable={false} style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`, cursor: scale > 1 ? "grab" : "zoom-in", touchAction: "none" }} />
-      </div>
-      {scale > 1 && <button type="button" className="zoom-reset-button" onClick={(event) => { event.stopPropagation(); resetZoom(); }}>Reset zoom</button>}
-    </div>
-  );
-});
-ZoomableImageViewer.displayName = "ZoomableImageViewer";
-
-const ProviderProfileSheet = memo(({ post, isOwner = false, onClose, onMessage, onShare }) => {
-  useEscapeToClose(onClose);
-  const info = getVerificationStatus(post);
-  const providerName = post.service_provider_name || post.creator_name || "Provider";
-  const headline = post.service_charge_per_minute || post.title || "";
-  const description = post.work_description || post.subtitle || "";
-  const postedDate = post.created_at ? new Date(post.created_at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }) : "";
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card profile-sheet-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{isOwner ? "Your Profile" : "Provider Profile"}</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <div className="profile-sheet-top">
-          <div className={`provider-sheet-avatar ${info.className}`}>
-            <img src={post.logo_url || DEFAULT_LOGO} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-          </div>
-          <div className="profile-sheet-identity">
-            <h3>{providerName}</h3>
-            <VerificationTag info={info} />
-          </div>
-        </div>
-        {headline ? <p className="profile-sheet-headline">{headline}</p> : null}
-        {description ? <p className="profile-sheet-description">{description}</p> : null}
-        {postedDate ? <p className="profile-sheet-meta">Posted {postedDate}</p> : null}
-        <div className="profile-sheet-actions">
-          {!isOwner && <button type="button" className="save-button" onClick={onMessage}><MessageSquare size={18} aria-hidden="true" /> Message</button>}
-          <button type="button" className="cancel-button" onClick={onShare}>Share</button>
-        </div>
-      </div>
-    </div>
-  );
-});
-ProviderProfileSheet.displayName = "ProviderProfileSheet";
-
-const ProfileEditModal = memo(({
-  user, fullName, setFullName, serviceName, setServiceName, servicesOffered, setServicesOffered,
-  photoPreview, onPhotoChange, onRemovePhoto, photoRemoved, contextPost, onEditListing,
-  onOpenServices, onLogout, deleteConfirming, setDeleteConfirming, onDeleteAccount,
-  saving, error, onSave, onClose,
-}) => {
-  useEscapeToClose(onClose);
-  const info = getVerificationStatus(user);
-  const currentPhoto = photoRemoved ? "" : photoPreview || user?.profile_image_url || "";
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>My Profile</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <div className="account-status-row">
-          <VerificationTag info={info} />
-          {info.status === "pending" && <p className="field-help">Your blue verified badge appears after Gwamo staff confirms your details.</p>}
-        </div>
-        <div className="form-section">
-          <div className="section-heading">Photo</div>
-          <div className="profile-photo-row">
-            <div className="profile-photo-preview">
-              {currentPhoto ? <img src={currentPhoto} alt="" /> : <User size={26} aria-hidden="true" />}
-            </div>
-            <div className="profile-photo-actions">
-              <label className="file-picker profile-photo-picker" htmlFor="profile-photo-upload">
-                <span>Change Photo</span>
-                <input id="profile-photo-upload" type="file" accept="image/*" onChange={(event) => onPhotoChange(event.target.files?.[0] || null)} />
-              </label>
-              {currentPhoto && <button type="button" className="cancel-button profile-photo-remove" onClick={onRemovePhoto}>Remove Photo</button>}
-            </div>
-          </div>
-          <p className="field-help">Use a clear square photo. It will be cropped into the circular profile badge.</p>
-        </div>
-        <div className="form-section">
-          <label htmlFor="profile-full-name">Full name</label>
-          <input id="profile-full-name" type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-          <p className="field-help">Your legal name, used for verification.</p>
-        </div>
-        <div className="form-section">
-          <label htmlFor="profile-service-name">Public / service name</label>
-          <input id="profile-service-name" type="text" value={serviceName} onChange={(event) => setServiceName(event.target.value)} />
-          <p className="field-help">This is the name shown on your services.</p>
-        </div>
-        <div className="form-section">
-          <label htmlFor="profile-services-offered">Services you can offer</label>
-          <textarea id="profile-services-offered" placeholder="e.g. Phone repair, driving, English tutoring" value={servicesOffered} onChange={(event) => setServicesOffered(event.target.value)} />
-          <p className="field-help">Separate different skills with a comma.</p>
-        </div>
-        {contextPost && (
-          <div className="form-section">
-            <div className="section-heading">This listing</div>
-            <button type="button" className="cancel-button" onClick={onEditListing}><Pencil size={16} aria-hidden="true" /> Edit price, description and media</button>
-            <p className="field-help">Opens the Service Provider form for this specific listing.</p>
-          </div>
-        )}
-        <div className="form-section">
-          <div className="section-heading">Account</div>
-          <button type="button" className="cancel-button" onClick={onOpenServices}><ShoppingBasket size={16} aria-hidden="true" /> Manage all my services</button>
-          <button type="button" className="cancel-button" onClick={onLogout}><LogOut size={16} aria-hidden="true" /> Log out</button>
-        </div>
-        {error && <p className="auth-error">{error}</p>}
-        <button type="button" className="save-button" onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save changes"}</button>
-        <button type="button" className="cancel-button" onClick={onClose}>Cancel</button>
-        <div className="form-section form-section-last profile-danger-zone">
-          <div className="section-heading">Danger zone</div>
-          {deleteConfirming ? (
-            <>
-              <p className="field-help">This deletes your provider identity, not just one listing. Are you sure?</p>
-              <button type="button" className="danger-button" onClick={onDeleteAccount}>Yes, delete my provider profile</button>
-              <button type="button" className="cancel-button" onClick={() => setDeleteConfirming(false)}>Keep my profile</button>
-            </>
-          ) : (
-            <button type="button" className="danger-button" onClick={() => setDeleteConfirming(true)}>Delete my provider profile</button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
-ProfileEditModal.displayName = "ProfileEditModal";
-
-const MyServicesSheet = memo(({ services, loading, error, onEdit, onDelete, onClose, onCreateNew }) => {
+const ZoomableImageViewer = memo(({ src, onClose }) => {
   useEscapeToClose(onClose);
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>My Services</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        {loading ? (
-          <p className="field-help">Loading your services...</p>
-        ) : error ? (
-          <p className="auth-error">{error}</p>
-        ) : services.length === 0 ? (
-          <div className="mysheet-empty">
-            <p>You haven't added a service yet.</p>
-            <button type="button" className="save-button" onClick={onCreateNew}>Offer your service</button>
-          </div>
-        ) : (
-          <div className="myservices-list">
-            {services.map((service) => {
-              const info = getVerificationStatus(service);
-              return (
-                <div className="myservice-row" key={service.id}>
-                  <img src={service.logo_url || DEFAULT_LOGO} alt="" className="myservice-thumb" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-                  <div className="myservice-info">
-                    <strong>{service.service_charge_per_minute || service.title || "Price not set"}{info.verified && <CheckCircle size={14} className="verified-badge verified" aria-label="Verified" />}</strong>
-                    <span>{service.work_description || service.subtitle || "No description yet."}</span>
-                  </div>
-                  <div className="myservice-actions">
-                    <button type="button" onClick={() => onEdit(service)} aria-label="Edit service"><Pencil size={17} /></button>
-                    <button type="button" onClick={() => onDelete(service.id)} aria-label="Delete service" className="myservice-delete"><X size={17} /></button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <button type="button" className="cancel-button" onClick={onClose}>Close</button>
+    <div className="zoom-overlay" onClick={onClose}>
+      <button type="button" className="zoom-close-button" onClick={onClose}><X size={26} /></button>
+      <div className="zoom-image-shell" onClick={(e) => e.stopPropagation()}>
+        <img src={src} alt="" className="zoom-image" />
       </div>
     </div>
   );
 });
-MyServicesSheet.displayName = "MyServicesSheet";
-
-const MyTimeSheet = memo(({ onClose }) => {
-  useEscapeToClose(onClose);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>My Time</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        <div className="mysheet-empty">
-          <Wallet size={40} className="mytime-icon" aria-hidden="true" />
-          <p>This is where you'll track the economic value of your time on Gwamo --- time offered, time exchanged, completed requests and what you've earned.</p>
-          <p className="field-help">These numbers arrive once Time Requests go live. Nothing to see yet --- check back soon.</p>
-        </div>
-        <button type="button" className="cancel-button" onClick={onClose}>Close</button>
-      </div>
-    </div>
-  );
-});
-MyTimeSheet.displayName = "MyTimeSheet";
-
-const MyInboxSheet = memo(({ conversations, loading, error, currentUserId, filterServicePostId, onOpenConversation, onClose }) => {
-  useEscapeToClose(onClose);
-  const [searchTerm, setSearchTerm] = useState("");
-  const visible = filterServicePostId ? conversations.filter((conversation) => String(conversation.service_post_id) === String(filterServicePostId)) : conversations;
-  const sorted = [...visible].sort((a, b) => {
-    const aTime = Date.parse(a.last_message_at || a.updated_at || a.created_at || 0) || 0;
-    const bTime = Date.parse(b.last_message_at || b.updated_at || b.created_at || 0) || 0;
-    return bTime - aTime;
-  });
-  
-  const query = searchTerm.trim().toLowerCase();
-  const filtered = query ? sorted.filter((conversation) => {
-    const iAmProvider = String(conversation.provider_id) === String(currentUserId);
-    const partnerName = (iAmProvider ? conversation.customer_full_name : conversation.provider_full_name || conversation.service_provider_name) || "";
-    const serviceName = conversation.service_name || "";
-    return partnerName.toLowerCase().includes(query) || serviceName.toLowerCase().includes(query);
-  }) : sorted;
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{filterServicePostId ? "Messages about this service" : "Messages"}</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
-        </div>
-        
-        {!filterServicePostId && conversations.length > 0 && (
-          <div className="myinbox-search-wrap">
-            <Search size={16} aria-hidden="true" />
-            <input type="text" className="myinbox-search" placeholder="Search messages" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} aria-label="Search messages" />
-          </div>
-        )}
-        {loading ? (
-          <p className="field-help">Loading conversations...</p>
-        ) : error ? (
-          <p className="auth-error">{error}</p>
-        ) : filtered.length === 0 ? (
-          <div className="mysheet-empty">
-            <p>No messages yet.</p>
-            <p className="field-help">When someone contacts you, the message will appear here.</p>
-          </div>
-        ) : (
-          <div className="myinbox-list">
-            {filtered.map((conversation) => {
-              const iAmProvider = String(conversation.provider_id) === String(currentUserId);
-              const partnerName = iAmProvider ? conversation.customer_full_name || "Customer" : conversation.provider_full_name || conversation.service_provider_name || "Provider";
-              const partnerAvatar = iAmProvider ? conversation.customer_profile_image_url || "" : conversation.provider_profile_image_url || "";
-              const partnerVerified = iAmProvider ? conversation.customer_verification_status === "verified" : conversation.provider_verification_status === "verified";
-              const preview = conversation.last_message ? conversation.last_message : conversation.last_message_type ? attachmentPreviewLabel(conversation.last_message_type) : "No messages yet";
-              const unread = Number(conversation.unread_count || 0);
-              const lastActivity = conversation.last_message_at || conversation.updated_at || conversation.created_at || "";
-              const timeLabel = lastActivity ? new Date(lastActivity).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
-              return (
-                <button type="button" className={`myinbox-row${unread > 0 ? " has-unread" : ""}`} key={conversation.id} onClick={() => onOpenConversation(conversation)}>
-                  <span className="myinbox-avatar">
-                    <img src={partnerAvatar || DEFAULT_LOGO} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-                  </span>
-                  <span className="myinbox-main">
-                    <span className="myinbox-name-row">
-                      <strong>{partnerName}</strong>
-                      {partnerVerified && <span className="verified-check-badge myinbox-verified" role="img" aria-label="Verified"><Check size={9} strokeWidth={3.5} aria-hidden="true" /></span>}
-                      {timeLabel && <span className="myinbox-time">{timeLabel}</span>}
-                    </span>
-                    <small>{conversation.service_name || conversation.service_charge_per_minute || conversation.service_provider_name || ""}</small>
-                    <small className="myinbox-preview">{preview}</small>
-                  </span>
-                  {unread > 0 && <span className="myinbox-unread-badge" aria-label={`${unread} unread messages`}>{unread > 99 ? "99+" : unread}</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <button type="button" className="cancel-button" onClick={onClose}>Close</button>
-      </div>
-    </div>
-  );
-});
-MyInboxSheet.displayName = "MyInboxSheet";
 
 const InfoModal = memo(({ topic, onClose }) => {
   useEscapeToClose(onClose);
   const content = INFO_CONTENT[topic] || INFO_CONTENT.about;
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{content.title}</h2>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={20} strokeWidth={2.4} aria-hidden="true" /></button>
+          <button type="button" onClick={onClose} className="modal-close"><X size={20} /></button>
         </div>
         <div className="info-modal-content">
-          {content.eyebrow ? <p className="info-modal-lead">{content.eyebrow}</p> : null}
+          {content.eyebrow && <p className="info-modal-lead">{content.eyebrow}</p>}
           <p className="info-modal-body">{content.body}</p>
-          {content.sections?.length ? (
-            <div className="info-modal-sections">
-              {content.sections.map((section) => (
-                <div className="info-modal-section" key={section.title}>
-                  <h3>{section.title}</h3>
-                  <p>{section.body}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
         <button type="button" className="cancel-button" onClick={onClose}>Close</button>
       </div>
     </div>
   );
 });
-InfoModal.displayName = "InfoModal";
 
 function HomeStylesInner() {
   return (
     <style>{`
       @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=DM+Sans:opsz,wght@9..40,400..700&display=swap");
 
-      /* ------------------------------------------------------------------
-         GWAMO DESIGN SYSTEM
-         Ink-blue surfaces, one warm "time" amber accent, blue reserved for
-         verification. Bricolage Grotesque for voice, DM Sans for reading.
-         ------------------------------------------------------------------ */
       :root {
-        /* legacy tokens, kept so child components (Connect, Heart Zone, TV) keep working */
-        --page-bg: #0d1320;
-        --panel-bg: #151d2e;
-        --blue: #087cff;
-        --blue-bright: #168bff;
-        --blue-border: rgba(22, 139, 255, 0.78);
-        --muted: #9aa6ba;
-        --danger: #ff5c70;
-        --neon-red: #ff0040;
-        --neon-glow: rgba(255, 0, 64, 0.8);
-        --deep-orange: #ff6a00;
-        --deep-orange-bright: #ff8a00;
-        --deep-orange-soft: rgba(255, 106, 0, 0.34);
-        --deep-orange-glow: rgba(255, 106, 0, 0.78);
+        --page-bg: #0d1320; --panel-bg: #151d2e; --blue: #087cff; --blue-bright: #168bff;
+        --blue-border: rgba(22, 139, 255, 0.78); --muted: #9aa6ba; --danger: #ff5c70;
         --verified-green: #2aa3ff;
       }
       .home-page {
-        --ink: #0d1320;
-        --surface: #151d2e;
-        --surface-2: #1e2840;
-        --surface-3: #283450;
-        --line: rgba(255, 255, 255, 0.09);
-        --line-strong: rgba(255, 255, 255, 0.16);
-        --text: #f3f5f9;
-        --text-dim: #9aa6ba;
-        --amber: #ffb938;
-        --amber-strong: #ffc766;
-        --amber-ink: #1b1303;
-        --amber-soft: rgba(255, 185, 56, 0.15);
-        --verified: #2aa3ff;
-        --ok: #3ddc97;
-        --bad: #ff5c70;
-        --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-                --top-h: 60px;
-        --top-offset: calc(var(--top-h) + env(safe-area-inset-top, 0px));
+        --ink: #0d1320; --surface: #151d2e; --surface-2: #1e2840; --surface-3: #283450;
+        --line: rgba(255, 255, 255, 0.09); --line-strong: rgba(255, 255, 255, 0.16);
+        --text: #f3f5f9; --text-dim: #9aa6ba; --amber: #ffb938; --amber-strong: #ffc766;
+        --amber-ink: #1b1303; --amber-soft: rgba(255, 185, 56, 0.15); --verified: #2aa3ff;
+        --ok: #3ddc97; --bad: #ff5c70;
+        --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+        --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+        --top-h: 60px; --top-offset: calc(var(--top-h) + env(safe-area-inset-top, 0px));
         --nav-h: calc(58px + env(safe-area-inset-bottom, 0px));
         --reel-h: calc(100svh - var(--top-offset) - var(--nav-h) - 20px);
-        --r-sheet: 28px;
-        --r-card: 16px;
-        --r-field: 14px;
+        --r-sheet: 28px; --r-card: 16px; --r-field: 14px;
       }
-        @supports (height: 100dvh) {
-        .home-page { --reel-h: calc(100dvh - var(--top-offset) - var(--nav-h) - 20px); }
-      }
-      @media (min-width: 700px) {
-        .home-page { --top-h: 64px; }
-      }
+      @media (min-width: 700px) { .home-page { --top-h: 64px; } }
 
       * { box-sizing: border-box; }
       html, body, #root { min-height: 100%; margin: 0; background: var(--page-bg); }
-      html:has(.home-page.is-tv-mode) { scroll-snap-type: y proximity; }
-      body { overflow-x: hidden; font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+      body { overflow-x: hidden; font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
       button, input, textarea, select { font: inherit; }
       button { -webkit-tap-highlight-color: transparent; }
 
       .home-page {
-        width: 100%;
-        min-height: 100svh;
-        padding-bottom: var(--nav-h);
-        overflow-x: hidden;
-        overflow-x: clip;
-        color: var(--text);
-        font-family: var(--font-body);
-        background: var(--ink);
+        width: 100%; min-height: 100svh; padding-bottom: var(--nav-h);
+        overflow-x: hidden; overflow-x: clip; color: var(--text); background: var(--ink);
       }
       .home-page :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
-      /* ------------------------------ TOP BAR ------------------------------ */
+      /* TOP BAR */
       .feedx-topbar {
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        z-index: 1000;
+        position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
         padding-top: env(safe-area-inset-top, 0px);
-        background: rgba(13, 19, 32, 0.96);
-        border-bottom: 1px solid var(--line);
+        background: rgba(13, 19, 32, 0.96); border-bottom: 1px solid var(--line);
       }
       .feedx-topbar.is-tv-mode {
         background: linear-gradient(180deg, rgba(13, 19, 32, 0.78) 0%, rgba(13, 19, 32, 0.34) 62%, transparent 100%);
         border-bottom-color: transparent;
       }
       .feedx-topbar-inner {
-        width: min(100%, 900px);
-        height: var(--top-h);
-        margin: 0 auto;
-        padding: 0 8px 0 18px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        width: min(100%, 900px); height: var(--top-h); margin: 0 auto;
+        padding: 0 8px 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
       }
       .gwamo-brand { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
       .feedx-logo {
-        margin: 0;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 3px;
-        color: var(--text);
-        font-family: var(--font-display);
-        font-size: 28px;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.03em;
+        margin: 0; display: inline-flex; align-items: baseline; gap: 3px;
+        color: var(--text); font-family: var(--font-display); font-size: 28px; font-weight: 800; line-height: 1;
       }
-      .feedx-logo::after {
-        content: "";
-        width: 7px; height: 7px;
-        flex-shrink: 0;
-        border-radius: 50%;
-        background: var(--amber);
-        transform: translateY(-1px);
-      }
-      .gwamo-tagline { display: none; color: var(--text-dim); font-size: 13px; font-weight: 500; white-space: nowrap; }
+      .feedx-logo::after { content: ""; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--amber); transform: translateY(-1px); }
+      .gwamo-tagline { display: none; color: var(--text-dim); font-size: 13px; font-weight: 500; }
       @media (min-width: 700px) { .gwamo-tagline { display: block; } }
-
       .topbar-actions { position: relative; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-      .topbar-icon-button, .menu-button {
-        position: relative;
-        width: 44px; height: 44px;
-        display: grid; place-items: center;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
-        color: var(--text);
-        background: transparent;
-        cursor: pointer;
-        transition: background 160ms ease;
-      }
-      .topbar-icon-button:hover, .menu-button:hover { background: rgba(255, 255, 255, 0.08); }
-      .feedx-topbar.is-tv-mode .topbar-icon-button svg,
-      .feedx-topbar.is-tv-mode .menu-button svg { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7)); }
-      .inbox-icon-wrap { position: relative; display: inline-flex; }
-      .inbox-unread-badge {
-        position: absolute; top: -6px; right: -8px;
-        min-width: 18px; height: 18px;
-        padding: 0 5px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 999px;
-        color: var(--amber-ink);
-        background: var(--amber);
-        box-shadow: 0 0 0 2px var(--ink);
-        font-size: 10.5px; font-weight: 800; line-height: 1;
-      }
-      .login-pill {
-        min-height: 36px;
-        display: inline-flex; align-items: center; gap: 6px;
-        margin-right: 2px;
-        padding: 0 14px;
-        border: 1px solid var(--amber);
-        border-radius: 999px;
-        color: var(--amber);
-        background: transparent;
-        font-size: 13px; font-weight: 700;
-        cursor: pointer;
-        transition: background 160ms ease, color 160ms ease;
-      }
-      .login-pill:hover { color: var(--amber-ink); background: var(--amber); }
-      .account-avatar-button {
-        --ring: var(--amber);
-        width: 38px; height: 38px; flex: 0 0 38px;
-        margin: 0 4px;
-        padding: 0;
-        overflow: visible;
-        border: 0;
-        border-radius: 50%;
-        background: var(--surface-2);
-        box-shadow: 0 0 0 2px var(--ring);
-        cursor: pointer;
-      }
-      .account-avatar-button.status-verified { --ring: var(--verified); }
-      .account-avatar-button.status-rejected { --ring: var(--muted); }
-      .account-avatar-button img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%; }
-
+      .menu-button { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: var(--text); background: transparent; cursor: pointer; }
       .dropdown-backdrop { position: fixed; inset: 0; z-index: 999; }
-      .dropdown-menu {
-        position: absolute; top: calc(100% + 6px); right: 6px;
-        z-index: 1001;
-        min-width: 236px;
-        padding: 6px;
-        border: 1px solid var(--line-strong);
-        border-radius: var(--r-card);
-        background: var(--surface);
-        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
-      }
-      .account-dropdown-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; padding: 10px 12px 12px; border-bottom: 1px solid var(--line); }
-      .account-dropdown-name { overflow: hidden; color: var(--text); font-family: var(--font-display); font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-      .dropdown-divider { height: 1px; margin: 5px 6px; background: var(--line); }
-      .dropdown-item {
-        width: 100%;
-        display: flex; align-items: center; gap: 12px;
-        padding: 11px 12px;
-        border: 0;
-        border-radius: 10px;
-        color: var(--text);
-        background: transparent;
-        font-size: 14.5px; font-weight: 500; text-align: left;
-        cursor: pointer;
-        transition: background 140ms ease;
-      }
-      .dropdown-item svg { flex-shrink: 0; color: var(--text-dim); }
-      .dropdown-item:hover { background: var(--surface-2); }
-      .dropdown-item-count { margin-left: auto; min-width: 22px; padding: 2px 7px; border-radius: 999px; color: var(--amber-ink); background: var(--amber); font-size: 11.5px; font-weight: 800; text-align: center; }
-      .dropdown-item-danger, .dropdown-item-danger svg { color: #ff8e9c; }
+      .dropdown-menu { position: absolute; top: calc(100% + 6px); right: 6px; z-index: 1001; min-width: 236px; padding: 6px; border: 1px solid var(--line-strong); border-radius: var(--r-card); background: var(--surface); box-shadow: 0 18px 44px rgba(0,0,0,0.5); }
+      .dropdown-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 0; border-radius: 10px; color: var(--text); background: transparent; font-size: 14.5px; font-weight: 500; text-align: left; cursor: pointer; }
 
-      .verification-tag { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); font-size: 12px; font-weight: 700; }
-      .verification-tag.status-verified { color: #62bdff; }
-      .verification-tag.status-pending { color: var(--amber); }
-      .verification-tag.status-rejected { color: var(--text-dim); }
-      .verified-badge { flex-shrink: 0; }
-      .verified-badge.verified { color: var(--verified); }
-      .verified-badge.pending { color: var(--amber); }
-          .verified-badge.rejected { color: var(--muted); }
-
-      /* Hide floating inbox on TV & Heart tabs so it never covers the mic */
-      .is-tv-mode .topbar-icon-button,
-      .is-social-life-mode .topbar-icon-button {
-        display: none !important;
+      /* BOTTOM NAV */
+      .bottom-nav {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 950;
+        padding-bottom: env(safe-area-inset-bottom, 0px); background: transparent;
       }
-
-      /* ---------------------------- BOTTOM NAV ----------------------------- */
-        .bottom-nav {
-        position: fixed;
-        left: 0; right: 0; bottom: 0;
-        z-index: 950;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-        background: transparent;
-        border-top: 1px solid transparent;
+      .bottom-nav-scroll {
+        width: min(100%, 520px); height: 58px; margin: 0 auto; padding: 0 4px;
+        display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center;
       }
-        .bottom-nav-scroll {
-        width: min(100%, 520px);
-        height: 58px;
-        margin: 0 auto;
-        padding: 0 4px;
-        display: grid;
-        grid-template-columns: 1fr 1fr 64px 1fr 1fr;
-        align-items: center;
+      .bottom-nav-item {
+        height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        padding: 0; border: 0; color: var(--text-dim); background: transparent; font-size: 10px; font-weight: 600; cursor: pointer;
       }
-           .bottom-nav-item {
-        height: 100%;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-        padding: 0;
-        border: 0;
-        color: var(--text-dim);
-        background: transparent;
-        font-size: 10px; font-weight: 600; line-height: 1;
-        cursor: pointer;
-        transition: color 160ms ease;
-      }
-      .bottom-nav-icon { width: 44px; height: 26px; display: grid; place-items: center; border-radius: 13px; transition: background 180ms ease, color 180ms ease; }
-      .bottom-nav-item:hover { color: var(--text); }
       .bottom-nav-item.is-active { color: var(--text); font-weight: 700; }
-      .bottom-nav-item.is-active .bottom-nav-icon { color: var(--amber); background: transparent; }
-      .bottom-nav-plus-wrap { display: grid; place-items: center; }
-            .bottom-nav-plus {
-        width: 44px; height: 26px;
-        margin-top: 0;
-        display: grid; place-items: center;
-        padding: 0;
-        border: none;
-        border-radius: 13px;
-        color: #ff0040;
-        background: transparent;
-        cursor: pointer;
-        transition: transform 160ms ease, background 160ms ease;
-      }
-      .bottom-nav-plus:hover { background: transparent; }
-      .bottom-nav-plus:active { transform: scale(0.94); }
-      /* ------------------------------- FEED -------------------------------- */
+      .bottom-nav-icon { width: 44px; height: 26px; display: grid; place-items: center; border-radius: 13px; }
+      .bottom-nav-item.is-active .bottom-nav-icon { color: var(--amber); }
+
+      /* FEED LAYOUT */
       .home-feed { width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16))); margin: 0 auto; padding: calc(var(--top-offset) + 10px) 0 10px; }
       .service-reel-card {
-        position: relative;
-        isolation: isolate;
-        width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16)));
-        aspect-ratio: 9 / 16;
-        height: auto;
-        min-height: 0;
-        margin: 0 auto;
-        overflow: hidden;
-        background: var(--ink);
-        scroll-snap-align: start;
-        scroll-margin-top: calc(var(--top-offset) + 10px);
-        content-visibility: auto;
-        contain-intrinsic-size: auto 640px;
+        position: relative; isolation: isolate; width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16)));
+        aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; background: var(--ink);
+        scroll-snap-align: start; scroll-margin-top: calc(var(--top-offset) + 10px);
       }
-      .service-reel-card .media-card,
-      .service-reel-card .media-viewport,
-      .service-reel-card .media-layer { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; }
-      .media-layer { display: grid; place-items: center; overflow: hidden; background: #000; }
-      .home-media { width: 100%; height: 100%; display: block; border: 0; object-position: center; background: #000; }
-      .service-reel-card img.home-media, .service-reel-card video.home-media { position: absolute; inset: 0; z-index: 1; object-fit: cover; }
-      .media-layer > iframe.home-media { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 100%; min-height: 100%; }
-      .embed-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; color: var(--text); background: var(--surface); text-align: center; }
-      .embed-placeholder-icon { font-size: 44px; }
-
-      .service-card-gradient {
-        position: absolute; inset: 0; z-index: 20;
-        pointer-events: none;
-        background: linear-gradient(to bottom, rgba(13, 19, 32, 0.55) 0%, transparent 20%, transparent 46%, rgba(13, 19, 32, 0.6) 74%, rgba(13, 19, 32, 0.97) 100%);
-      }
-
-      .post-info-block { position: absolute; z-index: 40; left: 12px; right: 70px; bottom: 75px; max-height: min(30svh, 220px); transition: opacity 0.2s ease, visibility 0.2s ease; }
-      .post-info-block.is-hidden-by-eye { opacity: 0; visibility: hidden; pointer-events: none; }
-      .post-provider-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-      .post-provider-copy { min-width: 0; flex: 1; padding-top: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
-            .service-avatar-badge {
-        --ring: var(--amber);
-        position: relative;
-        width: 34px; height: 34px; flex: 0 0 34px;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
-        background: var(--surface-2);
-        box-shadow: none;
-        cursor: pointer;
-      }
-      .service-avatar-badge.status-verified { --ring: var(--verified); }
-      .service-avatar-badge.status-rejected { --ring: var(--muted); }
-      .service-avatar-badge img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%; }
-  
-      .creator-name {
-        max-width: 100%; min-width: 0;
-        display: inline-flex; align-items: center; gap: 4px;
-        margin: 0; padding: 0;
-        border: 0;
-        color: #fff;
-        background: transparent;
-        font-size: 13px; font-weight: 700; line-height: 1.2; text-align: left;
-        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
-        cursor: pointer;
-      }
-      .creator-name > span:first-child { 
-        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
-        background: transparent !important;
-      }
-      .verified-check-badge { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; color: #fff; background: var(--verified); }
-      .service-name {
-        margin: 2px 0 0;
-        color: #fff;
-        font-family: var(--font-display);
-        font-size: 16px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em;
-        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
-        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-        text-align: left;
-      }
-      .post-tagline {
-        margin: 0;
-        color: rgba(255, 255, 255, 0.92);
-        font-size: 11.5px; line-height: 1.35;
-        text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9);
-        white-space: pre-line; overflow-wrap: anywhere;
-        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-        text-align: left;
-      }
-      .post-tagline.is-expanded { display: block; max-height: min(22svh, 170px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.4) transparent; }
-      .tagline-toggle-button { display: inline; margin: 0; padding: 0; border: 0; color: var(--amber); background: none; font-size: inherit; font-weight: 700; cursor: pointer; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); }
-      .description-link { color: var(--amber-strong); font-weight: 700; text-decoration: underline; text-decoration-color: rgba(255, 199, 102, 0.5); text-underline-offset: 2px; }
-      .description-link:hover { text-decoration-color: var(--amber-strong); }
-      .post-price { margin-top: 3px; color: var(--ok); font-size: 13px; font-weight: 700; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); }
-      .post-price-unit { color: rgba(61, 220, 151, 0.8); font-weight: 600; }
-
-      .trade-skills-blocks { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
-      .trade-skill-block { display: flex; flex-direction: column; gap: 1px; }
-      .trade-skill-label { color: var(--amber); font-size: 11.5px; font-weight: 700; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); }
-      .trade-skill-value { color: #fff; font-size: 13.5px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); }
-      .trade-skills-fields { display: flex; flex-direction: column; gap: 12px; }
-      .trade-skills-fields .form-field { display: flex; flex-direction: column; }
-
-      .service-social-rail { position: absolute; z-index: 42; right: 12px; bottom: 92px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-      .rail-action { width: 48px; min-height: 48px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; color: #fff; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); }
-      .rail-action:disabled { opacity: 0.75; cursor: wait; }
-      .gold-star { color: var(--amber); fill: var(--amber); stroke: var(--amber-strong); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55)); transition: transform 180ms ease; }
-      .star-action.is-active .gold-star { transform: scale(1.1); }
-      .star-action.is-active:disabled { opacity: 1; cursor: default; }
-      .star-action > span { color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }
-
-      .contact-me-cta {
-        position: absolute; z-index: 44;
-        left: 14px; right: 14px; bottom: 14px;
-        height: 48px;
-        display: flex; align-items: center; justify-content: center; gap: 9px;
-        padding: 0 20px;
-        border: 0;
-        border-radius: var(--r-field);
-        color: var(--amber-ink);
-        background: var(--amber);
-        font-size: 16px; font-weight: 700;
-        cursor: pointer;
-        transition: background 160ms ease, transform 160ms ease;
-      }
-      .contact-me-cta:hover { background: var(--amber-strong); }
-      .contact-me-cta:active { transform: scale(0.985); }
-      .contact-me-cta:has(~ .call-me-button) { right: 72px; }
-      .call-me-button {
-        position: absolute; z-index: 44;
-        right: 14px; bottom: 14px;
-        width: 48px; height: 48px;
-        display: flex; align-items: center; justify-content: center;
-        border: 1px solid var(--line-strong);
-        border-radius: var(--r-field);
-        color: #fff;
-        background: rgba(21, 29, 46, 0.78);
-        cursor: pointer;
-        transition: background 160ms ease;
-      }
-      .call-me-button:hover { background: var(--surface-3); }
-
-      .load-more-wrap { display: flex; justify-content: center; padding: 18px 0 28px; }
-      .load-more-button { min-height: 46px; padding: 0 22px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--text); background: var(--surface); font-size: 14px; font-weight: 700; cursor: pointer; }
-      .load-more-button:hover { background: var(--surface-2); }
-      .load-more-button:disabled { opacity: 0.6; cursor: wait; }
-
-      .loading-state, .empty-state, .coming-soon-panel {
-        min-height: 70dvh;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-        padding: calc(var(--top-offset) + 24px) 28px 40px;
-        color: var(--text-dim);
-        text-align: center;
-      }
-      .empty-state p, .coming-soon-panel p { max-width: 320px; margin: 0 0 10px; font-size: 15px; line-height: 1.5; }
-      .coming-soon-panel h2 { margin: 0; color: var(--text); font-family: var(--font-display); font-size: 24px; }
-      .empty-button { min-height: 48px; padding: 0 22px; border: 0; border-radius: var(--r-field); color: var(--amber-ink); background: var(--amber); font-size: 15px; font-weight: 700; cursor: pointer; }
-      .empty-button:hover { background: var(--amber-strong); }
       .skeleton-card { pointer-events: none; background: var(--surface); }
-      .skeleton-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.02) 70%); background-size: 200% 100%; animation: gwamoSkeletonShimmer 1.6s ease-in-out infinite; }
-      @keyframes gwamoSkeletonShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+      .skeleton-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(255,255,255,0.02) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 70%); background-size: 200% 100%; animation: gwamoSkeletonShimmer 1.6s ease-in-out infinite; }
 
-      .gwamo-toast {
-        position: fixed; left: 50%; top: calc(var(--top-offset) + 8px);
-        z-index: 10500;
-        max-width: min(88vw, 380px);
-        padding: 11px 18px;
-        border: 1px solid var(--line-strong);
-        border-radius: 999px;
-        color: var(--text);
-        background: var(--surface-2);
-        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
-        font-size: 14px; font-weight: 600; text-align: center;
-        transform: translateX(-50%);
-        animation: gwamoToastIn 220ms ease-out;
+      .reel-media-wrapper { position: relative; overflow: hidden; width: 100%; }
+      .reel-media-wrapper .media-card, .reel-media-wrapper .media-viewport, .reel-media-wrapper .media-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .reel-media-wrapper img, .reel-media-wrapper video, .reel-media-wrapper iframe { width: 100%; height: 100%; object-fit: cover; }
+      .service-card-gradient { position: absolute; inset: 0; z-index: 20; pointer-events: none; background: linear-gradient(to bottom, transparent 40%, rgba(13,19,32,0.85) 100%); }
+      
+      .post-info-block { position: absolute; z-index: 40; left: 12px; right: 12px; bottom: 16px; }
+      .post-provider-row { display: flex; align-items: center; gap: 8px; }
+      .post-provider-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+      .service-avatar-badge { width: 34px; height: 34px; border-radius: 50%; padding: 0; border: none; background: transparent; cursor: pointer; }
+      .service-avatar-badge img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+      .creator-name { color: #fff; font-size: 13px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+      .service-name { margin: 2px 0 0; color: #fff; font-size: 15px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
+      .service-social-rail { position: absolute; z-index: 42; right: 12px; }
+      .rail-action { display: flex; flex-direction: column; align-items: center; padding: 0; border: none; background: transparent; color: #fff; cursor: pointer; }
+      .gold-star { color: var(--amber); fill: var(--amber); }
+
+      .tv-private-contact-cta { position: absolute; z-index: 44; right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(13,19,32,0.7); color: #fff; border: 1px solid var(--line-strong); display: grid; place-items: center; }
+      .contact-me-cta { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: var(--r-field); background: var(--amber); color: var(--amber-ink); font-weight: 700; border: none; cursor: pointer; }
+
+      /* COMMENTS CAROUSEL */
+      @keyframes slideUpIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      @keyframes gwamoToastIn { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
-
-      /* ------------------------ SHEETS, MODALS, FORMS ----------------------- */
-      .modal-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(6, 9, 16, 0.76); }
-      .auth-modal-overlay { align-items: center; padding: 16px; }
-      .modal-card {
-        position: relative;
-        width: 100%; max-width: 520px; max-height: 92dvh;
-        overflow-y: auto; overscroll-behavior: contain;
-        padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px));
-        border: 1px solid var(--line);
-        border-bottom: 0;
-        border-radius: var(--r-sheet) var(--r-sheet) 0 0;
-        color: var(--text);
-        background: var(--surface);
-        box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
+      .reel-comment-body {
+        font-size: 13px; line-height: 1.4; color: var(--text); display: -webkit-box;
+        -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        margin: 0; transition: all 0.3s ease;
       }
-      .modal-card::before { content: ""; display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--line-strong); }
-      .auth-modal-card { max-width: 420px; padding-bottom: 24px; border-bottom: 1px solid var(--line); border-radius: var(--r-sheet); }
-      .auth-modal-card::before { display: none; }
-      .modal-header { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -20px 14px; padding: 14px 20px 12px; background: var(--surface); }
-      .modal-header h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
-      .modal-header-note { margin: 4px 0 0; color: var(--text-dim); font-size: 12px; line-height: 1.4; }
-      .modal-close { width: 38px; height: 38px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: var(--text); background: var(--surface-2); cursor: pointer; }
-      .modal-close:hover { background: var(--surface-3); }
-
-      .form-section { margin-bottom: 18px; }
-      .form-section-last { margin-bottom: 0; }
-      .section-heading { margin-bottom: 10px; color: var(--text); font-family: var(--font-display); font-size: 16px; font-weight: 700; }
-      .modal-card label { display: block; margin: 0 0 7px; color: var(--text-dim); font-size: 13px; font-weight: 600; }
-      .modal-card input, .modal-card textarea, .modal-card select {
-        width: 100%; min-height: 50px;
-        margin: 0 0 6px;
-        padding: 13px 15px;
-        border: 1px solid var(--line);
-        border-radius: var(--r-field);
-        outline: none;
-        color: var(--text);
-        background: var(--surface-2);
-        font-size: 15px;
-        transition: border-color 140ms ease, box-shadow 140ms ease;
+      .reel-comment-body.expanded {
+        display: block; -webkit-line-clamp: unset; overflow-y: auto; max-height: 100px;
       }
-      .modal-card select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%); background-position: calc(100% - 20px) 22px, calc(100% - 14px) 22px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
-      .modal-card select option { color: #fff; background: var(--surface); }
-      .modal-card textarea { min-height: 120px; line-height: 1.55; resize: vertical; }
-      .modal-card input::placeholder, .modal-card textarea::placeholder { color: rgba(154, 166, 186, 0.7); opacity: 1; }
-      .modal-card input:focus, .modal-card textarea:focus, .modal-card select:focus { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
-      .field-help { margin: 0 0 16px; color: var(--text-dim); font-size: 12.5px; line-height: 1.5; }
-      .two-field-row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 10px; }
-
-      .post-type-section { padding-bottom: 6px; }
-      .post-type-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .post-type-choice {
-        min-height: 88px;
-        display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px;
-        padding: 12px 14px;
-        border: 1.5px solid var(--line);
-        border-radius: var(--r-card);
-        color: var(--text);
-        background: var(--surface-2);
-        text-align: left;
-        cursor: pointer;
-        transition: border-color 150ms ease, background 150ms ease;
+      .reel-comment-readmore {
+        background: none; border: none; color: var(--amber); font-size: 11px; font-weight: 700;
+        padding: 0; margin-top: 4px; cursor: pointer; text-align: left;
       }
-      .post-type-choice:hover { border-color: var(--line-strong); }
-      .post-type-choice.is-selected { border-color: var(--amber); background: var(--amber-soft); }
-      .post-type-icon { font-size: 20px; line-height: 1; }
-      .post-type-choice strong { font-size: 14px; }
-      .post-type-choice small { color: var(--text-dim); font-size: 11.5px; line-height: 1.35; }
-      .choice-pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-      .choice-pill { min-height: 40px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 999px; color: var(--text-dim); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
-      .choice-pill.is-selected { color: var(--amber-ink); border-color: var(--amber); background: var(--amber); }
 
-      .file-picker { min-height: 52px; display: flex !important; align-items: center; gap: 8px; padding: 12px 14px; border: 1.5px dashed var(--line-strong); border-radius: var(--r-field); color: var(--text); background: transparent; font-size: 14px; font-weight: 600; cursor: pointer; }
-      .file-picker:hover { border-color: var(--amber); }
-      .file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-      .profile-photo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
-      .profile-photo-preview { width: 68px; height: 68px; flex: 0 0 68px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; color: var(--text-dim); background: var(--surface-2); }
-      .profile-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
-      .profile-photo-actions { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
-      .profile-photo-picker { min-height: 44px; justify-content: center; }
-      .profile-photo-remove { min-height: 40px; margin-top: 0; font-size: 13px; }
-      .preview-wrap { margin: 10px 0 14px; }
-      .media-preview { width: 100%; max-height: 220px; display: block; object-fit: contain; border: 1px solid var(--line); border-radius: var(--r-card); background: #000; }
-      .logo-preview { width: 60px; height: 60px; display: block; object-fit: cover; border-radius: 50%; }
+      /* MODALS */
+      .modal-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(6,9,16,0.76); }
+      .modal-card { width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto; padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px)); border-radius: var(--r-sheet) var(--r-sheet) 0 0; background: var(--surface); }
+      .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 12px; margin: 0 -20px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+      .modal-close { background: var(--surface-2); border: none; width: 38px; height: 38px; border-radius: 50%; color: #fff; display: grid; place-items: center; cursor: pointer; }
+      .cancel-button { width: 100%; min-height: 52px; margin-top: 10px; border: 1px solid var(--line-strong); color: var(--text); background: transparent; border-radius: var(--r-field); cursor: pointer; }
 
-      .save-button, .cancel-button, .switch-mode-button, .danger-button { width: 100%; min-height: 52px; padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--r-field); font-size: 15.5px; font-weight: 700; cursor: pointer; transition: background 150ms ease, border-color 150ms ease; }
-      .save-button { border: 0; color: var(--amber-ink); background: var(--amber); }
-      .save-button:hover:not(:disabled) { background: var(--amber-strong); }
-      .save-button:disabled { opacity: 0.6; cursor: wait; }
-      .cancel-button { margin-top: 10px; border: 1px solid var(--line-strong); color: var(--text); background: transparent; }
-      .cancel-button:hover { background: var(--surface-2); }
-      .switch-mode-button { min-height: 44px; margin-top: 8px; border: 0; color: var(--amber); background: transparent; font-size: 14.5px; font-weight: 600; }
-      .forgot-pin-button { width: 100%; min-height: 42px; margin-top: 6px; padding: 8px 12px; border: 0; color: var(--amber); background: transparent; font-size: 13.5px; font-weight: 600; cursor: pointer; }
-      .forgot-pin-button:disabled { opacity: 0.55; cursor: wait; }
-      .danger-button { min-height: 48px; margin-top: 6px; border: 1px solid rgba(255, 92, 112, 0.4); color: #ff8e9c; background: rgba(255, 92, 112, 0.08); font-size: 14.5px; }
-      .danger-button:hover { background: rgba(255, 92, 112, 0.16); }
-      .profile-danger-zone { margin-top: 24px; padding: 16px; border: 1px solid rgba(255, 92, 112, 0.28); border-radius: var(--r-card); background: rgba(255, 92, 112, 0.05); }
-      .auth-error { margin: -2px 0 12px; color: #ff8e9c; font-size: 13px; font-weight: 600; }
-      .auth-success-message { margin-bottom: 14px; padding: 11px 14px; border-radius: var(--r-field); color: #0a5c3c; background: #d9f7e8; font-size: 14px; font-weight: 600; text-align: center; }
-      .auth-helper-text { display: block; margin-top: 8px; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
-      .account-status-row { margin-bottom: 16px; }
-      .account-status-row .field-help { margin-top: 8px; margin-bottom: 0; }
-      .pin-reset-card { max-width: 440px; }
-      .pin-reset-intro { margin: 0 0 16px; color: var(--text-dim); font-size: 14px; line-height: 1.55; }
-      .pin-verification-panel { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 4px 0 16px; padding: 20px; border: 1px solid var(--amber); border-radius: var(--r-card); background: var(--amber-soft); }
-      .pin-verification-panel span { color: var(--text-dim); font-size: 13px; font-weight: 600; }
-      .pin-verification-panel strong { color: var(--amber-strong); font-family: var(--font-display); font-size: clamp(32px, 10vw, 44px); font-variant-numeric: tabular-nums; letter-spacing: 0.14em; }
+      .chat-modal-overlay { position: fixed; inset: 0; z-index: 9998; display: flex; align-items: flex-end; justify-content: center; background: rgba(6,9,16,0.76); }
+      .chat-modal { width: 100%; max-width: 500px; height: 88vh; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-sheet) var(--r-sheet) 0 0; background: var(--surface); }
+      .chat-header { padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+      .chat-back { width: 38px; height: 38px; border-radius: 50%; background: var(--surface-2); border: none; color: #fff; cursor: pointer; }
+      .chat-header-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; }
+      .chat-header-copy strong { display: block; font-size: 16px; }
+      .chat-header-copy small { color: var(--text-dim); font-size: 11px; }
+      .chat-messages { flex: 1; padding: 16px; overflow-y: auto; }
 
-      .upload-progress-wrap { margin: 16px 0 10px; }
-      .upload-progress-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--text); font-size: 13px; font-weight: 600; }
-      .upload-progress-track { width: 100%; height: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
-      .upload-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--amber); transition: width 180ms ease; }
+      .zoom-overlay { position: fixed; inset: 0; z-index: 11000; display: flex; align-items: center; justify-content: center; background: rgba(6,9,16,0.92); }
+      .zoom-image-shell { width: 90vw; height: 80vh; display: grid; place-items: center; }
+      .zoom-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .zoom-close-button { position: fixed; top: 20px; right: 20px; background: rgba(30,40,64,0.9); border: none; border-radius: 50%; width: 46px; height: 46px; color: #fff; cursor: pointer; }
 
-      .mysheet-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 36px 10px; color: var(--text-dim); text-align: center; }
-      .mysheet-empty p { margin: 0; line-height: 1.5; }
-      .mytime-icon { color: var(--amber); }
-      .myservices-list, .myinbox-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-      .myservice-row, .myinbox-row { display: flex; align-items: center; gap: 12px; padding: 11px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-2); }
-      .myservice-thumb { width: 54px; height: 54px; flex: 0 0 54px; object-fit: cover; border-radius: 12px; background: #000; }
-      .myservice-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-      .myservice-info strong { display: flex; align-items: center; gap: 6px; overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
-      .myservice-info span { overflow: hidden; color: var(--text-dim); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-      .myservice-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-      .myservice-actions button { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 10px; color: var(--text); background: var(--surface-3); cursor: pointer; }
-      .myservice-actions .myservice-delete { color: #ff8e9c; background: rgba(255, 92, 112, 0.12); }
-      .myinbox-search-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-field); color: var(--text-dim); background: var(--surface-2); }
-      .modal-card .myinbox-search { flex: 1; min-height: 46px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 15px; }
-      .myinbox-row { position: relative; width: 100%; color: var(--text); text-align: left; cursor: pointer; transition: background 140ms ease; }
-      .myinbox-row:hover { background: var(--surface-3); }
-      .myinbox-row.has-unread { border-color: rgba(255, 185, 56, 0.5); background: var(--amber-soft); }
-      .myinbox-avatar { width: 44px; height: 44px; flex: 0 0 44px; display: block; overflow: hidden; border-radius: 50%; background: var(--surface-3); }
-      .myinbox-avatar img { width: 100%; height: 100%; object-fit: cover; }
-      .myinbox-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-      .myinbox-name-row { display: flex; align-items: center; gap: 5px; }
-      .myinbox-name-row strong { min-width: 0; overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
-      .myinbox-verified { width: 14px; height: 14px; flex-shrink: 0; }
-      .myinbox-time { margin-left: auto; flex-shrink: 0; color: var(--text-dim); font-size: 11px; font-weight: 600; }
-      .myinbox-main small { overflow: hidden; color: var(--text-dim); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-      .myinbox-preview { color: rgba(243, 245, 249, 0.78) !important; }
-      .myinbox-row.has-unread .myinbox-preview { color: #fff !important; font-weight: 600; }
-      .myinbox-unread-badge { min-width: 22px; height: 22px; padding: 0 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 999px; color: var(--amber-ink); background: var(--amber); font-size: 12px; font-weight: 800; }
-
-      .info-modal-content { text-align: left; }
-      .info-modal-lead { margin: 2px 0 10px; color: var(--text); font-family: var(--font-display); font-size: 22px; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
-      .info-modal-body { margin: 0 0 16px; color: var(--text-dim); font-size: 15px; line-height: 1.65; }
-      .info-modal-sections { display: grid; gap: 10px; margin: 4px 0 20px; }
-      .info-modal-section { padding: 14px 16px; border-radius: var(--r-card); background: var(--surface-2); }
-      .info-modal-section h3 { margin: 0 0 5px; color: var(--text); font-size: 15px; font-weight: 700; line-height: 1.3; }
-      .info-modal-section p { margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.55; }
-
-      .profile-sheet-card { max-width: 460px; }
-      .profile-sheet-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-      .provider-sheet-avatar { --ring: var(--amber); width: 76px; height: 76px; flex: 0 0 76px; border-radius: 50%; box-shadow: 0 0 0 3px var(--ring), 0 0 0 6px var(--surface); }
-      .provider-sheet-avatar.status-verified { --ring: var(--verified); }
-      .provider-sheet-avatar.status-rejected { --ring: var(--muted); }
-      .provider-sheet-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%; }
-      .profile-sheet-identity { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-      .profile-sheet-identity h3 { margin: 0; overflow: hidden; font-family: var(--font-display); font-size: 21px; text-overflow: ellipsis; white-space: nowrap; }
-      .profile-sheet-headline { margin: 0 0 8px; color: var(--text); font-size: 17px; font-weight: 700; }
-      .profile-sheet-description { margin: 0 0 10px; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; }
-      .profile-sheet-meta { margin: 0 0 18px; color: var(--text-dim); font-size: 12.5px; }
-      .profile-sheet-actions { display: flex; flex-direction: column; gap: 10px; }
-      .profile-sheet-actions .save-button, .profile-sheet-actions .cancel-button { margin-top: 0; }
-
-      /* ----------------------------- PRIVATE CHAT ---------------------------- */
-      .chat-modal-overlay { position: fixed; inset: 0; z-index: 9998; display: flex; align-items: flex-end; justify-content: center; background: rgba(6, 9, 16, 0.76); }
-      .chat-modal { width: 100%; max-width: 500px; height: 88vh; height: 88dvh; max-height: 740px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-sheet) var(--r-sheet) 0 0; color: var(--text); background: var(--surface); box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5); }
-      .chat-header { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
-      .chat-back { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--text); background: var(--surface-2); cursor: pointer; }
-      .chat-header-avatar { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; object-fit: cover; background: var(--surface-2); }
-      .chat-header div { min-width: 0; display: flex; flex-direction: column; }
-      .chat-header-copy { flex: 1; }
-      .chat-header-name { display: flex; align-items: center; gap: 5px; overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-      .chat-header-verified { width: 15px; height: 15px; flex-shrink: 0; }
-      .chat-header small { color: var(--text-dim); font-size: 12.5px; }
-      .chat-header .chat-privacy-note { margin-top: 3px; color: var(--text-dim); font-size: 10.5px; line-height: 1.3; white-space: normal; }
-      .chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px; background: var(--ink); }
-      .chat-date-separator { display: flex; justify-content: center; margin: 8px 0; }
-      .chat-date-separator span { padding: 4px 12px; border-radius: 999px; color: var(--text-dim); background: var(--surface); font-size: 11.5px; font-weight: 600; }
-      .chat-loading, .chat-empty { padding: 40px 0; color: var(--text-dim); text-align: center; }
-      .chat-welcome { min-height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; padding: 28px 18px; color: var(--text-dim); text-align: center; }
-      .chat-welcome img { width: 68px; height: 68px; object-fit: cover; border-radius: 50%; box-shadow: 0 0 0 3px var(--amber); }
-      .chat-welcome strong { color: var(--text); font-family: var(--font-display); font-size: 18px; }
-      .chat-welcome p { max-width: 320px; margin: 0; font-size: 13.5px; line-height: 1.5; }
-      .chat-message { max-width: 80%; padding: 9px 13px; border-radius: 18px; }
-      .chat-message.sent { align-self: flex-end; border-bottom-right-radius: 5px; color: var(--amber-ink); background: var(--amber); }
-      .chat-message.received { align-self: flex-start; border-bottom-left-radius: 5px; color: var(--text); background: var(--surface-2); }
-      .chat-message.is-pending { opacity: 0.62; }
-      .chat-message.is-failed { outline: 1.5px solid var(--bad); }
-      .chat-message p { margin: 0; font-size: 15px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-      .chat-message img, .chat-message video { max-width: 100%; margin-bottom: 6px; border-radius: 12px; }
-      .chat-image-attachment { cursor: zoom-in; }
-      .chat-message audio { width: 100%; margin-bottom: 6px; }
-      .chat-document-link { display: flex; align-items: center; gap: 9px; max-width: 100%; padding: 10px 12px; border-radius: 12px; color: inherit; background: rgba(255, 255, 255, 0.08); text-decoration: none; }
-      .chat-message.sent .chat-document-link { background: rgba(27, 19, 3, 0.12); }
-      .chat-document-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .chat-message time { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 3px; font-size: 10.5px; opacity: 0.65; }
-      .chat-read-status { display: inline-flex; align-items: center; opacity: 0.8; }
-      .chat-read-status.is-read { color: #7ee0ff; opacity: 1; }
-      .chat-message.sent .chat-read-status.is-read { color: #0a4e8a; }
-      .chat-new-messages-button { align-self: center; margin: 4px 0 8px; padding: 7px 16px; border: 0; border-radius: 999px; color: var(--amber-ink); background: var(--amber); font-size: 12.5px; font-weight: 700; cursor: pointer; animation: gwamoFadeIn 220ms ease-out; }
-      @keyframes gwamoFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-      .chat-retry-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 16px; color: #ff8e9c; background: rgba(255, 92, 112, 0.12); font-size: 13px; font-weight: 600; }
-      .chat-retry-banner button { border: 0; color: #ff8e9c; background: none; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer; }
-      .chat-composer { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--surface); }
-      .chat-composer input { flex: 1; min-width: 0; padding: 11px 16px; border: 1px solid var(--line); border-radius: 999px; outline: none; color: var(--text); background: var(--surface-2); font-size: 15px; }
-      .chat-composer input:focus { border-color: var(--amber); }
-      .chat-send { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--amber-ink); background: var(--amber); cursor: pointer; }
-      .chat-send:disabled { opacity: 0.45; cursor: not-allowed; }
-      .chat-attach-wrap { position: relative; flex-shrink: 0; }
-      .chat-attach-button { width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--text); background: var(--surface-2); cursor: pointer; }
-      .chat-attach-backdrop { position: fixed; inset: 0; z-index: 9; }
-      .chat-attach-menu { position: absolute; bottom: 52px; left: 0; z-index: 10; min-width: 170px; padding: 6px; border: 1px solid var(--line-strong); border-radius: var(--r-card); background: var(--surface-2); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45); }
-      .chat-attach-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; color: var(--text); background: transparent; font-size: 14.5px; cursor: pointer; }
-      .chat-attach-menu button:hover { background: var(--surface-3); }
-
-      .zoom-overlay { position: fixed; inset: 0; z-index: 11000; display: flex; align-items: center; justify-content: center; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); background: rgba(6, 9, 16, 0.92); cursor: zoom-out; animation: zoomOverlayIn 180ms ease-out; }
-      .zoom-image-shell { width: min(92vw, 760px); height: min(82vh, 760px); display: grid; place-items: center; overflow: hidden; border-radius: 24px; background: #000; cursor: default; }
-      .zoom-image { width: 100%; height: 100%; display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; }
-      .zoom-close-button { position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px; z-index: 11001; width: 46px; height: 46px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #fff; background: rgba(30, 40, 64, 0.9); cursor: pointer; }
-      @keyframes zoomOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-      .zoom-reset-button { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 11001; min-height: 42px; padding: 0 18px; border: 0; border-radius: 999px; color: #fff; background: rgba(30, 40, 64, 0.92); font-size: 14px; font-weight: 700; transform: translateX(-50%); cursor: pointer; }
-
-      /* -------------------------- TV MODE (immersive) ------------------------ */
-      .home-page.is-tv-mode .home-feed { width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16))); }
-      .home-page.is-tv-mode .service-reel-card .media-layer { background: radial-gradient(circle at 50% 42%, rgba(42, 163, 255, 0.12), transparent 62%), var(--surface); }
-      .home-page.is-tv-mode .service-reel-card img.home-media,
-      .home-page.is-tv-mode .service-reel-card video.home-media { object-fit: cover; object-position: center; background: transparent; }
-      .tv-media-backdrop { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-      .tv-media-backdrop img, .tv-media-backdrop video { width: 100%; height: 100%; object-fit: cover; object-position: center; filter: blur(38px) saturate(1.15) brightness(0.58); transform: scale(1.18); }
-      .tv-media-backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(13, 19, 32, 0.3); }
-      .home-page.is-tv-mode .media-layer > iframe.home-media {
-        position: absolute; z-index: 1; top: 50%; left: 50%;
-        width: calc(var(--reel-h) * 1.77778); height: var(--reel-h);
-        min-width: 100%; min-height: 100%; max-width: none; max-height: none;
-        transform: translate(-50%, -50%);
-        border: 0; border-radius: 0;
-      }
-      @media (orientation: landscape) {
-        .home-page.is-tv-mode .media-layer > iframe.home-media { width: 100vw; height: 56.25vw; }
-      }
-      .home-page.is-tv-mode .service-card-gradient { background: linear-gradient(to bottom, rgba(13, 19, 32, 0.5) 0%, transparent 22%, transparent 55%, rgba(13, 19, 32, 0.45) 78%, rgba(13, 19, 32, 0.92) 100%); }
-      .home-page.is-tv-mode .post-info-block { left: 14px; right: 14px; bottom: 76px; max-height: min(26svh, 190px); }
-
-      .tv-live-anchor { position: absolute; z-index: 45; top: 12px; left: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 10px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.55); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; pointer-events: none; }
-      .tv-live-anchor .tv-live-watchers { font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0; }
-      .tv-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff4560; animation: tvLivePulse 1.4s ease-in-out infinite; }
-      @keyframes tvLivePulse { 0%, 100% { opacity: 0.55; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
-
-      .tv-conversation-column { position: absolute; z-index: 41; top: calc(var(--top-offset) + 42px); right: 76px; bottom: calc(86px + min(26svh, 190px)); left: 14px; overflow: hidden; pointer-events: none; transition: opacity 140ms ease; }
-      .tv-conversation-column.is-hidden { visibility: hidden; opacity: 0; }
-      .tv-conversation-column.is-hidden .tv-message-item { animation-play-state: paused; }
-      .tv-message-item { position: absolute; left: 0; width: min(88%, 380px); display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; column-gap: 9px; padding: 0; opacity: 0; pointer-events: auto; cursor: pointer; will-change: transform, opacity; animation: tvMessageRise var(--tv-message-duration, 30s) linear var(--tv-message-delay, 0s) infinite both; }
-      .tv-message-item.is-paused { animation-play-state: paused; }
-      @keyframes tvMessageRise { 0% { opacity: 0; transform: translate3d(0, 18px, 0); } 14% { opacity: 0; transform: translate3d(0, 18px, 0); } 20% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; transform: translate3d(0, -72svh, 0); } }
-      .tv-message-avatar { position: relative; width: 32px; height: 32px; margin-top: 3px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
-      .tv-message-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.7); }
-      .tv-message-avatar.is-placeholder {
-  box-shadow: 0 0 15px #ff0040, inset 0 0 10px #ff0040 !important;
-  background: #ffffff !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-.tv-message-avatar.is-placeholder img {
-  display: none;
-}
-.tv-message-avatar.is-placeholder::after {
-  content: "";
-  width: 60%;
-  height: 60%;
-  background: #111827;
-  border-radius: 50%;
-  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>') center/contain no-repeat;
-}
-      .tv-message-flag { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 13px; display: grid; place-items: center; overflow: hidden; border: 0; border-radius: 2px; background: transparent; font-size: 13px; line-height: 1; }
-      .tv-message-body { position: relative; min-width: 0; width: fit-content; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 5px 6px 6px 0; text-align: left; }
-      .tv-message-name { order: 1; max-width: 100%; overflow: hidden; color: var(--tv-neon, #ffc766); font-size: 11.5px; font-weight: 800; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); }
-      .tv-message-text { order: 2; max-width: 100%; color: #fff; font-size: 12.5px; font-weight: 520; line-height: 1.34; overflow-wrap: anywhere; text-shadow: 0 1px 2px #000, 0 2px 6px #000, 0 0 12px rgba(0, 0, 0, 0.9); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-      .tv-message-paused-mark { position: absolute; top: -2px; right: -18px; color: rgba(255, 255, 255, 0.64); font-size: 9px; letter-spacing: -2px; }
-       .tv-public-action-dock { position: absolute; z-index: 9999; right: 4px; left: auto; bottom: 130px; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: auto; }
-            .tv-public-conversation-cta, .tv-visibility-toggle, .tv-private-contact-cta, .social-life-call-cta {
-        position: relative;
-        width: 34px; height: 34px;
-        display: grid; place-items: center;
-        padding: 0;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 50%;
-        color: #fff;
-        background: rgba(13, 19, 32, 0.65);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        cursor: pointer;
-        transition: background 150ms ease, transform 150ms ease;
-      }
-      .tv-public-conversation-cta:active, .tv-visibility-toggle:active, .tv-private-contact-cta:active {
-        transform: scale(0.92);
-      }
-      .tv-public-conversation-cta { color: var(--amber-ink); border-color: transparent; background: rgba(255, 185, 56, 0.9); animation: tvPublicCtaBreath 2.8s ease-in-out infinite; }
-      .tv-public-conversation-cta:hover { background: var(--amber-strong); }
-      .tv-public-conversation-bolt { color: #ff0040; }
-      @keyframes tvPublicCtaBreath { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 185, 56, 0.45); } 50% { box-shadow: 0 0 0 8px rgba(255, 185, 56, 0); } }
-      .tv-visibility-toggle { width: 34px; height: 34px; border-radius: 50%; }
-      .tv-visibility-toggle:hover, .tv-private-contact-cta:hover, .social-life-call-cta:hover { background: rgba(13, 19, 32, 0.85); }
-      .tv-public-conversation-cta.is-social-life { color: var(--amber-ink); background: var(--amber); }
-      .tv-view-count { min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none; }
-           .tv-private-contact-cta { position: absolute; z-index: 9999; right: 4px; left: auto; bottom: 70px; }
-      .social-life-call-cta { position: absolute; z-index: 9999; right: 4px; left: auto; bottom: 180px; }
-      /* LIVE belongs only to the reel that is currently active */
-      .service-reel-card:not(.is-active-reel) .tv-live-anchor { display: none; }
-
-      /* Compact neon Zap (gold) and Eye (cyan): no card, no border, no big container */
-      .tv-public-conversation-cta,
-      .tv-public-conversation-cta.is-social-life,
-      .tv-visibility-toggle,
-      .tv-view-count {
-        width: auto; height: auto; min-width: 28px; min-height: 28px;
-        display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-        padding: 0 2px; border: 0; border-radius: 0;
-        background: transparent; box-shadow: none; animation: none;
-        font-size: 17px; line-height: 1;
-      }
-      .tv-public-conversation-cta:hover,
-      .tv-public-conversation-cta.is-social-life:hover,
-      .tv-visibility-toggle:hover { background: transparent; }
-      .tv-public-conversation-cta svg, .tv-public-conversation-bolt,
-      .tv-visibility-toggle svg, .tv-view-count svg { width: 17px; height: 17px; flex: 0 0 17px; }
-      .tv-public-conversation-cta, .tv-public-conversation-cta.is-social-life, .tv-public-conversation-bolt { color: #ffd54a; }
-      .tv-public-conversation-cta svg, .tv-public-conversation-bolt {
-        filter: drop-shadow(0 0 2px #ffe27a) drop-shadow(0 0 6px rgba(255, 200, 40, 0.85)) drop-shadow(0 0 12px rgba(255, 176, 0, 0.55));
-      }
-      .tv-visibility-toggle, .tv-view-count svg { color: #3df2ff; }
-      .tv-visibility-toggle svg, .tv-view-count svg {
-        filter: drop-shadow(0 0 2px #9ffaff) drop-shadow(0 0 6px rgba(40, 220, 255, 0.85)) drop-shadow(0 0 12px rgba(0, 160, 255, 0.55));
-      }
-      .tv-view-count { color: #fff; font-size: 12px; }
-
-      .tv-typing-presence { position: absolute; left: 0; bottom: 56px; min-width: 82px; max-width: 170px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 5px 9px 5px 5px; border-radius: 999px; color: #fff; background: rgba(13, 19, 32, 0.6); pointer-events: auto; }
-      .tv-typing-avatar { position: relative; grid-row: 1 / 3; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
-      .tv-typing-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.68); }
-      .tv-typing-avatar span { position: absolute; right: -4px; bottom: -3px; font-size: 10px; }
-      .tv-typing-presence strong { min-width: 0; overflow: hidden; font-size: 11px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
-      .tv-typing-dots { display: flex; align-items: center; gap: 3px; height: 10px; }
-      .tv-typing-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--amber); animation: tvTypingDot 1s ease-in-out infinite; }
-      .tv-typing-dots i:nth-child(2) { animation-delay: 0.14s; }
-      .tv-typing-dots i:nth-child(3) { animation-delay: 0.28s; }
-      @keyframes tvTypingDot { 0%, 70%, 100% { opacity: 0.3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
-
-      .tv-chat-guide { position: absolute; z-index: 48; left: 14px; right: 14px; bottom: 74px; max-width: 520px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--r-card); color: #fff; background: rgba(21, 29, 46, 0.96); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4); }
-      .tv-chat-guide-head { display: flex; align-items: center; gap: 9px; }
-      .tv-gwamo-orb { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 50%; color: var(--amber-ink); background: var(--amber); font-family: var(--font-display); font-size: 14px; font-weight: 800; }
-      .tv-chat-guide-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
-      .tv-chat-guide-copy strong { color: var(--amber); font-size: 11.5px; }
-      .tv-chat-guide-copy span { color: #fff; font-size: 13px; font-weight: 600; line-height: 1.3; }
-      .tv-guide-close, .tv-guide-symbol-button, .tv-guide-upload-symbol { display: grid; place-items: center; padding: 0; border: 0; color: #fff; background: transparent; cursor: pointer; }
-      .tv-guide-close { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; color: var(--text-dim); }
-      .tv-guide-reply-row, .tv-guide-message-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-      .tv-guide-input, .tv-country-search { min-width: 0; height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; outline: none; color: #fff; background: var(--surface-2); font-size: 13px; }
-      .tv-guide-input { flex: 1; }
-      .tv-guide-input::placeholder, .tv-country-search::placeholder { color: rgba(154, 166, 186, 0.8); }
-      .tv-guide-input:focus, .tv-country-search:focus { border-color: var(--amber); }
-      .tv-guide-symbol-button { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%; color: var(--amber-ink); background: var(--amber); }
-      .tv-guide-symbol-button:disabled { opacity: 0.45; cursor: wait; }
-      .tv-guide-photo-step { min-height: 70px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 11px 0 2px; }
-      .tv-guide-photo-preview { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.62); }
-      .tv-guide-upload-symbol { position: relative; width: 48px; height: 48px; border: 1.5px dashed var(--amber); border-radius: 50%; background: var(--amber-soft); }
-      .tv-guide-upload-symbol.is-busy { opacity: 0.55; cursor: wait; }
-      .tv-guide-upload-symbol input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-      .tv-country-picker { margin-top: 10px; }
-      .tv-country-search { width: 100%; margin-bottom: 8px; }
-      .tv-country-list { max-height: min(34svh, 260px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; scrollbar-width: thin; }
-      .tv-country-option { min-width: 0; min-height: 36px; display: flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid transparent; border-radius: 10px; color: #fff; background: var(--surface-2); text-align: left; cursor: pointer; }
-      .tv-country-option:hover, .tv-country-option[aria-selected="true"] { border-color: var(--amber); background: var(--amber-soft); }
-      .tv-country-option span:last-child { min-width: 0; overflow: hidden; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
-      .tv-country-flag { flex: 0 0 auto; font-size: 17px; line-height: 1; }
-      .tv-guide-self-avatar { position: relative; width: 38px; height: 38px; flex: 0 0 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: zoom-in; }
-      .tv-guide-self-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.62); }
-      .tv-guide-self-avatar.is-placeholder {
-  box-shadow: 0 0 10px #ff0040, inset 0 0 6px #ff0040 !important;
-  background: #ffffff !important;
-  display: grid;
-  place-items: center;
-}
-.tv-guide-self-avatar.is-placeholder img {
-  display: none !important;
-}
-.tv-guide-self-avatar.is-placeholder::after {
-  content: "";
-  width: 65%;
-  height: 65%;
-  background: #111827;
-  border-radius: 50%;
-  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>') center/contain no-repeat;
-}
-      .tv-guide-self-avatar span { position: absolute; right: -4px; bottom: -3px; font-size: 10px; }
-            .tv-composer-error { margin-top: 8px; padding: 6px 10px; border-radius: 8px; color: #ff9ba7; background: rgba(255, 92, 112, 0.12); font-size: 11.5px; font-weight: 600; }
-
-      /* Hide floating global inbox on TV & Heart tabs so it doesn't block the bottom nav */
-      .is-tv-mode .inbox-unread-badge,
-      .is-tv-mode .topbar-icon-button,
-      .is-social-life-mode .topbar-icon-button {
-        display: none !important;
-      }
-      /* ------------------------------ RESPONSIVE ----------------------------- */
-      @media (max-width: 380px) {
-        .feedx-logo { font-size: 25px; }
-        .service-name { font-size: 19px; }
-        .bottom-nav-icon { width: 48px; }
-      }
-      @media (min-width: 700px) {
-        .home-feed, .home-page.is-tv-mode .home-feed { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .skeleton-shimmer, .tv-live-dot, .tv-typing-dots i, .tv-public-conversation-cta, .gwamo-toast, .chat-new-messages-button { animation: none; }
-        .tv-message-item { animation-duration: 48s; }
-        .home-page * { transition-duration: 0.01ms !important; }
-      }
-      @media (prefers-reduced-data: reduce) {
-        .tv-media-backdrop img, .tv-media-backdrop video { filter: none; }
-      }
+      .gwamo-toast { position: fixed; left: 50%; top: calc(var(--top-offset) + 8px); z-index: 10500; padding: 11px 18px; border-radius: 999px; background: var(--surface-2); color: #fff; transform: translateX(-50%); font-size: 14px; }
     `}</style>
   );
 }
 const HomeStyles = memo(HomeStylesInner);
-HomeStyles.displayName = "HomeStyles";
 export default Home;
