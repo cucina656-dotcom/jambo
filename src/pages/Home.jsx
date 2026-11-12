@@ -1,62 +1,24 @@
 ﻿import TvMedia from "../components/tv/TvMedia";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
 import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  memo,
+  Fragment, useCallback, useEffect, useMemo, useRef, useState, memo
 } from "react";
 import {
-  ShoppingBasket,
-  X,
-  Menu,
-  Send,
-  MessageSquare,
-  User,
-  Pencil,
-  Check,
-  CheckCircle,
-  Clock,
-  ShieldX,
-  Wallet,
-  Inbox,
-  Mail,
-  Plus,
-  Star,
-  Paperclip,
-  Image as ImageIcon,
-  Video,
-  FileText,
-  Search,
-  CheckCheck,
-  Phone,
-  Heart,
-  Info,
-  HelpCircle,
-  ShieldCheck,
-  Trash2,
-  Tv, // <-- ADDED THIS BACK TO FIX THE BLANK SCREEN
+  ShoppingBasket, X, Menu, Send, MessageSquare, User, Pencil, Check,
+  CheckCircle, Clock, ShieldX, Wallet, Inbox, Mail, Plus, Star, Paperclip,
+  Image as ImageIcon, Video, FileText, Search, CheckCheck, Phone, Heart,
+  Info, HelpCircle, ShieldCheck, Trash2, Tv, ThumbsUp, MessageCircle, Share2, Bookmark, ChevronLeft, ChevronRight
 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
-const DEFAULT_VIDEO =
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-const IS_DEV = Boolean(
-  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV,
-);
+const DEFAULT_VIDEO = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+const IS_DEV = Boolean(typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV);
 
-function devWarn(...args) {
-  if (IS_DEV) console.warn(...args);
-}
-function devError(...args) {
-  if (IS_DEV) console.error(...args);
-}
+function devWarn(...args) { if (IS_DEV) console.warn(...args); }
+function devError(...args) { if (IS_DEV) console.error(...args); }
 
 // ==========================================
-// NOTIFICATION RING (Web Audio API)
+// NOTIFICATION RING
 // ==========================================
 let audioCtx;
 function playNotificationRing() {
@@ -77,9 +39,7 @@ function playNotificationRing() {
     };
     playTone(880, 0, 0.4);
     playTone(1174.66, 0.2, 0.6);
-  } catch (err) {
-    devWarn("Could not play notification ring", err);
-  }
+  } catch (err) {}
 }
 
 function getPostType(post = {}) {
@@ -94,14 +54,9 @@ function getPostType(post = {}) {
 }
 
 const DEFAULT_LOGO = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='100' fill='%23111827'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%239CA3AF'/%3E%3Cpath d='M38 174c6-38 29-58 62-58s56 20 62 58' fill='%239CA3AF'/%3E%3C/svg%3E";
-const IMAGE_FALLBACK_SRC = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%2306101f'/%3E%3Ccircle cx='100' cy='82' r='28' fill='%23234061'/%3E%3Crect x='55' y='128' width='90' height='16' rx='8' fill='%23234061'/%3E%3C/svg%3E";
 
 const INITIAL_PAGE_LIMIT = 5;
 const LOAD_MORE_LIMIT = 5;
-const SESSION_TOKEN_KEY = "time-market-session-token";
-const USER_DATA_KEY = "time-market-user-data";
-const MESSAGE_POLL_INTERVAL_MS = 2000;
-const REACTION_COUNTS_POLL_INTERVAL_MS = 12000;
 const TOAST_DURATION_MS = 4200;
 const noop = () => {};
 
@@ -181,20 +136,6 @@ function useEscapeToClose(onClose, isOpen = true) {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
-}
-async function compressImageFile(file, { maxWidth, maxHeight, quality = 0.75 } = {}) {
-  if (!file || !file.type || !file.type.startsWith("image/")) return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    let { width, height } = bitmap;
-    const scale = Math.min(1, (maxWidth || width) / width, (maxHeight || height) / height);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(width * scale));
-    canvas.height = Math.max(1, Math.round(height * scale));
-    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
-    return new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: "image/webp" });
-  } catch { return file; }
 }
 
 // ==========================================
@@ -290,78 +231,26 @@ function GwamoBrainWidget({ apiUrl }) {
 }
 
 // ==========================================
-// TV COMMENT CAROUSEL
+// TV COMMENT SECTION (With Input & Carousel)
 // ==========================================
-const VerticalCommentCarousel = ({ messages, onZoomImage }) => {
+const TvCommentSection = ({ postId, onZoomImage }) => {
+  const [messages, setMessages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    if (isPaused || !messages || messages.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % messages.length);
-      setExpanded(false);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [isPaused, messages.length]);
-
-  if (!messages || messages.length === 0) {
-    return <div style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "#9ca3af" }}>No conversations yet.</div>;
-  }
-
-  const current = messages[currentIndex];
-  const next = messages[(currentIndex + 1) % messages.length];
-  const prev = messages[(currentIndex - 1 + messages.length) % messages.length];
-
-  return (
-    <div 
-      style={{ padding: "12px", display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between", background: "#151d2e", overflow: "hidden" }}
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-    >
-      <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(-4px)" }}>
-        {prev.user_name || "User"} · {prev.message?.slice(0, 30)}...
-      </div>
-
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", animation: "slideUpIn 0.4s ease-out forwards" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-          <button onClick={() => onZoomImage?.(current.profile_image || DEFAULT_LOGO)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
-            <img src={current.profile_image || DEFAULT_LOGO} alt="" style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover", border: "1px solid #ffffff33" }} />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#9ca3af" }}>
-            <strong style={{ color: "#fff" }}>{current.user_name || "Anonymous"}</strong>
-            <span>{current.country_code || "🌍"}</span>
-          </div>
-        </div>
-        
-        <p className={`reel-comment-body ${expanded ? "expanded" : ""}`}>
-          {current.message}
-        </p>
-        
-        {current.message?.length > 80 && (
-          <button className="reel-comment-readmore" onClick={() => setExpanded(!expanded)}>
-            {expanded ? "Show less" : "Read more"}
-          </button>
-        )}
-      </div>
-
-      <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(4px)" }}>
-        {next.user_name || "User"} · {next.message?.slice(0, 30)}...
-      </div>
-    </div>
-  );
-};
-
-const TvCommentFetcher = ({ postId, onZoomImage }) => {
-  const [messages, setMessages] = useState([]);
   useEffect(() => {
     let alive = true;
     const fetchComments = async () => {
       try {
         const res = await fetch(`${API_URL}/api/tv/conversation?post_id=${encodeURIComponent(postId)}&limit=15`);
         const data = await res.json();
-        if (alive && data.success && data.messages) setMessages(data.messages);
+        if (alive && data.success && data.messages) {
+          setMessages(data.messages);
+          // keep currentIndex valid if messages changed
+          if (currentIndex >= data.messages.length) setCurrentIndex(0);
+        }
       } catch {}
     };
     fetchComments();
@@ -369,7 +258,109 @@ const TvCommentFetcher = ({ postId, onZoomImage }) => {
     return () => { alive = false; clearInterval(interval); };
   }, [postId]);
 
-  return <VerticalCommentCarousel messages={messages} onZoomImage={onZoomImage} />;
+  useEffect(() => {
+    if (isPaused || messages.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % messages.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [isPaused, messages.length]);
+
+  const sendComment = async (e) => {
+    e.preventDefault();
+    if (!draft.trim() || sending) return;
+    setSending(true);
+    try {
+      const payload = {
+        tv_post_id: postId,
+        post_id: postId,
+        mode: "tv",
+        message: draft.trim(),
+        comment: draft.trim(),
+        user_name: "Guest",
+        profile_image: DEFAULT_LOGO,
+        country_code: "RW",
+        viewer_id: localStorage.getItem("gwamo-tv-public-viewer-id:v1") || "guest",
+      };
+      const res = await fetch(`${API_URL}/api/tv/conversation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDraft("");
+      } else {
+        alert(data.error || "Could not send comment.");
+      }
+    } catch (err) {
+      alert("Network error.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const prev = messages.length > 0 ? messages[(currentIndex - 1 + messages.length) % messages.length] : null;
+  const current = messages.length > 0 ? messages[currentIndex] : null;
+  const next = messages.length > 0 ? messages[(currentIndex + 1) % messages.length] : null;
+
+  return (
+    <div className="tv-comment-wrapper">
+      {/* Header */}
+      <div className="tv-comment-header">
+        <MessageSquare size={18} color="#ffb938" />
+        <h3>Comments ({messages.length})</h3>
+        {messages.length > 1 && (
+          <div className="tv-comment-nav">
+            <button onClick={() => setCurrentIndex((p) => (p - 1 + messages.length) % messages.length)}><ChevronLeft size={16} /></button>
+            <button onClick={() => setCurrentIndex((p) => (p + 1) % messages.length)}><ChevronRight size={16} /></button>
+          </div>
+        )}
+      </div>
+
+      {/* Carousel Body */}
+      <div 
+        className="tv-comment-body"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
+        {!current ? (
+          <div className="tv-comment-empty">No comments yet. Be the first!</div>
+        ) : (
+          <>
+            {prev && <div className="tv-peek">{prev.user_name}: {prev.message}</div>}
+            
+            <div className="tv-active-comment" key={current.id}>
+              <div className="tv-avatar-row">
+                <img src={current.profile_image || DEFAULT_LOGO} alt="" onClick={() => onZoomImage(current.profile_image || DEFAULT_LOGO)} />
+                <div className="tv-meta">
+                  <strong>{current.user_name || "Anonymous"}</strong>
+                  <small>{current.country_code || "🌍"} · {new Date(current.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                </div>
+              </div>
+              <p>{current.message}</p>
+            </div>
+            
+            {next && <div className="tv-peek">{next.user_name}: {next.message}</div>}
+          </>
+        )}
+      </div>
+
+      {/* Input Box */}
+      <form className="tv-comment-input-row" onSubmit={sendComment}>
+        <div className="tv-smiley"><User size={20} color="#9ca3af" /></div>
+        <input 
+          value={draft} 
+          onChange={(e) => setDraft(e.target.value)} 
+          placeholder="Andika igitekerezo..." 
+          disabled={sending}
+        />
+        <button type="submit" disabled={!draft.trim() || sending}>
+          <Send size={18} />
+        </button>
+      </form>
+    </div>
+  );
 };
 
 // ==========================================
@@ -397,7 +388,6 @@ function Home() {
   const toastTimerRef = useRef(null);
 
   const [zoomImage, setZoomImage] = useState("");
-  const [mediaAspectRatios, setMediaAspectRatios] = useState({});
   const [reactedPosts, setReactedPosts] = useState({});
   const [reactingPostId, setReactingPostId] = useState(null);
 
@@ -484,11 +474,6 @@ function Home() {
     return () => { observer.disconnect(); };
   }, [posts]);
 
-  const handleMediaAspectRatio = useCallback((postId, ratio) => {
-    if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
-    setMediaAspectRatios((current) => current[postId] === ratio ? current : { ...current, [postId]: ratio });
-  }, []);
-
   const pauseAllVideos = useCallback(() => {
     Object.entries(videoRefs.current).forEach(([postId, video]) => { if (video && !video.paused) video.pause(); });
   }, []);
@@ -562,8 +547,8 @@ function Home() {
             <ServicePost 
               key={String(post.id ?? index)} post={post} index={index} postId={String(post.id ?? index)}
               isActive={activePostIndex === index} reacted={Boolean(reactedPosts[String(post.id)])}
-              reacting={reactingPostId === String(post.id)} mediaAspectRatio={mediaAspectRatios[String(post.id)]}
-              onMediaAspectRatio={handleMediaAspectRatio} postRefCallback={(ref) => { if (ref) postRefs.current[index] = ref; }}
+              reacting={reactingPostId === String(post.id)} 
+              postRefCallback={(ref) => { if (ref) postRefs.current[index] = ref; }}
               videoRefCallback={(ref) => { if (ref) videoRefs.current[index] = ref; }}
               onViewProfile={noop} onContactProvider={openInboxForPost} onCallProvider={callProvider}
               onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"}
@@ -652,8 +637,8 @@ const TimeMarketTopBar = memo(({ activeCategory, onOpenInfo }) => {
 });
 
 const ServicePost = memo(function ServicePost({
-  post, index, postId, isActive, reacted, reacting, mediaAspectRatio,
-  onMediaAspectRatio, postRefCallback, videoRefCallback, onContactProvider, onCallProvider,
+  post, index, postId, isActive, reacted, reacting, 
+  postRefCallback, videoRefCallback, onContactProvider, onCallProvider,
   onReact, onZoomImage, isTvTab, isSocialLife, showLiveConversation,
 }) {
   const mediaUrl = post.media_url || post.video_url || DEFAULT_VIDEO;
@@ -663,18 +648,14 @@ const ServicePost = memo(function ServicePost({
   const isEmbed = mediaType === "embed" || (!mediaType && !isImageUrl(mediaUrl) && !isDirectVideoUrl(mediaUrl));
   const verificationInfo = getVerificationStatus(post);
   const providerName = post.service_provider_name || post.creator_name || "Provider";
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const reactionCount = Number(post.displayed_reactions || 0);
-  
-  const handleVideoLoadedMetadata = useCallback((event) => { const v = event.currentTarget; if (v.videoWidth && v.videoHeight) onMediaAspectRatio(postId, v.videoWidth / v.videoHeight); }, [onMediaAspectRatio, postId]);
-  const callPhone = normalizeWhatsAppNumber(post.creator_identity || "");
 
   return (
     <section ref={postRefCallback} data-index={index} className={`home-post service-reel-card${isActive ? " is-active-reel" : ""}`} style={{ display: "flex", flexDirection: "column" }}>
       
-      {/* Media Section (65%) */}
-      <div className="reel-media-wrapper" style={{ flex: "0 0 65%", position: "relative", background: "#000", overflow: "hidden" }}>
-        <TvMedia mediaUrl={mediaUrl} embedUrl={getEmbedUrl(mediaUrl)} isTvTab={isTvTab} isImage={isImage} isVideo={isVideo} isEmbed={isEmbed} isActive={isActive} mediaAspectRatio={mediaAspectRatio} postId={postId} videoRefCallback={videoRefCallback} onVideoLoadedMetadata={handleVideoLoadedMetadata} />
+      {/* Media Section (60%) */}
+      <div className="reel-media-wrapper" style={{ flex: "0 0 60%", position: "relative", background: "#000", overflow: "hidden" }}>
+        <TvMedia mediaUrl={mediaUrl} embedUrl={getEmbedUrl(mediaUrl)} isTvTab={isTvTab} isImage={isImage} isVideo={isVideo} isEmbed={isEmbed} isActive={isActive} postId={postId} videoRefCallback={videoRefCallback} />
         <div className="service-card-gradient" />
         
         <div className="post-info-block">
@@ -688,27 +669,28 @@ const ServicePost = memo(function ServicePost({
             </div>
           </div>
         </div>
-        
-        {!showLiveConversation && (
-          <div className="service-social-rail" style={{ bottom: "20px" }}>
-            <button type="button" className={`rail-action star-action${reacted ? " is-active" : ""}`} onClick={() => onReact(post)} disabled={reacting || reacted}>
-              <Star className="gold-star" size={34} fill="currentColor" />
-              <span>{formatCount(reactionCount)}</span>
-            </button>
-          </div>
-        )}
-        {showLiveConversation && (
-          <button type="button" className="tv-private-contact-cta" style={{ bottom: "20px" }} onClick={() => onContactProvider(post)}><Mail size={20} /></button>
-        )}
+
+        {/* Engagement Buttons (Like, Comment, Share) */}
+        <div className="tv-engagement-bar">
+          <button onClick={() => onReact(post)} className={reacted ? "is-liked" : ""}>
+            <ThumbsUp size={18} fill={reacted ? "currentColor" : "none"} /> Like
+          </button>
+          <button>
+            <MessageCircle size={18} /> Comment ({post.comment_count || 0})
+          </button>
+          <button>
+            <Share2 size={18} /> Share
+          </button>
+        </div>
       </div>
 
-      {/* Comments Section (35%) - Only on TV/Heart */}
+      {/* Comments Section (40%) */}
       {showLiveConversation ? (
-        <div style={{ flex: 1, background: "#151d2e", borderTop: "1px solid #ffffff1a", overflow: "hidden", position: "relative" }}>
-          <TvCommentFetcher postId={postId} onZoomImage={onZoomImage} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#0d1526", overflow: "hidden" }}>
+          <TvCommentSection postId={postId} onZoomImage={onZoomImage} />
         </div>
       ) : (
-        <div style={{ flex: 1, background: "#151d2e", borderTop: "1px solid #ffffff1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ flex: 1, background: "#151d2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <button type="button" className="contact-me-cta" style={{ position: "relative", width: "90%", left: "auto", right: "auto" }} onClick={() => onContactProvider(post)}>
             <Send size={20} /><span>Contact me</span>
           </button>
@@ -814,10 +796,6 @@ function HomeStylesInner() {
         padding-top: env(safe-area-inset-top, 0px);
         background: rgba(13, 19, 32, 0.96); border-bottom: 1px solid var(--line);
       }
-      .feedx-topbar.is-tv-mode {
-        background: linear-gradient(180deg, rgba(13, 19, 32, 0.78) 0%, rgba(13, 19, 32, 0.34) 62%, transparent 100%);
-        border-bottom-color: transparent;
-      }
       .feedx-topbar-inner {
         width: min(100%, 900px); height: var(--top-h); margin: 0 auto;
         padding: 0 8px 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -859,16 +837,15 @@ function HomeStylesInner() {
         position: relative; isolation: isolate; width: min(100%, max(300px, calc(var(--reel-h) * 9 / 16)));
         aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; background: var(--ink);
         scroll-snap-align: start; scroll-margin-top: calc(var(--top-offset) + 10px);
+        border-bottom: 1px solid #ffffff1a;
       }
-      .skeleton-card { pointer-events: none; background: var(--surface); }
-      .skeleton-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(255,255,255,0.02) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 70%); background-size: 200% 100%; animation: gwamoSkeletonShimmer 1.6s ease-in-out infinite; }
 
       .reel-media-wrapper { position: relative; overflow: hidden; width: 100%; }
       .reel-media-wrapper .media-card, .reel-media-wrapper .media-viewport, .reel-media-wrapper .media-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
       .reel-media-wrapper img, .reel-media-wrapper video, .reel-media-wrapper iframe { width: 100%; height: 100%; object-fit: cover; }
-      .service-card-gradient { position: absolute; inset: 0; z-index: 20; pointer-events: none; background: linear-gradient(to bottom, transparent 40%, rgba(13,19,32,0.85) 100%); }
+      .service-card-gradient { position: absolute; inset: 0; z-index: 20; pointer-events: none; background: linear-gradient(to bottom, transparent 60%, rgba(13,19,32,0.95) 100%); }
       
-      .post-info-block { position: absolute; z-index: 40; left: 12px; right: 12px; bottom: 16px; }
+      .post-info-block { position: absolute; z-index: 40; left: 12px; right: 12px; bottom: 50px; }
       .post-provider-row { display: flex; align-items: center; gap: 8px; }
       .post-provider-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
       .service-avatar-badge { width: 34px; height: 34px; border-radius: 50%; padding: 0; border: none; background: transparent; cursor: pointer; }
@@ -876,30 +853,66 @@ function HomeStylesInner() {
       .creator-name { color: #fff; font-size: 13px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
       .service-name { margin: 2px 0 0; color: #fff; font-size: 15px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 
-      .service-social-rail { position: absolute; z-index: 42; right: 12px; }
-      .rail-action { display: flex; flex-direction: column; align-items: center; padding: 0; border: none; background: transparent; color: #fff; cursor: pointer; }
-      .gold-star { color: var(--amber); fill: var(--amber); }
+      /* ENGAGEMENT BAR */
+      .tv-engagement-bar {
+        position: absolute; bottom: 0; left: 0; right: 0; z-index: 45;
+        display: flex; justify-content: space-around; align-items: center;
+        padding: 8px 10px; background: rgba(13,19,32,0.95); border-top: 1px solid #ffffff1a;
+      }
+      .tv-engagement-bar button {
+        display: flex; align-items: center; gap: 6px;
+        background: transparent; border: none; color: #9ca3af;
+        font-size: 12px; font-weight: 600; padding: 6px 10px; cursor: pointer;
+      }
+      .tv-engagement-bar button.is-liked { color: #ffb938; }
 
-      .tv-private-contact-cta { position: absolute; z-index: 44; right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(13,19,32,0.7); color: #fff; border: 1px solid var(--line-strong); display: grid; place-items: center; }
-      .contact-me-cta { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: var(--r-field); background: var(--amber); color: var(--amber-ink); font-weight: 700; border: none; cursor: pointer; }
+      /* COMMENT SECTION */
+      .tv-comment-wrapper {
+        flex: 1; display: flex; flex-direction: column; background: #0d1526;
+      }
+      .tv-comment-header {
+        display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid #ffffff1a;
+      }
+      .tv-comment-header h3 { margin: 0; font-size: 14px; color: #fff; flex: 1; }
+      .tv-comment-nav { display: flex; gap: 4px; }
+      .tv-comment-nav button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #ffffff33; background: transparent; color: #fff; display: grid; place-items: center; cursor: pointer; }
 
-      /* COMMENTS CAROUSEL */
+      .tv-comment-body {
+        flex: 1; padding: 12px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; position: relative;
+      }
+      .tv-comment-empty { text-align: center; color: #9ca3af; font-size: 13px; }
+      .tv-peek { font-size: 10px; color: #ffffff66; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 4px 0; }
+      
+      .tv-active-comment {
+        animation: slideUpIn 0.4s ease-out forwards;
+        padding: 10px 0;
+      }
       @keyframes slideUpIn {
-        from { opacity: 0; transform: translateY(12px); }
+        from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
       }
-      .reel-comment-body {
-        font-size: 13px; line-height: 1.4; color: var(--text); display: -webkit-box;
-        -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-        margin: 0; transition: all 0.3s ease;
+      
+      .tv-avatar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+      .tv-avatar-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; cursor: pointer; }
+      .tv-meta { display: flex; flex-direction: column; }
+      .tv-meta strong { font-size: 13px; color: #fff; }
+      .tv-meta small { font-size: 10px; color: #9ca3af; }
+      
+      .tv-active-comment p {
+        margin: 0; font-size: 14px; color: #e5e7eb; line-height: 1.4;
       }
-      .reel-comment-body.expanded {
-        display: block; -webkit-line-clamp: unset; overflow-y: auto; max-height: 100px;
+
+      .tv-comment-input-row {
+        display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid #ffffff1a; background: #0d1526;
       }
-      .reel-comment-readmore {
-        background: none; border: none; color: var(--amber); font-size: 11px; font-weight: 700;
-        padding: 0; margin-top: 4px; cursor: pointer; text-align: left;
+      .tv-smiley { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ffffff33; display: grid; place-items: center; }
+      .tv-comment-input-row input {
+        flex: 1; padding: 10px 16px; border-radius: 20px; border: 1px solid #ffffff33; background: transparent; color: #fff; font-size: 13px; outline: none;
       }
+      .tv-comment-input-row button {
+        width: 36px; height: 36px; border-radius: 50%; border: none; background: #10b981; color: #fff; display: grid; place-items: center; cursor: pointer;
+      }
+      .tv-comment-input-row button:disabled { opacity: 0.5; }
 
       /* MODALS */
       .modal-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(6,9,16,0.76); }
