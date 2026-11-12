@@ -38,6 +38,7 @@ import {
   HelpCircle,
   ShieldCheck,
   Trash2,
+  Tv, // <-- ADDED THIS BACK TO FIX THE BLANK SCREEN
 } from "lucide-react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
@@ -319,12 +320,10 @@ const VerticalCommentCarousel = ({ messages, onZoomImage }) => {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Top small preview */}
       <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(-4px)" }}>
         {prev.user_name || "User"} · {prev.message?.slice(0, 30)}...
       </div>
 
-      {/* Current Active Message */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", animation: "slideUpIn 0.4s ease-out forwards" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
           <button onClick={() => onZoomImage?.(current.profile_image || DEFAULT_LOGO)} style={{ padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
@@ -347,7 +346,6 @@ const VerticalCommentCarousel = ({ messages, onZoomImage }) => {
         )}
       </div>
 
-      {/* Bottom small preview */}
       <div style={{ fontSize: "10px", color: "#9ca3af", opacity: 0.5, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "2px 0", transform: "translateY(4px)" }}>
         {next.user_name || "User"} · {next.message?.slice(0, 30)}...
       </div>
@@ -383,9 +381,6 @@ function Home() {
   const observerRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  const user = null; 
-  const isLoggedIn = false;
-
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -397,23 +392,6 @@ function Home() {
   const [showChat, setShowChat] = useState(false);
   const [chatPartner, setChatPartner] = useState(null);
   
-  const [showMyProfile, setShowMyProfile] = useState(false);
-  const [profileFullName, setProfileFullName] = useState("");
-  const [profileServiceName, setProfileServiceName] = useState("");
-  const [profileServicesOffered, setProfileServicesOffered] = useState("");
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState("");
-  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
-  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
-  const [profileEditContextPost, setProfileEditContextPost] = useState(null);
-  const [profileDeleteConfirming, setProfileDeleteConfirming] = useState(false);
-  
-  const [showMyServices, setShowMyServices] = useState(false);
-  const [myServices, setMyServices] = useState([]);
-  const [myServicesLoading, setMyServicesLoading] = useState(false);
-  const [myServicesError, setMyServicesError] = useState("");
-  const [showMyTime, setShowMyTime] = useState(false);
-  
   const [showInfoModal, setShowInfoModal] = useState(null);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
@@ -422,18 +400,12 @@ function Home() {
   const [mediaAspectRatios, setMediaAspectRatios] = useState({});
   const [reactedPosts, setReactedPosts] = useState({});
   const [reactingPostId, setReactingPostId] = useState(null);
-  
-  const objectUrlsRef = useRef(new Set());
 
   const readJsonSafely = useCallback(async (response) => {
     const text = await response.text();
     if (!text) return { success: response.ok };
     try { return JSON.parse(text); } catch { throw new Error(text); }
   }, []);
-
-  const getSessionToken = useCallback(() => localStorage.getItem(SESSION_TOKEN_KEY) || "", []);
-  const setSessionToken = useCallback((token) => { if (token) localStorage.setItem(SESSION_TOKEN_KEY, token); else localStorage.removeItem(SESSION_TOKEN_KEY); }, []);
-  const setUserData = useCallback((userData) => { if (userData) localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData)); else localStorage.removeItem(USER_DATA_KEY); }, []);
 
   const handleOfferTime = useCallback((requestedPostType = "offer") => {
     if (activeCategory === "tv" || requestedPostType === "moment") {
@@ -614,7 +586,7 @@ function Home() {
       {mainContent}
       {toast && <div className="gwamo-toast" role="status">{toast.message}</div>}
       {zoomImage && <ZoomableImageViewer src={zoomImage} onClose={() => setZoomImage("")} />}
-      {showChat && chatPartner && <ChatModal partner={chatPartner} currentUser={null} getSessionToken={getSessionToken} apiUrl={API_URL} onClose={closeChat} onZoomImage={setZoomImage} onRequireAuth={noop} />}
+      {showChat && chatPartner && <ChatModal partner={chatPartner} currentUser={null} onClose={closeChat} onZoomImage={setZoomImage} />}
       {showInfoModal && <InfoModal topic={showInfoModal} onClose={() => setShowInfoModal(null)} />}
       
       <nav className="bottom-nav" aria-label="Primary">
