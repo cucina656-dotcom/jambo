@@ -1,6 +1,5 @@
 ﻿import TvMedia from "../components/tv/TvMedia";
 import TvConversationOverlay from "../components/tv/TvConversationOverlay";
-import ConnectExperience from "../components/connect/ConnectExperience";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 import {
@@ -159,17 +158,11 @@ const noop = () => {};
 
 const CATEGORY_TABS = [
   { key: "time-market", label: "Chat", icon: MessageSquare },
-  { key: "connect", label: "Connect", icon: Users },
   { key: "social-life", label: "Heart", icon: Heart },
   { key: "tv", label: "TV", icon: Tv },
 ];
 
 const CATEGORY_META = {
-  connect: {
-    label: "Connect",
-    blurb:
-      "Find a friend for life, a relationship, a sponsor or supporter, a mentor, or another meaningful connection.",
-  },
   "social-news": { label: "Social News", blurb: "Open Social News at social.com." },
   kitchen: { label: "Kitchen", blurb: "Food and kitchen services are coming to Gwamo." },
   tv: { label: "TV", blurb: "Video and media content are coming to Gwamo." },
@@ -1416,14 +1409,21 @@ function Home() {
     return fetch(`${API_URL}${path}`, { cache: "no-store", ...options, headers });
   }, [getSessionToken]);
 
-  // Auth functions removed. 
-  const openServiceForm = useCallback((provider, initialPostType = "offer") => {
-    // Alert user that they can't do this since auth is removed.
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
+  // Repurposed to open direct chat with support
   const handleOfferTime = useCallback((requestedPostType = "offer") => {
-    alert("Provider registration and login has been removed from this build.");
+    setChatPartner({
+      servicePostId: "", 
+      conversationId: "",
+      providerId: "", 
+      providerPhone: "250788484366", // Support WhatsApp Number
+      name: "Gwamo Support",
+      avatar: DEFAULT_LOGO,
+      headline: "Direct Support",
+      serviceName: "",
+      serviceMediaUrl: "",
+      verified: true,
+    });
+    setShowChat(true);
   }, []);
 
   const fetchAbortRef = useRef(null);
@@ -1796,8 +1796,6 @@ function Home() {
     mainContent = <GwamoBrainWidget apiUrl={API_URL} />;
   } else if (activeCategory === "social-life") {
     mainContent = <SocialLifeLanding />;
-} else if (activeCategory === "connect") {
-    mainContent = <ConnectExperience user={user} isLoggedIn={isLoggedIn} onRequireAuth={noop} resumeSignal={0} />;
   } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
@@ -1863,8 +1861,8 @@ function Home() {
               <Fragment key={tab.key}>
                 {navItem}
                 <div className="bottom-nav-plus-wrap">
-                  <button type="button" className="bottom-nav-plus" onClick={() => handleOfferTime(emptySectionAction.postType)} aria-label={emptySectionAction.label} title={emptySectionAction.label}>
-                   <Plus size={22} strokeWidth={2.6} aria-hidden="true" />
+                  <button type="button" className="bottom-nav-plus" onClick={() => handleOfferTime("chat")} aria-label="Chat with Support" title="Chat with Support">
+                   <MessageSquare size={22} strokeWidth={2.6} aria-hidden="true" />
                   </button>
                 </div>
               </Fragment>
