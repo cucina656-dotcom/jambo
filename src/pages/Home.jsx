@@ -1556,10 +1556,6 @@ function Home() {
     Object.entries(videoRefs.current).forEach(([postId, video]) => { if (video && !video.paused) video.pause(); });
   }, []);
 
-  const openEditor = useCallback(() => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
   const closeEditor = useCallback(() => {
     setShowEditor(false); setUploadProgress(0); setNewCreatorName(""); setNewCreatorIdentity("");
     setNewMediaUrl(""); setNewTitle(""); setSubtitle(""); setNewLogoFile(null);
@@ -1567,97 +1563,6 @@ function Home() {
     setNewMediaFile(null); revokeObjectUrl(mediaPreview); setMediaPreview(""); setMediaPreviewType("");
     setEditingServicePost(null);
   }, [logoPreview, mediaPreview, revokeObjectUrl]);
-
-  const handleLogoChange = useCallback(async (file) => {
-    revokeObjectUrl(logoPreview);
-    if (!file) { setNewLogoFile(null); setLogoPreview(""); return; }
-    setCompressingMedia(true);
-    try {
-      const compressed = await compressImageFile(file, { maxWidth: 400, maxHeight: 400, quality: 0.75 });
-      setNewLogoFile(compressed);
-      setLogoPreview(trackObjectUrl(URL.createObjectURL(compressed)));
-    } catch (error) {
-      devError("Profile photo processing failed:", error);
-      alert("This image could not be processed. Please try a different photo.");
-    } finally { setCompressingMedia(false); }
-  }, [logoPreview, revokeObjectUrl, trackObjectUrl]);
-
-  const handleProfilePhotoChange = useCallback(async (file) => {
-    revokeObjectUrl(profilePhotoPreview);
-    if (!file) { setProfilePhotoFile(null); setProfilePhotoPreview(""); return; }
-    try {
-      const compressed = await compressImageFile(file, { maxWidth: 400, maxHeight: 400, quality: 0.75 });
-      setProfilePhotoFile(compressed);
-      setProfilePhotoPreview(trackObjectUrl(URL.createObjectURL(compressed)));
-    } catch (error) {
-      devError("Profile photo processing failed:", error);
-      alert("This image could not be processed. Please try a different photo.");
-    }
-  }, [profilePhotoPreview, revokeObjectUrl, trackObjectUrl]);
-
-  const removeProfilePhoto = useCallback(() => {
-    revokeObjectUrl(profilePhotoPreview);
-    setProfilePhotoFile("remove"); setProfilePhotoPreview("");
-  }, [profilePhotoPreview, revokeObjectUrl]);
-
-  const handleMediaFileChange = useCallback(async (file) => {
-    revokeObjectUrl(mediaPreview);
-    if (!file) { setNewMediaFile(null); setMediaPreview(""); setMediaPreviewType(""); return; }
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      setNewMediaFile(file); setMediaPreview(trackObjectUrl(URL.createObjectURL(file))); setMediaPreviewType("video");
-      return;
-    }
-    setCompressingMedia(true);
-    try {
-      const compressed = await compressImageFile(file, { maxWidth: 1080, quality: 0.75 });
-      setNewMediaFile(compressed); setMediaPreview(trackObjectUrl(URL.createObjectURL(compressed))); setMediaPreviewType("image");
-    } catch (error) {
-      devError("Image processing failed:", error);
-      alert("This image could not be processed. Please try a different photo.");
-    } finally { setCompressingMedia(false); }
-  }, [mediaPreview, revokeObjectUrl, trackObjectUrl]);
-
-  const applyChanges = useCallback(async () => {
-    alert("Provider registration and login has been removed. You cannot post.");
-  }, []);
-
-  const openServiceEdit = useCallback((post) => {
-    alert("Provider registration and login has been removed. You cannot edit.");
-  }, []);
-
-  const saveServiceEdit = useCallback(async () => {
-    alert("Provider registration and login has been removed. You cannot save.");
-  }, []);
-
-  const showToast = useCallback((message) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast({ id: `${Date.now()}`, message });
-    toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, TOAST_DURATION_MS);
-  }, []);
-  useEffect(() => { return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }; }, []);
-
-  const conversationsInFlightRef = useRef(false);
-  const fetchMyConversations = useCallback(async ({ silent = false } = {}) => {
-    // Removed because we are not logged in.
-  }, []);
-
-  useEffect(() => {
-    // Removed because we are not logged in.
-  }, []);
-
-  useEffect(() => {
-    // Removed because we are not logged in.
-  }, []);
-
-  const unreadCountsByPost = useMemo(() => ({}), []);
-  const totalUnreadCount = useMemo(() => 0, []);
-
-  const openMyInbox = useCallback((filterPostId = null) => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const openInboxFromRail = useCallback(() => { openMyInbox(null); }, [openMyInbox]);
 
   const closeChat = useCallback(() => {
     setShowChat(false); setChatPartner(null);
@@ -1689,40 +1594,7 @@ function Home() {
     startChatWithPost(post);
   }, [startChatWithPost]);
 
-  const openConversationFromInbox = useCallback((conversation) => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
   const openProviderProfile = useCallback((post) => { setProviderProfileTarget(post); setShowProviderProfile(true); }, []);
-  const closeProviderProfile = useCallback(() => { setShowProviderProfile(false); setProviderProfileTarget(null); }, []);
-
-  const openMyProfile = useCallback((contextPost = null) => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const saveMyProfile = useCallback(async () => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const deleteMyProviderAccount = useCallback(async () => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const openEditListingFromProfile = useCallback(() => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const fetchMyServices = useCallback(async () => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const openMyServices = useCallback(() => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
-
-  const deleteMyService = useCallback(async (postId) => {
-    alert("Provider registration and login has been removed from this build.");
-  }, []);
 
   const getReactedStorageKey = useCallback((providerId) => `time-market-reacted:${providerId || "anon"}`, []);
   const loadReactedFromStorage = useCallback((providerId) => {
@@ -1813,7 +1685,7 @@ function Home() {
             const postId = String(post.id ?? index);
             const isOwner = false; // Removed isLoggedIn check
             return (
-              <ServicePost key={postId} post={post} index={index} postId={postId} isActive={activePostIndex === index} reacted={Boolean(reactedPosts[postId])} reacting={reactingPostId === postId} unreadCount={0} mediaAspectRatio={mediaAspectRatios[postId]} onMediaAspectRatio={handleMediaAspectRatio} isOwner={isOwner} postRefCallback={getPostRefCallback(index)} videoRefCallback={getVideoRefCallback(index)} onVideoPlay={noop} onVideoPause={noop} onViewProfile={openProviderProfile} onSellTime={handleOfferTime} onContactProvider={openInboxForPost} onCallProvider={callProvider} onOpenInbox={openInboxFromRail} onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"} isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"} conversationMode={activeCategory === "social-life" ? "social-life" : "tv"} currentUser={null} getSessionToken={getSessionToken} onRequireAuth={noop} />
+              <ServicePost key={postId} post={post} index={index} postId={postId} isActive={activePostIndex === index} reacted={Boolean(reactedPosts[postId])} reacting={reactingPostId === postId} unreadCount={0} mediaAspectRatio={mediaAspectRatios[postId]} onMediaAspectRatio={handleMediaAspectRatio} isOwner={isOwner} postRefCallback={getPostRefCallback(index)} videoRefCallback={getVideoRefCallback(index)} onVideoPlay={noop} onVideoPause={noop} onViewProfile={openProviderProfile} onSellTime={handleOfferTime} onContactProvider={openInboxForPost} onCallProvider={callProvider} onOpenInbox={noop} onReact={reactToPost} onZoomImage={setZoomImage} isTvTab={activeCategory === "tv"} isSocialLife={activeCategory === "social-life"} showLiveConversation={activeCategory === "tv" || activeCategory === "social-life"} conversationMode={activeCategory === "social-life" ? "social-life" : "tv"} currentUser={null} getSessionToken={getSessionToken} onRequireAuth={noop} />
             );
           })}
         </main>
