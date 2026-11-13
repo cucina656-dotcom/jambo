@@ -1,8 +1,4 @@
-﻿
-src/pages/Home.jsx
-
-
-import ConnectExperience from "../components/connect/ConnectExperience";
+﻿import ConnectExperience from "../components/connect/ConnectExperience";
 import SocialLifeLanding from "../components/social/SocialLifeLanding";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 import {
