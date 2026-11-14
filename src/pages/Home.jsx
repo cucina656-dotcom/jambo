@@ -1887,13 +1887,6 @@ const ServicePost = memo(function ServicePost({
         ) : (
           <iframe className="home-media post-embed-media" src={getEmbedUrl(mediaUrl)} title={title || "Gwamo media"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
         )}
-      </div>
-      {(title || description) && (
-        <div className="post-content-block">
-          {title && <h2 className="service-name">{title}</h2>}
-          {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
-        </div>
-      )}
       <div className="post-actions-row social-reaction-actions" aria-label="Social reactions">
         <button type="button" className="post-action social-reactions-button" onClick={() => onReact?.(post)}>
           <span className="social-reaction-emoji" aria-hidden="true">✨</span>
@@ -1908,9 +1901,16 @@ const ServicePost = memo(function ServicePost({
         >
           <span aria-hidden="true">💬</span>
           <span>{replyOpen ? "Close Spill" : "Spill"}</span>
-          {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
+          {/* Spill intentionally has no count badge. */}
         </button>
-      </div>
+      </div>\n      </div>
+      {(title || description) && (
+        <div className="post-content-block">
+          {title && <h2 className="service-name">{title}</h2>}
+          {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
+        </div>
+      )}
+
 
       <style>{`
         .home-post.service-reel-card{height:auto;min-height:0;max-height:none;overflow:visible;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -2090,6 +2090,262 @@ const ServicePost = memo(function ServicePost({
           .home-post .post-content-block{max-height:62px}
           .social-reaction-actions{padding:0 12px!important}
           .bottom-nav-scroll{height:66px!important;padding-left:18px!important;padding-right:18px!important}
+        }
+        /* TikTok-style full media stage with transparent overlaid reactions. */
+        .home-post.service-reel-card{
+          position:relative!important;
+          height:calc(100svh - 142px)!important;
+          min-height:520px!important;
+          max-height:calc(100svh - 142px)!important;
+          display:flex!important;
+          flex-direction:column!important;
+          overflow:hidden!important;
+          padding-bottom:0!important;
+        }
+        .home-post .post-date-row{flex:0 0 auto!important}
+        .home-post .post-media-frame{
+          position:relative!important;
+          flex:1 1 auto!important;
+          width:100%!important;
+          height:auto!important;
+          min-height:0!important;
+          max-height:none!important;
+          aspect-ratio:auto!important;
+          overflow:hidden!important;
+          background:#000!important;
+        }
+        .home-post .post-media-frame .home-media{
+          position:absolute!important;
+          inset:0!important;
+          display:block!important;
+          width:100%!important;
+          height:100%!important;
+          object-fit:cover!important;
+          object-position:center center!important;
+          background:#000!important;
+        }
+        .home-post .post-content-block{
+          flex:0 0 auto!important;
+          max-height:58px!important;
+          overflow:hidden!important;
+          padding:5px 12px!important;
+        }
+        .home-post .post-description{
+          display:-webkit-box!important;
+          -webkit-line-clamp:1!important;
+          -webkit-box-orient:vertical!important;
+          overflow:hidden!important;
+        }
+        .home-post .social-reaction-actions{
+          position:absolute!important;
+          z-index:5!important;
+          left:0!important;
+          right:0!important;
+          bottom:0!important;
+          width:100%!important;
+          box-sizing:border-box!important;
+          display:flex!important;
+          align-items:center!important;
+          justify-content:space-between!important;
+          min-height:58px!important;
+          height:58px!important;
+          padding:0 16px!important;
+          margin:0!important;
+          border:0!important;
+          border-radius:0!important;
+          background:transparent!important;
+          box-shadow:none!important;
+          backdrop-filter:none!important;
+        }
+        .home-post .social-reaction-actions .post-action{
+          display:inline-flex!important;
+          align-items:center!important;
+          width:auto!important;
+          min-height:44px!important;
+          padding:6px 0!important;
+          gap:8px!important;
+          border:0!important;
+          border-radius:0!important;
+          background:transparent!important;
+          box-shadow:none!important;
+          white-space:nowrap!important;
+          font-weight:800!important;
+          text-shadow:0 1px 5px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.85)!important;
+        }
+        .home-post .social-reactions-button{
+          justify-content:flex-start!important;
+          color:#ffd36b!important;
+        }
+        .home-post .social-reactions-button small{
+          color:#fff!important;
+          font-size:14px!important;
+          font-weight:800!important;
+        }
+        .home-post .spill-button{
+          margin-left:auto!important;
+          justify-content:flex-end!important;
+          color:#2cffaa!important;
+        }
+        .home-post .social-reaction-emoji{font-size:22px!important}
+        .home-post .post-replies-chat{
+          flex:0 0 158px!important;
+          min-height:158px!important;
+          max-height:158px!important;
+          box-sizing:border-box!important;
+          overflow:hidden!important;
+          padding:10px 12px!important;
+          background:transparent!important;
+          border-top:1px solid rgba(65,190,255,.18)!important;
+        }
+        .home-post .post-replies-chat .rotating-comment{
+          min-height:0!important;
+          height:100%!important;
+          box-sizing:border-box!important;
+          align-items:center!important;
+          gap:9px!important;
+          padding:10px!important;
+        }
+        @media(max-width:600px){
+          .home-post.service-reel-card{
+            height:calc(100svh - 142px)!important;
+            min-height:500px!important;
+            max-height:calc(100svh - 142px)!important;
+          }
+          .home-post .post-replies-chat{
+            flex-basis:150px!important;
+            min-height:150px!important;
+            max-height:150px!important;
+            padding:8px 10px!important;
+          }
+          .home-post .social-reaction-actions{padding:0 14px!important}
+        }
+
+        /* Final override: immersive TikTok-style media stage */
+        .home-post.service-reel-card{
+          height:calc(100svh - 140px)!important;
+          min-height:560px!important;
+          max-height:calc(100svh - 140px)!important;
+          display:flex!important;
+          flex-direction:column!important;
+          overflow:hidden!important;
+          position:relative!important;
+        }
+        .home-post .post-date-row{
+          flex:0 0 auto!important;
+        }
+        .home-post .post-media-frame{
+          position:relative!important;
+          flex:1 1 0!important;
+          width:100%!important;
+          height:auto!important;
+          min-height:360px!important;
+          max-height:none!important;
+          aspect-ratio:auto!important;
+          overflow:hidden!important;
+          background:#000!important;
+        }
+        .home-post .post-media-frame .home-media,
+        .home-post .post-media-frame video.home-media,
+        .home-post .post-media-frame iframe.home-media{
+          position:absolute!important;
+          inset:0!important;
+          display:block!important;
+          width:100%!important;
+          height:100%!important;
+          max-width:none!important;
+          max-height:none!important;
+          object-fit:cover!important;
+          object-position:center center!important;
+          background:#000!important;
+        }
+        .home-post .post-media-frame iframe.home-media{
+          border:0!important;
+        }
+        .home-post .social-reaction-actions{
+          position:absolute!important;
+          z-index:20!important;
+          left:0!important;
+          right:0!important;
+          bottom:0!important;
+          display:flex!important;
+          align-items:center!important;
+          justify-content:space-between!important;
+          width:100%!important;
+          min-height:58px!important;
+          height:58px!important;
+          box-sizing:border-box!important;
+          margin:0!important;
+          padding:0 16px!important;
+          border:0!important;
+          border-radius:0!important;
+          background:transparent!important;
+          box-shadow:none!important;
+          backdrop-filter:none!important;
+        }
+        .home-post .social-reaction-actions,
+        .home-post .social-reaction-actions *{
+          background-color:transparent!important;
+          box-shadow:none!important;
+        }
+        .home-post .social-reaction-actions .post-action{
+          display:inline-flex!important;
+          align-items:center!important;
+          gap:8px!important;
+          min-height:44px!important;
+          width:auto!important;
+          padding:6px 0!important;
+          border:0!important;
+          border-radius:0!important;
+          background:transparent!important;
+          white-space:nowrap!important;
+          text-shadow:0 1px 5px #000,0 0 9px #000!important;
+        }
+        .home-post .social-reactions-button{
+          margin-right:auto!important;
+          color:#ffd36b!important;
+        }
+        .home-post .social-reactions-button small{
+          display:inline!important;
+          color:#fff!important;
+          font-size:14px!important;
+          font-weight:800!important;
+        }
+        .home-post .spill-button{
+          margin-left:auto!important;
+          color:#2cffaa!important;
+          justify-content:flex-end!important;
+        }
+        .home-post .spill-button small,
+        .home-post .spill-button .count,
+        .home-post .spill-button [data-count]{
+          display:none!important;
+        }
+        .home-post .post-replies-chat{
+          flex:0 0 145px!important;
+          min-height:145px!important;
+          max-height:145px!important;
+          box-sizing:border-box!important;
+          overflow:hidden!important;
+          background:transparent!important;
+          padding:8px 12px!important;
+        }
+        @media(max-width:600px){
+          .home-post.service-reel-card{
+            height:calc(100svh - 140px)!important;
+            min-height:520px!important;
+            max-height:calc(100svh - 140px)!important;
+          }
+          .home-post .post-media-frame{
+            min-height:300px!important;
+          }
+          .home-post .post-replies-chat{
+            flex-basis:132px!important;
+            min-height:132px!important;
+            max-height:132px!important;
+          }
+          .home-post .social-reaction-actions{
+            padding:0 14px!important;
+          }
         }
       `}</style>
       <section className="post-replies-chat" aria-label="Replies">
