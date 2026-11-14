@@ -1898,8 +1898,7 @@ const ServicePost = memo(function ServicePost({
         <button type="button" className="post-action social-reactions-button" onClick={() => onReact?.(post)}>
           <span className="social-reaction-emoji" aria-hidden="true">✨</span>
           <span>Social Reactions</span>
-          {reactionCount > 0 && <small aria-label="Reaction count">{formatCount(reactionCount)}</small>}
-          {commentCount > 0 && <small aria-label="Spill count">{formatCount(commentCount)}</small>}
+          {reactionCount > 0 && <small>{formatCount(reactionCount)}</small>}
         </button>
         <button
           type="button"
@@ -1909,6 +1908,7 @@ const ServicePost = memo(function ServicePost({
         >
           <span aria-hidden="true">💬</span>
           <span>{replyOpen ? "Close Spill" : "Spill"}</span>
+          {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
       </div>
 
@@ -1926,22 +1926,21 @@ const ServicePost = memo(function ServicePost({
         .social-reaction-emoji{font-size:20px!important}
         .post-replies-chat{min-height:160px;display:flex;align-items:stretch;justify-content:center;padding:18px;background:linear-gradient(145deg,rgba(8,24,52,.98),rgba(5,16,38,.99))}
         .post-replies-chat .rotating-comment{width:100%;min-height:142px;box-sizing:border-box;align-items:flex-start;gap:16px;padding:18px;border-radius:20px 20px 20px 7px;background:linear-gradient(145deg,rgba(20,43,80,.96),rgba(13,31,61,.98))}
-        .comment-avatar-zoom{width:82px;height:82px;flex:0 0 82px;min-width:82px;min-height:82px;padding:0;overflow:hidden;border:2px solid #1caaff;border-radius:50%;background:#07152b;cursor:zoom-in;box-shadow:0 0 10px rgba(28,170,255,.28);display:block}
-        .post-replies-chat .comment-avatar{width:100%;height:100%;display:block;object-fit:cover;object-position:center;border-radius:50%;background:#07152b}
-        .post-replies-chat .comment-avatar-zoom,
-        .post-replies-chat .comment-avatar-zoom .comment-avatar{border-radius:50%!important}
-        .post-replies-chat .comment-avatar-zoom .comment-avatar{object-fit:cover!important;object-position:center!important}
+        .post-replies-chat .rotating-comment{display:flex;align-items:flex-start;gap:9px;padding:12px}
+        .post-replies-chat .comment-avatar-zoom{display:block!important;width:68px!important;height:68px!important;min-width:68px!important;min-height:68px!important;flex:0 0 68px!important;padding:0!important;margin:0!important;overflow:hidden!important;border:2px solid #1caaff!important;border-radius:50%!important;background:#07152b!important;box-shadow:0 0 10px rgba(28,170,255,.28)!important;cursor:zoom-in!important;line-height:0!important}
+        .post-replies-chat .comment-avatar-zoom .comment-avatar{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;flex:none!important;object-fit:cover!important;object-position:center!important;border:0!important;border-radius:50%!important;margin:0!important;padding:0!important;background:#07152b!important}
         .post-replies-chat .comment-copy p{font-size:clamp(16px,3.6vw,20px);line-height:1.55}
         .reply-avatar-lightbox{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.88);backdrop-filter:blur(8px)}
         .reply-avatar-lightbox img{display:block;max-width:min(92vw,680px);max-height:86svh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 18px 70px rgba(0,0,0,.5)}
         .reply-avatar-lightbox button{position:absolute;top:20px;right:20px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#111;font-size:30px;line-height:1}
-        @media(max-width:600px){.home-post .post-media-frame{max-height:calc(100svh - 245px);min-height:190px}.post-replies-chat{padding:12px}.post-replies-chat .rotating-comment{min-height:130px;padding:14px}.comment-avatar-zoom{width:76px;height:76px;min-width:76px;min-height:76px;flex-basis:76px;border-radius:50%}.social-reaction-actions{padding:0 10px}.social-reaction-actions .post-action{padding:8px 10px;font-size:12px}}
+        @media(max-width:600px){.home-post .post-media-frame{max-height:calc(100svh - 245px);min-height:190px}.post-replies-chat{padding:12px}.post-replies-chat .rotating-comment{min-height:130px;padding:14px}.post-replies-chat .comment-avatar-zoom{width:68px!important;height:68px!important;min-width:68px!important;min-height:68px!important;flex-basis:68px!important;border-radius:50%!important}.social-reaction-actions{padding:0 10px}.social-reaction-actions .post-action{padding:8px 10px;font-size:12px}}
         .comment-rotation-dots,.reply-rotation-dots{display:none!important}
         .post-replies-chat{padding:14px 16px 10px;background:linear-gradient(145deg,rgba(8,24,52,.96),rgba(5,16,38,.98));border-top:1px solid rgba(70,190,255,.12)}
         .post-replies-chat .rotating-comment{display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid rgba(82,185,255,.2);border-radius:16px 16px 16px 5px;background:rgba(17,38,72,.82)}
-        .post-replies-chat .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover}
-        .post-replies-chat .comment-copy{min-width:0;flex:1}
-        .post-replies-chat .comment-copy p{margin:7px 0 2px;line-height:1.5;overflow-wrap:anywhere;color:#e7efff}
+        .post-replies-chat .comment-avatar{width:100%!important;height:100%!important;flex:0 0 100%!important;object-fit:cover!important;border-radius:50%!important}
+        .post-replies-chat .comment-copy{min-width:0;flex:1;margin:0;padding:0}
+        .post-replies-chat .comment-author-row{margin:0 0 3px}
+        .post-replies-chat .comment-copy p{margin:3px 0 2px;line-height:1.45;overflow-wrap:anywhere;color:#e7efff;text-align:left}
         .post-replies-chat .comment-author-row{display:flex;align-items:center;gap:8px;color:#fff}
         .post-replies-chat .comment-country-flag{font-size:17px}
         .reply-empty-state{display:flex;align-items:center;gap:10px;color:#a9bddc;padding:14px 4px;font-size:14px}
