@@ -2380,8 +2380,8 @@ const ServicePost = memo(function ServicePost({
     const name = replyName.trim();
     const message = replyMessage.trim();
     if (!name || !message) { setReplyError("Please complete your name and message."); return; }
-    if (replyPhoto && replyPhoto.size > 2 * 1024 * 1024) {
-      setReplyError("Choose a profile picture smaller than 2 MB, or continue without one.");
+    if (replyPhoto && replyPhoto.size > 5 * 1024 * 1024) {
+      setReplyError("Choose a profile picture smaller than 5 MB, or continue without one.");
       return;
     }
     if (message.length > 500) { setReplyError("Please keep your message under 500 characters."); return; }
