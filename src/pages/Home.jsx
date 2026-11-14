@@ -1622,7 +1622,6 @@ function Home() {
     const mediaToSave = newMediaUrl.trim();
     if (!contactInfo) return alert("Please enter your telephone number.");
     if (!baseDescription) return alert("Please add a description.");
-    if (!baseDescription) return alert(postType === "moment" ? "Please write your saying, story, or thought." : "Please add a short description.");
     if (postType === "exchange" && !wantedExchange) return alert("Please say what service you need in return.");
     if (!mediaToSave && !newMediaFile) return alert("Please upload a photo/video or enter a media link.");
     let detectedMediaType = "";
@@ -1639,7 +1638,7 @@ function Home() {
     }
     const workDescription = detailLines.join("\n");
     
-    const cardValue = enteredValue || headline || "";
+    const cardValue = headline || "";
     try {
       setSaving(true); setUploadProgress(1);
       const formData = new FormData();
@@ -2315,10 +2314,13 @@ const ServicePost = memo(function ServicePost({
   const isEmbed = mediaType === "embed" || (!isImage && !isVideo);
   const title = String(post.service_name || post.service_title || post.title || "").trim();
   const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "").trim();
-  const comments = Array.isArray(post.comments) ? post.comments : Array.isArray(post.recent_comments) ? post.recent_comments : Array.isArray(post.comment_list) ? post.comment_list : [];
+  const incomingComments = Array.isArray(post.comments) ? post.comments : Array.isArray(post.recent_comments) ? post.recent_comments : Array.isArray(post.comment_list) ? post.comment_list : [];
+  const [comments, setComments] = useState(incomingComments);
   const [commentIndex, setCommentIndex] = useState(0);
   const [rotationPaused, setRotationPaused] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
+  const [replyStep, setReplyStep] = useState(0);
+  const [replyOpen, setReplyOpen] = useState(false);
   const [replyName, setReplyName] = useState("");
   const [replyFlag, setReplyFlag] = useState("🇷🇼");
   const [replyMessage, setReplyMessage] = useState("");
@@ -2335,9 +2337,22 @@ const ServicePost = memo(function ServicePost({
     ? new Date(dateValue).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
     : "";
   const reactionCount = Number(post.displayed_reactions || post.real_reactions || 0);
-  const commentCount = Number(post.comment_count ?? comments.length ?? 0);
+  const commentCount = Math.max(Number(post.comment_count || 0), comments.length);
   const aspectClass = mediaAspectRatio && mediaAspectRatio < 0.85 ? "is-portrait" : mediaAspectRatio && mediaAspectRatio > 1.2 ? "is-landscape" : "is-square";
   const mediaRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/api/home/comments?post_id=${encodeURIComponent(String(postId))}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled && data?.success && Array.isArray(data.comments)) {
+          setComments(data.comments);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [postId]);
 
   useEffect(() => {
     setCommentIndex(0);
@@ -2364,8 +2379,12 @@ const ServicePost = memo(function ServicePost({
     event.preventDefault();
     const name = replyName.trim();
     const message = replyMessage.trim();
-    if (!name || !message) { setReplyError("Enter your name and message."); return; }
-    if (message.length > 2000) { setReplyError("Message must be 2,000 characters or fewer."); return; }
+    if (!name || !message) { setReplyError("Please complete your name and message."); return; }
+    if (replyPhoto && replyPhoto.size > 2 * 1024 * 1024) {
+      setReplyError("Choose a profile picture smaller than 2 MB, or continue without one.");
+      return;
+    }
+    if (message.length > 500) { setReplyError("Please keep your message under 500 characters."); return; }
     setReplySending(true); setReplyError("");
     try {
       const form = new FormData();
@@ -2376,10 +2395,15 @@ const ServicePost = memo(function ServicePost({
       if (replyPhoto) form.append("profile_image", replyPhoto);
       const response = await fetch(`${API_URL}/api/home/comment`, { method: "POST", body: form });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error || "Could not send your reply.");
-      setReplyMessage(""); setReplyPhoto(null);
-      window.location.reload();
-    } catch (error) { setReplyError(error.message || "Could not send your reply."); }
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || `Reply failed (${response.status}).`);
+      const savedReply = data.comment || {
+        id: `local-${Date.now()}`, post_id: postId, commenter_name: name,
+        country_flag: replyFlag, comment: message, profile_image_url: ""
+      };
+      setComments((current) => [savedReply, ...current]);
+      setCommentIndex(0);
+      setReplyMessage(""); setReplyPhoto(null); setReplyStep(0); setReplyOpen(false);
+    } catch (error) { setReplyError(error.message || "Could not send your reply. Please try again."); }
     finally { setReplySending(false); }
   }, [postId, replyName, replyFlag, replyMessage, replyPhoto]);
   const activeComment = comments.length ? comments[commentIndex % comments.length] : null;
@@ -2408,32 +2432,148 @@ const ServicePost = memo(function ServicePost({
         {title && <h2 className="service-name">{title}</h2>}
         {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
       </div>
-      <div className="post-actions-row" aria-label="Post reply">
-        <button type="button" className="post-action comment-action" onClick={() => document.getElementById(`reply-form-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-          <MessageSquare size={19} aria-hidden="true" /><span>Reply</span>{commentCount > 0 && <small>({formatCount(commentCount)})</small>}
+      <div className="post-actions-row" aria-label="Reply to this post">
+        <button
+          type="button"
+          className="post-action comment-action"
+          onClick={() => { setReplyOpen((open) => !open); setReplyStep(0); setReplyError(""); }}
+          aria-expanded={replyOpen}
+        >
+          <MessageSquare size={19} aria-hidden="true" />
+          <span>{replyOpen ? "Close reply" : "Reply"}</span>
+          {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
       </div>
-      <section id={`post-comments-${postId}`} className="post-comments-panel" aria-label="Post comments" aria-live="polite">
-        <div className="post-comments-heading"><MessageSquare size={19} aria-hidden="true" /><strong>Comments ({commentCount})</strong>{comments.length > 1 && <div className="comment-rotation-dots">{comments.map((_, i) => <button key={i} type="button" className={i === commentIndex ? "is-active" : ""} onClick={() => setCommentIndex(i)} aria-label={`Show comment ${i + 1}`} />)}</div>}</div>
+
+      <style>{`
+        .post-replies-chat{padding:14px 16px 10px;background:linear-gradient(145deg,rgba(8,24,52,.96),rgba(5,16,38,.98));border-top:1px solid rgba(70,190,255,.12)}
+        .post-replies-chat .rotating-comment{display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid rgba(82,185,255,.2);border-radius:16px 16px 16px 5px;background:rgba(17,38,72,.82)}
+        .post-replies-chat .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover}
+        .post-replies-chat .comment-copy{min-width:0;flex:1}
+        .post-replies-chat .comment-copy p{margin:7px 0 2px;line-height:1.5;overflow-wrap:anywhere;color:#e7efff}
+        .post-replies-chat .comment-author-row{display:flex;align-items:center;gap:8px;color:#fff}
+        .post-replies-chat .comment-country-flag{font-size:17px}
+        .reply-empty-state{display:flex;align-items:center;gap:10px;color:#a9bddc;padding:14px 4px;font-size:14px}
+        .reply-empty-icon{font-size:22px}
+        .post-reply-chat-form{margin:0 14px 16px;padding:16px;border:1px solid rgba(45,190,255,.35);border-radius:18px;background:linear-gradient(150deg,#101f3b,#07152d);box-shadow:0 12px 30px rgba(0,0,0,.22);color:#eef5ff}
+        .reply-chat-topline{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:700;color:#a9c8ed}
+        .reply-chat-progress{height:4px;margin:10px 0 16px;background:#253957;border-radius:9px;overflow:hidden}
+        .reply-chat-progress span{display:block;height:100%;background:linear-gradient(90deg,#20d68a,#29baff);border-radius:9px;transition:width .2s ease}
+        .reply-chat-step{display:flex;flex-direction:column;gap:12px}
+        .reply-bot-bubble,.reply-user-bubble{max-width:88%;padding:11px 14px;border-radius:16px;line-height:1.4;font-size:14px}
+        .reply-bot-bubble{align-self:flex-start;background:#1a3154;color:#e8f2ff;border-bottom-left-radius:5px}
+        .reply-user-bubble{align-self:flex-end;background:#075f49;color:#fff;border-bottom-right-radius:5px}
+        .reply-chat-step input:not([type=file]),.reply-chat-step select,.reply-chat-step textarea{width:100%;box-sizing:border-box;min-height:46px;border:1px solid #49617f;border-radius:12px;padding:12px 13px;background:#07152b;color:#fff;font:inherit;font-size:15px;outline:none}
+        .reply-chat-step textarea{resize:vertical;min-height:105px}
+        .reply-chat-step input:focus,.reply-chat-step select:focus,.reply-chat-step textarea:focus{border-color:#27c9ff;box-shadow:0 0 0 3px rgba(39,201,255,.12)}
+        .reply-chat-step button{min-height:43px;border:0;border-radius:12px;padding:10px 16px;background:#12b978;color:#041b17;font-weight:800;font-size:14px}
+        .reply-chat-step button:disabled{opacity:.45}
+        .reply-chat-buttons{display:flex;gap:9px;justify-content:flex-end}
+        .reply-chat-step .reply-back-button{background:#263c5b;color:#eaf2ff}
+        .reply-chat-step .reply-skip-button{background:transparent;color:#a9c8ed;min-height:32px;padding:5px;text-decoration:underline}
+        .reply-photo-picker{display:flex;align-items:center;justify-content:center;min-height:48px;border:1px dashed #5b789c;border-radius:12px;color:#cde4ff;font-weight:700}
+        .reply-photo-picker input{display:none}
+        .reply-message-meta{align-self:flex-end;color:#9fb5d3;font-size:12px}
+        .reply-chat-error{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(255,85,85,.12);color:#ffbcbc;font-size:13px}
+        @media(max-width:480px){.post-reply-chat-form{margin:0 10px 14px;padding:13px}.post-replies-chat{padding:12px 11px 8px}}
+      `}</style>
+      <section className="post-replies-chat" aria-label="Replies">
         {activeComment ? (
-          <div className="rotating-comment" key={`${postId}-${activeComment.id || commentIndex}`} onPointerDown={() => setRotationPaused(true)} onPointerUp={() => setRotationPaused(false)} onPointerLeave={() => setRotationPaused(false)} onTouchStart={() => setRotationPaused(true)} onTouchEnd={() => setRotationPaused(false)}>
+          <div
+            className="rotating-comment"
+            key={`${postId}-${activeComment.id || commentIndex}`}
+            onPointerDown={() => setRotationPaused(true)}
+            onPointerUp={() => setRotationPaused(false)}
+            onPointerLeave={() => setRotationPaused(false)}
+            onTouchStart={() => setRotationPaused(true)}
+            onTouchEnd={() => setRotationPaused(false)}
+          >
             <img className="comment-avatar" src={commentAvatar} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-            <div className="comment-copy"><div className="comment-author-row"><strong>{commentName}</strong><span className="comment-country-flag" aria-label="Commenter country">{activeComment?.country_flag || flag}</span></div><p>{replyExpanded || String(commentText).length <= 260 ? commentText : `${String(commentText).slice(0, 260)}…`}</p>{String(commentText).length > 260 && <button type="button" className="tagline-toggle-button" onClick={() => setReplyExpanded((value) => !value)}>{replyExpanded ? "Read less" : "Read more"}</button>}</div>
+            <div className="comment-copy">
+              <div className="comment-author-row">
+                <strong>{commentName}</strong>
+                <span className="comment-country-flag">{activeComment?.country_flag || flag}</span>
+              </div>
+              <p>{replyExpanded || String(commentText).length <= 260 ? commentText : `${String(commentText).slice(0, 260)}…`}</p>
+              {String(commentText).length > 260 && <button type="button" className="tagline-toggle-button" onClick={() => setReplyExpanded((value) => !value)}>{replyExpanded ? "Read less" : "Read more"}</button>}
+            </div>
           </div>
         ) : (
-          <div className="comment-empty">No comments yet. Be the first to comment.</div>
+          <div className="reply-empty-state">
+            <span className="reply-empty-icon">💬</span>
+            <span>Start a conversation about this post.</span>
+          </div>
         )}
       </section>
-      <form id={`reply-form-${postId}`} className="post-reply-form" onSubmit={submitReply}>
-        <input aria-label="Your name" value={replyName} onChange={(event) => setReplyName(event.target.value)} placeholder="Your name" maxLength={80} required />
-        <select aria-label="Country flag" value={replyFlag} onChange={(event) => setReplyFlag(event.target.value)}>
-          <option value="🇷🇼">🇷🇼 Rwanda</option><option value="🇺🇬">🇺🇬 Uganda</option><option value="🇰🇪">🇰🇪 Kenya</option><option value="🇹🇿">🇹🇿 Tanzania</option><option value="🇧🇮">🇧🇮 Burundi</option><option value="🇨🇩">🇨🇩 DR Congo</option><option value="🌍">🌍 Other</option>
-        </select>
-        <input aria-label="Optional profile picture" type="file" accept="image/*" onChange={(event) => setReplyPhoto(event.target.files?.[0] || null)} />
-        <textarea aria-label="Your reply" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} placeholder="Write a reply..." maxLength={2000} required />
-        {replyError && <p role="alert">{replyError}</p>}
-        <button type="submit" disabled={replySending}>{replySending ? "Sending..." : "Send reply"}</button>
-      </form>
+
+      {replyOpen && (
+        <form id={`reply-form-${postId}`} className="post-reply-chat-form" onSubmit={submitReply}>
+          <div className="reply-chat-topline">
+            <span>Reply to this post</span>
+            <span>Step {replyStep + 1} of 4</span>
+          </div>
+          <div className="reply-chat-progress"><span style={{ width: `${((replyStep + 1) / 4) * 100}%` }} /></div>
+
+          {replyStep === 0 && (
+            <div className="reply-chat-step">
+              <div className="reply-bot-bubble">Hi 👋 What should we call you?</div>
+              <input autoFocus aria-label="Your name" value={replyName} onChange={(event) => setReplyName(event.target.value)} placeholder="Type your name" maxLength={80} />
+              <button type="button" disabled={!replyName.trim()} onClick={() => setReplyStep(1)}>Continue <span>→</span></button>
+            </div>
+          )}
+
+          {replyStep === 1 && (
+            <div className="reply-chat-step">
+              <div className="reply-user-bubble">{replyName.trim()}</div>
+              <div className="reply-bot-bubble">Nice to meet you. Which country are you from?</div>
+              <select aria-label="Your country" value={replyFlag} onChange={(event) => setReplyFlag(event.target.value)}>
+                <option value="🇷🇼">🇷🇼 Rwanda</option>
+                <option value="🇺🇬">🇺🇬 Uganda</option>
+                <option value="🇰🇪">🇰🇪 Kenya</option>
+                <option value="🇹🇿">🇹🇿 Tanzania</option>
+                <option value="🇧🇮">🇧🇮 Burundi</option>
+                <option value="🇨🇩">🇨🇩 DR Congo</option>
+                <option value="🌍">🌍 Other</option>
+              </select>
+              <div className="reply-chat-buttons">
+                <button type="button" className="reply-back-button" onClick={() => setReplyStep(0)}>Back</button>
+                <button type="button" onClick={() => setReplyStep(2)}>Continue <span>→</span></button>
+              </div>
+            </div>
+          )}
+
+          {replyStep === 2 && (
+            <div className="reply-chat-step">
+              <div className="reply-user-bubble">{replyFlag} {replyName.trim()}</div>
+              <div className="reply-bot-bubble">Would you like to add a profile picture? This is optional.</div>
+              <label className="reply-photo-picker">
+                <span>{replyPhoto ? `✓ ${replyPhoto.name}` : "＋ Choose a picture"}</span>
+                <input type="file" accept="image/*" onChange={(event) => { setReplyPhoto(event.target.files?.[0] || null); setReplyError(""); }} />
+              </label>
+              {replyPhoto && <button type="button" className="reply-skip-button" onClick={() => setReplyPhoto(null)}>Remove picture</button>}
+              <div className="reply-chat-buttons">
+                <button type="button" className="reply-back-button" onClick={() => setReplyStep(1)}>Back</button>
+                <button type="button" onClick={() => { setReplyError(""); setReplyStep(3); }}>Continue <span>→</span></button>
+              </div>
+              <button type="button" className="reply-skip-button" onClick={() => { setReplyPhoto(null); setReplyStep(3); }}>Skip picture</button>
+            </div>
+          )}
+
+          {replyStep === 3 && (
+            <div className="reply-chat-step">
+              <div className="reply-user-bubble">{replyPhoto ? "Profile picture added" : "No profile picture"} · {replyFlag}</div>
+              <div className="reply-bot-bubble">Now write your reply. Your message will appear with this post.</div>
+              <textarea aria-label="Your reply" autoFocus value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} placeholder="Write your message..." maxLength={500} rows={4} />
+              <div className="reply-message-meta">{replyMessage.length}/500</div>
+              <div className="reply-chat-buttons">
+                <button type="button" className="reply-back-button" onClick={() => setReplyStep(2)}>Back</button>
+                <button type="submit" disabled={replySending || !replyMessage.trim()}>{replySending ? "Sending..." : "Send reply"} <span>➤</span></button>
+              </div>
+            </div>
+          )}
+          {replyError && <p className="reply-chat-error" role="alert">{replyError}</p>}
+        </form>
+      )}
     </article>
   );
 });
@@ -2443,143 +2583,95 @@ function BookmarkIcon() {
 ServicePost.displayName = "ServicePost";
 
 const ServiceEditorModal = memo(({
-  newCreatorName, setNewCreatorName, newCreatorIdentity, setNewCreatorIdentity,
-  newTitle, setNewTitle, newMediaUrl, setNewMediaUrl, subtitle, setSubtitle,
-  postType, setPostType, postHeadline, setPostHeadline, serviceCategory,
-  setServiceCategory, postLocation, setPostLocation, priceUnit, setPriceUnit,
-  availability, setAvailability, exchangeNeed, setExchangeNeed, allowCashBalance,
-  setAllowCashBalance, momentKind, setMomentKind, handleLogoChange, logoPreview,
-  handleMediaFileChange, mediaPreview, mediaPreviewType, applyChanges, closeEditor,
-  saving, uploadProgress, compressingMedia, isEdit = false,
+  newCreatorIdentity, setNewCreatorIdentity, postHeadline, setPostHeadline,
+  subtitle, setSubtitle, newMediaUrl, setNewMediaUrl, handleMediaFileChange,
+  mediaPreview, mediaPreviewType, applyChanges, closeEditor, saving,
+  uploadProgress, compressingMedia, isEdit = false,
 }) => {
   useEscapeToClose(closeEditor);
   return (
     <div className="modal-overlay" onClick={closeEditor}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card say-some-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2>{isEdit ? "✎ Edit Post" : "＋ What are you posting?"}</h2>
+          <h2>{isEdit ? "Edit your post" : "Say some"}</h2>
           <button type="button" onClick={closeEditor} className="modal-close" aria-label="Close">×</button>
         </div>
-        
-        {!isEdit && (
-          <div className="form-section post-type-section">
-            <div className="section-heading">Choose one</div>
-            <div className="post-type-grid" role="radiogroup" aria-label="Post type">
-              {[
-                ["offer", "🛠️", "Offer Work", "Show what you can do"],
-                ["exchange", "🔄", "Trade Skills", "Give work, get work"],
-                ["moment", "✨", "Share a Moment", "Story, song or movie saying"],
-              ].map(([value, icon, label, help]) => (
-                <button key={value} type="button" role="radio" aria-checked={postType === value} className={`post-type-choice${postType === value ? " is-selected" : ""}`} onClick={() => setPostType(value)}>
-                  <span className="post-type-icon" aria-hidden="true">{icon}</span>
-                  <strong>{label}</strong>
-                  <small>{help}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+
         <div className="form-section">
-          <div className="section-heading">
-            {postType === "offer" ? "Your work" : postType === "need" ? "Help you need" : postType === "exchange" ? "Your trade" : "Your moment"}
-          </div>
-          {postType === "moment" && (
-            <>
-              <label>What kind of moment?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="Moment type">
-                {[["story", "My story"], ["song", "Song saying"], ["movie", "Movie saying"], ["recommend", "Recommend someone"]].map(([value, label]) => (
-                  <button key={value} type="button" role="radio" aria-checked={momentKind === value} className={`choice-pill${momentKind === value ? " is-selected" : ""}`} onClick={() => setMomentKind(value)}>{label}</button>
-                ))}
-              </div>
-            </>
-          )}
-          {postType === "exchange" ? (
-            <div className="trade-skills-fields">
-              <div className="form-field">
-                <label htmlFor="field-exchange-give">What skill/service can you give?</label>
-                <input id="field-exchange-give" type="text" value={postHeadline} onChange={(event) => setPostHeadline(event.target.value)} />
-              </div>
-              <div className="form-field">
-                <label htmlFor="field-exchange-need">What skill/service do you need?</label>
-                <input id="field-exchange-need" type="text" value={exchangeNeed} onChange={(event) => setExchangeNeed(event.target.value)} />
-              </div>
-            </div>
-          ) : (
-            <>
-              <label htmlFor="field-post-headline">{postType === "offer" ? "What work can you do?" : postType === "need" ? "What help do you need?" : "Short title"}</label>
-              <input id="field-post-headline" type="text" value={postHeadline} onChange={(event) => setPostHeadline(event.target.value)} />
-            </>
-          )}
-          {postType !== "moment" && postType !== "exchange" && (
-            <>
-              <label htmlFor="field-category">Category</label>
-              <input id="field-category" type="text" value={serviceCategory} onChange={(event) => setServiceCategory(event.target.value)} />
-            </>
-          )}
-          <label htmlFor="field-description">{postType === "offer" ? "Tell people about your work" : postType === "need" ? "Explain the problem" : postType === "exchange" ? "Explain your exchange (optional)" : "Write your saying, story, or thought"}</label>
-          <textarea id="field-description" value={subtitle} onChange={(event) => setSubtitle(event.target.value)} />
-          {postType !== "moment" && postType !== "exchange" && (
-            <>
-              <label htmlFor="field-location">Where?</label>
-              <input id="field-location" type="text" value={postLocation} onChange={(event) => setPostLocation(event.target.value)} />
-            </>
-          )}
-          {postType === "exchange" && (
-            <>
-              <label>Can cash balance the difference?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="Allow cash balance">
-                <button type="button" role="radio" aria-checked={allowCashBalance} className={`choice-pill${allowCashBalance ? " is-selected" : ""}`} onClick={() => setAllowCashBalance(true)}>Yes</button>
-                <button type="button" role="radio" aria-checked={!allowCashBalance} className={`choice-pill${!allowCashBalance ? " is-selected" : ""}`} onClick={() => setAllowCashBalance(false)}>No</button>
-              </div>
-            </>
-          )}
-          {(postType === "offer" || postType === "need") && (
-            <>
-              <label>When?</label>
-              <div className="choice-pill-row" role="radiogroup" aria-label="When">
-                {[["today", "Today"], ["this week", "This week"], ["choose date", "Choose date later"]].map(([value, label]) => (
-                  <button key={value} type="button" role="radio" aria-checked={availability === value} className={`choice-pill${availability === value ? " is-selected" : ""}`} onClick={() => setAvailability(value)}>{label}</button>
-                ))}
-              </div>
-            </>
-          )}
+          <div className="section-heading">Your post</div>
+          <label htmlFor="field-post-headline">Title (Optional)</label>
+          <input
+            id="field-post-headline"
+            type="text"
+            value={postHeadline}
+            onChange={(event) => setPostHeadline(event.target.value)}
+            placeholder="Give your post a title"
+            maxLength={140}
+          />
+          <label htmlFor="field-description">Description</label>
+          <textarea
+            id="field-description"
+            value={subtitle}
+            onChange={(event) => setSubtitle(event.target.value)}
+            placeholder="What would you like to say?"
+            rows={5}
+            required
+          />
+          <label htmlFor="field-phone">Telephone number</label>
+          <input
+            id="field-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={newCreatorIdentity}
+            onChange={(event) => setNewCreatorIdentity(event.target.value)}
+            placeholder="Enter your telephone number"
+            required
+          />
         </div>
-        <div className={`form-section${isEdit ? " form-section-last" : ""}`}>
-          <div className="section-heading">Photo or video</div>
+
+        <div className="form-section form-section-last">
+          <div className="section-heading">Photo or video (Optional)</div>
           <label className="file-picker" htmlFor="field-media-upload">
-            <span>{compressingMedia ? "Processing..." : postType === "moment" ? "▣ Add a photo or short video" : "▣ Show the work, need, or skill"}</span>
-            <input id="field-media-upload" type="file" accept="image/*,video/*" disabled={compressingMedia} onChange={(event) => handleMediaFileChange(event.target.files?.[0] || null)} />
+            <span>{compressingMedia ? "Processing..." : "Choose photo or video from your device"}</span>
+            <input
+              id="field-media-upload"
+              type="file"
+              accept="image/*,video/*"
+              disabled={compressingMedia}
+              onChange={(event) => handleMediaFileChange(event.target.files?.[0] || null)}
+            />
           </label>
           {mediaPreview && (
             <div className="preview-wrap">
-              {mediaPreviewType === "image" ? <img src={mediaPreview} alt="Selected media" className="media-preview" /> : <video src={mediaPreview} className="media-preview" controls muted playsInline />}
+              {mediaPreviewType === "image"
+                ? <img src={mediaPreview} alt="Selected media" className="media-preview" />
+                : <video src={mediaPreview} className="media-preview" controls muted playsInline />}
             </div>
           )}
-          <label htmlFor="field-media-link">Media link (Optional)</label>
-          <input id="field-media-link" type="text" value={newMediaUrl} onChange={(event) => setNewMediaUrl(event.target.value)} />
-          <p className="field-help">Upload media or paste a supported link.</p>
+          <label htmlFor="field-media-link">Or paste a media link (Optional)</label>
+          <input
+            id="field-media-link"
+            type="url"
+            value={newMediaUrl}
+            onChange={(event) => setNewMediaUrl(event.target.value)}
+            placeholder="https://..."
+          />
         </div>
-        {!isEdit && (
-          <div className="form-section form-section-last">
-            <div className="section-heading">Your picture (Optional)</div>
-            <label className="file-picker" htmlFor="field-profile-photo">
-              <span>{compressingMedia ? "Processing..." : "◎ Add or change your profile photo"}</span>
-              <input id="field-profile-photo" type="file" accept="image/*" disabled={compressingMedia} onChange={(event) => handleLogoChange(event.target.files?.[0] || null)} />
-            </label>
-            {logoPreview && <div className="preview-wrap"><img src={logoPreview} alt="Profile preview" className="logo-preview" /></div>}
-          </div>
-        )}
+
         {saving && (
           <div className="upload-progress-wrap" role="status" aria-live="polite">
             <div className="upload-progress-text">
-              <span>{uploadProgress < 96 ? (isEdit ? "Saving changes..." : "Uploading your post...") : "Finishing up..."}</span>
+              <span>{uploadProgress < 96 ? "Posting..." : "Finishing up..."}</span>
               <strong>{uploadProgress}%</strong>
             </div>
-            <div className="upload-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress}><span style={{ width: `${uploadProgress}%` }} /></div>
+            <div className="upload-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress}>
+              <span style={{ width: `${uploadProgress}%` }} />
+            </div>
           </div>
         )}
         <button type="button" onClick={applyChanges} className="save-button" disabled={saving || compressingMedia}>
-          {saving ? (isEdit ? `Saving... ${uploadProgress}%` : `Creating Post... ${uploadProgress}%`) : isEdit ? "Save Changes" : postType === "offer" ? "Post my work" : postType === "need" ? "Post my request" : postType === "exchange" ? "Post my trade" : "Share my moment"}
+          {saving ? `Posting... ${uploadProgress}%` : isEdit ? "Save changes" : "Post"}
         </button>
         <button type="button" onClick={closeEditor} className="cancel-button">Cancel</button>
       </div>
