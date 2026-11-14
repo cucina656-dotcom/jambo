@@ -127,8 +127,8 @@ const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 const noop = () => {};
 
 const CATEGORY_TABS = [
-  { key: "time-market", label: "Media", icon: MessageSquare },
-  { key: "social-life", label: "Heart", icon: Heart },
+  { key: "time-market", label: "📈 Trendz", icon: MessageSquare },
+  { key: "social-life", label: "❤️ Bae & Bae", icon: Heart },
 ];
 
 const CATEGORY_META = {
@@ -1779,6 +1779,7 @@ const ServicePost = memo(function ServicePost({
   const [commentIndex, setCommentIndex] = useState(0);
   const [rotationPaused, setRotationPaused] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
+  const [avatarZoomOpen, setAvatarZoomOpen] = useState(false);
   const [replyStep, setReplyStep] = useState(0);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyName, setReplyName] = useState("");
@@ -1888,24 +1889,52 @@ const ServicePost = memo(function ServicePost({
           <iframe className="home-media post-embed-media" src={getEmbedUrl(mediaUrl)} title={title || "Gwamo media"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
         )}
       </div>
-      <div className="post-content-block">
-        {title && <h2 className="service-name">{title}</h2>}
-        {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
-      </div>
-      <div className="post-actions-row" aria-label="Reply to this post">
+      {(title || description) && (
+        <div className="post-content-block">
+          {title && <h2 className="service-name">{title}</h2>}
+          {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
+        </div>
+      )}
+      <div className="post-actions-row social-reaction-actions" aria-label="Social reactions">
+        <button type="button" className="post-action social-reactions-button" onClick={() => onReact?.(post)}>
+          <span className="social-reaction-emoji" aria-hidden="true">✨</span>
+          <span>Social Reactions</span>
+          {reactionCount > 0 && <small>{formatCount(reactionCount)}</small>}
+        </button>
         <button
           type="button"
-          className="post-action comment-action"
+          className="post-action spill-button"
           onClick={() => { setReplyOpen((open) => !open); setReplyStep(0); setReplyError(""); }}
           aria-expanded={replyOpen}
         >
-          <MessageSquare size={19} aria-hidden="true" />
-          <span>{replyOpen ? "Close reply" : "Reply"}</span>
+          <span aria-hidden="true">💬</span>
+          <span>{replyOpen ? "Close Spill" : "Spill"}</span>
           {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
       </div>
 
       <style>{`
+        .home-post.service-reel-card{height:auto;min-height:0;max-height:none;overflow:visible;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+        .home-post .post-media-frame{width:100%;height:auto;max-height:calc(100svh - 255px);aspect-ratio:16/9;min-height:220px;flex:0 1 auto}
+        .home-post .post-media-frame.is-portrait{aspect-ratio:4/5;max-height:calc(100svh - 255px)}
+        .home-post .post-media-frame.is-landscape{aspect-ratio:16/9;max-height:calc(100svh - 255px)}
+        .home-post .post-media-frame.is-square{aspect-ratio:1/1;max-height:calc(100svh - 255px)}
+        .home-post .post-media-frame .home-media{object-fit:contain}
+        .social-reaction-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:62px;padding:0 14px;background:rgba(4,16,39,.96)}
+        .social-reaction-actions .post-action{width:auto;min-width:0;justify-content:center;gap:8px;border:1px solid rgba(50,190,255,.2);border-radius:13px;padding:8px 13px;white-space:nowrap}
+        .social-reactions-button{color:#ffd36b!important;background:rgba(255,190,55,.08)!important}
+        .spill-button{color:#22e59b!important;background:rgba(13,205,137,.09)!important}
+        .social-reaction-emoji{font-size:20px!important}
+        .post-replies-chat{min-height:160px;display:flex;align-items:stretch;justify-content:center;padding:18px;background:linear-gradient(145deg,rgba(8,24,52,.98),rgba(5,16,38,.99))}
+        .post-replies-chat .rotating-comment{width:100%;min-height:142px;box-sizing:border-box;align-items:flex-start;gap:16px;padding:18px;border-radius:20px 20px 20px 7px;background:linear-gradient(145deg,rgba(20,43,80,.96),rgba(13,31,61,.98))}
+        .comment-avatar-zoom{width:76px;height:76px;flex:0 0 76px;padding:0;overflow:hidden;border:2px solid #1caaff;border-radius:18px;background:#07152b;cursor:zoom-in}
+        .post-replies-chat .comment-avatar{width:100%;height:100%;display:block;object-fit:contain;background:#07152b}
+        .post-replies-chat .comment-copy p{font-size:clamp(16px,3.6vw,20px);line-height:1.55}
+        .reply-avatar-lightbox{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.88);backdrop-filter:blur(8px)}
+        .reply-avatar-lightbox img{display:block;max-width:min(92vw,680px);max-height:86svh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 18px 70px rgba(0,0,0,.5)}
+        .reply-avatar-lightbox button{position:absolute;top:20px;right:20px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#111;font-size:30px;line-height:1}
+        @media(max-width:600px){.home-post .post-media-frame{max-height:calc(100svh - 245px);min-height:190px}.post-replies-chat{padding:12px}.post-replies-chat .rotating-comment{min-height:130px;padding:14px}.comment-avatar-zoom{width:68px;height:68px;flex-basis:68px}.social-reaction-actions{padding:0 10px}.social-reaction-actions .post-action{padding:8px 10px;font-size:12px}}
+        .comment-rotation-dots,.reply-rotation-dots{display:none!important}
         .post-replies-chat{padding:14px 16px 10px;background:linear-gradient(145deg,rgba(8,24,52,.96),rgba(5,16,38,.98));border-top:1px solid rgba(70,190,255,.12)}
         .post-replies-chat .rotating-comment{display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid rgba(82,185,255,.2);border-radius:16px 16px 16px 5px;background:rgba(17,38,72,.82)}
         .post-replies-chat .comment-avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover}
@@ -1948,7 +1977,9 @@ const ServicePost = memo(function ServicePost({
             onTouchStart={() => setRotationPaused(true)}
             onTouchEnd={() => setRotationPaused(false)}
           >
-            <img className="comment-avatar" src={commentAvatar} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
+            <button type="button" className="comment-avatar-zoom" aria-label={`View ${commentName}'s full profile picture`} onClick={() => setAvatarZoomOpen(true)}>
+              <img className="comment-avatar" src={commentAvatar} alt={`${commentName}'s profile`} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
+            </button>
             <div className="comment-copy">
               <div className="comment-author-row">
                 <strong>{commentName}</strong>
@@ -2033,6 +2064,12 @@ const ServicePost = memo(function ServicePost({
           )}
           {replyError && <p className="reply-chat-error" role="alert">{replyError}</p>}
         </form>
+      )}
+      {avatarZoomOpen && activeComment && (
+        <div className="reply-avatar-lightbox" role="dialog" aria-modal="true" aria-label={`${commentName} profile picture`} onClick={() => setAvatarZoomOpen(false)}>
+          <button type="button" aria-label="Close profile picture" onClick={() => setAvatarZoomOpen(false)}>×</button>
+          <img src={commentAvatar} alt={`${commentName}'s full profile picture`} onClick={(event) => event.stopPropagation()} />
+        </div>
       )}
     </article>
   );
