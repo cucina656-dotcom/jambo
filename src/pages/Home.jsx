@@ -1,5 +1,4 @@
-﻿import ConnectExperience from "../components/connect/ConnectExperience";
-import SocialLifeLanding from "../components/social/SocialLifeLanding";
+﻿import SocialLifeLanding from "../components/social/SocialLifeLanding";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 import {
   Fragment,
@@ -129,7 +128,6 @@ const noop = () => {};
 
 const CATEGORY_TABS = [
   { key: "time-market", label: "Media", icon: MessageSquare },
-  { key: "connect", label: "Connect", icon: Users },
   { key: "social-life", label: "Heart", icon: Heart },
 ];
 
@@ -1622,16 +1620,11 @@ function Home() {
     const baseDescription = subtitle.trim();
     const wantedExchange = exchangeNeed.trim();
     const mediaToSave = newMediaUrl.trim();
-    if (!providerName) return alert("Please enter your service provider name.");
-    if (!contactInfo) return alert("Please enter your phone number or website.");
-    if (!headline) return alert(postType === "offer" ? "Please say what work you can do." : postType === "need" ? "Please say what help you need." : postType === "exchange" ? "Please say what service you can give." : "Please add a short title for your moment.");
+    if (!contactInfo) return alert("Please enter your telephone number.");
+    if (!baseDescription) return alert("Please add a description.");
     if (!baseDescription) return alert(postType === "moment" ? "Please write your saying, story, or thought." : "Please add a short description.");
     if (postType === "exchange" && !wantedExchange) return alert("Please say what service you need in return.");
     if (!mediaToSave && !newMediaFile) return alert("Please upload a photo/video or enter a media link.");
-    if (!isLoggedIn || !user) {
-      openAuthModal("login");
-      return;
-    }
     let detectedMediaType = "";
     if (newMediaFile) detectedMediaType = newMediaFile.type.startsWith("image/") ? "image" : "video";
     else if (isImageUrl(mediaToSave)) detectedMediaType = "image";
@@ -1646,7 +1639,7 @@ function Home() {
     }
     const workDescription = detailLines.join("\n");
     
-    const cardValue = postType === "offer" ? headline : postType === "need" ? (enteredValue ? `Budget: ${enteredValue}` : "Budget: Let us agree") : postType === "exchange" ? "Trade skills" : momentKind === "song" ? "Song saying" : momentKind === "movie" ? "Movie saying" : momentKind === "recommend" ? "Recommendation" : "My story";
+    const cardValue = enteredValue || headline || "";
     try {
       setSaving(true); setUploadProgress(1);
       const formData = new FormData();
@@ -1660,16 +1653,13 @@ function Home() {
       formData.append("allow_cash_balance", allowCashBalance ? "1" : "0");
       formData.append("moment_kind", postType === "moment" ? momentKind : "");
       formData.append("media_type", detectedMediaType); formData.append("is_new_service", "true");
-      if (user && user.id) formData.append("provider_id", user.id);
       if (mediaToSave) formData.append("media_url", mediaToSave);
       if (newLogoFile) formData.append("logo_file", newLogoFile);
       if (newMediaFile) formData.append("media_file", newMediaFile);
-      const token = getSessionToken();
       const { status, statusText, responseText } = await new Promise((resolve, reject) => {
         const request = new XMLHttpRequest();
-        request.open("POST", `${API_URL}/api/time-market/services`);
+        request.open("POST", `${API_URL}/api/home/update`);
         request.timeout = 180000;
-        request.setRequestHeader("Authorization", `Bearer ${token}`);
         request.upload.onprogress = (event) => {
           if (!event.lengthComputable || !isMountedRef.current) return;
           const percentage = Math.min(95, Math.max(1, Math.round((event.loaded / event.total) * 95)));
@@ -1700,7 +1690,7 @@ function Home() {
     } finally {
       if (isMountedRef.current) { setSaving(false); setUploadProgress(0); }
     }
-  }, [closeEditor, fetchHomeData, newCreatorName, newCreatorIdentity, newLogoFile, newMediaFile, newMediaUrl, newTitle, subtitle, postType, postHeadline, serviceCategory, postLocation, priceUnit, availability, exchangeNeed, allowCashBalance, momentKind, getSessionToken, user, isLoggedIn, openAuthModal]);
+  }, [closeEditor, fetchHomeData, newCreatorName, newCreatorIdentity, newLogoFile, newMediaFile, newMediaUrl, newTitle, subtitle, postType, postHeadline, serviceCategory, postLocation, priceUnit, availability, exchangeNeed, allowCashBalance, momentKind]);
 
   const openServiceEdit = useCallback((post) => {
     setEditingServicePost(post);
@@ -2109,8 +2099,6 @@ function Home() {
   
   if (activeCategory === "social-life") {
     mainContent = <SocialLifeLanding />;
-  } else if (activeCategory === "connect") {
-    mainContent = <ConnectExperience user={user} isLoggedIn={isLoggedIn} onRequireAuth={requireAuthForConnect} />;
   } else if (loading) {
     mainContent = <FeedSkeleton />;
   } else if (!memoizedPosts.length) {
@@ -2256,9 +2244,9 @@ const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLog
               </button>
             </>
           ) : (
-            <button type="button" className="login-pill" onClick={() => onAuth("login")}>
-              <LogIn size={16} aria-hidden="true" />
-              <span>Log in</span>
+            <button type="button" className="login-pill" onClick={onCreatePost}>
+              <Plus size={16} aria-hidden="true" />
+              <span>Say some</span>
             </button>
           )}
           <button type="button" className="menu-button" onClick={() => setShowMenu((value) => !value)} aria-label="Menu" aria-haspopup="true" aria-expanded={showMenu}>
@@ -2283,12 +2271,7 @@ const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLog
                   <button type="button" className="dropdown-item" onClick={run(onOpenMyServices)}><ShoppingBasket size={18} aria-hidden="true" />My services</button>
                   <button type="button" className="dropdown-item" onClick={run(onOpenMyTime)}><Wallet size={18} aria-hidden="true" />My time</button>
                 </>
-              ) : (
-                <>
-                  <button type="button" className="dropdown-item" onClick={run(() => onAuth("login"))}><LogIn size={18} aria-hidden="true" />Log in</button>
-                  <button type="button" className="dropdown-item" onClick={run(() => onAuth("register"))}><Plus size={18} aria-hidden="true" />Create an account</button>
-                </>
-              )}
+              ) : null}
               <div className="dropdown-divider" />
               <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("about"))}><Info size={18} aria-hidden="true" />About Gwamo</button>
               <button type="button" className="dropdown-item" onClick={run(() => onOpenInfo("help"))}><HelpCircle size={18} aria-hidden="true" />Help</button>
@@ -2334,6 +2317,14 @@ const ServicePost = memo(function ServicePost({
   const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "").trim();
   const comments = Array.isArray(post.comments) ? post.comments : Array.isArray(post.recent_comments) ? post.recent_comments : Array.isArray(post.comment_list) ? post.comment_list : [];
   const [commentIndex, setCommentIndex] = useState(0);
+  const [rotationPaused, setRotationPaused] = useState(false);
+  const [replyExpanded, setReplyExpanded] = useState(false);
+  const [replyName, setReplyName] = useState("");
+  const [replyFlag, setReplyFlag] = useState("🇷🇼");
+  const [replyMessage, setReplyMessage] = useState("");
+  const [replyPhoto, setReplyPhoto] = useState(null);
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState("");
   const [saved, setSaved] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gwamo-saved-posts") || "[]").includes(String(post.id)); }
     catch { return false; }
@@ -2350,10 +2341,10 @@ const ServicePost = memo(function ServicePost({
 
   useEffect(() => {
     setCommentIndex(0);
-    if (comments.length < 2) return undefined;
-    const timer = window.setInterval(() => setCommentIndex((current) => (current + 1) % comments.length), 5500);
+    if (comments.length < 2 || rotationPaused) return undefined;
+    const timer = window.setInterval(() => { setCommentIndex((current) => (current + 1) % comments.length); setReplyExpanded(false); }, 5500);
     return () => window.clearInterval(timer);
-  }, [postId, comments.length]);
+  }, [postId, comments.length, rotationPaused]);
 
   const handleMediaLoad = useCallback((event) => {
     const element = event.currentTarget;
@@ -2369,9 +2360,31 @@ const ServicePost = memo(function ServicePost({
       setSaved(!saved);
     } catch { setSaved(!saved); }
   }, [post.id, saved]);
+  const submitReply = useCallback(async (event) => {
+    event.preventDefault();
+    const name = replyName.trim();
+    const message = replyMessage.trim();
+    if (!name || !message) { setReplyError("Enter your name and message."); return; }
+    if (message.length > 2000) { setReplyError("Message must be 2,000 characters or fewer."); return; }
+    setReplySending(true); setReplyError("");
+    try {
+      const form = new FormData();
+      form.append("post_id", String(postId));
+      form.append("name", name);
+      form.append("country_flag", replyFlag);
+      form.append("comment", message);
+      if (replyPhoto) form.append("profile_image", replyPhoto);
+      const response = await fetch(`${API_URL}/api/home/comment`, { method: "POST", body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || "Could not send your reply.");
+      setReplyMessage(""); setReplyPhoto(null);
+      window.location.reload();
+    } catch (error) { setReplyError(error.message || "Could not send your reply."); }
+    finally { setReplySending(false); }
+  }, [postId, replyName, replyFlag, replyMessage, replyPhoto]);
   const activeComment = comments.length ? comments[commentIndex % comments.length] : null;
   const commentText = activeComment?.text_content || activeComment?.comment || activeComment?.body || activeComment?.text || "";
-  const commentName = activeComment?.full_name || activeComment?.name || activeComment?.author_name || "Gwamo member";
+  const commentName = activeComment?.commenter_name || activeComment?.full_name || activeComment?.name || activeComment?.author_name || "Gwamo member";
   const commentAvatar = activeComment?.profile_image_url || activeComment?.avatar_url || activeComment?.avatar || DEFAULT_LOGO;
   const phone = String(activeComment?.phone || activeComment?.telephone || "");
   const country = String(activeComment?.country_code || activeComment?.country || "").toUpperCase();
@@ -2395,27 +2408,32 @@ const ServicePost = memo(function ServicePost({
         {title && <h2 className="service-name">{title}</h2>}
         {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
       </div>
-      <div className="post-actions-row" aria-label="Post actions">
-        <button type="button" className={`post-action${reacted ? " is-active" : ""}`} onClick={() => onReact(post)} disabled={reacting || reacted} aria-pressed={reacted}><span aria-hidden="true">♡</span><span>Like</span>{reactionCount > 0 && <small>{formatCount(reactionCount)}</small>}</button>
-        <button type="button" className="post-action comment-action" onClick={() => document.getElementById(`post-comments-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><MessageSquare size={19} aria-hidden="true" /><span>Comment</span>{commentCount > 0 && <small>({formatCount(commentCount)})</small>}</button>
-        <button type="button" className="post-action" onClick={() => onShare(post)}><Send size={19} aria-hidden="true" /><span>Share</span></button>
-        <button type="button" className={`post-action${saved ? " is-active" : ""}`} onClick={handleSave} aria-pressed={saved}><BookmarkIcon /><span>{saved ? "Saved" : "Save"}</span></button>
+      <div className="post-actions-row" aria-label="Post reply">
+        <button type="button" className="post-action comment-action" onClick={() => document.getElementById(`reply-form-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+          <MessageSquare size={19} aria-hidden="true" /><span>Reply</span>{commentCount > 0 && <small>({formatCount(commentCount)})</small>}
+        </button>
       </div>
       <section id={`post-comments-${postId}`} className="post-comments-panel" aria-label="Post comments" aria-live="polite">
         <div className="post-comments-heading"><MessageSquare size={19} aria-hidden="true" /><strong>Comments ({commentCount})</strong>{comments.length > 1 && <div className="comment-rotation-dots">{comments.map((_, i) => <button key={i} type="button" className={i === commentIndex ? "is-active" : ""} onClick={() => setCommentIndex(i)} aria-label={`Show comment ${i + 1}`} />)}</div>}</div>
         {activeComment ? (
-          <div className="rotating-comment" key={`${postId}-${activeComment.id || commentIndex}`}>
+          <div className="rotating-comment" key={`${postId}-${activeComment.id || commentIndex}`} onPointerDown={() => setRotationPaused(true)} onPointerUp={() => setRotationPaused(false)} onPointerLeave={() => setRotationPaused(false)} onTouchStart={() => setRotationPaused(true)} onTouchEnd={() => setRotationPaused(false)}>
             <img className="comment-avatar" src={commentAvatar} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-            <div className="comment-copy"><div className="comment-author-row"><strong>{commentName}</strong><span className="comment-country-flag" aria-label="Commenter country">{flag}</span></div><p>{commentText}</p></div>
+            <div className="comment-copy"><div className="comment-author-row"><strong>{commentName}</strong><span className="comment-country-flag" aria-label="Commenter country">{activeComment?.country_flag || flag}</span></div><p>{replyExpanded || String(commentText).length <= 260 ? commentText : `${String(commentText).slice(0, 260)}…`}</p>{String(commentText).length > 260 && <button type="button" className="tagline-toggle-button" onClick={() => setReplyExpanded((value) => !value)}>{replyExpanded ? "Read less" : "Read more"}</button>}</div>
           </div>
         ) : (
           <div className="comment-empty">No comments yet. Be the first to comment.</div>
         )}
       </section>
-      <div className="post-contact-row">
-        <button type="button" className="contact-me-cta" onClick={() => onContactProvider(post)}><Send size={18} aria-hidden="true" /><span>Contact me</span></button>
-        {post.creator_identity && <button type="button" className="call-me-button-inline" onClick={() => onCallProvider(post)}><Phone size={17} aria-hidden="true" />Call</button>}
-      </div>
+      <form id={`reply-form-${postId}`} className="post-reply-form" onSubmit={submitReply}>
+        <input aria-label="Your name" value={replyName} onChange={(event) => setReplyName(event.target.value)} placeholder="Your name" maxLength={80} required />
+        <select aria-label="Country flag" value={replyFlag} onChange={(event) => setReplyFlag(event.target.value)}>
+          <option value="🇷🇼">🇷🇼 Rwanda</option><option value="🇺🇬">🇺🇬 Uganda</option><option value="🇰🇪">🇰🇪 Kenya</option><option value="🇹🇿">🇹🇿 Tanzania</option><option value="🇧🇮">🇧🇮 Burundi</option><option value="🇨🇩">🇨🇩 DR Congo</option><option value="🌍">🌍 Other</option>
+        </select>
+        <input aria-label="Optional profile picture" type="file" accept="image/*" onChange={(event) => setReplyPhoto(event.target.files?.[0] || null)} />
+        <textarea aria-label="Your reply" value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} placeholder="Write a reply..." maxLength={2000} required />
+        {replyError && <p role="alert">{replyError}</p>}
+        <button type="submit" disabled={replySending}>{replySending ? "Sending..." : "Send reply"}</button>
+      </form>
     </article>
   );
 });
