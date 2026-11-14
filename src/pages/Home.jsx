@@ -127,8 +127,8 @@ const CHAT_DRAFT_PREFIX = "gwamo-chat-draft:";
 const noop = () => {};
 
 const CATEGORY_TABS = [
-  { key: "time-market", label: "📈 Trendz", icon: MessageSquare },
-  { key: "social-life", label: "❤️ Bae & Bae", icon: Heart },
+  { key: "time-market", label: "Trendz", emoji: "📈" },
+  { key: "social-life", label: "Bae & Bae", emoji: "❤️" },
 ];
 
 const CATEGORY_META = {
@@ -1636,7 +1636,6 @@ function Home() {
       <nav className="bottom-nav" aria-label="Primary">
         <div className="bottom-nav-scroll">
           {CATEGORY_TABS.map((tab, tabIndex) => {
-            const TabIcon = tab.icon;
             const isActive = activeCategory === tab.key;
             const navItem = (
               <button
@@ -1645,7 +1644,7 @@ function Home() {
                 onClick={() => { setActivePostIndex(0); setActiveCategory(tab.key); window.scrollTo(0, 0); }}
                 aria-current={isActive ? "page" : undefined}
               >
-                <span className="bottom-nav-icon"><TabIcon size={22} strokeWidth={isActive ? 2.4 : 2} aria-hidden="true" /></span>
+                <span className="bottom-nav-icon" aria-hidden="true">{tab.emoji}</span>
                 <span>{tab.label}</span>
               </button>
             );
@@ -1965,6 +1964,131 @@ const ServicePost = memo(function ServicePost({
         .reply-message-meta{align-self:flex-end;color:#9fb5d3;font-size:12px}
         .reply-chat-error{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(255,85,85,.12);color:#ffbcbc;font-size:13px}
         @media(max-width:480px){.post-reply-chat-form{margin:0 10px 14px;padding:13px}.post-replies-chat{padding:12px 11px 8px}}
+
+        /* Final feed layout: keep media and its reaction controls in one viewport. */
+        .home-post.service-reel-card{
+          height:calc(100svh - 146px)!important;
+          min-height:440px!important;
+          max-height:calc(100svh - 146px)!important;
+          overflow:hidden!important;
+          display:flex!important;
+          flex-direction:column!important;
+          padding-bottom:0!important;
+          scroll-snap-align:start;
+        }
+        .home-post .post-media-frame{
+          flex:1 1 auto!important;
+          width:100%!important;
+          height:0!important;
+          min-height:0!important;
+          max-height:none!important;
+          aspect-ratio:auto!important;
+          overflow:hidden!important;
+          background:#020817;
+        }
+        .home-post .post-media-frame .home-media{
+          width:100%!important;
+          height:100%!important;
+          object-fit:contain!important;
+          object-position:center top!important;
+        }
+        .home-post .post-content-block{
+          flex:0 0 auto;
+          max-height:76px;
+          overflow:auto;
+          padding-top:7px!important;
+          padding-bottom:7px!important;
+        }
+        .home-post .post-description{
+          display:-webkit-box;
+          -webkit-line-clamp:2;
+          -webkit-box-orient:vertical;
+          overflow:hidden;
+        }
+        .social-reaction-actions{
+          flex:0 0 46px!important;
+          min-height:46px!important;
+          height:46px!important;
+          display:flex!important;
+          align-items:center!important;
+          justify-content:space-between!important;
+          gap:8px!important;
+          padding:0 14px!important;
+          background:transparent!important;
+          border:0!important;
+          border-top:1px solid rgba(50,190,255,.14)!important;
+        }
+        .social-reaction-actions .post-action{
+          min-height:40px!important;
+          width:auto!important;
+          border:0!important;
+          border-radius:0!important;
+          padding:5px 0!important;
+          background:transparent!important;
+          box-shadow:none!important;
+          white-space:nowrap!important;
+        }
+        .social-reactions-button{
+          justify-content:flex-start!important;
+          color:#ffd36b!important;
+          text-shadow:0 0 8px rgba(255,190,55,.32);
+        }
+        .spill-button{
+          margin-left:auto!important;
+          justify-content:flex-end!important;
+          color:#29f0a5!important;
+          text-shadow:0 0 8px rgba(25,240,165,.38);
+        }
+        .social-reaction-emoji{font-size:19px!important}
+        .bottom-nav{
+          background:rgba(3,8,24,.97)!important;
+          border-top:1px solid rgba(31,190,255,.48)!important;
+          box-shadow:0 -5px 24px rgba(0,145,255,.12),0 0 18px rgba(0,145,255,.12)!important;
+          backdrop-filter:blur(18px);
+        }
+        .bottom-nav-scroll{
+          width:min(100%,520px)!important;
+          height:68px!important;
+          grid-template-columns:1fr 1fr!important;
+          gap:8px!important;
+          padding:4px 24px!important;
+        }
+        .bottom-nav-item{
+          gap:3px!important;
+          color:#91a6c7!important;
+          font-size:12px!important;
+          text-shadow:none;
+        }
+        .bottom-nav-icon{
+          width:62px!important;
+          height:34px!important;
+          border-radius:14px!important;
+          display:grid!important;
+          place-items:center!important;
+          font-size:25px!important;
+          background:transparent!important;
+          transition:all .18s ease!important;
+        }
+        .bottom-nav-item.is-active{
+          color:#f4fbff!important;
+          text-shadow:0 0 8px rgba(32,202,255,.55)!important;
+        }
+        .bottom-nav-item.is-active .bottom-nav-icon{
+          color:#fff!important;
+          background:rgba(14,178,255,.12)!important;
+          border:1px solid rgba(42,211,255,.65)!important;
+          box-shadow:0 0 8px rgba(0,190,255,.55),inset 0 0 12px rgba(0,190,255,.15)!important;
+        }
+        @media(max-width:600px){
+          .home-post.service-reel-card{
+            height:calc(100svh - 142px)!important;
+            max-height:calc(100svh - 142px)!important;
+            min-height:420px!important;
+          }
+          .home-post .post-content-block{max-height:62px}
+          .social-reaction-actions{padding:0 12px!important}
+          .bottom-nav-scroll{height:66px!important;padding-left:18px!important;padding-right:18px!important}
+        }
       `}</style>
       <section className="post-replies-chat" aria-label="Replies">
         {activeComment ? (
