@@ -1887,21 +1887,16 @@ const ServicePost = memo(function ServicePost({
         ) : (
           <iframe className="home-media post-embed-media" src={getEmbedUrl(mediaUrl)} title={title || "Gwamo media"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
         )}
-      <div className="post-actions-row social-reaction-actions" aria-label="Social reactions">
-        <button type="button" className="post-action social-reactions-button" onClick={() => onReact?.(post)}>
-          <span className="social-reaction-emoji" aria-hidden="true">✨</span>
-          <span>Social Reactions</span>
-          {reactionCount > 0 && <small>{formatCount(reactionCount)}</small>}
-        </button>
+      <div className="post-actions-row social-reaction-actions" aria-label="Social feedback">
         <button
           type="button"
-          className="post-action spill-button"
+          className="post-action social-reactions-button"
           onClick={() => { setReplyOpen((open) => !open); setReplyStep(0); setReplyError(""); }}
           aria-expanded={replyOpen}
         >
-          <span aria-hidden="true">💬</span>
-          <span>{replyOpen ? "Close Spill" : "Spill"}</span>
-          {/* Spill intentionally has no count badge. */}
+          <span className="social-reaction-emoji" aria-hidden="true">✨</span>
+          <span>{replyOpen ? "Close Social Feedback" : "Social Feedback"}</span>
+          {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
       </div>\n      </div>
       {(title || description) && (
@@ -1922,7 +1917,6 @@ const ServicePost = memo(function ServicePost({
         .social-reaction-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:62px;padding:0 14px;background:rgba(4,16,39,.96)}
         .social-reaction-actions .post-action{width:auto;min-width:0;justify-content:center;gap:8px;border:1px solid rgba(50,190,255,.2);border-radius:13px;padding:8px 13px;white-space:nowrap}
         .social-reactions-button{color:#ffd36b!important;background:rgba(255,190,55,.08)!important}
-        .spill-button{color:#22e59b!important;background:rgba(13,205,137,.09)!important}
         .social-reaction-emoji{font-size:20px!important}
         .post-replies-chat{min-height:160px;display:flex;align-items:stretch;justify-content:center;padding:18px;background:linear-gradient(145deg,rgba(8,24,52,.98),rgba(5,16,38,.99))}
         .post-replies-chat .rotating-comment{width:100%;min-height:142px;box-sizing:border-box;align-items:flex-start;gap:16px;padding:18px;border-radius:20px 20px 20px 7px;background:linear-gradient(145deg,rgba(20,43,80,.96),rgba(13,31,61,.98))}
@@ -2034,12 +2028,6 @@ const ServicePost = memo(function ServicePost({
           justify-content:flex-start!important;
           color:#ffd36b!important;
           text-shadow:0 0 8px rgba(255,190,55,.32);
-        }
-        .spill-button{
-          margin-left:auto!important;
-          justify-content:flex-end!important;
-          color:#29f0a5!important;
-          text-shadow:0 0 8px rgba(25,240,165,.38);
         }
         .social-reaction-emoji{font-size:19px!important}
         .bottom-nav{
@@ -2309,16 +2297,6 @@ const ServicePost = memo(function ServicePost({
           color:#fff!important;
           font-size:14px!important;
           font-weight:800!important;
-        }
-        .home-post .spill-button{
-          margin-left:auto!important;
-          color:#2cffaa!important;
-          justify-content:flex-end!important;
-        }
-        .home-post .spill-button small,
-        .home-post .spill-button .count,
-        .home-post .spill-button [data-count]{
-          display:none!important;
         }
         .home-post .post-replies-chat{
           flex:0 0 145px!important;
