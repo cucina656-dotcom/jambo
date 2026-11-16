@@ -1890,11 +1890,12 @@ const ServicePost = memo(function ServicePost({
           <span>{replyOpen ? "Close Social Feedback" : "Social Feedback"}</span>
           {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
-      </div>\n      </div>
+        </div>
+      </div>
       {(title || description) && (
         <div className="post-content-block">
-          {title && <h2 className="service-name">{title}</h2>}
-          {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
+         {/[^\s.,;:!?\-_·•]/.test(title) && <h2 className="service-name">{title}</h2>}
+          {/[^\s.,;:!?\-_·•]/.test(description) && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
         </div>
       )}
 
@@ -2334,6 +2335,38 @@ const ServicePost = memo(function ServicePost({
           box-shadow:none!important;
           border-radius:0!important;
         }
+          .home-post .post-media-frame .home-media,
+.home-post .post-media-frame video.home-media,
+.home-post .post-media-frame iframe.home-media{
+  object-fit:contain!important;
+  object-position:center center!important;
+}
+.home-post .post-replies-chat{
+  flex:0 0 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:8px 12px 10px!important;
+}
+.home-post .post-replies-chat .rotating-comment{
+  height:auto!important;
+  min-height:0!important;
+  padding:8px 10px!important;
+  gap:10px!important;
+  align-items:center!important;
+}
+.home-post .post-replies-chat .comment-avatar-zoom{
+  width:42px!important;
+  height:42px!important;
+  min-width:42px!important;
+  min-height:42px!important;
+  flex:0 0 42px!important;
+}
+.home-post .post-replies-chat .comment-copy p{
+  font-size:14px!important;
+  line-height:1.4!important;
+  margin:2px 0 0!important;
+}
+.home-post .post-replies-chat .comment-author-row{font-size:13px!important}
       `}</style>
       <section className="post-replies-chat" aria-label="Replies">
         {activeComment ? (
