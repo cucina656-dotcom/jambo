@@ -2367,6 +2367,7 @@ const ServicePost = memo(function ServicePost({
   margin:2px 0 0!important;
 }
 .home-post .post-replies-chat .comment-author-row{font-size:13px!important}
+.home-post .post-replies-chat[hidden]{display:none!important}
       `}</style>
       <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
