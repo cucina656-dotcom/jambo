@@ -1887,7 +1887,7 @@ const ServicePost = memo(function ServicePost({
           aria-expanded={replyOpen}
         >
           <span className="social-reaction-emoji" aria-hidden="true">✨</span>
-          <span>{replyOpen ? "Close Social Feedback" : "Social Feedback"}</span>
+          <span>{replyOpen ? "Close Social Feedback" : commentCount > 0 ? "Social Feedback" : "Add feedback"}</span>
           {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
         </div>
@@ -2368,7 +2368,7 @@ const ServicePost = memo(function ServicePost({
 }
 .home-post .post-replies-chat .comment-author-row{font-size:13px!important}
       `}</style>
-      <section className="post-replies-chat" aria-label="Replies">
+      <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
           <div
             className="rotating-comment"
