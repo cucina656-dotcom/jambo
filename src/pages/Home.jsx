@@ -2368,6 +2368,18 @@ const ServicePost = memo(function ServicePost({
 }
 .home-post .post-replies-chat .comment-author-row{font-size:13px!important}
 .home-post .post-replies-chat[hidden]{display:none!important}
+/* Media first, then date; feedback button sits below the video controls */
+.home-post .post-media-frame{order:0!important}
+.home-post .post-date-row{order:1!important;padding:10px 16px 6px!important}
+.home-post .post-content-block{order:2!important}
+.home-post .post-replies-chat{order:3!important}
+.home-post .post-reply-chat-form{order:4!important}
+.home-post .post-media-frame .home-media,
+.home-post .post-media-frame video.home-media,
+.home-post .post-media-frame iframe.home-media{
+  inset:0 0 58px 0!important;
+  height:calc(100% - 58px)!important;
+}
       `}</style>
       <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
