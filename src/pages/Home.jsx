@@ -1895,7 +1895,7 @@ const ServicePost = memo(function ServicePost({
       {(title || description) && (
         <div className="post-content-block">
          {/[^\s.,;:!?\-_·•]/.test(title) && <h2 className="service-name">{title}</h2>}
-          {/[^\s.,;:!?\-_·•]/.test(description) && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
+          {/[^\s.,;:!?\-_·•]/.test(description) && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 140))}{description.length > 140 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
         </div>
       )}
 
@@ -2366,20 +2366,90 @@ const ServicePost = memo(function ServicePost({
   line-height:1.4!important;
   margin:2px 0 0!important;
 }
-.home-post .post-replies-chat .comment-author-row{font-size:13px!important}
-.home-post .post-replies-chat[hidden]{display:none!important}
-/* Post text first, then date, then media; feedback sits below the video controls */
-.home-post .post-content-block{order:0!important}
-.home-post .post-date-row{order:1!important;padding:8px 16px 8px!important}
-.home-post .post-media-frame{order:2!important}
-.home-post .post-replies-chat{order:3!important}
-.home-post .post-reply-chat-form{order:4!important}
-.home-post .post-media-frame .home-media,
+/* Facebook-style post: date, words, media, feedback row */
+.home-post.service-reel-card{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  content-visibility:visible!important;
+  border-bottom:8px solid rgba(255,255,255,.05)!important;
+}
+.home-page .home-feed{gap:0!important}
+.home-post .post-date-row{
+  order:0!important;
+  min-height:0!important;
+  padding:12px 14px 4px!important;
+  font-size:12px!important;
+  font-weight:500!important;
+  letter-spacing:0!important;
+  text-transform:none!important;
+  color:#8fa3c7!important;
+}
+.home-post .post-date-row svg{display:none!important}
+.home-post .post-content-block{
+  order:1!important;
+  max-height:none!important;
+  overflow:visible!important;
+  padding:2px 14px 12px!important;
+  text-align:left!important;
+}
+.home-post .service-name{
+  font-size:18px!important;
+  line-height:1.3!important;
+  margin:0 0 4px!important;
+  text-align:left!important;
+}
+.home-post .post-description{
+  display:block!important;
+  -webkit-line-clamp:unset!important;
+  overflow:visible!important;
+  max-height:none!important;
+  font-size:16px!important;
+  line-height:1.45!important;
+  text-align:left!important;
+  color:#f1f5ff!important;
+}
+.home-post .post-media-frame,
+.home-post .post-media-frame.is-portrait,
+.home-post .post-media-frame.is-landscape,
+.home-post .post-media-frame.is-square{
+  order:2!important;
+  flex:0 0 auto!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:auto!important;
+  background:transparent!important;
+}
+.home-post .post-media-frame img.home-media,
 .home-post .post-media-frame video.home-media,
 .home-post .post-media-frame iframe.home-media{
-  inset:0 0 58px 0!important;
-  height:calc(100% - 58px)!important;
+  position:static!important;
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:180px!important;
+  max-width:100%!important;
+  max-height:75svh!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  background:#000!important;
 }
+.home-post .post-media-frame video.home-media{aspect-ratio:auto 16/9!important}
+.home-post .post-media-frame iframe.home-media{aspect-ratio:16/9!important}
+.home-post .post-media-frame .social-reaction-actions{
+  position:static!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:46px!important;
+  padding:0 14px!important;
+  justify-content:flex-start!important;
+  border-top:1px solid rgba(255,255,255,.08)!important;
+  background:transparent!important;
+}
+.home-post .post-replies-chat{order:3!important}
+.home-post .post-reply-chat-form{order:4!important}
       `}</style>
       <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
