@@ -1764,7 +1764,7 @@ const ServicePost = memo(function ServicePost({
   const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
   const isEmbed = mediaType === "embed" || (!isImage && !isVideo);
   const title = String(post.service_name || post.service_title || post.title || "").trim();
-  const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "").trim();
+  const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "") .replace(/^\s*Available:.*$/gim, "").trim();
   const incomingComments = Array.isArray(post.comments) ? post.comments : Array.isArray(post.recent_comments) ? post.recent_comments : Array.isArray(post.comment_list) ? post.comment_list : [];
   const [comments, setComments] = useState(incomingComments);
   const [commentIndex, setCommentIndex] = useState(0);
@@ -2450,6 +2450,13 @@ const ServicePost = memo(function ServicePost({
 }
 .home-post .post-replies-chat{order:3!important}
 .home-post .post-reply-chat-form{order:4!important}
+/* Remove top gap and hide the empty feedback message */
+.home-page .home-feed{padding-top:0!important}
+.home-post .reply-empty-state{display:none!important}
+.home-post .post-replies-chat:not(:has(.rotating-comment)){
+  display:none!important;
+}
+
       `}</style>
       <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
