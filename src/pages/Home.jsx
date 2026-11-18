@@ -47,6 +47,22 @@ import {
   Trash2,
 } from "lucide-react";
 
+import countries from "world-countries";
+
+const ALL_COUNTRIES = countries
+  .filter((country) => country.cca2 && country.name?.common)
+  .map((country) => ({
+    code: country.cca2,
+    name: country.name.common,
+    flag: country.cca2
+      .toUpperCase()
+      .replace(/[A-Z]/g, (letter) =>
+        String.fromCodePoint(127397 + letter.charCodeAt(0))
+      ),
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
@@ -2549,15 +2565,19 @@ const ServicePost = memo(function ServicePost({
             <div className="reply-chat-step">
               <div className="reply-user-bubble">{replyName.trim()}</div>
               <div className="reply-bot-bubble">Nice to meet you. Which country are you from?</div>
-              <select aria-label="Your country" value={replyFlag} onChange={(event) => setReplyFlag(event.target.value)}>
-                <option value="🇷🇼">🇷🇼 Rwanda</option>
-                <option value="🇺🇬">🇺🇬 Uganda</option>
-                <option value="🇰🇪">🇰🇪 Kenya</option>
-                <option value="🇹🇿">🇹🇿 Tanzania</option>
-                <option value="🇧🇮">🇧🇮 Burundi</option>
-                <option value="🇨🇩">🇨🇩 DR Congo</option>
-                <option value="🌍">🌍 Other</option>
-              </select>
+             
+<select
+  aria-label="Your country"
+  value={replyFlag}
+  onChange={(event) => setReplyFlag(event.target.value)}
+>
+  {ALL_COUNTRIES.map((country) => (
+    <option key={country.code} value={country.flag}>
+      {country.flag} {country.name}
+    </option>
+  ))}
+</select>
+
               <div className="reply-chat-buttons">
                 <button type="button" className="reply-back-button" onClick={() => setReplyStep(0)}>Back</button>
                 <button type="button" onClick={() => setReplyStep(2)}>Continue <span>→</span></button>
