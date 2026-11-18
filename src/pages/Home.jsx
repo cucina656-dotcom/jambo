@@ -143,14 +143,54 @@ const CATEGORY_META = {
 };
 
 const INFO_CONTENT = {
-  about: {
+   about: {
     title: "About Gwamo",
-    eyebrow: "Your time has value.",
-    body: "Gwamo is a marketplace built around the value of human time. It helps people turn skills, experience, availability and useful abilities into real connections and opportunities.",
+    eyebrow: "Your Voice. Your Story. Your Value.",
+
+    body:
+      "Gwamo is a social platform built around people, connections, creativity, and opportunities. We believe every person has something valuable to offer — a story, an idea, a talent, a relationship, a skill, or simply their time. Gwamo brings people together to express themselves, discover others, build relationships, and create opportunities.",
+
     sections: [
-      { title: "Show your value", body: "Create a clear presence that shows who you are, what you can do and the value of your time." },
-      { title: "Get discovered", body: "Use the Gwamo feed to reach people looking for skills, services, support, collaboration or meaningful opportunities." },
-      { title: "Build trust", body: "Connect with real people and build confidence through Gwamo verification. Verified members are identified by a blue verification badge." },
+      {
+        title: "💬 Share Your Voice",
+        body:
+          "Have something to say? Share your thoughts, stories, photos, and videos. Let people discover your ideas, experiences, and perspective.",
+      },
+      {
+        title: "📈 Discover Trendz",
+        body:
+          "Explore what people are sharing, discover interesting stories, and connect with conversations happening around you.",
+      },
+      {
+        title: "❤️ Bae & Bae",
+        body:
+          "Explore meaningful connections, celebrate couples, discover romantic stories, and enjoy interactive relationship experiences.",
+      },
+      {
+        title: "🎵 Music & Entertainment",
+        body:
+          "Discover songs, creativity, and entertainment while connecting with people through shared experiences.",
+      },
+      {
+        title: "🌟 Discover Opportunities",
+        body:
+          "Everyone has something valuable to offer. Gwamo believes people's time, knowledge, talents, and abilities can create opportunities for others.",
+      },
+      {
+        title: "🌍 Our Vision",
+        body:
+          "Our vision is to build a platform where social connections and real-life opportunities meet. A place where people do more than scroll — they participate, express themselves, connect, and create value.",
+      },
+      {
+        title: "✨ Our Belief",
+        body:
+          "Every person has value. Every story deserves a voice. Every connection can create an opportunity. Every talent has potential. Every person's time matters.",
+      },
+      {
+        title: "Welcome to Gwamo",
+        body:
+          "Your voice matters. Your time matters. Your presence matters. Gwamo — Where People, Stories, Connections, and Opportunities Meet.",
+      },
     ],
   },
   help: {
