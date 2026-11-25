@@ -1725,32 +1725,93 @@ const FeedSkeleton = memo(function FeedSkeleton() {
 });
 FeedSkeleton.displayName = "FeedSkeleton";
 
-function OnlineVoiceLanding() {
+ function OnlineVoiceLanding() {
   return (
     <section className="online-voice-page">
       <div className="online-voice-header">
         <span>🎙️</span>
-        <h1>Gwamo Live Voice</h1>
-        <p>Meet people. Talk live. Make new connections.</p>
+        <h1>🌍 Open Conversation</h1>
+        <div className="online-live-status">
+          <div className="online-participant-count">
+            <div className="online-media-stage">
+
+  <div className="online-media-placeholder">
+    🎵
+    <p>Music or video will appear here</p>
+    <div className="online-media-audio-status">
+  🔊 Media audio plays when everyone is silent
+</div>
+  </div>
+
+  <div className="online-participants">
+  <div className="online-person-bubble">
+    <span className="online-person-avatar">👨🏾</span>
+    <span className="online-person-name">Alex</span>
+    <span className="online-person-speaking">
+  🔊 Speaking
+</span>
+  </div>
+
+  <div className="online-person-bubble">
+    <span className="online-person-avatar">👩🏽</span>
+    <span className="online-person-online-dot"></span>
+    <span className="online-person-name">Maya</span>
+  </div>
+
+  <div className="online-person-bubble">
+    <span className="online-person-avatar">👨🏻</span>
+    <span className="online-person-name">John</span>
+    <span className="online-person-online-dot"></span>
+  </div>
+
+  <div className="online-person-bubble">
+    <span className="online-person-avatar">👩🏾</span>
+    <span className="online-person-online-dot"></span>
+    <span className="online-person-name">Sarah</span>
+    <span className="online-person-online-dot"></span>
+  </div>
+  <div className="online-mic-controls">
+    <span className="online-mic-status">
+  🔇
+</span>
+  <button className="online-mic-button">
+    🎙️
+  </button>
+ <p>Microphone is off</p>
+  <button className="online-leave-button">
+  ✕ Leave conversation
+</button>
+</div>
+</div>
+</div>
+  👥 <span>12</span> people online
+</div>
+  <span className="online-live-dot"></span>
+  LIVE CONVERSATION
+</div>
+        <p>Join the live conversation and talk with people around the world.</p>
       </div>
 
       <div className="online-voice-card">
-        <h2>🌍 Open Conversations</h2>
-        <p>Join people from different places and talk together.</p>
+        <h2>🌍 Live Conversation</h2>
+        <p>Everyone can talk and listen together.</p>
       </div>
 
       <div className="online-voice-card">
-        <h2>💬 Private Voice Calls</h2>
-        <p>Talk privately with another person.</p>
+        <h2>🎵 Music & Video</h2>
+        <p>Media plays when nobody is talking.</p>
       </div>
 
       <div className="online-voice-card">
-        <h2>📻 Live Radio</h2>
-        <p>Listen to a host and request to speak.</p>
+        <h2>🎙️ Microphone</h2>
+        <p>Mute or unmute your microphone.</p>
       </div>
     </section>
   );
 }
+ 
+
+ 
 
 const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, onCreatePost, unreadCount, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -4504,12 +4565,27 @@ function HomeStylesInner() {
         padding: 24px 16px 100px;
         color: #fff;
         text-align: center;
-        background: #030b20;
+        background: radial-gradient(circle at top, #12302b 0%, #030b20 65%);
       }
 
       .online-voice-header {
         margin-bottom: 28px;
       }
+        .online-live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 50px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.12);
+}
 
       .online-voice-header > span {
         font-size: 34px;
