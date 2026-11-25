@@ -4497,6 +4497,58 @@ function HomeStylesInner() {
         .comment-avatar { width: 48px; height: 48px; flex-basis: 48px; }
       }
         .home-feed{ padding-left:0!important; padding-right:0!important; }
+  
+              /* GWAMO LIVE VOICE */
+      .online-voice-page {
+        min-height: 75vh;
+        padding: 24px 16px 100px;
+        color: #fff;
+        text-align: center;
+        background: #030b20;
+      }
+
+      .online-voice-header {
+        margin-bottom: 28px;
+      }
+
+      .online-voice-header > span {
+        font-size: 34px;
+      }
+
+      .online-voice-header h1 {
+        font-size: 30px;
+        margin: 14px 0;
+      }
+
+      .online-voice-header p {
+        color: #b9c5dc;
+        font-size: 15px;
+      }
+
+      .online-voice-card {
+        max-width: 500px;
+        margin: 14px auto;
+        padding: 22px 18px;
+        border: 1px solid rgba(255, 185, 56, 0.35);
+        border-radius: 18px;
+        background: linear-gradient(145deg, #172541, #0c1529);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+      }
+
+      .online-voice-card h2 {
+        margin: 0 0 10px;
+        font-size: 19px;
+        color: #ffc766;
+      }
+
+      .online-voice-card p {
+        margin: 0;
+        color: #d0d9e9;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+
     `}</style>
   );
 }
