@@ -144,6 +144,7 @@ const noop = () => {};
 
 const CATEGORY_TABS = [
   { key: "time-market", label: "Trendz", emoji: "📈" },
+  { key: "online", label: "Online", emoji: "🎙️" },
   { key: "social-life", label: "Bae & Bae", emoji: "❤️" },
 ];
 
@@ -1612,7 +1613,9 @@ function Home() {
   const emptySectionAction = activeCategory === "social-life" ? { label: "Ask for help", postType: "need" } : { label: "Create a post", postType: "offer" };
 
   let mainContent;
-  
+  if (activeCategory === "online") {
+  mainContent = <OnlineVoiceLanding />;
+} else
   if (activeCategory === "social-life") {
     mainContent = <SocialLifeLanding />;
   } else if (loading) {
@@ -1721,6 +1724,33 @@ const FeedSkeleton = memo(function FeedSkeleton() {
   return null;
 });
 FeedSkeleton.displayName = "FeedSkeleton";
+
+function OnlineVoiceLanding() {
+  return (
+    <section className="online-voice-page">
+      <div className="online-voice-header">
+        <span>🎙️</span>
+        <h1>Gwamo Live Voice</h1>
+        <p>Meet people. Talk live. Make new connections.</p>
+      </div>
+
+      <div className="online-voice-card">
+        <h2>🌍 Open Conversations</h2>
+        <p>Join people from different places and talk together.</p>
+      </div>
+
+      <div className="online-voice-card">
+        <h2>💬 Private Voice Calls</h2>
+        <p>Talk privately with another person.</p>
+      </div>
+
+      <div className="online-voice-card">
+        <h2>📻 Live Radio</h2>
+        <p>Listen to a host and request to speak.</p>
+      </div>
+    </section>
+  );
+}
 
 const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, onCreatePost, unreadCount, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
