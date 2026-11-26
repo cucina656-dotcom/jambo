@@ -1725,111 +1725,117 @@ const FeedSkeleton = memo(function FeedSkeleton() {
 });
 FeedSkeleton.displayName = "FeedSkeleton";
 
- function OnlineVoiceLanding() {
+function OnlineVoiceLanding() {
   const [isJoined, setIsJoined] = useState(false);
   return (
     <section className="online-voice-page">
-      <div className="online-voice-header">
-        <span>🎙️</span>
-        <h1>🌍 Open Conversation</h1>
+      <header className="online-voice-header">
+        <span className="online-voice-icon" aria-hidden="true">🎙️</span>
+
         <div className="online-live-status">
-          <div className="online-participant-count">
-            <div className="online-media-stage">
+          <span className="online-live-dot"></span>
+          LIVE CONVERSATION
+        </div>
 
-  <div className="online-media-placeholder">
-    🎵
-    <p>Music or video will appear here</p>
-    <div className="online-media-audio-status">
-  🔊 Media audio plays when everyone is silent
-</div>
-  </div>
+        <h1>🌍 Open Conversation</h1>
+        <p>Join the live conversation and talk with people around the world.</p>
 
-  <div className="online-participants">
-  <div className="online-person-bubble">
-    <span className="online-person-avatar">👨🏾</span>
-    <span className="online-person-name">Alex</span>
-    <span className="online-person-speaking">
-  🔊 Speaking
-</span>
-  </div>
+        <div className="online-participant-count">
+          👥 <span>12</span> people online
+        </div>
+      </header>
 
-  <div className="online-person-bubble">
-    <span className="online-person-avatar">👩🏽</span>
-    <span className="online-person-online-dot"></span>
-    <span className="online-person-name">Maya</span>
-  </div>
+      <div className="online-media-stage">
+        <div className="online-media-placeholder">
+          <span className="online-media-emoji" aria-hidden="true">🎵</span>
+          <p>Music or video will appear here</p>
+          <div className="online-media-audio-status">
+            🔊 Media audio plays when everyone is silent
+          </div>
+        </div>
 
-  <div className="online-person-bubble">
-    <span className="online-person-avatar">👨🏻</span>
-    <span className="online-person-name">John</span>
-    <span className="online-person-online-dot"></span>
-  </div>
+        <div className="online-participants">
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👨🏾</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Alex</span>
+            <span className="online-person-speaking">
+              🔊 Speaking
+            </span>
+          </div>
 
-  <div className="online-person-bubble">
-    <span className="online-person-avatar">👩🏾</span>
-    <span className="online-person-online-dot"></span>
-    <span className="online-person-name">Sarah</span>
-    <span className="online-person-online-dot"></span>
-  </div>
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👩🏽</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Maya</span>
+          </div>
 
-{!isJoined && (
-  <button
-    className="online-join-button"
-    onClick={() => setIsJoined(true)}
-  >
-    🎙️ Join Conversation
-  </button>
-)}
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👨🏻</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">John</span>
+          </div>
 
-{isJoined && (
-  <div className="online-mic-controls">
-    <span className="online-mic-status">
-      🔇
-    </span>
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👩🏾</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Sarah</span>
+          </div>
+        </div>
 
-    <button className="online-mic-button">
-      🎙️
-    </button>
+        <div className="online-stage-actions">
+          {!isJoined && (
+            <button
+              type="button"
+              className="online-join-button"
+              onClick={() => setIsJoined(true)}
+            >
+              🎙️ Join Conversation
+            </button>
+          )}
 
-    <p>Microphone is off</p>
+          {isJoined && (
+            <div className="online-mic-controls">
+              <span className="online-mic-status">
+                🔇
+              </span>
 
-    <button
-      className="online-leave-button"
-      onClick={() => setIsJoined(false)}
-    >
-      ✕ Leave conversation
-    </button>
-  </div>
-)}
-</div>
-</div>
+              <button type="button" className="online-mic-button">
+                🎙️
+              </button>
 
-👥 <span>12</span> people online
-</div>
+              <p>Microphone is off</p>
 
-<span className="online-live-dot"></span>
-LIVE CONVERSATION
-</div>
+              <button
+                type="button"
+                className="online-leave-button"
+                onClick={() => setIsJoined(false)}
+              >
+                ✕ Leave conversation
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
-<p>Join the live conversation and talk with people around the world.</p>
-</div>
+      <div className="online-voice-cards">
+        <div className="online-voice-card">
+          <h2>🌍 Live Conversation</h2>
+          <p>Everyone can talk and listen together.</p>
+        </div>
 
-<div className="online-voice-card">
-  <h2>🌍 Live Conversation</h2>
-  <p>Everyone can talk and listen together.</p>
-</div>
+        <div className="online-voice-card">
+          <h2>🎵 Music & Video</h2>
+          <p>Media plays when nobody is talking.</p>
+        </div>
 
-<div className="online-voice-card">
-  <h2>🎵 Music & Video</h2>
-  <p>Media plays when nobody is talking.</p>
-</div>
-
-<div className="online-voice-card">
-  <h2>🎙️ Microphone</h2>
-  <p>Mute or unmute your microphone.</p>
-</div>
-</section>
-);
+        <div className="online-voice-card">
+          <h2>🎙️ Microphone</h2>
+          <p>Mute or unmute your microphone.</p>
+        </div>
+      </div>
+    </section>
+  );
 }
  
 
@@ -4581,362 +4587,301 @@ function HomeStylesInner() {
       }
         .home-feed{ padding-left:0!important; padding-right:0!important; }
   
-              /* GWAMO LIVE VOICE */
+      /* ------------------------------------------------------------------
+         MODERN SHELL POLISH (layout/visual only)
+         Frosted top bar + bottom nav. The blur lives on a pseudo-element so
+         the bar never becomes a containing block for the fixed dropdown
+         backdrop that sits inside it.
+         ------------------------------------------------------------------ */
+      .feedx-topbar { background: transparent; border-bottom: 0; isolation: isolate; }
+      .feedx-topbar::before {
+        content: "";
+        position: absolute; inset: 0; z-index: -1;
+        background: rgba(2, 9, 29, 0.74);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        -webkit-backdrop-filter: saturate(1.5) blur(18px);
+        backdrop-filter: saturate(1.5) blur(18px);
+        pointer-events: none;
+      }
+      .feedx-topbar-inner { width: min(100%, 760px); padding: 0 10px 0 16px; }
+      .topbar-icon-button, .menu-button { transition: background 160ms ease, transform 160ms ease; }
+      .topbar-icon-button:active, .menu-button:active { transform: scale(0.92); }
+
+      .bottom-nav {
+        background: rgba(2, 9, 29, 0.8);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        -webkit-backdrop-filter: saturate(1.5) blur(18px);
+        backdrop-filter: saturate(1.5) blur(18px);
+      }
+      .bottom-nav-scroll { width: min(100%, 520px); margin: 0 auto; padding: 6px 12px 4px; gap: 6px; }
+      .bottom-nav-item { min-height: 58px; gap: 3px; border-radius: 16px; -webkit-tap-highlight-color: transparent; }
+      .bottom-nav-icon { width: 60px; height: 32px; border-radius: 16px; font-size: 19px; }
+      .bottom-nav-item:active .bottom-nav-icon { transform: scale(0.94); }
+
+      /* ------------------------------------------------------------------
+         GWAMO LIVE VOICE
+         One clear vertical flow: header, stage (media, people, action),
+         then the info cards. No overlapping or absolutely positioned layers.
+         ------------------------------------------------------------------ */
       .online-voice-page {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
-  padding: 18px 10px 100px;
-}
+        --voice: #34d399;
+        --voice-strong: #10b981;
+        --voice-soft: rgba(52, 211, 153, 0.12);
+        --voice-line: rgba(52, 211, 153, 0.28);
+        --voice-glass: rgba(255, 255, 255, 0.05);
+        --voice-dim: #a9b8d4;
+        width: 100%;
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 28px 16px calc(40px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        box-sizing: border-box;
+        overflow-x: clip;
+      }
 
       .online-voice-header {
-        margin-bottom: 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        text-align: center;
       }
-        .online-live-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  border-radius: 50px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  box-shadow: 0 0 18px rgba(16, 185, 129, 0.12);
-}
-
-      .online-voice-header > span {
-        font-size: 34px;
+      .online-voice-icon {
+        width: 72px; height: 72px;
+        display: grid; place-items: center;
+        border: 1px solid var(--voice-line);
+        border-radius: 24px;
+        font-size: 34px; line-height: 1;
+        background: linear-gradient(145deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.05));
+        box-shadow: 0 10px 40px rgba(16, 185, 129, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
       }
-
+      .online-live-status {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 13px;
+        border: 1px solid var(--voice-line);
+        border-radius: 999px;
+        color: var(--voice);
+        background: var(--voice-soft);
+        font-size: 11.5px; font-weight: 800; letter-spacing: 0.12em;
+      }
+      .online-live-dot {
+        width: 8px; height: 8px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--voice);
+        animation: online-live-pulse 1.8s ease-out infinite;
+      }
       .online-voice-header h1 {
-        font-size: 30px;
-        margin: 14px 0;
+        margin: 2px 0 0;
+        color: #f4f8ff;
+        font-family: var(--font-display);
+        font-size: clamp(26px, 6.4vw, 36px);
+        font-weight: 800; line-height: 1.1; letter-spacing: -0.025em;
       }
-      
-      .online-participant-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px auto 18px;
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 50px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #d1fae5;
-  font-size: 13px;
-  font-weight: 600;
-  backdrop-filter: blur(10px);
-}
-
-.online-media-stage {
-  position: relative;
-  max-width: 700px;
-  min-height: 420px;
-  margin: 20px auto;
-  padding: 20px;
-  border: 1px solid rgba(52, 211, 153, 0.2);
-  border-radius: 28px;
-  background: linear-gradient(
-    145deg,
-    rgba(15, 45, 39, 0.85),
-    rgba(5, 13, 29, 0.95)
-  );
-  box-shadow: 0 0 35px rgba(16, 185, 129, 0.08);
-  overflow: hidden;
-}
-
-.online-media-placeholder {
-  position: relative;
-  min-height: 180px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 14px;
-  border-radius: 22px;
-  background: radial-gradient(
-    circle at center,
-    rgba(16, 185, 129, 0.12),
-    rgba(3, 11, 32, 0.6)
-  );
-  color: #d1fae5;
-  font-size: 48px;
-  text-align: center;
-}
-     .online-media-audio-status {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.2);
-  color: #6ee7b7;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.online-participants {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 18px;
-  padding: 20px;
-  pointer-events: none;
-}
-
-.online-person-bubble {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 20px;
-  background: rgba(8, 20, 35, 0.72);
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
-  pointer-events: auto;
-}
-
-.online-person-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #123b32, #0b1728);
-  border: 2px solid rgba(52, 211, 153, 0.65);
-  font-size: 32px;
-  box-shadow: 0 0 18px rgba(16, 185, 129, 0.18);
-}
-
-.online-person-name {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  text-align: center;
-}
-
-.online-person-online-dot {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #34d399;
-  border: 2px solid #081423;
-  box-shadow: 0 0 10px rgba(52, 211, 153, 0.8);
-}
-
-.online-person-speaking {
-  color: #34d399;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 8px;
-  border-radius: 20px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  animation: online-speaking-pulse 1.5s infinite;
-}
-
-.online-mic-controls {
-  width: 100%;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 12px 4px;
-}
-
-.online-mic-button {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 2px solid rgba(52, 211, 153, 0.6);
-  background: linear-gradient(145deg, #10b981, #047857);
-  color: white;
-  font-size: 28px;
-  cursor: pointer;
-  box-shadow: 0 0 25px rgba(16, 185, 129, 0.35);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.online-mic-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
-}
-
-.online-mic-controls p {
-  margin: 0;
-  color: #a7f3d0;
-  font-size: 13px;
-  font-weight: 600;
-}
-.online-join-button {
-  display: block;
-  width: calc(100% - 40px);
-  max-width: 280px;
-  box-sizing: border-box;
-  margin: 20px auto;
-  padding: 14px 12px;
-  border: 2px solid #10b981;
-  border-radius: 50px;
-  background: linear-gradient(135deg, #10b981, #047857);
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  text-align: center;
-  white-space: normal;
-  position: relative;
-  z-index: 100;
-  cursor: pointer;
-  pointer-events: auto;
-  box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
-}
-
-.online-join-button:hover {
-  box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
-  filter: brightness(1.1);
-}
-
-.online-join-button:active {
-  transform: scale(0.97);
-}
-
-.online-leave-button:hover {
-  background: rgba(239, 68, 68, 0.22);
-  border-color: rgba(248, 113, 113, 0.6);
-  transform: translateY(-1px);
-}
-
-@keyframes online-speaking-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
-  }
-}
-
-@media (max-width: 600px) {
-  .online-voice-page {
-    padding: 18px 10px 100px;
-  }
-
- .online-media-stage {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  min-height: auto;
-  box-sizing: border-box;
-  margin: 12px auto;
-  padding: 10px;
-  border-radius: 20px;
-  overflow: hidden;
-}
-
- .online-media-placeholder {
-  width: 100%;
-  min-width: 0;
-  min-height: 160px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 10px;
-  border-radius: 16px;
-  font-size: 32px;
-  text-align: center;
-}
-
-.online-participants {
-  position: relative;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-content: center;
-  align-items: stretch;
-  gap: 10px;
-  padding: 12px 4px;
-  margin: 0 auto;
-}
-
-.online-person-bubble {
-  width: 100%;
-  max-width: none;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 10px 6px;
-  border-radius: 14px;
-  gap: 6px;
-}
-
-.online-person-avatar {
-  width: 48px;
-  height: 48px;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-  .online-mic-button {
-    width: 66px;
-    height: 66px;
-  }
-}
-
-
       .online-voice-header p {
-        color: #b9c5dc;
-        font-size: 15px;
-      }
-
-      .online-voice-card {
-        max-width: 500px;
-        margin: 14px auto;
-        padding: 22px 18px;
-        border: 1px solid rgba(255, 185, 56, 0.35);
-        border-radius: 18px;
-        background: linear-gradient(145deg, #172541, #0c1529);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
-      }
-
-      .online-voice-card h2 {
-        margin: 0 0 10px;
-        font-size: 19px;
-        color: #ffc766;
-      }
-
-      .online-voice-card p {
+        max-width: 440px;
         margin: 0;
-        color: #d0d9e9;
-        font-size: 14px;
-        line-height: 1.6;
+        color: var(--voice-dim);
+        font-size: 15px; line-height: 1.55;
+      }
+      .online-participant-count {
+        display: inline-flex; align-items: center; gap: 8px;
+        margin-top: 2px;
+        padding: 8px 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        color: #d1fae5;
+        background: var(--voice-glass);
+        font-size: 13.5px; font-weight: 600;
+      }
+      .online-participant-count span { color: #fff; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+      .online-media-stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid var(--voice-line);
+        border-radius: 28px;
+        background:
+          radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
+          linear-gradient(160deg, rgba(12, 38, 36, 0.9), rgba(4, 12, 28, 0.96));
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+      .online-media-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 190px;
+        padding: 24px 16px;
+        border: 1px dashed rgba(52, 211, 153, 0.3);
+        border-radius: 20px;
+        background: rgba(2, 9, 29, 0.45);
+        text-align: center;
+      }
+      .online-media-emoji { font-size: 44px; line-height: 1; }
+      .online-media-placeholder p { margin: 0; color: #d1fae5; font-size: 15px; font-weight: 600; }
+      .online-media-audio-status {
+        max-width: 100%;
+        padding: 8px 14px;
+        border: 1px solid rgba(52, 211, 153, 0.2);
+        border-radius: 999px;
+        color: #6ee7b7;
+        background: var(--voice-soft);
+        font-size: 12.5px; line-height: 1.4;
       }
 
+      .online-participants {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+        gap: 12px;
+      }
+      .online-person-bubble {
+        position: relative;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.045);
+        transition: border-color 200ms ease, background 200ms ease;
+      }
+      .online-person-bubble:has(.online-person-speaking) {
+        border-color: rgba(52, 211, 153, 0.55);
+        background: rgba(16, 185, 129, 0.1);
+      }
+      .online-person-avatar {
+        width: 60px; height: 60px;
+        display: grid; place-items: center;
+        border: 2px solid rgba(52, 211, 153, 0.55);
+        border-radius: 50%;
+        font-size: 30px; line-height: 1;
+        background: linear-gradient(145deg, #123b32, #0b1728);
+      }
+      .online-person-name {
+        max-width: 100%;
+        overflow: hidden;
+        color: #f4f8ff;
+        font-size: 13px; font-weight: 700;
+        text-align: center; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .online-person-online-dot {
+        position: absolute; top: 12px; right: 12px;
+        width: 10px; height: 10px;
+        border: 2px solid #0a1a24;
+        border-radius: 50%;
+        background: var(--voice);
+        box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
+      }
+      .online-person-speaking {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 9px;
+        border: 1px solid rgba(52, 211, 153, 0.25);
+        border-radius: 999px;
+        color: var(--voice);
+        background: rgba(16, 185, 129, 0.15);
+        font-size: 11px; font-weight: 700;
+        animation: online-speaking-pulse 1.5s infinite;
+      }
+
+      .online-stage-actions { display: flex; flex-direction: column; align-items: center; }
+      .online-join-button {
+        width: 100%; max-width: 340px; min-height: 56px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        padding: 0 24px;
+        border: 0;
+        border-radius: 999px;
+        color: #03231a;
+        background: linear-gradient(135deg, #34d399, #10b981);
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.35);
+        font-size: 16px; font-weight: 800; letter-spacing: 0.2px;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+      }
+      .online-join-button:hover { box-shadow: 0 14px 38px rgba(16, 185, 129, 0.5); filter: brightness(1.06); }
+      .online-join-button:active { transform: scale(0.97); }
+
+      .online-mic-controls { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .online-mic-status {
+        width: 36px; height: 36px;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 18px; line-height: 1;
+      }
+      .online-mic-button {
+        width: 76px; height: 76px;
+        display: grid; place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(145deg, #10b981, #047857);
+        box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.15), 0 12px 30px rgba(16, 185, 129, 0.4);
+        font-size: 30px; line-height: 1;
+        cursor: pointer;
+        transition: transform 180ms ease, box-shadow 180ms ease;
+      }
+      .online-mic-button:hover { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.2), 0 14px 36px rgba(16, 185, 129, 0.5); }
+      .online-mic-button:active { transform: scale(0.96); }
+      .online-mic-controls p { margin: 0; color: #a7f3d0; font-size: 13.5px; font-weight: 600; }
+      .online-leave-button {
+        min-height: 44px;
+        padding: 0 20px;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        border-radius: 999px;
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.1);
+        font-size: 14px; font-weight: 700;
+        cursor: pointer;
+        transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      }
+      .online-leave-button:hover { background: rgba(239, 68, 68, 0.22); border-color: rgba(248, 113, 113, 0.6); transform: translateY(-1px); }
+
+      .online-voice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+      .online-voice-card {
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 20px;
+        background: linear-gradient(160deg, rgba(23, 37, 65, 0.9), rgba(12, 21, 41, 0.9));
+      }
+      .online-voice-card h2 { margin: 0 0 6px; color: #f4f8ff; font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+      .online-voice-card p { margin: 0; color: var(--voice-dim); font-size: 14px; line-height: 1.55; }
+
+      @keyframes online-live-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
+        70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+      }
+      @keyframes online-speaking-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
+        70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+      }
+
+      @media (min-width: 700px) {
+        .online-voice-page { padding-top: 40px; gap: 28px; }
+        .online-media-stage { padding: 24px; gap: 20px; }
+        .online-media-placeholder { min-height: 220px; }
+        .online-participants { gap: 14px; }
+      }
+      @media (max-width: 380px) {
+        .online-voice-page { padding-left: 12px; padding-right: 12px; }
+        .online-media-stage { padding: 12px; border-radius: 24px; }
+        .online-person-avatar { width: 52px; height: 52px; font-size: 26px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .online-live-dot, .online-person-speaking { animation: none; }
+        .online-voice-page * { transition-duration: 0.01ms !important; }
+      }
 
     `}</style>
   );
