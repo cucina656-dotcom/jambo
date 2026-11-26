@@ -1726,6 +1726,7 @@ const FeedSkeleton = memo(function FeedSkeleton() {
 FeedSkeleton.displayName = "FeedSkeleton";
 
  function OnlineVoiceLanding() {
+  const [isJoined, setIsJoined] = useState(false);
   return (
     <section className="online-voice-page">
       <div className="online-voice-header">
@@ -1770,44 +1771,65 @@ FeedSkeleton.displayName = "FeedSkeleton";
     <span className="online-person-name">Sarah</span>
     <span className="online-person-online-dot"></span>
   </div>
+
+{!isJoined && (
+  <button
+    className="online-join-button"
+    onClick={() => setIsJoined(true)}
+  >
+    🎙️ Join Conversation
+  </button>
+)}
+
+{isJoined && (
   <div className="online-mic-controls">
     <span className="online-mic-status">
-  🔇
-</span>
-  <button className="online-mic-button">
-    🎙️
-  </button>
- <p>Microphone is off</p>
-  <button className="online-leave-button">
-  ✕ Leave conversation
-</button>
-</div>
-</div>
-</div>
-  👥 <span>12</span> people online
-</div>
-  <span className="online-live-dot"></span>
-  LIVE CONVERSATION
-</div>
-        <p>Join the live conversation and talk with people around the world.</p>
-      </div>
+      🔇
+    </span>
 
-      <div className="online-voice-card">
-        <h2>🌍 Live Conversation</h2>
-        <p>Everyone can talk and listen together.</p>
-      </div>
+    <button className="online-mic-button">
+      🎙️
+    </button>
 
-      <div className="online-voice-card">
-        <h2>🎵 Music & Video</h2>
-        <p>Media plays when nobody is talking.</p>
-      </div>
+    <p>Microphone is off</p>
 
-      <div className="online-voice-card">
-        <h2>🎙️ Microphone</h2>
-        <p>Mute or unmute your microphone.</p>
-      </div>
-    </section>
-  );
+    <button
+      className="online-leave-button"
+      onClick={() => setIsJoined(false)}
+    >
+      ✕ Leave conversation
+    </button>
+  </div>
+)}
+</div>
+</div>
+
+👥 <span>12</span> people online
+</div>
+
+<span className="online-live-dot"></span>
+LIVE CONVERSATION
+</div>
+
+<p>Join the live conversation and talk with people around the world.</p>
+</div>
+
+<div className="online-voice-card">
+  <h2>🌍 Live Conversation</h2>
+  <p>Everyone can talk and listen together.</p>
+</div>
+
+<div className="online-voice-card">
+  <h2>🎵 Music & Video</h2>
+  <p>Media plays when nobody is talking.</p>
+</div>
+
+<div className="online-voice-card">
+  <h2>🎙️ Microphone</h2>
+  <p>Mute or unmute your microphone.</p>
+</div>
+</section>
+);
 }
  
 
@@ -4765,6 +4787,34 @@ function HomeStylesInner() {
   color: #a7f3d0;
   font-size: 13px;
   font-weight: 600;
+}
+
+.online-join-button {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 20px auto;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #10b981, #047857);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.online-join-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
+  filter: brightness(1.1);
+}
+
+.online-join-button:active {
+  transform: scale(0.97);
 }
 
 .online-leave-button {
