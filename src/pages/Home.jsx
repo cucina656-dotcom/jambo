@@ -4630,7 +4630,7 @@ function HomeStylesInner() {
 
 .online-media-placeholder {
   position: relative;
-  min-height: 300px;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -4800,7 +4800,7 @@ function HomeStylesInner() {
   }
 
   .online-media-stage {
-    min-height: 500px;
+    min-height: auto;
     padding: 12px;
     border-radius: 22px;
   }
@@ -4810,15 +4810,33 @@ function HomeStylesInner() {
     font-size: 38px;
   }
 
-  .online-participants {
-    gap: 12px;
-    padding: 12px;
-  }
+ .online-participants {
+  position: relative;
+  display: grid;
+ grid-template-columns: repeat(2, minmax(0, 140px));
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+  width: 100%;
+}
 
   .online-person-bubble {
-    padding: 8px;
-    border-radius: 16px;
-  }
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 16px;
+  background: rgba(8, 20, 35, 0.85);
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  width: 100%;
+  max-width: 140px;
+}
 
   .online-person-avatar {
     width: 54px;
