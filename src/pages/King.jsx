@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const TYPES = [
   ["love", "Meet Someone", "Love profiles and matching"],
   ["walk", "Walk Together", "Walks and people interested"],
   ["money", "Make Money Together", "Missions and Mission Rooms"],
+  ["voice", "Open Conversation", "Live voice room: remove, block and delete visitors"],
 ];
 const ITEM_STATUSES = ["active", "paused", "matched", "closed", "hidden"];
 const ROOM_STATUSES = ["team_forming", "talking", "ready_to_meet", "meeting_planned", "closed"];
@@ -70,6 +71,239 @@ function DataRows({ data }) {
   );
 }
 
+const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : "-");
+const BLOCK_DURATIONS = [
+  ["", "Permanent"],
+  ["1", "1 hour"],
+  ["24", "24 hours"],
+  ["168", "7 days"],
+  ["720", "30 days"],
+];
+const KIND_LABEL = { visitor: "device", phone: "phone number", network: "network" };
+
+function VoiceAvatar({ url, flag }) {
+  return url ? (
+    <img src={url} alt="" className="vAvatar" />
+  ) : (
+    <span className="vAvatar vFlag">{flag || "?"}</span>
+  );
+}
+
+function VoiceBlockedNote({ blocked }) {
+  if (!blocked) return null;
+  return (
+    <div className="vBlocked">
+      <b>Blocked</b>
+      {" "}
+      ({(blocked.kinds || []).map((k) => KIND_LABEL[k] || k).join(" + ")}){" "}
+      {blocked.expires_at ? `until ${fmtTime(blocked.expires_at)}` : "permanently"}
+      {blocked.reason ? ` - ${blocked.reason}` : ""}
+    </div>
+  );
+}
+
+function VoiceModeration({ voice, filter, setFilter, search, busy, onAct }) {
+  const query = search.trim().toLowerCase();
+  const blocks = (voice.blocks || []).filter(
+    (b) =>
+      !query ||
+      [b.username, b.phone].some((v) => String(v || "").toLowerCase().includes(query))
+  );
+  const online = voice.room?.count ?? 0;
+  const tabs = [
+    ["all", "All visitors"],
+    ["online", `In room (${online})`],
+    ["blocked", `Blocked (${voice.blockedTotal || 0})`],
+  ];
+
+  return (
+    <section className="voiceDesk">
+      <div className="vHead">
+        <div>
+          <h3>Open Conversation moderation</h3>
+          <p>
+            {voice.room?.configured === false
+              ? "Voice room is not configured yet."
+              : voice.room?.live_ok === false
+              ? "Could not reach the live room; online status may be out of date."
+              : `${online} ${online === 1 ? "person is" : "people are"} in the room right now.`}
+          </p>
+        </div>
+        <div className="vTabs">
+          {tabs.map(([key, label]) => (
+            <button
+              key={key}
+              className={filter === key ? "primary" : ""}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="vRules">
+        <b>Remove</b> only kicks someone out of the live room. <b>Block</b> removes them and stops them
+        rejoining from the same device or phone number. <b>Delete</b> erases their stored profile
+        (name, phone, photo) and does not unblock anyone.
+      </p>
+
+      {filter === "blocked" ? (
+        <div className="vList">
+          {!busy && !blocks.length && <div className="empty">No blocked visitors.</div>}
+          {blocks.map((b) => (
+            <article className="card vCard" key={b.block_id}>
+              <div className="person">
+                {b.profile_deleted ? <span className="vAvatar vFlag">?</span> : <VoiceAvatar url={b.avatar_url} flag={b.flag} />}
+                <div>
+                  <h3>{b.profile_deleted ? "Deleted profile" : b.username || "Unnamed"}</h3>
+                  <p>{b.profile_deleted ? "Profile information was deleted" : b.phone}</p>
+                </div>
+                <span className="status hidden">Blocked</span>
+              </div>
+              <VoiceBlockedNote blocked={b} />
+              <div className="vMeta"><span>Blocked on</span><b>{fmtTime(b.created_at)}</b></div>
+              {b.visitor_id && <div className="vMeta"><span>Visitor ID</span><code className="vid">{b.visitor_id}</code></div>}
+              <div className="actions">
+                <button className="primary" disabled={busy || !b.visitor_id} onClick={() => onAct("unblock", { ...b, username: b.username || "this visitor" })}>
+                  Unblock
+                </button>
+                {!b.profile_deleted && (
+                  <button className="danger" disabled={busy} onClick={() => onAct("delete", b)}>Delete</button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="vList">
+          {!busy && !(voice.visitors || []).length && (
+            <div className="empty">{query ? "No visitors match your search." : "No visitors yet."}</div>
+          )}
+          {(voice.visitors || []).map((v) => (
+            <article className="card vCard" key={v.visitor_id || v.identity}>
+              <div className="person">
+                <VoiceAvatar url={v.avatar_url} flag={v.flag} />
+                <div>
+                  <h3>{v.username || "Unnamed"}</h3>
+                  <p>{v.phone || "No stored phone"} {v.flag ? ` ${v.flag}` : ""}</p>
+                </div>
+                <span className={`status ${v.blocked ? "hidden" : v.online ? "active" : ""}`}>
+                  {v.blocked ? "Blocked" : v.online ? (v.mic_on ? "In room - mic on" : "In room") : "Offline"}
+                </span>
+              </div>
+              <VoiceBlockedNote blocked={v.blocked} />
+              <div className="vMeta"><span>Visitor ID</span><code className="vid">{v.visitor_id || "not registered"}</code></div>
+              <div className="vMeta"><span>{v.online ? "Joined room" : "Last seen"}</span><b>{fmtTime(v.online ? v.joined_at : v.last_seen_at)}</b></div>
+              <div className="vMeta"><span>First seen / joins</span><b>{fmtTime(v.first_seen_at)} / {v.join_count}</b></div>
+              {v.network_shared_with > 0 && (
+                <div className="vMeta"><span>Network</span><b>shared with {v.network_shared_with} other visitor{v.network_shared_with === 1 ? "" : "s"}</b></div>
+              )}
+              <div className="actions">
+                <button disabled={busy || !v.online} onClick={() => onAct("remove", v)}>Remove</button>
+                {v.blocked ? (
+                  <button className="primary" disabled={busy || !v.visitor_id} onClick={() => onAct("unblock", v)}>Unblock</button>
+                ) : (
+                  <button className="danger" disabled={busy || !v.visitor_id} onClick={() => onAct("block", v)}>Block</button>
+                )}
+                <button className="danger" disabled={busy || !v.visitor_id} onClick={() => onAct("delete", v)}>Delete</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VoiceDialog({ dialog, form, setForm, busy, error, onCancel, onConfirm }) {
+  const v = dialog.visitor;
+  const name = v.username || "this visitor";
+  const expected = (v.username || "delete").trim().toLowerCase();
+  const confirmOk = form.confirm.trim().toLowerCase() === expected;
+
+  return (
+    <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
+      <section className="panel vDialog" role="dialog" aria-modal="true">
+        <button className="close" onClick={onCancel} disabled={busy}>X</button>
+        <div className="eyebrow">OPEN CONVERSATION</div>
+
+        {dialog.kind === "remove" && (
+          <>
+            <h2>Remove {name} from the room?</h2>
+            <p className="muted">They are disconnected now but can rejoin straight away. Use Block to stop that.</p>
+          </>
+        )}
+
+        {dialog.kind === "unblock" && (
+          <>
+            <h2>Unblock {name}?</h2>
+            <p className="muted">They will be able to join the conversation again from their device and phone number.</p>
+          </>
+        )}
+
+        {dialog.kind === "block" && (
+          <>
+            <h2>Block {name}</h2>
+            <p className="muted">
+              They are removed from the live room now and cannot rejoin from the same device or phone number while blocked.
+            </p>
+            <label className="vField">Reason (only King sees this)
+              <input value={form.reason} maxLength={200} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. harassing other participants" />
+            </label>
+            <label className="vField">Duration
+              <select value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })}>
+                {BLOCK_DURATIONS.map(([val, label]) => <option key={label} value={val}>{label}</option>)}
+              </select>
+            </label>
+            <label className="check vNetwork">
+              <input type="checkbox" checked={form.network} onChange={(e) => setForm({ ...form, network: e.target.checked })} />
+              <span>
+                Also block this network (IP address) for {form.hours ? "the same period" : "24 hours"}.
+                <small>
+                  Careful: other people on the same Wi-Fi, home or workplace will be blocked too.
+                  {v.network_shared_with > 0 ? ` ${v.network_shared_with} other visitor${v.network_shared_with === 1 ? " has" : "s have"} joined from this network.` : ""}
+                </small>
+              </span>
+            </label>
+          </>
+        )}
+
+        {dialog.kind === "delete" && (
+          <>
+            <h2>Delete {name}'s stored information?</h2>
+            <p className="muted">
+              This permanently erases their username, phone number and profile photo from Open Conversation.
+              It is not a block: {v.blocked || dialog.visitor.kinds ? "their active block stays in force." : "they can join again later with a new profile."}
+            </p>
+            <label className="vField">Type <b>{v.username || "delete"}</b> to confirm
+              <input value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} placeholder={v.username || "delete"} autoFocus />
+            </label>
+            {(v.blocked || v.kinds) && (
+              <label className="check">
+                <input type="checkbox" checked={form.dropBlock} onChange={(e) => setForm({ ...form, dropBlock: e.target.checked })} />
+                Also lift their block (not recommended)
+              </label>
+            )}
+          </>
+        )}
+
+        {error && <div className="alert error">{error}</div>}
+        <div className="actions vDialogActions">
+          <button onClick={onCancel} disabled={busy}>Cancel</button>
+          <button
+            className={dialog.kind === "unblock" ? "primary" : "danger"}
+            disabled={busy || (dialog.kind === "delete" && !confirmOk)}
+            onClick={onConfirm}
+          >
+            {busy ? "Working..." : { remove: "Remove from room", block: "Block visitor", unblock: "Unblock", delete: "Delete permanently" }[dialog.kind]}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function King() {
   const [pin, setPin] = useState("");
   const [open, setOpen] = useState(false);
@@ -84,6 +318,10 @@ export default function King() {
   const [walkPanel, setWalkPanel] = useState(null);
   const [roomPanel, setRoomPanel] = useState(null);
   const [loveMatches, setLoveMatches] = useState([]);
+  const [voice, setVoice] = useState({ visitors: [], blocks: [], room: null, blockedTotal: 0 });
+  const [voiceFilter, setVoiceFilter] = useState("all");
+  const [voiceDialog, setVoiceDialog] = useState(null);
+  const [voiceForm, setVoiceForm] = useState({ reason: "", hours: "", network: false, confirm: "", dropBlock: false });
   const [matchForm, setMatchForm] = useState({
     a: "",
     b: "",
@@ -117,6 +355,21 @@ export default function King() {
     setNotice("");
 
     try {
+      if (nextType === "voice") {
+        const query = type === "voice" ? search : "";
+        if (type !== "voice") setSearch("");
+        const [summary, fresh] = await Promise.all([
+          kingApi("/api/king/overview", pin),
+          loadVoice(voiceFilter, query),
+        ]);
+        setOverview(summary);
+        setItems([]);
+        setVoice((current) => ({ ...current, ...fresh }));
+        setType("voice");
+        setOpen(true);
+        return;
+      }
+
       const jobs = [
         kingApi("/api/king/overview", pin),
         kingApi(
@@ -125,12 +378,24 @@ export default function King() {
         ),
       ];
 
-      if (nextType === "love") {
-        jobs.push(kingApi("/api/king/love/matches", pin));
+      jobs.push(
+        nextType === "love"
+          ? kingApi("/api/king/love/matches", pin)
+          : Promise.resolve(null)
+      );
+      jobs.push(
+        kingApi("/api/king/voice/visitors?limit=1", pin).catch(() => null)
+      );
+
+      const [summary, list, matches, voiceSummary] = await Promise.all(jobs);
+
+      if (voiceSummary) {
+        setVoice((current) => ({
+          ...current,
+          room: voiceSummary.room,
+          blockedTotal: voiceSummary.blocked_total || 0,
+        }));
       }
-
-      const [summary, list, matches] = await Promise.all(jobs);
-
       setOverview(summary);
       setItems(list.items || []);
       setDrafts(
@@ -159,6 +424,89 @@ export default function King() {
       setBusy(false);
     }
   }
+
+  async function loadVoice(filter = voiceFilter, query = search) {
+    if (filter === "blocked") {
+      const data = await kingApi("/api/king/voice/blocks", pin);
+      return { blocks: data.blocks || [] };
+    }
+    const data = await kingApi(
+      `/api/king/voice/visitors?status=${filter}&q=${encodeURIComponent(query.trim())}&limit=200`,
+      pin
+    );
+    return {
+      visitors: data.visitors || [],
+      room: data.room || null,
+      blockedTotal: data.blocked_total || 0,
+    };
+  }
+
+  async function refreshVoice() {
+    const fresh = await loadVoice(voiceFilter, search);
+    setVoice((current) => ({ ...current, ...fresh }));
+  }
+
+  function openVoiceDialog(kind, visitor) {
+    setError("");
+    setNotice("");
+    setVoiceForm({ reason: "", hours: "", network: false, confirm: "", dropBlock: false });
+    setVoiceDialog({ kind, visitor });
+  }
+
+  async function confirmVoiceDialog() {
+    if (!voiceDialog) return;
+    const { kind, visitor } = voiceDialog;
+    const body = visitor.visitor_id
+      ? { visitor_id: visitor.visitor_id }
+      : { identity: visitor.identity };
+    if (kind === "block") {
+      body.reason = voiceForm.reason;
+      body.hours = voiceForm.hours ? Number(voiceForm.hours) : null;
+      body.block_network = voiceForm.network;
+    }
+    if (kind === "delete") {
+      body.confirm = voiceForm.confirm;
+      body.keep_block = !voiceForm.dropBlock;
+    }
+
+    setBusy(true);
+    setError("");
+
+    try {
+      const data = await kingApi(`/api/king/voice/${kind}`, pin, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setVoiceDialog(null);
+      await refreshVoice();
+      setNotice(data.message || "Done.");
+    } catch (err) {
+      setError(err.message || "Action failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Live status: refresh every 10s while the Open Conversation tab is showing.
+  useEffect(() => {
+    if (!open || type !== "voice") return undefined;
+    const timer = setInterval(() => {
+      if (voiceDialog) return;
+      refreshVoice().catch(() => {});
+    }, 10000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, type, voiceFilter, search, voiceDialog, pin]);
+
+  // Server-side search (username / phone / visitor ID) and filter changes.
+  useEffect(() => {
+    if (!open || type !== "voice") return undefined;
+    const timer = setTimeout(() => {
+      refreshVoice().catch((err) => setError(err.message || "Could not load visitors."));
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, voiceFilter]);
 
   const setDraft = (id, key, value) => {
     setDrafts((current) => ({
@@ -413,8 +761,14 @@ export default function King() {
             onClick={() => load(key)}
           >
             <span>{label}</span>
-            <strong>{count(overview, key)}</strong>
-            <small>{overview?.counts?.[key]?.active || 0} active</small>
+            <strong>
+              {key === "voice" ? voice.room?.count ?? "-" : count(overview, key)}
+            </strong>
+            <small>
+              {key === "voice"
+                ? `in room now | ${voice.blockedTotal || 0} blocked`
+                : `${overview?.counts?.[key]?.active || 0} active`}
+            </small>
           </button>
         ))}
 
@@ -444,6 +798,10 @@ export default function King() {
           <strong>Make Money:</strong> open Mission Room to see
           members/messages and move the room progress.
         </span>
+        <span>
+          <strong>Open Conversation:</strong> remove or block people who
+          misbehave in the live voice room; Delete erases their stored profile.
+        </span>
       </section>
 
       <section className="toolbar">
@@ -455,12 +813,27 @@ export default function King() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search name, location, phone..."
+          placeholder={
+            type === "voice"
+              ? "Search username or phone..."
+              : "Search name, location, phone..."
+          }
         />
       </section>
 
       {error && <div className="alert error">{error}</div>}
       {notice && <div className="alert notice">{notice}</div>}
+
+      {type === "voice" && (
+        <VoiceModeration
+          voice={voice}
+          filter={voiceFilter}
+          setFilter={setVoiceFilter}
+          search={search}
+          busy={busy}
+          onAct={openVoiceDialog}
+        />
+      )}
 
       {type === "love" && (
         <section className="matchDesk">
@@ -594,6 +967,7 @@ export default function King() {
         </section>
       )}
 
+      {type !== "voice" && (
       <section className="grid">
         {!busy && !filtered.length && (
           <div className="empty">Nothing here yet.</div>
@@ -757,6 +1131,19 @@ export default function King() {
           );
         })}
       </section>
+      )}
+
+      {voiceDialog && (
+        <VoiceDialog
+          dialog={voiceDialog}
+          form={voiceForm}
+          setForm={setVoiceForm}
+          busy={busy}
+          error={error}
+          onCancel={() => setVoiceDialog(null)}
+          onConfirm={confirmVoiceDialog}
+        />
+      )}
 
       {walkPanel && (
         <div
@@ -924,7 +1311,7 @@ const CSS = `
 .king .danger{background:#2a1117;border-color:#6b2632;color:#ffb9c3}
 .topbar{max-width:1500px;margin:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding-bottom:24px}
 .headBtns{display:flex;gap:10px}
-.stats{max-width:1500px;margin:0 auto 24px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.stats{max-width:1500px;margin:0 auto 24px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
 .stat{min-height:112px!important;text-align:left!important;padding:18px!important;background:#0b111d!important;border:1px solid #202b3d!important;border-radius:16px!important}
 .stat span,.stat small{display:block;color:#9aa8ba}
 .stat strong{display:block;font-size:34px;margin:7px 0;color:white}
@@ -987,13 +1374,39 @@ const CSS = `
 .messages>div{background:#101927;padding:11px;border-radius:10px}
 .messages p{margin:5px 0}
 .messages small{color:#7f8ea3}
+.voiceDesk{max-width:1500px;margin:0 auto 20px}
+.vHead{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.vHead h3{margin:0 0 4px;font-size:20px}
+.vHead p{margin:0;color:#9aa8ba}
+.vTabs{display:flex;gap:8px;flex-wrap:wrap}
+.vRules{margin:0 0 16px;padding:12px 14px;border:1px solid #24344d;border-radius:12px;background:#091322;color:#aebed2;font-size:13px;line-height:1.5}
+.vRules b{color:#d9e8ff}
+.vList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.vCard{display:grid;gap:10px}
+.vAvatar{width:58px;height:58px;border-radius:50%;object-fit:cover;background:#101827;border:2px solid #223049}
+.vFlag{display:grid;place-items:center;font-size:30px;line-height:1}
+.vBlocked{padding:9px 11px;border-radius:10px;background:#2b1820;border:1px solid #6b2632;color:#ffc2cb;font-size:13px}
+.vMeta{display:grid;grid-template-columns:140px 1fr;gap:10px;font-size:13px;align-items:center}
+.vMeta span{color:#8f9caf}
+.vMeta b{font-weight:600;word-break:break-word}
+.vid{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#bcd0ee;word-break:break-all;user-select:all}
+.vDialog{width:min(520px,96vw)}
+.vDialog h2{margin:6px 0 8px;font-size:22px;padding-right:36px}
+.vField{display:grid;gap:6px;margin:14px 0 0;color:#9aa8ba;font-size:12px;font-weight:700}
+.vNetwork{align-items:flex-start;margin-top:16px;padding:12px;border:1px solid #4a3b1a;border-radius:10px;background:#1a1608}
+.vNetwork input{margin-top:3px}
+.vNetwork small{display:block;margin-top:4px;color:#e6c46e}
+.vDialogActions{margin-top:18px;justify-content:flex-end}
 @media(max-width:1050px){
+  .vList{grid-template-columns:1fr}
   .stats{grid-template-columns:repeat(2,1fr)}
   .grid{grid-template-columns:1fr}
   .matchDesk form{grid-template-columns:1fr 1fr}
   .matchDesk form .primary{grid-column:1/-1}
 }
 @media(max-width:700px){
+  .vMeta{grid-template-columns:1fr;gap:2px}
+  .vHead{align-items:flex-start}
   .king{padding:16px}
   .topbar{align-items:flex-start}
   .topbar h1{font-size:30px}
