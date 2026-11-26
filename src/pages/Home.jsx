@@ -47,6 +47,22 @@ import {
   Trash2,
 } from "lucide-react";
 
+import countries from "world-countries";
+
+const ALL_COUNTRIES = countries
+  .filter((country) => country.cca2 && country.name?.common)
+  .map((country) => ({
+    code: country.cca2,
+    name: country.name.common,
+    flag: country.cca2
+      .toUpperCase()
+      .replace(/[A-Z]/g, (letter) =>
+        String.fromCodePoint(127397 + letter.charCodeAt(0))
+      ),
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const DEFAULT_VIDEO =
   "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
@@ -128,6 +144,7 @@ const noop = () => {};
 
 const CATEGORY_TABS = [
   { key: "time-market", label: "Trendz", emoji: "📈" },
+  { key: "online", label: "Online", emoji: "🎙️" },
   { key: "social-life", label: "Bae & Bae", emoji: "❤️" },
 ];
 
@@ -143,14 +160,54 @@ const CATEGORY_META = {
 };
 
 const INFO_CONTENT = {
-  about: {
+   about: {
     title: "About Gwamo",
-    eyebrow: "Your time has value.",
-    body: "Gwamo is a marketplace built around the value of human time. It helps people turn skills, experience, availability and useful abilities into real connections and opportunities.",
+    eyebrow: "Your Voice. Your Story. Your Value.",
+
+    body:
+      "Gwamo is a social platform built around people, connections, creativity, and opportunities. We believe every person has something valuable to offer — a story, an idea, a talent, a relationship, a skill, or simply their time. Gwamo brings people together to express themselves, discover others, build relationships, and create opportunities.",
+
     sections: [
-      { title: "Show your value", body: "Create a clear presence that shows who you are, what you can do and the value of your time." },
-      { title: "Get discovered", body: "Use the Gwamo feed to reach people looking for skills, services, support, collaboration or meaningful opportunities." },
-      { title: "Build trust", body: "Connect with real people and build confidence through Gwamo verification. Verified members are identified by a blue verification badge." },
+      {
+        title: "💬 Share Your Voice",
+        body:
+          "Have something to say? Share your thoughts, stories, photos, and videos. Let people discover your ideas, experiences, and perspective.",
+      },
+      {
+        title: "📈 Discover Trendz",
+        body:
+          "Explore what people are sharing, discover interesting stories, and connect with conversations happening around you.",
+      },
+      {
+        title: "❤️ Bae & Bae",
+        body:
+          "Explore meaningful connections, celebrate couples, discover romantic stories, and enjoy interactive relationship experiences.",
+      },
+      {
+        title: "🎵 Music & Entertainment",
+        body:
+          "Discover songs, creativity, and entertainment while connecting with people through shared experiences.",
+      },
+      {
+        title: "🌟 Discover Opportunities",
+        body:
+          "Everyone has something valuable to offer. Gwamo believes people's time, knowledge, talents, and abilities can create opportunities for others.",
+      },
+      {
+        title: "🌍 Our Vision",
+        body:
+          "Our vision is to build a platform where social connections and real-life opportunities meet. A place where people do more than scroll — they participate, express themselves, connect, and create value.",
+      },
+      {
+        title: "✨ Our Belief",
+        body:
+          "Every person has value. Every story deserves a voice. Every connection can create an opportunity. Every talent has potential. Every person's time matters.",
+      },
+      {
+        title: "Welcome to Gwamo",
+        body:
+          "Your voice matters. Your time matters. Your presence matters. Gwamo — Where People, Stories, Connections, and Opportunities Meet.",
+      },
     ],
   },
   help: {
@@ -1556,7 +1613,9 @@ function Home() {
   const emptySectionAction = activeCategory === "social-life" ? { label: "Ask for help", postType: "need" } : { label: "Create a post", postType: "offer" };
 
   let mainContent;
-  
+  if (activeCategory === "online") {
+  mainContent = <OnlineVoiceLanding />;
+} else
   if (activeCategory === "social-life") {
     mainContent = <SocialLifeLanding />;
   } else if (loading) {
@@ -1662,17 +1721,125 @@ function Home() {
 // SUB-COMPONENTS & MODALS
 // ==========================================
 const FeedSkeleton = memo(function FeedSkeleton() {
-  return (
-    <main className="home-feed" aria-hidden="true">
-      {[0, 1].map((key) => (
-        <div className="service-reel-card skeleton-card" key={key}>
-          <div className="skeleton-shimmer" />
-        </div>
-      ))}
-    </main>
-  );
+  return null;
 });
 FeedSkeleton.displayName = "FeedSkeleton";
+
+function OnlineVoiceLanding() {
+  const [isJoined, setIsJoined] = useState(false);
+  return (
+    <section className="online-voice-page">
+      <header className="online-voice-header">
+        <span className="online-voice-icon" aria-hidden="true">🎙️</span>
+
+        <div className="online-live-status">
+          <span className="online-live-dot"></span>
+          LIVE CONVERSATION
+        </div>
+
+        <h1>🌍 Open Conversation</h1>
+        <p>Join the live conversation and talk with people around the world.</p>
+
+        <div className="online-participant-count">
+          👥 <span>12</span> people online
+        </div>
+      </header>
+
+      <div className="online-media-stage">
+        <div className="online-media-placeholder">
+          <span className="online-media-emoji" aria-hidden="true">🎵</span>
+          <p>Music or video will appear here</p>
+          <div className="online-media-audio-status">
+            🔊 Media audio plays when everyone is silent
+          </div>
+        </div>
+
+        <div className="online-participants">
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👨🏾</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Alex</span>
+            <span className="online-person-speaking">
+              🔊 Speaking
+            </span>
+          </div>
+
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👩🏽</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Maya</span>
+          </div>
+
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👨🏻</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">John</span>
+          </div>
+
+          <div className="online-person-bubble">
+            <span className="online-person-avatar">👩🏾</span>
+            <span className="online-person-online-dot"></span>
+            <span className="online-person-name">Sarah</span>
+          </div>
+        </div>
+
+        <div className="online-stage-actions">
+          {!isJoined && (
+            <button
+              type="button"
+              className="online-join-button"
+              onClick={() => setIsJoined(true)}
+            >
+              🎙️ Join Conversation
+            </button>
+          )}
+
+          {isJoined && (
+            <div className="online-mic-controls">
+              <span className="online-mic-status">
+                🔇
+              </span>
+
+              <button type="button" className="online-mic-button">
+                🎙️
+              </button>
+
+              <p>Microphone is off</p>
+
+              <button
+                type="button"
+                className="online-leave-button"
+                onClick={() => setIsJoined(false)}
+              >
+                ✕ Leave conversation
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="online-voice-cards">
+        <div className="online-voice-card">
+          <h2>🌍 Live Conversation</h2>
+          <p>Everyone can talk and listen together.</p>
+        </div>
+
+        <div className="online-voice-card">
+          <h2>🎵 Music & Video</h2>
+          <p>Media plays when nobody is talking.</p>
+        </div>
+
+        <div className="online-voice-card">
+          <h2>🎙️ Microphone</h2>
+          <p>Mute or unmute your microphone.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+ 
+
+ 
 
 const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, onCreatePost, unreadCount, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -1772,7 +1939,7 @@ const ServicePost = memo(function ServicePost({
   const isVideo = mediaType === "video" || (!mediaType && isDirectVideoUrl(mediaUrl));
   const isEmbed = mediaType === "embed" || (!isImage && !isVideo);
   const title = String(post.service_name || post.service_title || post.title || "").trim();
-  const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "").trim();
+  const description = String(post.service_description || post.description || post.work_description || post.subtitle || post.services_offered || "") .replace(/^\s*Available:.*$/gim, "").trim();
   const incomingComments = Array.isArray(post.comments) ? post.comments : Array.isArray(post.recent_comments) ? post.recent_comments : Array.isArray(post.comment_list) ? post.comment_list : [];
   const [comments, setComments] = useState(incomingComments);
   const [commentIndex, setCommentIndex] = useState(0);
@@ -1895,14 +2062,15 @@ const ServicePost = memo(function ServicePost({
           aria-expanded={replyOpen}
         >
           <span className="social-reaction-emoji" aria-hidden="true">✨</span>
-          <span>{replyOpen ? "Close Social Feedback" : "Social Feedback"}</span>
+          <span>{replyOpen ? "Close Social Feedback" : commentCount > 0 ? "Social Feedback" : "Add feedback"}</span>
           {commentCount > 0 && <small>{formatCount(commentCount)}</small>}
         </button>
-      </div>\n      </div>
+        </div>
+      </div>
       {(title || description) && (
         <div className="post-content-block">
-          {title && <h2 className="service-name">{title}</h2>}
-          {description && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 240))}{description.length > 240 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
+         {/[^\s.,;:!?\-_·•]/.test(title) && <h2 className="service-name">{title}</h2>}
+          {/[^\s.,;:!?\-_·•]/.test(description) && <p className={`post-description${expanded ? " is-expanded" : ""}`}>{renderDescriptionWithLinks(expanded ? description : makeDescriptionPreview(description, 140))}{description.length > 140 && <button type="button" className="tagline-toggle-button" onClick={() => setExpanded((value) => !value)}>{expanded ? " less" : " more"}</button>}</p>}
         </div>
       )}
 
@@ -2325,8 +2493,147 @@ const ServicePost = memo(function ServicePost({
             padding:0 14px!important;
           }
         }
+                  .home-post.service-reel-card{
+          padding:0!important;
+          margin:0!important;
+          background:transparent!important;
+          border:0!important;
+          box-shadow:none!important;
+          border-radius:0!important;
+        }
+        .home-post .post-media-frame{
+          width:100%!important;
+          padding:0!important;
+          margin:0!important;
+          background:transparent!important;
+          border:0!important;
+          box-shadow:none!important;
+          border-radius:0!important;
+        }
+          .home-post .post-media-frame .home-media,
+.home-post .post-media-frame video.home-media,
+.home-post .post-media-frame iframe.home-media{
+  object-fit:contain!important;
+  object-position:center center!important;
+}
+.home-post .post-replies-chat{
+  flex:0 0 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:8px 12px 10px!important;
+}
+.home-post .post-replies-chat .rotating-comment{
+  height:auto!important;
+  min-height:0!important;
+  padding:8px 10px!important;
+  gap:10px!important;
+  align-items:center!important;
+}
+.home-post .post-replies-chat .comment-avatar-zoom{
+  width:42px!important;
+  height:42px!important;
+  min-width:42px!important;
+  min-height:42px!important;
+  flex:0 0 42px!important;
+}
+.home-post .post-replies-chat .comment-copy p{
+  font-size:14px!important;
+  line-height:1.4!important;
+  margin:2px 0 0!important;
+}
+/* Facebook-style post: date, words, media, feedback row */
+.home-post.service-reel-card{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  content-visibility:visible!important;
+  border-bottom:8px solid rgba(255,255,255,.05)!important;
+}
+.home-page .home-feed{gap:0!important}
+.home-post .post-date-row{
+  order:0!important;
+  min-height:0!important;
+  padding:12px 14px 4px!important;
+  font-size:12px!important;
+  font-weight:500!important;
+  letter-spacing:0!important;
+  text-transform:none!important;
+  color:#8fa3c7!important;
+}
+.home-post .post-date-row svg{display:none!important}
+.home-post .post-content-block{
+  order:1!important;
+  max-height:none!important;
+  overflow:visible!important;
+  padding:2px 14px 12px!important;
+  text-align:left!important;
+}
+.home-post .service-name{
+  font-size:18px!important;
+  line-height:1.3!important;
+  margin:0 0 4px!important;
+  text-align:left!important;
+}
+.home-post .post-description{
+  display:block!important;
+  -webkit-line-clamp:unset!important;
+  overflow:visible!important;
+  max-height:none!important;
+  font-size:16px!important;
+  line-height:1.45!important;
+  text-align:left!important;
+  color:#f1f5ff!important;
+}
+.home-post .post-media-frame,
+.home-post .post-media-frame.is-portrait,
+.home-post .post-media-frame.is-landscape,
+.home-post .post-media-frame.is-square{
+  order:2!important;
+  flex:0 0 auto!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:auto!important;
+  background:transparent!important;
+}
+.home-post .post-media-frame img.home-media,
+.home-post .post-media-frame video.home-media,
+.home-post .post-media-frame iframe.home-media{
+  position:static!important;
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:180px!important;
+  max-width:100%!important;
+  max-height:75svh!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  background:#000!important;
+}
+.home-post .post-media-frame video.home-media{aspect-ratio:auto 16/9!important}
+.home-post .post-media-frame iframe.home-media{aspect-ratio:16/9!important}
+.home-post .post-media-frame .social-reaction-actions{
+  position:static!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:46px!important;
+  padding:0 14px!important;
+  justify-content:flex-start!important;
+  border-top:1px solid rgba(255,255,255,.08)!important;
+  background:transparent!important;
+}
+.home-post .post-replies-chat{order:3!important}
+.home-post .post-reply-chat-form{order:4!important}
+/* Remove top gap and hide the empty feedback message */
+.home-page .home-feed{padding-top:0!important}
+.home-post .reply-empty-state{display:none!important}
+.home-post .post-replies-chat:not(:has(.rotating-comment)){
+  display:none!important;
+}
+
       `}</style>
-      <section className="post-replies-chat" aria-label="Replies">
+      <section className="post-replies-chat" aria-label="Replies" hidden={!activeComment}>
         {activeComment ? (
           <div
             className="rotating-comment"
@@ -2377,15 +2684,19 @@ const ServicePost = memo(function ServicePost({
             <div className="reply-chat-step">
               <div className="reply-user-bubble">{replyName.trim()}</div>
               <div className="reply-bot-bubble">Nice to meet you. Which country are you from?</div>
-              <select aria-label="Your country" value={replyFlag} onChange={(event) => setReplyFlag(event.target.value)}>
-                <option value="🇷🇼">🇷🇼 Rwanda</option>
-                <option value="🇺🇬">🇺🇬 Uganda</option>
-                <option value="🇰🇪">🇰🇪 Kenya</option>
-                <option value="🇹🇿">🇹🇿 Tanzania</option>
-                <option value="🇧🇮">🇧🇮 Burundi</option>
-                <option value="🇨🇩">🇨🇩 DR Congo</option>
-                <option value="🌍">🌍 Other</option>
-              </select>
+             
+<select
+  aria-label="Your country"
+  value={replyFlag}
+  onChange={(event) => setReplyFlag(event.target.value)}
+>
+  {ALL_COUNTRIES.map((country) => (
+    <option key={country.code} value={country.flag}>
+      {country.flag} {country.name}
+    </option>
+  ))}
+</select>
+
               <div className="reply-chat-buttons">
                 <button type="button" className="reply-back-button" onClick={() => setReplyStep(0)}>Back</button>
                 <button type="button" onClick={() => setReplyStep(2)}>Continue <span>→</span></button>
@@ -4274,6 +4585,304 @@ function HomeStylesInner() {
         .post-comments-panel { padding: 10px 12px 12px; }
         .comment-avatar { width: 48px; height: 48px; flex-basis: 48px; }
       }
+        .home-feed{ padding-left:0!important; padding-right:0!important; }
+  
+      /* ------------------------------------------------------------------
+         MODERN SHELL POLISH (layout/visual only)
+         Frosted top bar + bottom nav. The blur lives on a pseudo-element so
+         the bar never becomes a containing block for the fixed dropdown
+         backdrop that sits inside it.
+         ------------------------------------------------------------------ */
+      .feedx-topbar { background: transparent; border-bottom: 0; isolation: isolate; }
+      .feedx-topbar::before {
+        content: "";
+        position: absolute; inset: 0; z-index: -1;
+        background: rgba(2, 9, 29, 0.74);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        -webkit-backdrop-filter: saturate(1.5) blur(18px);
+        backdrop-filter: saturate(1.5) blur(18px);
+        pointer-events: none;
+      }
+      .feedx-topbar-inner { width: min(100%, 760px); padding: 0 10px 0 16px; }
+      .topbar-icon-button, .menu-button { transition: background 160ms ease, transform 160ms ease; }
+      .topbar-icon-button:active, .menu-button:active { transform: scale(0.92); }
+
+      .bottom-nav {
+        background: rgba(2, 9, 29, 0.8);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        -webkit-backdrop-filter: saturate(1.5) blur(18px);
+        backdrop-filter: saturate(1.5) blur(18px);
+      }
+      .bottom-nav-scroll { width: min(100%, 520px); margin: 0 auto; padding: 6px 12px 4px; gap: 6px; }
+      .bottom-nav-item { min-height: 58px; gap: 3px; border-radius: 16px; -webkit-tap-highlight-color: transparent; }
+      .bottom-nav-icon { width: 60px; height: 32px; border-radius: 16px; font-size: 19px; }
+      .bottom-nav-item:active .bottom-nav-icon { transform: scale(0.94); }
+
+      /* ------------------------------------------------------------------
+         GWAMO LIVE VOICE
+         One clear vertical flow: header, stage (media, people, action),
+         then the info cards. No overlapping or absolutely positioned layers.
+         ------------------------------------------------------------------ */
+      .online-voice-page {
+        --voice: #34d399;
+        --voice-strong: #10b981;
+        --voice-soft: rgba(52, 211, 153, 0.12);
+        --voice-line: rgba(52, 211, 153, 0.28);
+        --voice-glass: rgba(255, 255, 255, 0.05);
+        --voice-dim: #a9b8d4;
+        width: 100%;
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 28px 16px calc(40px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        box-sizing: border-box;
+        overflow-x: clip;
+      }
+
+      .online-voice-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        text-align: center;
+      }
+      .online-voice-icon {
+        width: 72px; height: 72px;
+        display: grid; place-items: center;
+        border: 1px solid var(--voice-line);
+        border-radius: 24px;
+        font-size: 34px; line-height: 1;
+        background: linear-gradient(145deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.05));
+        box-shadow: 0 10px 40px rgba(16, 185, 129, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      }
+      .online-live-status {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 13px;
+        border: 1px solid var(--voice-line);
+        border-radius: 999px;
+        color: var(--voice);
+        background: var(--voice-soft);
+        font-size: 11.5px; font-weight: 800; letter-spacing: 0.12em;
+      }
+      .online-live-dot {
+        width: 8px; height: 8px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--voice);
+        animation: online-live-pulse 1.8s ease-out infinite;
+      }
+      .online-voice-header h1 {
+        margin: 2px 0 0;
+        color: #f4f8ff;
+        font-family: var(--font-display);
+        font-size: clamp(26px, 6.4vw, 36px);
+        font-weight: 800; line-height: 1.1; letter-spacing: -0.025em;
+      }
+      .online-voice-header p {
+        max-width: 440px;
+        margin: 0;
+        color: var(--voice-dim);
+        font-size: 15px; line-height: 1.55;
+      }
+      .online-participant-count {
+        display: inline-flex; align-items: center; gap: 8px;
+        margin-top: 2px;
+        padding: 8px 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        color: #d1fae5;
+        background: var(--voice-glass);
+        font-size: 13.5px; font-weight: 600;
+      }
+      .online-participant-count span { color: #fff; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+      .online-media-stage {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid var(--voice-line);
+        border-radius: 28px;
+        background:
+          radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
+          linear-gradient(160deg, rgba(12, 38, 36, 0.9), rgba(4, 12, 28, 0.96));
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+      .online-media-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 190px;
+        padding: 24px 16px;
+        border: 1px dashed rgba(52, 211, 153, 0.3);
+        border-radius: 20px;
+        background: rgba(2, 9, 29, 0.45);
+        text-align: center;
+      }
+      .online-media-emoji { font-size: 44px; line-height: 1; }
+      .online-media-placeholder p { margin: 0; color: #d1fae5; font-size: 15px; font-weight: 600; }
+      .online-media-audio-status {
+        max-width: 100%;
+        padding: 8px 14px;
+        border: 1px solid rgba(52, 211, 153, 0.2);
+        border-radius: 999px;
+        color: #6ee7b7;
+        background: var(--voice-soft);
+        font-size: 12.5px; line-height: 1.4;
+      }
+
+      .online-participants {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+        gap: 12px;
+      }
+      .online-person-bubble {
+        position: relative;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.045);
+        transition: border-color 200ms ease, background 200ms ease;
+      }
+      .online-person-bubble:has(.online-person-speaking) {
+        border-color: rgba(52, 211, 153, 0.55);
+        background: rgba(16, 185, 129, 0.1);
+      }
+      .online-person-avatar {
+        width: 60px; height: 60px;
+        display: grid; place-items: center;
+        border: 2px solid rgba(52, 211, 153, 0.55);
+        border-radius: 50%;
+        font-size: 30px; line-height: 1;
+        background: linear-gradient(145deg, #123b32, #0b1728);
+      }
+      .online-person-name {
+        max-width: 100%;
+        overflow: hidden;
+        color: #f4f8ff;
+        font-size: 13px; font-weight: 700;
+        text-align: center; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .online-person-online-dot {
+        position: absolute; top: 12px; right: 12px;
+        width: 10px; height: 10px;
+        border: 2px solid #0a1a24;
+        border-radius: 50%;
+        background: var(--voice);
+        box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
+      }
+      .online-person-speaking {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 9px;
+        border: 1px solid rgba(52, 211, 153, 0.25);
+        border-radius: 999px;
+        color: var(--voice);
+        background: rgba(16, 185, 129, 0.15);
+        font-size: 11px; font-weight: 700;
+        animation: online-speaking-pulse 1.5s infinite;
+      }
+
+      .online-stage-actions { display: flex; flex-direction: column; align-items: center; }
+      .online-join-button {
+        width: 100%; max-width: 340px; min-height: 56px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        padding: 0 24px;
+        border: 0;
+        border-radius: 999px;
+        color: #03231a;
+        background: linear-gradient(135deg, #34d399, #10b981);
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.35);
+        font-size: 16px; font-weight: 800; letter-spacing: 0.2px;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+      }
+      .online-join-button:hover { box-shadow: 0 14px 38px rgba(16, 185, 129, 0.5); filter: brightness(1.06); }
+      .online-join-button:active { transform: scale(0.97); }
+
+      .online-mic-controls { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .online-mic-status {
+        width: 36px; height: 36px;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 18px; line-height: 1;
+      }
+      .online-mic-button {
+        width: 76px; height: 76px;
+        display: grid; place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(145deg, #10b981, #047857);
+        box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.15), 0 12px 30px rgba(16, 185, 129, 0.4);
+        font-size: 30px; line-height: 1;
+        cursor: pointer;
+        transition: transform 180ms ease, box-shadow 180ms ease;
+      }
+      .online-mic-button:hover { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.2), 0 14px 36px rgba(16, 185, 129, 0.5); }
+      .online-mic-button:active { transform: scale(0.96); }
+      .online-mic-controls p { margin: 0; color: #a7f3d0; font-size: 13.5px; font-weight: 600; }
+      .online-leave-button {
+        min-height: 44px;
+        padding: 0 20px;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        border-radius: 999px;
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.1);
+        font-size: 14px; font-weight: 700;
+        cursor: pointer;
+        transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      }
+      .online-leave-button:hover { background: rgba(239, 68, 68, 0.22); border-color: rgba(248, 113, 113, 0.6); transform: translateY(-1px); }
+
+      .online-voice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+      .online-voice-card {
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 20px;
+        background: linear-gradient(160deg, rgba(23, 37, 65, 0.9), rgba(12, 21, 41, 0.9));
+      }
+      .online-voice-card h2 { margin: 0 0 6px; color: #f4f8ff; font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+      .online-voice-card p { margin: 0; color: var(--voice-dim); font-size: 14px; line-height: 1.55; }
+
+      @keyframes online-live-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
+        70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+      }
+      @keyframes online-speaking-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
+        70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+      }
+
+      @media (min-width: 700px) {
+        .online-voice-page { padding-top: 40px; gap: 28px; }
+        .online-media-stage { padding: 24px; gap: 20px; }
+        .online-media-placeholder { min-height: 220px; }
+        .online-participants { gap: 14px; }
+      }
+      @media (max-width: 380px) {
+        .online-voice-page { padding-left: 12px; padding-right: 12px; }
+        .online-media-stage { padding: 12px; border-radius: 24px; }
+        .online-person-avatar { width: 52px; height: 52px; font-size: 26px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .online-live-dot, .online-person-speaking { animation: none; }
+        .online-voice-page * { transition-duration: 0.01ms !important; }
+      }
+
     `}</style>
   );
 }
