@@ -1725,121 +1725,645 @@ const FeedSkeleton = memo(function FeedSkeleton() {
 });
 FeedSkeleton.displayName = "FeedSkeleton";
 
+// ==========================================================================
+// OPEN CONVERSATION — real multi-user live voice room (LiveKit)
+// Entry is phone number + username (+ optional photo). It does NOT use the
+// Gwamo register/login flow. Audio, presence, mute state and speaking
+// detection all come from the LiveKit room; nothing here is hard-coded.
+// ==========================================================================
+const VOICE_PROFILE_KEY = "gwamo-voice-profile";
+const VOICE_VISITOR_KEY = "gwamo-voice-visitor";
+const VOICE_DUCK_KEY = "gwamo-voice-duck-media";
+// Optional music/video shown inside the room. Leave empty to show the placeholder.
+const OPEN_ROOM_MEDIA_URL = "";
+const VOICE_DUCK_LEVEL = 0.12;
+const VOICE_DUCK_RESTORE_MS = 1500;
+const VOICE_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+function voiceFlagFromIso(iso = "") {
+  if (!/^[A-Z]{2}$/.test(iso)) return "\u{1F30D}";
+  return String.fromCodePoint(...[...iso].map((c) => 127397 + c.charCodeAt(0)));
+}
+
+const VOICE_DIAL_OPTIONS = countries
+  .filter((c) => c.cca2 && c.idd?.root && c.name?.common)
+  .map((c) => {
+    const suffixes = c.idd.suffixes || [];
+    const dial = c.idd.root === "+1" || suffixes.length !== 1 ? c.idd.root : c.idd.root + suffixes[0];
+    return { iso: c.cca2, name: c.name.common, dial, flag: voiceFlagFromIso(c.cca2) };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+function voiceDialToIso() {
+  const map = {};
+  const prefer = { "1": "US", "7": "RU", "44": "GB" };
+  for (const o of VOICE_DIAL_OPTIONS) {
+    const key = o.dial.slice(1);
+    if (!map[key] || prefer[key] === o.iso) map[key] = o.iso;
+  }
+  return map;
+}
+const VOICE_DIAL_MAP = voiceDialToIso();
+
+function voiceGuessIso() {
+  try {
+    const lang = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    const region = lang.split("-")[1]?.toUpperCase();
+    if (region && VOICE_DIAL_OPTIONS.some((o) => o.iso === region)) return region;
+  } catch (e) { /* ignore */ }
+  return "RW";
+}
+
+// "+250 788 123 456" / "00250788..." typed or pasted into the number field.
+function voiceSplitInternational(raw = "") {
+  let v = String(raw).trim().replace(/[\s().-]/g, "");
+  if (v.startsWith("00")) v = "+" + v.slice(2);
+  if (!v.startsWith("+")) return null;
+  const digits = v.slice(1).replace(/\D/g, "");
+  for (let len = Math.min(4, digits.length); len >= 1; len--) {
+    const iso = VOICE_DIAL_MAP[digits.slice(0, len)];
+    if (iso) return { iso, national: digits.slice(len) };
+  }
+  return null;
+}
+
+function voiceBuildPhone(iso, national) {
+  const opt = VOICE_DIAL_OPTIONS.find((o) => o.iso === iso);
+  const digits = String(national || "").replace(/\D/g, "").replace(/^0+/, "");
+  const phone = `${opt?.dial || ""}${digits}`;
+  return /^\+[1-9]\d{6,14}$/.test(phone) ? phone : "";
+}
+
+function voiceReadJson(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
+}
+function voiceWriteJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* private mode */ }
+}
+function voiceReadVisitor() {
+  try {
+    const stored = localStorage.getItem(VOICE_VISITOR_KEY);
+    if (stored) return stored;
+  } catch (e) { /* ignore */ }
+  const m = document.cookie.match(/(?:^|;\s*)gwamo_vid=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+function voiceWriteVisitor(token) {
+  if (!token) return;
+  try { localStorage.setItem(VOICE_VISITOR_KEY, token); } catch (e) { /* ignore */ }
+  try {
+    document.cookie = `gwamo_vid=${encodeURIComponent(token)}; Max-Age=31536000; Path=/; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+  } catch (e) { /* ignore */ }
+}
+
+function voiceMicMessage(err) {
+  const name = err?.name || "";
+  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
+    return "Microphone access is blocked. You can still listen. To speak, allow the microphone for this site in your browser settings, then tap the mic button.";
+  }
+  if (name === "NotFoundError" || name === "OverconstrainedError") {
+    return "No microphone was found on this device. You can still listen.";
+  }
+  if (name === "NotReadableError") {
+    return "Your microphone is being used by another app. Close it and tap the mic button again.";
+  }
+  return "The microphone could not be started. You can still listen.";
+}
+
+async function voiceProbeMic() {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    return { ok: false, err: { name: "NotSupported" }, insecure: !window.isSecureContext };
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, err };
+  }
+}
+
+function voiceParseMeta(raw) {
+  try { const m = JSON.parse(raw || "{}"); return m && typeof m === "object" ? m : {}; } catch (e) { return {}; }
+}
+
+function voiceSnapshot(room, fallbackProfile) {
+  const make = (p, isLocal) => {
+    const m = voiceParseMeta(p.metadata);
+    return {
+      id: p.identity,
+      name: p.name || m.u || (isLocal ? fallbackProfile?.username : "") || "Guest",
+      flag: m.f || (isLocal ? fallbackProfile?.flag : "") || "\u{1F30D}",
+      avatar: m.a || (isLocal ? fallbackProfile?.avatar : "") || "",
+      speaking: Boolean(p.isSpeaking),
+      muted: !p.isMicrophoneEnabled,
+      isLocal
+    };
+  };
+  return [make(room.localParticipant, true), ...Array.from(room.remoteParticipants.values()).map((p) => make(p, false))];
+}
+
+function VoiceAvatar({ avatar, flag, size = 60, label = "" }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [avatar]);
+  const style = { width: size, height: size, fontSize: Math.round(size * 0.5) };
+  return (
+    <span className="online-person-avatar" style={style} aria-label={label || undefined}>
+      {avatar && !broken
+        ? <img src={avatar} alt="" loading="lazy" onError={() => setBroken(true)} />
+        : <span className="voice-flag-avatar" aria-hidden="true">{flag || "\u{1F30D}"}</span>}
+    </span>
+  );
+}
+
 function OnlineVoiceLanding() {
-  const [isJoined, setIsJoined] = useState(false);
+  const saved = useMemo(() => voiceReadJson(VOICE_PROFILE_KEY), []);
+  const [phase, setPhase] = useState("entry"); // entry | connecting | live
+  const [askOpen, setAskOpen] = useState(false); // the "who are you?" sheet that opens when Join Conversation is pressed
+  const [hasSaved, setHasSaved] = useState(Boolean(saved?.username));
+  const [editing, setEditing] = useState(!saved?.username);
+  const [iso, setIso] = useState(saved?.iso || voiceGuessIso());
+  const [national, setNational] = useState(saved?.national || "");
+  const [username, setUsername] = useState(saved?.username || "");
+  const [photoUrl, setPhotoUrl] = useState(saved?.photoUrl || "");
+  const [photoPreview, setPhotoPreview] = useState(saved?.photoUrl || "");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [roomError, setRoomError] = useState("");
+  const [status, setStatus] = useState("connected"); // connected | reconnecting | lost
+  const [participants, setParticipants] = useState([]);
+  const [roomInfo, setRoomInfo] = useState({ configured: true, count: null, participants: [] });
+  const [needsAudioTap, setNeedsAudioTap] = useState(false);
+  const [duck, setDuck] = useState(() => {
+    try { return localStorage.getItem(VOICE_DUCK_KEY) !== "0"; } catch (e) { return true; }
+  });
+  const roomRef = useRef(null);
+  const audioHostRef = useRef(null);
+  const leavingRef = useRef(false);
+  const sessionRef = useRef(null);
+  const profileRef = useRef(null);
+  const mediaRef = useRef(null);
+  const rampRef = useRef({ timer: null, restore: null });
+  const photoInputId = useId();
+
+  const me = participants.find((p) => p.isLocal);
+  const muted = me ? me.muted : true;
+  const anySpeaking = participants.some((p) => p.speaking);
+
+  // ---- Real participant count + who is inside, before joining ----
+  useEffect(() => {
+    if (phase === "live") return undefined;
+    let stop = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/voice/room`, { cache: "no-store" });
+        const data = await res.json();
+        if (!stop && data?.success) setRoomInfo({ configured: data.configured !== false, count: data.count, participants: data.participants || [] });
+      } catch (e) { /* offline: keep last numbers */ }
+    };
+    load();
+    const t = setInterval(load, 8000);
+    return () => { stop = true; clearInterval(t); };
+  }, [phase]);
+
+  const teardown = useCallback(() => {
+    const room = roomRef.current;
+    roomRef.current = null;
+    if (room) {
+      try { room.removeAllListeners(); room.disconnect(); } catch (e) { /* ignore */ }
+    }
+    if (audioHostRef.current) audioHostRef.current.innerHTML = "";
+  }, []);
+
+  // A moderator removed/blocked this visitor: stop cleanly and say why (never loop on "reconnecting").
+  const forcedExit = useCallback((message) => {
+    leavingRef.current = true;
+    teardown();
+    setParticipants([]);
+    setStatus("connected");
+    setNeedsAudioTap(false);
+    setRoomError("");
+    setPhase("entry");
+    setFormError(message);
+  }, [teardown]);
+
+  useEffect(() => {
+    if (!askOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape" && phase !== "connecting") setAskOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [askOpen, phase]);
+
+  // Leave immediately if the page is closed/hidden for good; clean up on unmount.
+  useEffect(() => {
+    const onHide = () => { leavingRef.current = true; teardown(); };
+    window.addEventListener("pagehide", onHide);
+    return () => { window.removeEventListener("pagehide", onHide); leavingRef.current = true; teardown(); };
+  }, [teardown]);
+
+  const connectRoom = useCallback(async () => {
+    const s = sessionRef.current;
+    const res = await fetch(`${API_URL}/api/voice/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: s.phone, username: s.username, photo_url: s.photoUrl || "", visitor_token: voiceReadVisitor() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data.message || "Could not join the conversation. Please try again.");
+      err.status = res.status;
+      throw err;
+    }
+    voiceWriteVisitor(data.visitor_token);
+    profileRef.current = { username: data.profile.username, flag: data.profile.flag, avatar: data.profile.avatar };
+
+    const lk = await import("livekit-client");
+    const { Room, RoomEvent, Track, DisconnectReason } = lk;
+    const room = new Room({
+      dynacast: true,
+      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      // Fully stop capture when muted so the browser's "mic in use" indicator turns off too.
+      publishDefaults: { stopMicTrackOnMute: true }
+    });
+    const sync = () => { if (roomRef.current === room) setParticipants(voiceSnapshot(room, profileRef.current)); };
+    room
+      .on(RoomEvent.ParticipantConnected, sync)
+      .on(RoomEvent.ParticipantDisconnected, sync)
+      .on(RoomEvent.ParticipantMetadataChanged, sync)
+      .on(RoomEvent.ParticipantNameChanged, sync)
+      .on(RoomEvent.TrackMuted, sync)
+      .on(RoomEvent.TrackUnmuted, sync)
+      .on(RoomEvent.TrackPublished, sync)
+      .on(RoomEvent.TrackUnpublished, sync)
+      .on(RoomEvent.LocalTrackPublished, sync)
+      .on(RoomEvent.LocalTrackUnpublished, sync)
+      .on(RoomEvent.ActiveSpeakersChanged, sync)
+      .on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === Track.Kind.Audio && audioHostRef.current) audioHostRef.current.appendChild(track.attach());
+        sync();
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track) => { track.detach().forEach((el) => el.remove()); sync(); })
+      .on(RoomEvent.AudioPlaybackStatusChanged, () => setNeedsAudioTap(!room.canPlaybackAudio))
+      .on(RoomEvent.Reconnecting, () => setStatus("reconnecting"))
+      .on(RoomEvent.Reconnected, () => { setStatus("connected"); sync(); })
+      .on(RoomEvent.MediaDevicesError, (err) => setRoomError(voiceMicMessage(err)))
+      .on(RoomEvent.Disconnected, (reason) => {
+        if (leavingRef.current || roomRef.current !== room) return;
+        if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
+          forcedExit("A moderator removed you from the conversation.");
+          return;
+        }
+        setStatus("lost");
+        setParticipants((list) => list.filter((p) => p.isLocal).map((p) => ({ ...p, muted: true, speaking: false })));
+        autoRejoin();
+      });
+    roomRef.current = room;
+    await room.connect(data.url, data.token);
+    setStatus("connected");
+    setNeedsAudioTap(!room.canPlaybackAudio);
+    try { await room.startAudio(); } catch (e) { /* needs a tap; banner shown */ }
+    sync();
+    return data;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forcedExit]);
+
+  // Network dropped for good: try again with a fresh token (tokens expire), starting muted.
+  const autoRejoin = useCallback(async () => {
+    const delays = [1500, 4000, 8000];
+    for (const wait of delays) {
+      await new Promise((r) => setTimeout(r, wait));
+      if (leavingRef.current) return;
+      try {
+        teardown();
+        await connectRoom();
+        setRoomError("");
+        return;
+      } catch (e) {
+        if (e?.status === 403) { forcedExit("You cannot join this conversation."); return; }
+      }
+    }
+    if (!leavingRef.current) setStatus("lost");
+  }, [connectRoom, teardown, forcedExit]);
+
+  // The field keeps exactly what the user typed. If it starts with "+" or "00" the country is
+  // read from it live (never rewritten mid-typing); otherwise the dropdown's country applies.
+  const intl = voiceSplitInternational(national);
+  const effIso = intl ? intl.iso : iso;
+  const effNational = intl ? intl.national : String(national).replace(/\D/g, "").replace(/^0+/, "");
+  const onPhoneChange = (value) => setNational(value);
+  const onCountryChange = (value) => {
+    setIso(value);
+    if (intl) setNational(intl.national);
+  };
+
+  const onPhotoPick = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { setFormError("Photo must be a JPG, PNG, WebP or GIF image."); return; }
+    if (file.size > VOICE_MAX_PHOTO_BYTES) { setFormError("Photo must be 5 MB or smaller."); return; }
+    setFormError("");
+    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoBusy(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`${API_URL}/api/voice/photo`, { method: "POST", body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Photo upload failed.");
+      setPhotoUrl(data.url);
+    } catch (e) {
+      setPhotoUrl("");
+      setPhotoPreview("");
+      setFormError(`${e.message} You can still join with your country flag.`);
+    } finally { setPhotoBusy(false); }
+  };
+
+  const removePhoto = () => { setPhotoUrl(""); setPhotoPreview(""); };
+
+  const join = async () => {
+    const phone = voiceBuildPhone(effIso, effNational);
+    const name = username.replace(/[<>"'`\\]/g, "").trim();
+    if (!phone) { setFormError("Enter your phone number (digits only, without the country code)."); setEditing(true); return; }
+    if (name.length < 2) { setFormError("Choose a username of at least 2 characters."); setEditing(true); return; }
+    setFormError(""); setRoomError("");
+    // Ask for the microphone inside the tap itself (required by mobile browsers).
+    const micProbe = voiceProbeMic();
+    setPhase("connecting");
+    leavingRef.current = false;
+    sessionRef.current = { phone, username: name, photoUrl };
+    try {
+      const mic = await micProbe;
+      const data = await connectRoom();
+      voiceWriteJson(VOICE_PROFILE_KEY, { iso: effIso, national: effNational, username: data.profile.username, photoUrl: data.profile.avatar || photoUrl || "" });
+      setIso(effIso);
+      setNational(effNational);
+      setHasSaved(true);
+      setEditing(false);
+      setAskOpen(false);
+      setPhase("live");
+      if (!mic.ok) setRoomError(mic.insecure ? "The microphone needs a secure (https) connection. You can still listen." : voiceMicMessage(mic.err));
+    } catch (e) {
+      teardown();
+      setPhase("entry");
+      setFormError(e?.message || "Could not join the conversation. Check your connection and try again.");
+    }
+  };
+
+  const toggleMic = async () => {
+    const room = roomRef.current;
+    if (!room || status !== "connected") return;
+    try {
+      await room.localParticipant.setMicrophoneEnabled(muted);
+      setRoomError("");
+    } catch (e) {
+      setRoomError(voiceMicMessage(e));
+    }
+    setParticipants(voiceSnapshot(room, profileRef.current));
+  };
+
+  const leave = () => {
+    leavingRef.current = true;
+    teardown();
+    setParticipants([]);
+    setStatus("connected");
+    setNeedsAudioTap(false);
+    setRoomError("");
+    setPhase("entry");
+  };
+
+  const enableSound = async () => {
+    try { await roomRef.current?.startAudio(); } catch (e) { /* ignore */ }
+    setNeedsAudioTap(roomRef.current ? !roomRef.current.canPlaybackAudio : false);
+  };
+
+  const manualRejoin = async () => {
+    leavingRef.current = false;
+    setStatus("reconnecting");
+    try { teardown(); await connectRoom(); setRoomError(""); } catch (e) { setStatus("lost"); setRoomError(e?.message || "Still offline. Check your connection."); }
+  };
+
+  const switchUser = () => { setEditing(true); setFormError(""); };
+
+  // ---- Media ducking: lower music/video while people talk, restore when quiet ----
+  useEffect(() => {
+    const el = mediaRef.current;
+    const ramp = rampRef.current;
+    if (!el) return undefined;
+    const rampTo = (target) => {
+      clearInterval(ramp.timer);
+      ramp.timer = setInterval(() => {
+        const diff = target - el.volume;
+        if (Math.abs(diff) < 0.04) { el.volume = target; clearInterval(ramp.timer); return; }
+        el.volume = Math.min(1, Math.max(0, el.volume + Math.sign(diff) * 0.06));
+      }, 40);
+    };
+    clearTimeout(ramp.restore);
+    if (!duck) { rampTo(1); return undefined; }
+    if (anySpeaking) rampTo(VOICE_DUCK_LEVEL);
+    else ramp.restore = setTimeout(() => rampTo(1), VOICE_DUCK_RESTORE_MS);
+    return () => { clearTimeout(ramp.restore); };
+  }, [anySpeaking, duck, phase]);
+  useEffect(() => () => { clearInterval(rampRef.current.timer); clearTimeout(rampRef.current.restore); }, []);
+
+  const toggleDuck = () => {
+    const next = !duck;
+    setDuck(next);
+    try { localStorage.setItem(VOICE_DUCK_KEY, next ? "1" : "0"); } catch (e) { /* ignore */ }
+  };
+
+  const selectedOpt = VOICE_DIAL_OPTIONS.find((o) => o.iso === effIso);
+  const live = phase === "live";
+  const count = live ? participants.length : roomInfo.count;
+  const configured = roomInfo.configured !== false;
+  const savedFlag = voiceFlagFromIso(effIso);
+  const showWelcomeBack = phase !== "live" && !editing && hasSaved;
+
   return (
     <section className="online-voice-page">
       <header className="online-voice-header">
-        <span className="online-voice-icon" aria-hidden="true">🎙️</span>
-
+        <span className="online-voice-icon" aria-hidden="true">{"\u{1F399}️"}</span>
         <div className="online-live-status">
           <span className="online-live-dot"></span>
-          LIVE CONVERSATION
+          {configured ? "LIVE CONVERSATION" : "OPENING SOON"}
         </div>
-
-        <h1>🌍 Open Conversation</h1>
+        <h1>{"\u{1F30D}"} Open Conversation</h1>
         <p>Join the live conversation and talk with people around the world.</p>
-
-        <div className="online-participant-count">
-          👥 <span>12</span> people online
+        <div className="online-participant-count" aria-live="polite">
+          {"\u{1F465}"} <span>{count === null || count === undefined ? "–" : count}</span> {count === 1 ? "person" : "people"} online
         </div>
       </header>
 
       <div className="online-media-stage">
-        <div className="online-media-placeholder">
-          <span className="online-media-emoji" aria-hidden="true">🎵</span>
-          <p>Music or video will appear here</p>
-          <div className="online-media-audio-status">
-            🔊 Media audio plays when everyone is silent
+        {OPEN_ROOM_MEDIA_URL ? (
+          <div className="online-media-player">
+            <video ref={mediaRef} src={OPEN_ROOM_MEDIA_URL} controls playsInline loop preload="metadata" />
+            <label className="voice-duck-toggle">
+              <input type="checkbox" checked={duck} onChange={toggleDuck} />
+              <span>Lower media volume when people talk</span>
+            </label>
           </div>
-        </div>
-
-        <div className="online-participants">
-          <div className="online-person-bubble">
-            <span className="online-person-avatar">👨🏾</span>
-            <span className="online-person-online-dot"></span>
-            <span className="online-person-name">Alex</span>
-            <span className="online-person-speaking">
-              🔊 Speaking
-            </span>
+        ) : (
+          <div className="online-media-placeholder">
+            <span className="online-media-emoji" aria-hidden="true">{"\u{1F3B5}"}</span>
+            <p>Music or video will appear here</p>
+            <div className="online-media-audio-status">{"\u{1F50A}"} Media audio lowers automatically when someone is speaking</div>
           </div>
+        )}
 
-          <div className="online-person-bubble">
-            <span className="online-person-avatar">👩🏽</span>
-            <span className="online-person-online-dot"></span>
-            <span className="online-person-name">Maya</span>
+        {live && status !== "connected" && (
+          <div className={`voice-banner ${status === "lost" ? "is-bad" : "is-warn"}`} role="status">
+            <span>{status === "reconnecting" ? "Reconnecting…" : "Connection lost. Trying to get you back in…"}</span>
+            {status === "lost" && <button type="button" onClick={manualRejoin}>Rejoin</button>}
           </div>
+        )}
+        {live && needsAudioTap && (
+          <button type="button" className="voice-banner is-info voice-tap-audio" onClick={enableSound}>
+            {"\u{1F50A}"} Tap to turn on sound
+          </button>
+        )}
+        {roomError && <div className="voice-banner is-warn" role="alert">{roomError}</div>}
 
-          <div className="online-person-bubble">
-            <span className="online-person-avatar">👨🏻</span>
-            <span className="online-person-online-dot"></span>
-            <span className="online-person-name">John</span>
+        {live ? (
+          <div className="online-participants" data-count={participants.length} data-many={participants.length > 9 ? "1" : "0"}>
+            {participants.map((p) => (
+              <div key={p.id} className={`online-person-bubble${p.speaking ? " is-speaking" : ""}${p.isLocal ? " is-local" : ""}`}>
+                <VoiceAvatar avatar={p.avatar} flag={p.flag} label={p.name} />
+                <span className="online-person-online-dot" aria-hidden="true"></span>
+                <span className="online-person-name">{p.name}{p.isLocal ? " (you)" : ""}</span>
+                {p.speaking
+                  ? <span className="online-person-speaking">{"\u{1F50A}"} Speaking</span>
+                  : <span className={`online-person-mic${p.muted ? " is-muted" : ""}`}>{p.muted ? "\u{1F507} Muted" : "\u{1F399}️ Mic on"}</span>}
+              </div>
+            ))}
           </div>
-
-          <div className="online-person-bubble">
-            <span className="online-person-avatar">👩🏾</span>
-            <span className="online-person-online-dot"></span>
-            <span className="online-person-name">Sarah</span>
-          </div>
-        </div>
-
-        <div className="online-stage-actions">
-          {!isJoined && (
-            <button
-              type="button"
-              className="online-join-button"
-              onClick={() => setIsJoined(true)}
-            >
-              🎙️ Join Conversation
-            </button>
-          )}
-
-          {isJoined && (
-            <div className="online-mic-controls">
-              <span className="online-mic-status">
-                🔇
-              </span>
-
-              <button type="button" className="online-mic-button">
-                🎙️
-              </button>
-
-              <p>Microphone is off</p>
-
-              <button
-                type="button"
-                className="online-leave-button"
-                onClick={() => setIsJoined(false)}
-              >
-                ✕ Leave conversation
-              </button>
+        ) : (
+          roomInfo.participants.length > 0 && (
+            <div className="voice-people-strip" aria-label="People in the room right now">
+              <div className="voice-people-faces">
+                {roomInfo.participants.slice(0, 8).map((p, i) => (
+                  <VoiceAvatar key={`${p.name}-${i}`} avatar={p.avatar} flag={p.flag} size={40} label={p.name} />
+                ))}
+              </div>
+              <span>{roomInfo.participants.slice(0, 3).map((p) => p.name).join(", ")}{roomInfo.count > 3 ? ` and ${roomInfo.count - 3} more` : ""} in the room</span>
             </div>
+          )
+        )}
+
+        {/* ---------- Entry (no Gwamo account, no PIN, no OTP) ---------- */}
+        {!live && !askOpen && (
+          <div className="voice-entry voice-entry-closed">
+            {formError && <div className="voice-banner is-bad" role="alert">{formError}</div>}
+            <div className="online-stage-actions">
+              <button type="button" className="online-join-button" onClick={() => { setFormError(""); setAskOpen(true); }} disabled={!configured}>
+                {!configured ? "Opening soon" : "\u{1F399}️ Join Conversation"}
+              </button>
+              <small className="voice-mic-note">{hasSaved ? `Welcome back, ${username}. Tap to continue.` : "Quick join: just your name and phone number. No account needed."}</small>
+            </div>
+          </div>
+        )}
+
+        {!live && askOpen && (
+          <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== "connecting") setAskOpen(false); }}>
+          <div className="voice-entry voice-sheet" role="dialog" aria-modal="true" aria-label="Join the conversation">
+            <div className="voice-sheet-head">
+              <h2>{showWelcomeBack ? "Welcome back" : "Join the conversation"}</h2>
+              <button type="button" className="voice-sheet-close" aria-label="Close" onClick={() => setAskOpen(false)} disabled={phase === "connecting"}>{"✕"}</button>
+            </div>
+            {showWelcomeBack ? (
+              <div className="voice-welcome-back">
+                <VoiceAvatar avatar={photoPreview} flag={savedFlag} size={64} label={username} />
+                <div>
+                  <strong>Welcome back, {username}</strong>
+                  <small>{selectedOpt?.flag} {selectedOpt?.dial} {"•••"} {String(effNational).slice(-3)}</small>
+                </div>
+                <button type="button" className="voice-link" onClick={switchUser}>Not you? Edit</button>
+              </div>
+            ) : (
+              <form className="voice-form" onSubmit={(e) => { e.preventDefault(); join(); }} noValidate>
+                <label className="voice-label" htmlFor="voice-phone">Phone number</label>
+                <div className="voice-phone-row">
+                  <div className="voice-country">
+                    <span className="voice-country-flag" aria-hidden="true">{selectedOpt?.flag}</span>
+                    <select aria-label="Country code" value={effIso} onChange={(e) => onCountryChange(e.target.value)}>
+                      {VOICE_DIAL_OPTIONS.map((o) => <option key={o.iso} value={o.iso}>{o.flag} {o.name} ({o.dial})</option>)}
+                    </select>
+                    <span className="voice-country-dial">{selectedOpt?.dial}</span>
+                  </div>
+                  <input id="voice-phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="788 123 456" value={national} onChange={(e) => onPhoneChange(e.target.value)} />
+                </div>
+
+                <label className="voice-label" htmlFor="voice-username">Username <small>(shown to others)</small></label>
+                <input id="voice-username" className="voice-input" type="text" maxLength={30} autoComplete="nickname" placeholder="Your name" value={username} onChange={(e) => setUsername(e.target.value)} />
+
+                <div className="voice-photo-row">
+                  <VoiceAvatar avatar={photoPreview} flag={savedFlag} size={52} label="Your avatar" />
+                  <div className="voice-photo-copy">
+                    <strong>Profile photo <small>(optional)</small></strong>
+                    <span>{photoPreview ? "Looks good." : "No photo? Your country flag is used."}</span>
+                  </div>
+                  <label className="voice-photo-btn" htmlFor={photoInputId}>{photoBusy ? "Uploading…" : photoPreview ? "Change" : "Add"}</label>
+                  <input id={photoInputId} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={onPhotoPick} hidden />
+                  {photoPreview && !photoBusy && <button type="button" className="voice-link" onClick={removePhoto}>Remove</button>}
+                </div>
+                <p className="voice-privacy">Your phone number stays private. Others only see your username and photo or flag.</p>
+              </form>
+            )}
+
+            {formError && <div className="voice-banner is-bad" role="alert">{formError}</div>}
+
+            <div className="online-stage-actions">
+              <button type="button" className="online-join-button" onClick={join} disabled={phase === "connecting" || photoBusy || !configured}>
+                {phase === "connecting" ? "Connecting…" : !configured ? "Opening soon" : showWelcomeBack ? `\u{1F399}️ Continue as ${username}` : "\u{1F399}️ Join now"}
+              </button>
+              <small className="voice-mic-note">You join muted. Your microphone is only on when you tap the mic.</small>
+            </div>
+          </div>
+          </div>
+        )}
+      </div>
+
+      {/* Remote audio elements are attached here (kept in the DOM, visually hidden). */}
+      <div ref={audioHostRef} className="voice-audio-host" aria-hidden="true"></div>
+
+      {live && (
+        <div className="voice-controls" role="group" aria-label="Microphone controls">
+          <div className={`voice-mic-state${muted ? "" : " is-live"}`}>
+            <span className="voice-mic-dot" aria-hidden="true"></span>
+            {muted ? "You are muted" : "Your microphone is live"}
+          </div>
+          <div className="voice-controls-row">
+            <button type="button" className={`online-mic-button${muted ? " is-muted" : " is-live"}`} onClick={toggleMic} disabled={status !== "connected"} aria-pressed={!muted} aria-label={muted ? "Unmute microphone" : "Mute microphone"}>
+              {muted ? "\u{1F507}" : "\u{1F399}️"}
+            </button>
+            <button type="button" className="online-leave-button" onClick={leave}>{"✕"} Leave conversation</button>
+          </div>
+          {OPEN_ROOM_MEDIA_URL && (
+            <label className="voice-duck-toggle voice-duck-inline">
+              <input type="checkbox" checked={duck} onChange={toggleDuck} />
+              <span>Lower media when people talk</span>
+            </label>
           )}
         </div>
-      </div>
+      )}
 
       <div className="online-voice-cards">
         <div className="online-voice-card">
-          <h2>🌍 Live Conversation</h2>
+          <h2>{"\u{1F30D}"} Live Conversation</h2>
           <p>Everyone can talk and listen together.</p>
         </div>
-
         <div className="online-voice-card">
-          <h2>🎵 Music & Video</h2>
+          <h2>{"\u{1F3B5}"} Music &amp; Video</h2>
           <p>Media plays when nobody is talking.</p>
         </div>
-
         <div className="online-voice-card">
-          <h2>🎙️ Microphone</h2>
-          <p>Mute or unmute your microphone.</p>
+          <h2>{"\u{1F399}️"} Microphone</h2>
+          <p>Mute or unmute your microphone any time.</p>
         </div>
       </div>
     </section>
   );
 }
- 
-
- 
 
 const TimeMarketTopBar = memo(({ activeCategory, isLoggedIn, user, onAuth, onLogout, onOpenMyProfile, onOpenMyServices, onOpenMyTime, onOpenMyInbox, onCreatePost, unreadCount, onOpenInfo }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -4883,6 +5407,126 @@ function HomeStylesInner() {
         .online-voice-page * { transition-duration: 0.01ms !important; }
       }
 
+          /* ----- Open Conversation: real room (entry form, live tiles, controls) ----- */
+      .online-person-bubble:has(.online-person-speaking) { border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.045); }
+      .online-person-bubble.is-speaking {
+        border-color: rgba(52, 211, 153, 0.7);
+        background: rgba(16, 185, 129, 0.12);
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18), 0 0 28px rgba(16, 185, 129, 0.28);
+      }
+      .online-person-bubble.is-speaking .online-person-avatar { border-color: var(--voice); animation: online-speaking-pulse 1.3s infinite; }
+      .online-person-bubble.is-local:not(.is-speaking) { border-color: rgba(255, 185, 56, 0.4); }
+      .online-person-avatar { overflow: hidden; flex-shrink: 0; }
+      .online-person-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
+      .voice-flag-avatar { display: grid; place-items: center; width: 100%; height: 100%; line-height: 1; }
+      .online-person-mic { padding: 3px 9px; border-radius: 999px; color: #a7f3d0; background: rgba(16, 185, 129, 0.12); font-size: 11px; font-weight: 700; }
+      .online-person-mic.is-muted { color: var(--voice-dim); background: rgba(255, 255, 255, 0.06); }
+      .online-participants[data-many="1"] { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+      .online-participants[data-count="1"], .online-participants[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .online-participants[data-count="2"] .online-person-avatar, .online-participants[data-count="1"] .online-person-avatar { width: 72px !important; height: 72px !important; font-size: 36px !important; }
+
+      .voice-audio-host { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); pointer-events: none; }
+
+      .voice-banner {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 11px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        color: #e8f0ff; background: rgba(255, 255, 255, 0.06);
+        font-size: 13.5px; font-weight: 600; line-height: 1.45; text-align: left;
+      }
+      .voice-banner.is-warn { color: #ffe3a3; border-color: rgba(255, 185, 56, 0.35); background: rgba(255, 185, 56, 0.1); }
+      .voice-banner.is-bad { color: #ffb4bd; border-color: rgba(255, 92, 112, 0.4); background: rgba(255, 92, 112, 0.1); }
+      .voice-banner.is-info { color: #bfe9ff; border-color: rgba(42, 163, 255, 0.4); background: rgba(42, 163, 255, 0.1); }
+      .voice-banner button { flex-shrink: 0; min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; color: #1b1303; background: var(--amber); font-weight: 800; cursor: pointer; }
+      .voice-tap-audio { width: 100%; justify-content: center; cursor: pointer; font: inherit; font-weight: 700; min-height: 48px; }
+
+      .voice-people-strip { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--voice-dim); font-size: 13px; text-align: center; }
+      .voice-people-faces { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
+      .voice-people-faces .online-person-avatar { border-width: 2px; }
+
+      .voice-entry { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px 2px; }
+      .voice-form { display: flex; flex-direction: column; gap: 8px; }
+      .voice-label { margin-top: 4px; color: #d6e4ff; font-size: 13px; font-weight: 700; }
+      .voice-label small, .voice-photo-copy small { color: var(--voice-dim); font-weight: 500; }
+      .voice-input, .voice-phone-row input {
+        width: 100%; min-height: 52px; padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 14px; outline: none;
+        color: #f4f8ff; background: rgba(2, 9, 29, 0.6); font-size: 16px;
+        transition: border-color 140ms ease, box-shadow 140ms ease;
+      }
+      .voice-input:focus, .voice-phone-row input:focus, .voice-country:focus-within { border-color: var(--voice); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18); }
+      .voice-input::placeholder, .voice-phone-row input::placeholder { color: rgba(169, 184, 212, 0.6); }
+      .voice-phone-row { display: flex; gap: 8px; }
+      .voice-phone-row input { flex: 1; min-width: 0; }
+      .voice-country {
+        position: relative; flex: 0 0 auto; min-width: 112px; min-height: 52px;
+        display: flex; align-items: center; gap: 6px; padding: 0 12px;
+        border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 14px; background: rgba(2, 9, 29, 0.6);
+        transition: border-color 140ms ease, box-shadow 140ms ease;
+      }
+      .voice-country-flag { font-size: 22px; line-height: 1; }
+      .voice-country-dial { color: #f4f8ff; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .voice-country select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+      .voice-photo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 6px; padding: 12px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 16px; }
+      .voice-photo-row .online-person-avatar { width: 52px; height: 52px; }
+      .voice-photo-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; color: #f4f8ff; font-size: 14px; }
+      .voice-photo-copy span { color: var(--voice-dim); font-size: 12.5px; }
+      .voice-photo-btn { min-height: 40px; display: inline-flex; align-items: center; padding: 0 16px; border: 1px solid var(--voice-line); border-radius: 999px; color: var(--voice); background: var(--voice-soft); font-size: 13.5px; font-weight: 800; cursor: pointer; }
+      .voice-link { min-height: 40px; padding: 0 8px; border: 0; color: var(--amber); background: transparent; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+      .voice-privacy, .voice-mic-note { margin: 0; color: var(--voice-dim); font-size: 12.5px; line-height: 1.5; text-align: center; }
+      .voice-mic-note { display: block; margin-top: 10px; }
+      .voice-welcome-back { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 14px; border: 1px solid var(--voice-line); border-radius: 18px; background: var(--voice-soft); }
+      .voice-welcome-back > div { min-width: 0; flex: 1 1 140px; display: flex; flex-direction: column; gap: 3px; }
+      .voice-welcome-back strong { color: #f4f8ff; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+      .voice-welcome-back small { color: var(--voice-dim); font-size: 12.5px; }
+      .voice-welcome-back .voice-link { flex: 1 1 100%; min-height: 36px; padding: 0; text-align: left; }
+      .online-join-button:disabled { opacity: 0.6; cursor: wait; filter: none; }
+
+      .online-media-player { display: flex; flex-direction: column; gap: 10px; }
+      .online-media-player video { width: 100%; max-height: 300px; display: block; border-radius: 18px; background: #000; }
+      .voice-duck-toggle { display: flex; align-items: center; gap: 10px; color: var(--voice-dim); font-size: 13px; font-weight: 600; cursor: pointer; }
+      .voice-duck-toggle input { width: 20px; height: 20px; accent-color: var(--voice-strong); }
+
+      /* Controls stay reachable above the bottom nav while the grid scrolls */
+      .voice-controls {
+        position: sticky; bottom: calc(var(--nav-h) + 10px); z-index: 20;
+        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--voice-line); border-radius: 24px;
+        background: rgba(4, 14, 28, 0.88);
+        -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      }
+      .voice-controls-row { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; }
+      .voice-mic-state { display: inline-flex; align-items: center; gap: 8px; color: var(--voice-dim); font-size: 13.5px; font-weight: 700; }
+      .voice-mic-state.is-live { color: #fecaca; }
+      .voice-mic-dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+      .voice-mic-state.is-live .voice-mic-dot { background: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); animation: voice-rec-pulse 1.6s infinite; }
+      .voice-controls .online-mic-button { flex-shrink: 0; width: 68px; height: 68px; font-size: 28px; }
+      .voice-controls .online-mic-button.is-muted { background: linear-gradient(145deg, #475569, #334155); box-shadow: 0 0 0 5px rgba(148, 163, 184, 0.14); }
+      .voice-controls .online-mic-button.is-live { background: linear-gradient(145deg, #10b981, #047857); }
+      .voice-controls .online-mic-button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .voice-controls .online-leave-button { flex: 1; max-width: 240px; min-height: 52px; }
+      .voice-duck-inline { justify-content: center; }
+      @keyframes voice-rec-pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+      @media (max-width: 380px) {
+        .voice-country { min-width: 96px; padding: 0 8px; }
+        .voice-photo-row { gap: 8px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .voice-mic-state.is-live .voice-mic-dot, .online-person-bubble.is-speaking .online-person-avatar { animation: none; }
+      }
+
+
+      .voice-sheet-backdrop { position: fixed; inset: 0; z-index: 400; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.72); backdrop-filter: blur(4px); padding: 0; }
+      .voice-sheet { width: min(100%, 460px); max-height: 92dvh; overflow-y: auto; background: #0b1426; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.5); animation: voice-sheet-up 220ms ease both; }
+      .voice-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .voice-sheet-head h2 { margin: 0; font-size: 20px; }
+      .voice-sheet-close { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.08); color: inherit; font-size: 16px; cursor: pointer; }
+      @media (min-width: 700px) { .voice-sheet-backdrop { align-items: center; } .voice-sheet { border-radius: 22px; } }
+      @keyframes voice-sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+      .voice-entry-closed { align-items: center; }
     `}</style>
   );
 }
