@@ -4788,43 +4788,36 @@ function HomeStylesInner() {
   font-size: 13px;
   font-weight: 600;
 }
-
 .online-join-button {
   display: block;
-  width: 100%;
-  max-width: 320px;
+  width: calc(100% - 40px);
+  max-width: 280px;
+  box-sizing: border-box;
   margin: 20px auto;
-  padding: 16px 24px;
-  border: none;
+  padding: 14px 12px;
+  border: 2px solid #10b981;
   border-radius: 50px;
   background: linear-gradient(135deg, #10b981, #047857);
   color: #ffffff;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  text-align: center;
+  white-space: normal;
+  position: relative;
+  z-index: 100;
   cursor: pointer;
+  pointer-events: auto;
   box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
-  transition: all 0.2s ease;
 }
 
 .online-join-button:hover {
-  transform: translateY(-2px);
   box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
   filter: brightness(1.1);
 }
 
 .online-join-button:active {
   transform: scale(0.97);
-}
-
-.online-leave-button {
-  width: 100%;
-  max-width: 240px;
-  box-sizing: border-box;
-  margin-top: 8px;
-  padding: 12px 16px;
-  border-radius: 30px;
-  font-size: 14px;
 }
 
 .online-leave-button:hover {
