@@ -4561,12 +4561,12 @@ function HomeStylesInner() {
   
               /* GWAMO LIVE VOICE */
       .online-voice-page {
-        min-height: 75vh;
-        padding: 24px 16px 100px;
-        color: #fff;
-        text-align: center;
-        background: radial-gradient(circle at top, #12302b 0%, #030b20 65%);
-      }
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: 18px 10px 100px;
+}
 
       .online-voice-header {
         margin-bottom: 28px;
@@ -4698,11 +4698,12 @@ function HomeStylesInner() {
 }
 
 .online-person-name {
-  color: #e5e7eb;
-  font-size: 13px;
-  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
   text-align: center;
-  letter-spacing: 0.3px;
 }
 
 .online-person-online-dot {
@@ -4729,13 +4730,16 @@ function HomeStylesInner() {
 }
 
 .online-mic-controls {
+  width: 100%;
+  box-sizing: border-box;
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 4px;
 }
 
 .online-mic-button {
@@ -4764,16 +4768,13 @@ function HomeStylesInner() {
 }
 
 .online-leave-button {
-  margin-top: 12px;
-  padding: 12px 22px;
+  width: 100%;
+  max-width: 240px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 12px 16px;
   border-radius: 30px;
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
   font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .online-leave-button:hover {
@@ -4799,50 +4800,64 @@ function HomeStylesInner() {
     padding: 18px 10px 100px;
   }
 
-  .online-media-stage {
-    min-height: auto;
-    padding: 12px;
-    border-radius: 22px;
-  }
-
-  .online-media-placeholder {
-    min-height: 260px;
-    font-size: 38px;
-  }
-
- .online-participants {
-  position: relative;
-  display: grid;
- grid-template-columns: repeat(2, minmax(0, 140px));
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 8px;
+ .online-media-stage {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: auto;
+  box-sizing: border-box;
+  margin: 12px auto;
+  padding: 10px;
+  border-radius: 20px;
+  overflow: hidden;
 }
 
-  .online-person-bubble {
-  position: relative;
+ .online-media-placeholder {
+  width: 100%;
+  min-width: 0;
+  min-height: 160px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  padding: 10px 6px;
+  gap: 10px;
+  padding: 16px 10px;
   border-radius: 16px;
-  background: rgba(8, 20, 35, 0.85);
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
-  pointer-events: auto;
-  width: 100%;
-  max-width: 140px;
+  font-size: 32px;
+  text-align: center;
 }
 
-  .online-person-avatar {
-    width: 54px;
-    height: 54px;
-    font-size: 27px;
-  }
+.online-participants {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: center;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 4px;
+  margin: 0 auto;
+}
+
+.online-person-bubble {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 6px;
+  border-radius: 14px;
+  gap: 6px;
+}
+
+.online-person-avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+  flex-shrink: 0;
+}
 
   .online-mic-button {
     width: 66px;
