@@ -145,7 +145,7 @@ const noop = () => {};
 
 const CATEGORY_TABS = [
   { key: "time-market", label: "Trendz", emoji: "📈" },
-  { key: "online", label: "Online", emoji: "🎙️" },
+  { key: "online", label: "Live", emoji: "🎙️" },
   { key: "social-life", label: "Bae & Bae", emoji: "❤️" },
 ];
 
@@ -1988,7 +1988,29 @@ function VoicePeople({ people, live, onZoom }) {
 }
 
 // "+ Add media": asks for the same PIN used for Romantic Stories media, checked by the server on every change.
+// Keeps bottom sheets inside the part of the screen that is really visible. On Android the on-screen
+// keyboard covers the bottom of a fixed sheet (and its last button) unless the sheet follows the visual viewport.
+function useSheetViewport() {
+  const [box, setBox] = useState(null);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return undefined;
+    const update = () => setBox({ top: Math.round(vv.offsetTop), height: Math.round(vv.height) });
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
+  }, []);
+  return box ? { top: box.top, bottom: "auto", height: box.height } : undefined;
+}
+// When a field gets focus inside a sheet, bring it into the middle of the sheet's scroll area.
+function sheetFocusIn(e) {
+  const t = e.target;
+  if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) setTimeout(() => { try { t.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (err) { /* ignore */ } }, 300);
+}
+
 function VoiceMediaAdmin({ items, onClose, onChanged }) {
+  const sheetVp = useSheetViewport();
   const [pin, setPin] = useState("");
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -2069,7 +2091,7 @@ function VoiceMediaAdmin({ items, onClose, onChanged }) {
 
   return (
     <VoicePortal>
-      <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className={`voice-sheet-backdrop${sheetVp && sheetVp.height < 430 ? " is-compact" : ""}`} style={sheetVp} onFocus={sheetFocusIn} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
         <div className="voice-sheet" role="dialog" aria-modal="true" aria-label="Add media">
           <div className="voice-sheet-head">
             <h2>{authed ? "Music & video" : "Add media"}</h2>
@@ -2119,6 +2141,7 @@ function VoiceMediaAdmin({ items, onClose, onChanged }) {
 function OnlineVoiceLanding() {
   const saved = useMemo(() => voiceReadJson(VOICE_PROFILE_KEY), []);
   const [phase, setPhase] = useState("entry"); // entry | connecting | live
+  const sheetVp = useSheetViewport();
   const [askOpen, setAskOpen] = useState(false); // the "who are you?" sheet that opens when Join Conversation is pressed
   const [hasSaved, setHasSaved] = useState(Boolean(saved?.username));
   const [editing, setEditing] = useState(!saved?.username);
@@ -2459,7 +2482,7 @@ function OnlineVoiceLanding() {
 
   const entrySheet = (
     <VoicePortal>
-      <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== "connecting") setAskOpen(false); }}>
+      <div className={`voice-sheet-backdrop${sheetVp && sheetVp.height < 430 ? " is-compact" : ""}`} style={sheetVp} onFocus={sheetFocusIn} onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== "connecting") setAskOpen(false); }}>
         <div className="voice-entry voice-sheet" role="dialog" aria-modal="true" aria-label="Join the conversation">
           <div className="voice-sheet-head">
             <h2>{showWelcomeBack ? "Welcome back" : "Join the conversation"}</h2>
@@ -2731,6 +2754,7 @@ const ServicePost = memo(function ServicePost({
   const [rotationPaused, setRotationPaused] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
   const [avatarZoomOpen, setAvatarZoomOpen] = useState(false);
+  const sheetVp = useSheetViewport();
   const [avatarBroken, setAvatarBroken] = useState("");
   const [replyStep, setReplyStep] = useState(0);
   const [replyOpen, setReplyOpen] = useState(false);
@@ -3469,7 +3493,7 @@ const ServicePost = memo(function ServicePost({
       </section>
 
       {replyOpen && typeof document !== "undefined" && createPortal(
-        <div className="reply-sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !replySending) setReplyOpen(false); }}>
+        <div className="reply-sheet-backdrop" style={sheetVp} onFocus={sheetFocusIn} onMouseDown={(event) => { if (event.target === event.currentTarget && !replySending) setReplyOpen(false); }}>
         <form id={`reply-form-${postId}`} className="post-reply-chat-form" onSubmit={submitReply}>
           <div className="reply-chat-topline">
             <span>Reply to this post</span>
@@ -5863,7 +5887,7 @@ function HomeStylesInner() {
 
       /* sheets: header and the action button stay on screen, only the middle scrolls */
       .voice-sheet-backdrop { z-index: 3000; }
-      .voice-sheet { display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: min(92dvh, 760px); }
+      .voice-sheet { display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: min(96%, 760px); }
       .voice-sheet-head { padding: 16px 18px 8px; flex: 0 0 auto; }
       .voice-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 18px 12px; display: flex; flex-direction: column; gap: 12px; }
       .voice-sheet-foot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 18px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255, 255, 255, 0.08); background: #0b1426; }
@@ -6020,6 +6044,13 @@ function HomeStylesInner() {
       }
       @media (prefers-reduced-motion: reduce) { .vr-float, .vr-person.is-speaking .online-person-avatar { animation: none; } }
       .vr-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: 0; }
+
+      /* sheets follow the visible screen (keyboard-safe) and carry no blur, which is heavy on low-memory phones */
+      .voice-sheet-backdrop, .reply-sheet-backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(2, 6, 18, 0.82) !important; }
+      .reply-sheet-backdrop .post-reply-chat-form { max-height: min(96%, 720px) !important; }
+      .voice-sheet-backdrop.is-compact .voice-mic-note, .voice-sheet-backdrop.is-compact .voice-privacy { display: none; }
+      .voice-sheet-backdrop.is-compact .voice-sheet-head { padding-top: 8px; padding-bottom: 2px; }
+      .voice-sheet-backdrop.is-compact .voice-sheet-foot { padding-top: 8px; padding-bottom: 8px; }
     `}</style>
   );
 }
