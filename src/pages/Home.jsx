@@ -1952,7 +1952,7 @@ function VoicePeople({ people, live, onZoom }) {
   const lanes = n <= 10 ? 2 : 4;
   const perLane = Math.max(1, Math.ceil(n / lanes));
   const base = n <= 6 ? 68 : n <= 10 ? 60 : 50;
-  const fit = Math.floor(Math.min((box.h - 20) / (1 + (perLane - 0.5) / 0.9), box.w * (lanes === 2 ? 0.26 : 0.19)));
+  const fit = Math.floor(Math.min((box.h - 42 - 28 * (perLane - 0.5)) / (1 + (perLane - 0.5)), box.w * (lanes === 2 ? 0.26 : 0.19)));
   const size = Math.min(base, fit);
   const grid = n > 24 || size < 34;
   const gridSize = Math.max(34, Math.min(48, Math.floor(box.w / 7.5)));
@@ -1964,7 +1964,7 @@ function VoicePeople({ people, live, onZoom }) {
     <div ref={hostRef} className={`vr-people${grid ? " is-grid" : ""}${n > 12 ? " is-still" : ""}`} role="list" aria-label="People in the room" style={{ "--vr-size": `${px}px`, "--vr-pad": `${Math.round(px / 2 + 10)}px` }}>
       {n > 0 && ordered.map(({ p, key }, i) => {
         const state = p.speaking ? "is-speaking" : p.muted ? "is-muted" : "is-live";
-        const pos = grid ? undefined : { left: `${slots[i].x}%`, top: `calc(var(--vr-pad) + (100% - 2 * var(--vr-pad)) * ${slots[i].y.toFixed(4)})`, "--vr-delay": `${-(vrHash(key) % 40) / 10}s` };
+        const pos = grid ? undefined : { left: `${slots[i].x}%`, top: `calc(var(--vr-pad) + (100% - 2 * var(--vr-pad) - 22px) * ${slots[i].y.toFixed(4)})`, "--vr-delay": `${-(vrHash(key) % 40) / 10}s` };
         return (
           <div role="listitem" className={`vr-person${p.speaking ? " is-speaking" : ""}`} key={key} style={pos}>
             <div className="vr-float">
@@ -1990,6 +1990,14 @@ function VoicePeople({ people, live, onZoom }) {
 // "+ Add media": asks for the same PIN used for Romantic Stories media, checked by the server on every change.
 // Keeps bottom sheets inside the part of the screen that is really visible. On Android the on-screen
 // keyboard covers the bottom of a fixed sheet (and its last button) unless the sheet follows the visual viewport.
+function voiceLiteDevice() {
+  try {
+    const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency;
+    const oldCss = !(window.CSS && CSS.supports && CSS.supports("inset", "0"));
+    return oldCss || (mem && mem <= 2) || (cores && cores <= 2);
+  } catch (e) { return false; }
+}
+
 function useSheetViewport() {
   const [box, setBox] = useState(null);
   useEffect(() => {
@@ -2162,6 +2170,13 @@ function OnlineVoiceLanding() {
   const [soundOn, setSoundOn] = useState(false);
   const [mediaAdminOpen, setMediaAdminOpen] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
+  const [noPicture, setNoPicture] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("vr-room-active");
+    if (voiceLiteDevice()) root.classList.add("gw-lite");
+    return () => root.classList.remove("vr-room-active");
+  }, []);
   const [zoom, setZoom] = useState(null);
   const roomRef = useRef(null);
   const audioHostRef = useRef(null);
@@ -2546,8 +2561,10 @@ function OnlineVoiceLanding() {
       <div className="vr-bg">
         {currentMedia ? (
           currentMedia.kind === "video" ? (
-            <video key={currentMedia.id} ref={mediaRef} className="vr-media-video" src={currentMedia.url} autoPlay muted playsInline preload="auto"
-              loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
+            <video key={currentMedia.id} ref={mediaRef} className="vr-media-video" src={currentMedia.url} autoPlay muted playsInline webkit-playsinline="true" preload="auto"
+              loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)}
+              onLoadedMetadata={() => setNoPicture(false)}
+              onTimeUpdate={(e) => { const v = e.currentTarget; if (v.currentTime > 1.5 && v.videoWidth === 0) setNoPicture(true); }} />
           ) : (
             <div className="vr-media-audio">
               <span className={`vr-music-art${soundOn ? " is-on" : ""}`} aria-hidden="true">{"\u{1F3B5}"}</span>
@@ -2585,6 +2602,9 @@ function OnlineVoiceLanding() {
       </header>
 
       <div className="vr-notices">
+        {noPicture && currentMedia && currentMedia.kind === "video" && (
+          <div className="voice-banner is-warn vr-novideo" role="status">This phone cannot show this video, but you can still hear it.</div>
+        )}
         {live && status !== "connected" && (
           <div className={`voice-banner ${status === "lost" ? "is-bad" : "is-warn"}`} role="status">
             <span>{status === "reconnecting" ? "Reconnecting\u2026" : "Connection lost. Trying to get you back in\u2026"}</span>
@@ -5775,7 +5795,7 @@ function HomeStylesInner() {
       }
       .voice-country-flag { font-size: 22px; line-height: 1; }
       .voice-country-dial { color: #f4f8ff; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-      .voice-country select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+      .voice-country select { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
       .voice-photo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 6px; padding: 12px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 16px; }
       .voice-photo-row .online-person-avatar { width: 52px; height: 52px; }
       .voice-photo-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; color: #f4f8ff; font-size: 14px; }
@@ -5827,7 +5847,7 @@ function HomeStylesInner() {
       }
 
 
-      .voice-sheet-backdrop { position: fixed; inset: 0; z-index: 400; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.72); backdrop-filter: blur(4px); padding: 0; }
+      .voice-sheet-backdrop { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 400; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.72); backdrop-filter: blur(4px); padding: 0; }
       .voice-sheet { width: min(100%, 460px); max-height: 92dvh; overflow-y: auto; background: #0b1426; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.5); animation: voice-sheet-up 220ms ease both; }
       .voice-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
       .voice-sheet-head h2 { margin: 0; font-size: 20px; }
@@ -5871,7 +5891,7 @@ function HomeStylesInner() {
       .vr-media-empty { width: 100%; height: 100%; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed rgba(52, 211, 153, 0.3); border-radius: 18px; background: rgba(2, 9, 29, 0.45); text-align: center; }
       .vr-media-empty p { margin: 0; color: #d1fae5; font-size: 14.5px; font-weight: 600; }
       .vr-sound-btn { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; color: #d1fae5; background: rgba(2, 9, 29, 0.85); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; }
-      .vr-media-error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; color: #fecaca; background: rgba(2, 9, 29, 0.88); font-size: 14px; }
+      .vr-media-error { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; color: #fecaca; background: rgba(2, 9, 29, 0.88); font-size: 14px; }
       .vr-media-error button { min-height: 40px; padding: 0 16px; border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 999px; color: #6ee7b7; background: transparent; font-weight: 700; cursor: pointer; }
       .vr-media-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
       .vr-now { flex: 1 1 140px; min-width: 0; display: flex; align-items: center; gap: 6px; color: #d1fae5; font-size: 13.5px; font-weight: 600; }
@@ -5902,7 +5922,7 @@ function HomeStylesInner() {
       .vr-media-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 
       /* tap a photo to see it whole */
-      .voice-zoom { position: fixed; inset: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; background: rgba(0, 0, 0, 0.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); cursor: zoom-out; }
+      .voice-zoom { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; background: rgba(0, 0, 0, 0.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); cursor: zoom-out; }
       .voice-zoom img { width: min(92vw, 560px); max-width: 100%; max-height: 80svh; height: auto; object-fit: contain; border-radius: 14px; box-shadow: 0 18px 70px rgba(0, 0, 0, 0.5); cursor: default; }
       .voice-zoom-name { color: #fff; font-size: 15px; font-weight: 700; }
       .voice-zoom-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; width: 46px; height: 46px; border: 0; border-radius: 50%; color: #111; background: #fff; font-size: 30px; line-height: 1; cursor: pointer; }
@@ -5949,7 +5969,7 @@ function HomeStylesInner() {
       .home-page .home-post .post-replies-chat .comment-copy p { font-size: 15px; line-height: 1.45; margin: 2px 0 0; }
 
       /* the reply form is a bottom sheet: it can never be cut off, and Send/Back stay in reach */
-      .reply-sheet-backdrop { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.7); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+      .reply-sheet-backdrop { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 3000; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.7); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
       .reply-sheet-backdrop .post-reply-chat-form { position: relative; margin: 0 !important; width: min(100%, 520px); max-height: min(92dvh, 720px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; border-radius: 22px 22px 0 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); box-sizing: border-box; }
       .reply-sheet-backdrop .reply-chat-buttons { position: sticky; bottom: calc(-14px - env(safe-area-inset-bottom)); padding: 14px 0 2px; background: linear-gradient(to top, #07152d 72%, rgba(7, 21, 45, 0)); }
       .reply-sheet-close { width: 34px; height: 34px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #eaf2ff; background: rgba(255, 255, 255, 0.1); font-size: 16px; line-height: 1; cursor: pointer; }
@@ -5959,19 +5979,20 @@ function HomeStylesInner() {
       /* The bottom bar is solid (no see-through / blur), so it is never faded or half-covered on low-memory phones. */
       .home-page .bottom-nav { background: #030a1e !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; z-index: 500 !important; }
       .home-page { --vr-nav: calc(66px + env(safe-area-inset-bottom, 0px)); }
-      .home-page:has(.online-voice-page.vr-full) { padding-bottom: 0; }
+      .home-page:has(.online-voice-page.vr-full), html.vr-room-active .home-page { padding-bottom: 0; }
 
       .online-voice-page.vr-full {
         position: relative; display: flex; flex-direction: column; width: 100%; max-width: 560px; margin: 0 auto; padding: 0; gap: 0;
+        height: calc(100vh - var(--top-offset, 60px) - var(--vr-nav));
         height: calc(100svh - var(--top-offset, 60px) - var(--vr-nav));
         min-height: 360px; overflow: hidden; isolation: isolate; background: #02091d;
       }
-      .vr-bg { position: absolute; inset: 0; z-index: 0; background: radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 60%), linear-gradient(160deg, #0c2624, #040c1c); }
-      .vr-media-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
-      .vr-bg .vr-media-audio { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .vr-bg .vr-media-empty { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; background: transparent; }
+      .vr-bg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; background: radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 60%), linear-gradient(160deg, #0c2624, #040c1c); }
+      .vr-media-video { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+      .vr-bg .vr-media-audio { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; }
+      .vr-bg .vr-media-empty { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; background: transparent; }
       .vr-bg .vr-media-error { z-index: 3; }
-      .vr-shade { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgba(2, 9, 29, 0.62) 0, rgba(2, 9, 29, 0) 26%, rgba(2, 9, 29, 0) 52%, rgba(2, 9, 29, 0.78) 100%); }
+      .vr-shade { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgba(2, 9, 29, 0.62) 0, rgba(2, 9, 29, 0) 26%, rgba(2, 9, 29, 0) 52%, rgba(2, 9, 29, 0.78) 100%); }
 
       .vr-top { position: absolute; top: 12px; left: 0; right: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
       .vr-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; padding: 0; }
@@ -5985,21 +6006,22 @@ function HomeStylesInner() {
       .vr-notices .voice-banner { background-color: rgba(3, 12, 26, 0.9); }
 
       .vr-field { position: relative; flex: 1 1 auto; min-height: 0; margin-top: 104px; z-index: 4; pointer-events: none; }
-      .vr-people { position: absolute; inset: 0; display: block; max-height: none; padding: 0; overflow: visible; }
+      .vr-people { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: block; max-height: none; padding: 0; overflow: visible; }
       .vr-person { position: absolute; width: auto; transform: translate(-50%, -50%); pointer-events: auto; transition: left 600ms ease, top 600ms ease; }
       .vr-float { display: flex; flex-direction: column; align-items: center; gap: 4px; animation: vr-bob 5s ease-in-out infinite; animation-delay: var(--vr-delay, 0s); }
       .vr-people.is-still .vr-float { animation: none; }
       @keyframes vr-bob { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
-      .vr-person .online-person-avatar { --vr-s: min(var(--vr-size, 64px), 12svh); width: var(--vr-s) !important; height: var(--vr-s) !important; font-size: calc(var(--vr-s) * 0.52) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); background: #12202e; }
+      .vr-person .online-person-avatar { --vr-s: var(--vr-size, 64px); width: var(--vr-s) !important; height: var(--vr-s) !important; font-size: calc(var(--vr-s) * 0.52) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); background: #12202e; }
       .vr-person.is-speaking .online-person-avatar { box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.55), 0 0 26px rgba(52, 211, 153, 0.55); animation: vr-speak 1.2s ease-in-out infinite; }
       @keyframes vr-speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
       .vr-badge { right: -2px; bottom: -2px; width: 22px; height: 22px; border: 2px solid #06101c; background: #22e58b; color: #fff; }
       .vr-badge.is-muted { background: #1b2433; }
       .vr-badge.is-live { background: #22e58b; }
       .vr-badge.is-speaking { background: #22e58b; }
-      .vr-name { display: none; max-width: 110px; padding: 2px 9px; border-radius: 999px; color: #fff; background: rgba(3, 12, 26, 0.78); font-size: 12px; }
-      .vr-person.is-speaking .vr-name { display: block; }
-      .vr-people.is-grid { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px 8px; padding: 4px 10px; overflow-y: auto; pointer-events: auto; }
+      .vr-name { display: block; max-width: 92px; padding: 2px 9px; border-radius: 999px; color: #fff; background: rgba(3, 12, 26, 0.78); font-size: 12px; line-height: 1.35; }
+      .vr-people.is-still .vr-name { display: none; }
+      .vr-people.is-still .vr-person.is-speaking .vr-name { display: block; }
+      .vr-people.is-grid { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px 8px; padding: 4px 10px; overflow-y: auto; pointer-events: auto; }
       .vr-people.is-grid .vr-person { position: static; transform: none; }
 
       .vr-sound-row { position: relative; z-index: 7; flex: 0 0 auto; display: flex; justify-content: center; padding: 0 0 8px; }
@@ -6039,7 +6061,7 @@ function HomeStylesInner() {
         .online-voice-page.vr-full .online-participant-count { font-size: 13px; padding: 6px 12px; }
       }
       @media (min-width: 700px) {
-        .online-voice-page.vr-full { border-radius: 24px; margin-top: 8px; height: calc(100svh - var(--top-offset, 64px) - var(--vr-nav) - 8px); }
+        .online-voice-page.vr-full { border-radius: 24px; margin-top: 8px; height: calc(100vh - var(--top-offset, 64px) - var(--vr-nav) - 8px); height: calc(100svh - var(--top-offset, 64px) - var(--vr-nav) - 8px); }
         .home-page .bottom-nav { z-index: 500 !important; }
       }
       @media (prefers-reduced-motion: reduce) { .vr-float, .vr-person.is-speaking .online-person-avatar { animation: none; } }
@@ -6051,6 +6073,19 @@ function HomeStylesInner() {
       .voice-sheet-backdrop.is-compact .voice-mic-note, .voice-sheet-backdrop.is-compact .voice-privacy { display: none; }
       .voice-sheet-backdrop.is-compact .voice-sheet-head { padding-top: 8px; padding-bottom: 2px; }
       .voice-sheet-backdrop.is-compact .voice-sheet-foot { padding-top: 8px; padding-bottom: 8px; }
+
+      /* lite mode for old / low-memory phones: no blur, no ambient motion, lighter shadows */
+      html.gw-lite *, html.gw-lite *::before, html.gw-lite *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+      html.gw-lite .vr-float, html.gw-lite .vr-person.is-speaking .online-person-avatar { animation: none !important; }
+      html.gw-lite .vr-person .online-person-avatar { box-shadow: none; }
+      html.gw-lite .vr-person { transition: none; }
+      .vr-novideo { font-size: 13px; }
+
+      /* plain-width fallbacks (same result as the min() rules above, but understood by old Chrome) */
+      .voice-sheet { width: 100%; max-width: 460px; }
+      .reply-sheet-backdrop .post-reply-chat-form { width: 100%; max-width: 520px; }
+      .vr-notices { width: 92%; max-width: 420px; }
+      .voice-zoom img { max-height: 80vh; }
     `}</style>
   );
 }
