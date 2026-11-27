@@ -1,4 +1,5 @@
 ﻿import SocialLifeLanding from "../components/social/SocialLifeLanding";
+import { createPortal } from "react-dom";
 // GWAMO_HOME_CONNECT_TV_PUBLIC_FINAL_20260831
 import {
   Fragment,
@@ -1733,11 +1734,11 @@ FeedSkeleton.displayName = "FeedSkeleton";
 // ==========================================================================
 const VOICE_PROFILE_KEY = "gwamo-voice-profile";
 const VOICE_VISITOR_KEY = "gwamo-voice-visitor";
-const VOICE_DUCK_KEY = "gwamo-voice-duck-media";
-// Optional music/video shown inside the room. Leave empty to show the placeholder.
-const OPEN_ROOM_MEDIA_URL = "";
-const VOICE_DUCK_LEVEL = 0.12;
-const VOICE_DUCK_RESTORE_MS = 1500;
+// Shared music/video playlist (managed with the Romantic Stories PIN). Media is silenced while anyone speaks.
+const VOICE_MEDIA_LEVEL = 0.85;
+const VOICE_DUCK_RESTORE_MS = 1100;
+const VOICE_MEDIA_MAX_VIDEO = 100 * 1024 * 1024;
+const VOICE_MEDIA_MAX_AUDIO = 20 * 1024 * 1024;
 const VOICE_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 function voiceFlagFromIso(iso = "") {
@@ -1863,16 +1864,201 @@ function voiceSnapshot(room, fallbackProfile) {
   return [make(room.localParticipant, true), ...Array.from(room.remoteParticipants.values()).map((p) => make(p, false))];
 }
 
-function VoiceAvatar({ avatar, flag, size = 60, label = "" }) {
+function VoiceAvatar({ avatar, flag, size = 60, label = "", onZoom }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => { setBroken(false); }, [avatar]);
   const style = { width: size, height: size, fontSize: Math.round(size * 0.5) };
+  const showImage = Boolean(avatar) && !broken;
+  const inner = showImage
+    ? <img src={avatar} alt="" loading="lazy" onError={() => setBroken(true)} />
+    : <span className="voice-flag-avatar" aria-hidden="true">{flag || "\u{1F30D}"}</span>;
+  if (showImage && onZoom) {
+    return (
+      <button type="button" className="online-person-avatar is-zoomable" style={style} aria-label={`View ${label || "profile"} photo`}
+        onClick={(e) => { e.stopPropagation(); onZoom({ src: avatar, name: label }); }}>
+        {inner}
+      </button>
+    );
+  }
+  return <span className="online-person-avatar" style={style} aria-label={label || undefined}>{inner}</span>;
+}
+
+// Everything that floats above the page (sheets, zoom) renders in <body> so no parent can clip or trap it.
+function VoicePortal({ children }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(<div className="online-voice-portal">{children}</div>, document.body);
+}
+
+function VoiceZoom({ zoom, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <span className="online-person-avatar" style={style} aria-label={label || undefined}>
-      {avatar && !broken
-        ? <img src={avatar} alt="" loading="lazy" onError={() => setBroken(true)} />
-        : <span className="voice-flag-avatar" aria-hidden="true">{flag || "\u{1F30D}"}</span>}
-    </span>
+    <VoicePortal>
+      <div className="voice-zoom" role="dialog" aria-modal="true" aria-label={`${zoom.name || "Visitor"} photo`} onClick={onClose}>
+        <button type="button" className="voice-zoom-close" aria-label="Close photo" onClick={onClose}>{"\u00d7"}</button>
+        <img src={zoom.src} alt={`${zoom.name || "Visitor"} full photo`} onClick={(e) => e.stopPropagation()} />
+        {zoom.name && <span className="voice-zoom-name">{zoom.name}</span>}
+      </div>
+    </VoicePortal>
+  );
+}
+
+function VoicePeople({ people, live, onZoom }) {
+  if (!people.length) return null;
+  const size = people.length > 30 ? 44 : people.length > 12 ? 52 : 64;
+  return (
+    <div className="vr-people" role="list" aria-label="People in the room" style={{ "--vr-size": `${size}px` }}>
+      {people.map((p, i) => {
+        const state = p.speaking ? "is-speaking" : p.muted ? "is-muted" : "is-live";
+        return (
+          <div role="listitem" className={`vr-person${p.speaking ? " is-speaking" : ""}`} key={p.id || `${p.name}-${i}`}>
+            <div className="vr-avatar-wrap">
+              <VoiceAvatar avatar={p.avatar} flag={p.flag} size={size} label={p.name} onZoom={onZoom} />
+              {live && (
+                <span className={`vr-badge ${state}`} aria-label={p.speaking ? "Speaking" : p.muted ? "Muted" : "Mic on"}>
+                  {p.speaking
+                    ? <span className="vr-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+                    : <span aria-hidden="true">{p.muted ? "\u{1F507}" : "\u{1F399}\uFE0F"}</span>}
+                </span>
+              )}
+            </div>
+            <span className="vr-name">{p.name}{p.isLocal ? " (you)" : ""}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// "+ Add media": asks for the same PIN used for Romantic Stories media, checked by the server on every change.
+function VoiceMediaAdmin({ items, onClose, onChanged }) {
+  const [pin, setPin] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [file, setFile] = useState(null);
+  const [name, setName] = useState("");
+  const [pct, setPct] = useState(0);
+  const fileId = useId();
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, busy]);
+
+  const call = async (path, body, json) => {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "X-Admin-Pin": pin.trim(), ...(json ? { "Content-Type": "application/json" } : {}) },
+      body: json ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) throw new Error(data.error || data.message || `Request failed (${res.status}).`);
+    return data;
+  };
+
+  const verify = async (e) => {
+    e?.preventDefault();
+    if (!pin.trim()) { setErr("Enter the PIN."); return; }
+    setBusy(true); setErr("");
+    try { await call("/api/voice/media/verify"); setAuthed(true); }
+    catch (ex) { setErr(ex.message || "That PIN was not accepted."); }
+    finally { setBusy(false); }
+  };
+
+  const pick = (e) => {
+    const f = e.target.files?.[0] || null;
+    setErr("");
+    if (!f) { setFile(null); return; }
+    const isVideo = f.type.startsWith("video/");
+    const isAudio = f.type.startsWith("audio/") || /\.(mp3|m4a|aac|ogg|wav)$/i.test(f.name);
+    if (!isVideo && !isAudio) { setErr("Choose a video (MP4, WebM, MOV) or a music file (MP3, M4A, AAC, OGG, WAV)."); setFile(null); return; }
+    if (isVideo && f.size > VOICE_MEDIA_MAX_VIDEO) { setErr("Video must be 100 MB or smaller."); setFile(null); return; }
+    if (!isVideo && f.size > VOICE_MEDIA_MAX_AUDIO) { setErr("Music must be 20 MB or smaller."); setFile(null); return; }
+    setFile(f);
+    if (!name) setName(f.name.replace(/\.[^.]+$/, "").slice(0, 80));
+  };
+
+  const upload = () => {
+    if (!file) { setErr("Choose a video or music file first."); return; }
+    setBusy(true); setErr(""); setPct(0);
+    const form = new FormData();
+    form.append("file", file);
+    form.append("name", name.trim());
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/api/voice/media`);
+    xhr.setRequestHeader("X-Admin-Pin", pin.trim());
+    xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) setPct(Math.round((ev.loaded / ev.total) * 100)); };
+    xhr.onerror = () => { setBusy(false); setErr("Upload failed. Check your connection and try again."); };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+      setBusy(false);
+      if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+        setFile(null); setName(""); setPct(0);
+        onChanged(data.item?.id);
+      } else setErr(data.error || data.message || `Upload failed (${xhr.status}).`);
+    };
+    xhr.send(form);
+  };
+
+  const remove = async (id) => {
+    setBusy(true); setErr("");
+    try { await call("/api/voice/media/delete", { id }, true); onChanged(); }
+    catch (ex) { setErr(ex.message || "Could not remove it."); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <VoicePortal>
+      <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+        <div className="voice-sheet" role="dialog" aria-modal="true" aria-label="Add media">
+          <div className="voice-sheet-head">
+            <h2>{authed ? "Music & video" : "Add media"}</h2>
+            <button type="button" className="voice-sheet-close" aria-label="Close" onClick={onClose} disabled={busy}>{"\u2715"}</button>
+          </div>
+          <div className="voice-sheet-body">
+            {!authed ? (
+              <form className="voice-form" onSubmit={verify}>
+                <label className="voice-label" htmlFor="vr-pin">Enter the PIN used for Romantic Stories media</label>
+                <input id="vr-pin" className="voice-input" type="password" inputMode="numeric" autoComplete="off" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN" />
+                <p className="voice-privacy">Only people with this PIN can add or remove media for everyone.</p>
+              </form>
+            ) : (
+              <div className="voice-form">
+                <label className="voice-photo-btn vr-file-btn" htmlFor={fileId}>{file ? `\u2713 ${file.name}` : "\uFF0B Choose video or music"}</label>
+                <input id={fileId} type="file" accept="video/mp4,video/webm,video/quicktime,audio/*,.mp3,.m4a,.aac,.ogg,.wav" onChange={pick} hidden />
+                <label className="voice-label" htmlFor="vr-name">Title <small>(optional)</small></label>
+                <input id="vr-name" className="voice-input" type="text" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Shown under the player" />
+                {busy && pct > 0 && <div className="vr-progress" aria-label="Upload progress"><span style={{ width: `${pct}%` }} /></div>}
+                {items.length > 0 && (
+                  <div className="vr-media-list">
+                    <strong>Playing now ({items.length})</strong>
+                    {items.map((it) => (
+                      <div className="vr-media-row" key={it.id}>
+                        <span aria-hidden="true">{it.kind === "video" ? "\u{1F3AC}" : "\u{1F3B5}"}</span>
+                        <span className="vr-media-row-name">{it.name || (it.kind === "video" ? "Video" : "Music")}</span>
+                        <button type="button" className="voice-link" onClick={() => remove(it.id)} disabled={busy}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {err && <div className="voice-banner is-bad" role="alert">{err}</div>}
+          </div>
+          <div className="voice-sheet-foot">
+            {!authed
+              ? <button type="button" className="online-join-button" onClick={verify} disabled={busy}>{busy ? "Checking…" : "Continue"}</button>
+              : <button type="button" className="online-join-button" onClick={upload} disabled={busy || !file}>{busy ? (pct > 0 && pct < 100 ? `Uploading ${pct}%` : "Uploading…") : "Add to the room"}</button>}
+          </div>
+        </div>
+      </div>
+    </VoicePortal>
   );
 }
 
@@ -1894,9 +2080,12 @@ function OnlineVoiceLanding() {
   const [participants, setParticipants] = useState([]);
   const [roomInfo, setRoomInfo] = useState({ configured: true, count: null, participants: [] });
   const [needsAudioTap, setNeedsAudioTap] = useState(false);
-  const [duck, setDuck] = useState(() => {
-    try { return localStorage.getItem(VOICE_DUCK_KEY) !== "0"; } catch (e) { return true; }
-  });
+  const [mediaItems, setMediaItems] = useState([]);
+  const [mediaId, setMediaId] = useState("");
+  const [soundOn, setSoundOn] = useState(false);
+  const [mediaAdminOpen, setMediaAdminOpen] = useState(false);
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const [zoom, setZoom] = useState(null);
   const roomRef = useRef(null);
   const audioHostRef = useRef(null);
   const leavingRef = useRef(false);
@@ -1904,6 +2093,7 @@ function OnlineVoiceLanding() {
   const profileRef = useRef(null);
   const mediaRef = useRef(null);
   const rampRef = useRef({ timer: null, restore: null });
+  const spokeRef = useRef(false);
   const photoInputId = useId();
 
   const me = participants.find((p) => p.isLocal);
@@ -2087,6 +2277,7 @@ function OnlineVoiceLanding() {
     if (!phone) { setFormError("Enter your phone number (digits only, without the country code)."); setEditing(true); return; }
     if (name.length < 2) { setFormError("Choose a username of at least 2 characters."); setEditing(true); return; }
     setFormError(""); setRoomError("");
+    setSoundOn(true);
     // Ask for the microphone inside the tap itself (required by mobile browsers).
     const micProbe = voiceProbeMic();
     setPhase("connecting");
@@ -2145,32 +2336,62 @@ function OnlineVoiceLanding() {
 
   const switchUser = () => { setEditing(true); setFormError(""); };
 
-  // ---- Media ducking: lower music/video while people talk, restore when quiet ----
+  // ---- Shared media list (video / music) ----
+  const loadMedia = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/voice/media`, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.items)) setMediaItems(data.items);
+    } catch (e) { /* offline: keep what we have */ }
+  }, []);
+  useEffect(() => {
+    loadMedia();
+    const t = setInterval(() => { if (!document.hidden) loadMedia(); }, 45000);
+    return () => clearInterval(t);
+  }, [loadMedia]);
+
+  const currentMedia = mediaItems.find((m) => m.id === mediaId) || mediaItems[0] || null;
+  const nextMedia = useCallback(() => {
+    if (mediaItems.length < 2) return;
+    const i = Math.max(0, mediaItems.findIndex((m) => m.id === (currentMedia && currentMedia.id)));
+    setMediaFailed(false);
+    setMediaId(mediaItems[(i + 1) % mediaItems.length].id);
+  }, [mediaItems, currentMedia]);
+  useEffect(() => { setMediaFailed(false); }, [currentMedia && currentMedia.id]);
+
+  // ---- Media follows the room: silent while anybody talks, back (as background) when it is quiet ----
   useEffect(() => {
     const el = mediaRef.current;
     const ramp = rampRef.current;
     if (!el) return undefined;
+    clearInterval(ramp.timer);
+    clearTimeout(ramp.restore);
     const rampTo = (target) => {
       clearInterval(ramp.timer);
+      if (target > 0) el.muted = !soundOn;
+      let guard = 0;
       ramp.timer = setInterval(() => {
-        const diff = target - el.volume;
-        if (Math.abs(diff) < 0.04) { el.volume = target; clearInterval(ramp.timer); return; }
-        el.volume = Math.min(1, Math.max(0, el.volume + Math.sign(diff) * 0.06));
-      }, 40);
+        guard += 1;
+        let diff = target - el.volume;
+        if (Math.abs(diff) < 0.05 || guard > 14) {
+          clearInterval(ramp.timer);
+          try { el.volume = target; } catch (e) { /* iOS keeps volume fixed */ }
+          el.muted = !soundOn || target === 0; // muting is what really works on iPhones
+          return;
+        }
+        try { el.volume = Math.min(1, Math.max(0, el.volume + Math.sign(diff) * 0.14)); } catch (e) { /* ignore */ }
+      }, 35);
     };
-    clearTimeout(ramp.restore);
-    if (!duck) { rampTo(1); return undefined; }
-    if (anySpeaking) rampTo(VOICE_DUCK_LEVEL);
-    else ramp.restore = setTimeout(() => rampTo(1), VOICE_DUCK_RESTORE_MS);
+    if (!soundOn) { el.muted = true; return undefined; }
+    if (anySpeaking) { spokeRef.current = true; rampTo(0); }
+    else if (spokeRef.current) {
+      ramp.restore = setTimeout(() => { spokeRef.current = false; rampTo(VOICE_MEDIA_LEVEL); }, VOICE_DUCK_RESTORE_MS);
+    } else rampTo(VOICE_MEDIA_LEVEL);
+    const p = el.play && el.play();
+    if (p && p.catch) p.catch(() => {});
     return () => { clearTimeout(ramp.restore); };
-  }, [anySpeaking, duck, phase]);
+  }, [anySpeaking, soundOn, currentMedia && currentMedia.id, phase]);
   useEffect(() => () => { clearInterval(rampRef.current.timer); clearTimeout(rampRef.current.restore); }, []);
-
-  const toggleDuck = () => {
-    const next = !duck;
-    setDuck(next);
-    try { localStorage.setItem(VOICE_DUCK_KEY, next ? "1" : "0"); } catch (e) { /* ignore */ }
-  };
 
   const selectedOpt = VOICE_DIAL_OPTIONS.find((o) => o.iso === effIso);
   const live = phase === "live";
@@ -2179,103 +2400,24 @@ function OnlineVoiceLanding() {
   const savedFlag = voiceFlagFromIso(effIso);
   const showWelcomeBack = phase !== "live" && !editing && hasSaved;
 
-  return (
-    <section className="online-voice-page">
-      <header className="online-voice-header">
-        <span className="online-voice-icon" aria-hidden="true">{"\u{1F399}️"}</span>
-        <div className="online-live-status">
-          <span className="online-live-dot"></span>
-          {configured ? "LIVE CONVERSATION" : "OPENING SOON"}
-        </div>
-        <h1>{"\u{1F30D}"} Open Conversation</h1>
-        <p>Join the live conversation and talk with people around the world.</p>
-        <div className="online-participant-count" aria-live="polite">
-          {"\u{1F465}"} <span>{count === null || count === undefined ? "–" : count}</span> {count === 1 ? "person" : "people"} online
-        </div>
-      </header>
+  const people = live ? participants : roomInfo.participants;
+  const mediaIcon = currentMedia && currentMedia.kind === "video" ? "\u{1F3AC}" : "\u{1F3B5}";
 
-      <div className="online-media-stage">
-        {OPEN_ROOM_MEDIA_URL ? (
-          <div className="online-media-player">
-            <video ref={mediaRef} src={OPEN_ROOM_MEDIA_URL} controls playsInline loop preload="metadata" />
-            <label className="voice-duck-toggle">
-              <input type="checkbox" checked={duck} onChange={toggleDuck} />
-              <span>Lower media volume when people talk</span>
-            </label>
+  const entrySheet = (
+    <VoicePortal>
+      <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== "connecting") setAskOpen(false); }}>
+        <div className="voice-entry voice-sheet" role="dialog" aria-modal="true" aria-label="Join the conversation">
+          <div className="voice-sheet-head">
+            <h2>{showWelcomeBack ? "Welcome back" : "Join the conversation"}</h2>
+            <button type="button" className="voice-sheet-close" aria-label="Close" onClick={() => setAskOpen(false)} disabled={phase === "connecting"}>{"\u2715"}</button>
           </div>
-        ) : (
-          <div className="online-media-placeholder">
-            <span className="online-media-emoji" aria-hidden="true">{"\u{1F3B5}"}</span>
-            <p>Music or video will appear here</p>
-            <div className="online-media-audio-status">{"\u{1F50A}"} Media audio lowers automatically when someone is speaking</div>
-          </div>
-        )}
-
-        {live && status !== "connected" && (
-          <div className={`voice-banner ${status === "lost" ? "is-bad" : "is-warn"}`} role="status">
-            <span>{status === "reconnecting" ? "Reconnecting…" : "Connection lost. Trying to get you back in…"}</span>
-            {status === "lost" && <button type="button" onClick={manualRejoin}>Rejoin</button>}
-          </div>
-        )}
-        {live && needsAudioTap && (
-          <button type="button" className="voice-banner is-info voice-tap-audio" onClick={enableSound}>
-            {"\u{1F50A}"} Tap to turn on sound
-          </button>
-        )}
-        {roomError && <div className="voice-banner is-warn" role="alert">{roomError}</div>}
-
-        {live ? (
-          <div className="online-participants" data-count={participants.length} data-many={participants.length > 9 ? "1" : "0"}>
-            {participants.map((p) => (
-              <div key={p.id} className={`online-person-bubble${p.speaking ? " is-speaking" : ""}${p.isLocal ? " is-local" : ""}`}>
-                <VoiceAvatar avatar={p.avatar} flag={p.flag} label={p.name} />
-                <span className="online-person-online-dot" aria-hidden="true"></span>
-                <span className="online-person-name">{p.name}{p.isLocal ? " (you)" : ""}</span>
-                {p.speaking
-                  ? <span className="online-person-speaking">{"\u{1F50A}"} Speaking</span>
-                  : <span className={`online-person-mic${p.muted ? " is-muted" : ""}`}>{p.muted ? "\u{1F507} Muted" : "\u{1F399}️ Mic on"}</span>}
-              </div>
-            ))}
-          </div>
-        ) : (
-          roomInfo.participants.length > 0 && (
-            <div className="voice-people-strip" aria-label="People in the room right now">
-              <div className="voice-people-faces">
-                {roomInfo.participants.slice(0, 8).map((p, i) => (
-                  <VoiceAvatar key={`${p.name}-${i}`} avatar={p.avatar} flag={p.flag} size={40} label={p.name} />
-                ))}
-              </div>
-              <span>{roomInfo.participants.slice(0, 3).map((p) => p.name).join(", ")}{roomInfo.count > 3 ? ` and ${roomInfo.count - 3} more` : ""} in the room</span>
-            </div>
-          )
-        )}
-
-        {/* ---------- Entry (no Gwamo account, no PIN, no OTP) ---------- */}
-        {!live && !askOpen && (
-          <div className="voice-entry voice-entry-closed">
-            {formError && <div className="voice-banner is-bad" role="alert">{formError}</div>}
-            <div className="online-stage-actions">
-              <button type="button" className="online-join-button" onClick={() => { setFormError(""); setAskOpen(true); }} disabled={!configured}>
-                {!configured ? "Opening soon" : "\u{1F399}️ Join Conversation"}
-              </button>
-              <small className="voice-mic-note">{hasSaved ? `Welcome back, ${username}. Tap to continue.` : "Quick join: just your name and phone number. No account needed."}</small>
-            </div>
-          </div>
-        )}
-
-        {!live && askOpen && (
-          <div className="voice-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== "connecting") setAskOpen(false); }}>
-          <div className="voice-entry voice-sheet" role="dialog" aria-modal="true" aria-label="Join the conversation">
-            <div className="voice-sheet-head">
-              <h2>{showWelcomeBack ? "Welcome back" : "Join the conversation"}</h2>
-              <button type="button" className="voice-sheet-close" aria-label="Close" onClick={() => setAskOpen(false)} disabled={phase === "connecting"}>{"✕"}</button>
-            </div>
+          <div className="voice-sheet-body">
             {showWelcomeBack ? (
               <div className="voice-welcome-back">
                 <VoiceAvatar avatar={photoPreview} flag={savedFlag} size={64} label={username} />
                 <div>
                   <strong>Welcome back, {username}</strong>
-                  <small>{selectedOpt?.flag} {selectedOpt?.dial} {"•••"} {String(effNational).slice(-3)}</small>
+                  <small>{selectedOpt?.flag} {selectedOpt?.dial} {"\u2022\u2022\u2022"} {String(effNational).slice(-3)}</small>
                 </div>
                 <button type="button" className="voice-link" onClick={switchUser}>Not you? Edit</button>
               </div>
@@ -2302,31 +2444,98 @@ function OnlineVoiceLanding() {
                     <strong>Profile photo <small>(optional)</small></strong>
                     <span>{photoPreview ? "Looks good." : "No photo? Your country flag is used."}</span>
                   </div>
-                  <label className="voice-photo-btn" htmlFor={photoInputId}>{photoBusy ? "Uploading…" : photoPreview ? "Change" : "Add"}</label>
+                  <label className="voice-photo-btn" htmlFor={photoInputId}>{photoBusy ? "Uploading\u2026" : photoPreview ? "Change" : "Add"}</label>
                   <input id={photoInputId} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={onPhotoPick} hidden />
                   {photoPreview && !photoBusy && <button type="button" className="voice-link" onClick={removePhoto}>Remove</button>}
                 </div>
                 <p className="voice-privacy">Your phone number stays private. Others only see your username and photo or flag.</p>
               </form>
             )}
-
             {formError && <div className="voice-banner is-bad" role="alert">{formError}</div>}
-
-            <div className="online-stage-actions">
-              <button type="button" className="online-join-button" onClick={join} disabled={phase === "connecting" || photoBusy || !configured}>
-                {phase === "connecting" ? "Connecting…" : !configured ? "Opening soon" : showWelcomeBack ? `\u{1F399}️ Continue as ${username}` : "\u{1F399}️ Join now"}
-              </button>
-              <small className="voice-mic-note">You join muted. Your microphone is only on when you tap the mic.</small>
-            </div>
           </div>
+          <div className="voice-sheet-foot">
+            <button type="button" className="online-join-button" onClick={join} disabled={phase === "connecting" || photoBusy || !configured}>
+              {phase === "connecting" ? "Connecting\u2026" : !configured ? "Opening soon" : showWelcomeBack ? `\u{1F399}\uFE0F Continue as ${username}` : "\u{1F399}\uFE0F Join now"}
+            </button>
+            <small className="voice-mic-note">You join muted. Your microphone is only on when you tap the mic.</small>
+          </div>
+        </div>
+      </div>
+    </VoicePortal>
+  );
+
+  return (
+    <section className="online-voice-page">
+      <header className="online-voice-header">
+        <span className="online-voice-icon" aria-hidden="true">{"\u{1F399}\uFE0F"}</span>
+        <div className="online-live-status">
+          <span className="online-live-dot"></span>
+          {configured ? "LIVE CONVERSATION" : "OPENING SOON"}
+        </div>
+        <h1>{"\u{1F30D}"} Open Conversation</h1>
+        <p>Join the live conversation and talk with people around the world.</p>
+        <div className="online-participant-count" aria-live="polite">
+          {"\u{1F465}"} <span>{count === null || count === undefined ? "\u2013" : count}</span> {count === 1 ? "person" : "people"} online
+        </div>
+      </header>
+
+      <div className="online-media-stage">
+        <VoicePeople people={people} live={live} onZoom={setZoom} />
+
+        <div className="vr-media">
+          {currentMedia ? (
+            currentMedia.kind === "video" ? (
+              <video key={currentMedia.id} ref={mediaRef} className="vr-media-video" src={currentMedia.url} autoPlay muted playsInline preload="auto"
+                loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
+            ) : (
+              <div className="vr-media-audio">
+                <span className={`vr-music-art${soundOn ? " is-on" : ""}`} aria-hidden="true">{"\u{1F3B5}"}</span>
+                <span className={`vr-eq${soundOn && !anySpeaking ? " is-on" : ""}`} aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                <audio key={currentMedia.id} ref={mediaRef} src={currentMedia.url} autoPlay muted preload="auto"
+                  loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
+              </div>
+            )
+          ) : (
+            <div className="vr-media-empty">
+              <span className="online-media-emoji" aria-hidden="true">{"\u{1F3B5}"}</span>
+              <p>Music or video will appear here</p>
+            </div>
+          )}
+          {currentMedia && !soundOn && !mediaFailed && (
+            <button type="button" className="vr-sound-btn" onClick={() => setSoundOn(true)}>{"\u{1F50A}"} Tap for sound</button>
+          )}
+          {mediaFailed && (
+            <div className="vr-media-error" role="status">
+              This {currentMedia && currentMedia.kind === "video" ? "video" : "music"} could not play.
+              {mediaItems.length > 1 && <button type="button" onClick={nextMedia}>Play next</button>}
+            </div>
+          )}
+        </div>
+        <div className="vr-media-bar">
+          <span className="vr-now">{currentMedia ? <>{mediaIcon} <span>{currentMedia.name || (currentMedia.kind === "video" ? "Video" : "Music")}</span></> : <>{"\u{1F3B5}"} <span>Music &amp; video</span></>}</span>
+          {mediaItems.length > 1 && <button type="button" className="vr-chip" onClick={nextMedia}>{"\u23ED"} Next</button>}
+          <button type="button" className="vr-chip vr-add" onClick={() => setMediaAdminOpen(true)}>{"\uFF0B"} Add media</button>
+        </div>
+        {currentMedia && soundOn && <div className="vr-auto-note">{"\u{1F50A}"} Media goes quiet while someone is talking.</div>}
+
+        {live && status !== "connected" && (
+          <div className={`voice-banner ${status === "lost" ? "is-bad" : "is-warn"}`} role="status">
+            <span>{status === "reconnecting" ? "Reconnecting\u2026" : "Connection lost. Trying to get you back in\u2026"}</span>
+            {status === "lost" && <button type="button" onClick={manualRejoin}>Rejoin</button>}
           </div>
         )}
+        {live && needsAudioTap && (
+          <button type="button" className="voice-banner is-info voice-tap-audio" onClick={enableSound}>
+            {"\u{1F50A}"} Tap to turn on sound
+          </button>
+        )}
+        {roomError && <div className="voice-banner is-warn" role="alert">{roomError}</div>}
       </div>
 
       {/* Remote audio elements are attached here (kept in the DOM, visually hidden). */}
       <div ref={audioHostRef} className="voice-audio-host" aria-hidden="true"></div>
 
-      {live && (
+      {live ? (
         <div className="voice-controls" role="group" aria-label="Microphone controls">
           <div className={`voice-mic-state${muted ? "" : " is-live"}`}>
             <span className="voice-mic-dot" aria-hidden="true"></span>
@@ -2334,33 +2543,27 @@ function OnlineVoiceLanding() {
           </div>
           <div className="voice-controls-row">
             <button type="button" className={`online-mic-button${muted ? " is-muted" : " is-live"}`} onClick={toggleMic} disabled={status !== "connected"} aria-pressed={!muted} aria-label={muted ? "Unmute microphone" : "Mute microphone"}>
-              {muted ? "\u{1F507}" : "\u{1F399}️"}
+              {muted ? "\u{1F507}" : "\u{1F399}\uFE0F"}
             </button>
-            <button type="button" className="online-leave-button" onClick={leave}>{"✕"} Leave conversation</button>
+            <button type="button" className="online-leave-button" onClick={leave}>{"\u2715"} Leave conversation</button>
           </div>
-          {OPEN_ROOM_MEDIA_URL && (
-            <label className="voice-duck-toggle voice-duck-inline">
-              <input type="checkbox" checked={duck} onChange={toggleDuck} />
-              <span>Lower media when people talk</span>
-            </label>
-          )}
+        </div>
+      ) : (
+        <div className="voice-controls vr-join-dock">
+          {formError && !askOpen && <div className="voice-banner is-bad" role="alert">{formError}</div>}
+          <button type="button" className="online-join-button" onClick={() => { setFormError(""); setAskOpen(true); }} disabled={!configured}>
+            {!configured ? "Opening soon" : "\u{1F399}\uFE0F Join Conversation"}
+          </button>
+          <small className="voice-mic-note">{hasSaved ? `Welcome back, ${username}. Tap to continue.` : "Quick join: just your name and phone number. No account needed."}</small>
         </div>
       )}
 
-      <div className="online-voice-cards">
-        <div className="online-voice-card">
-          <h2>{"\u{1F30D}"} Live Conversation</h2>
-          <p>Everyone can talk and listen together.</p>
-        </div>
-        <div className="online-voice-card">
-          <h2>{"\u{1F3B5}"} Music &amp; Video</h2>
-          <p>Media plays when nobody is talking.</p>
-        </div>
-        <div className="online-voice-card">
-          <h2>{"\u{1F399}️"} Microphone</h2>
-          <p>Mute or unmute your microphone any time.</p>
-        </div>
-      </div>
+      {!live && askOpen && entrySheet}
+      {mediaAdminOpen && (
+        <VoiceMediaAdmin items={mediaItems} onClose={() => setMediaAdminOpen(false)}
+          onChanged={(newId) => { loadMedia(); if (newId) setMediaId(newId); }} />
+      )}
+      {zoom && <VoiceZoom zoom={zoom} onClose={() => setZoom(null)} />}
     </section>
   );
 }
@@ -2470,6 +2673,7 @@ const ServicePost = memo(function ServicePost({
   const [rotationPaused, setRotationPaused] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
   const [avatarZoomOpen, setAvatarZoomOpen] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState("");
   const [replyStep, setReplyStep] = useState(0);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyName, setReplyName] = useState("");
@@ -2560,7 +2764,20 @@ const ServicePost = memo(function ServicePost({
   const activeComment = comments.length ? comments[commentIndex % comments.length] : null;
   const commentText = activeComment?.text_content || activeComment?.comment || activeComment?.body || activeComment?.text || "";
   const commentName = activeComment?.commenter_name || activeComment?.full_name || activeComment?.name || activeComment?.author_name || "Gwamo member";
-  const commentAvatar = activeComment?.profile_image_url || activeComment?.avatar_url || activeComment?.avatar || DEFAULT_LOGO;
+  const commentAvatar = activeComment?.profile_image_url || activeComment?.avatar_url || activeComment?.avatar || "";
+  const commentWhen = (() => {
+    const v = activeComment?.created_at || activeComment?.createdAt;
+    const t = v ? new Date(v).getTime() : NaN;
+    if (Number.isNaN(t)) return "";
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (m < 1) return "now";
+    if (m < 60) return `${m}m`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.round(h / 24);
+    if (d < 7) return `${d}d`;
+    return new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
+  })();
   const phone = String(activeComment?.phone || activeComment?.telephone || "");
   const country = String(activeComment?.country_code || activeComment?.country || "").toUpperCase();
   const flag = ({ RW: "🇷🇼", KE: "🇰🇪", UG: "🇺🇬", TZ: "🇹🇿", BI: "🇧🇮", CD: "🇨🇩", US: "🇺🇸", GB: "🇬🇧" })[country]
@@ -3168,13 +3385,18 @@ const ServicePost = memo(function ServicePost({
             onTouchStart={() => setRotationPaused(true)}
             onTouchEnd={() => setRotationPaused(false)}
           >
-            <button type="button" className="comment-avatar-zoom" aria-label={`View ${commentName}'s full profile picture`} onClick={() => setAvatarZoomOpen(true)}>
-              <img className="comment-avatar" src={commentAvatar} alt={`${commentName}'s profile`} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = DEFAULT_LOGO; }} />
-            </button>
+            {commentAvatar && avatarBroken !== commentAvatar ? (
+              <button type="button" className="comment-avatar-zoom" aria-label={`View ${commentName}'s full profile picture`} onClick={() => setAvatarZoomOpen(true)}>
+                <img className="comment-avatar" src={commentAvatar} alt={`${commentName}'s profile`} onError={() => setAvatarBroken(commentAvatar)} />
+              </button>
+            ) : (
+              <span className="comment-avatar-zoom is-flag" aria-hidden="true"><span className="comment-flag-avatar">{activeComment?.country_flag || flag}</span></span>
+            )}
             <div className="comment-copy">
               <div className="comment-author-row">
                 <strong>{commentName}</strong>
                 <span className="comment-country-flag">{activeComment?.country_flag || flag}</span>
+                {commentWhen && <span className="comment-when">· {commentWhen}</span>}
               </div>
               <p>{replyExpanded || String(commentText).length <= 260 ? commentText : `${String(commentText).slice(0, 260)}…`}</p>
               {String(commentText).length > 260 && <button type="button" className="tagline-toggle-button" onClick={() => setReplyExpanded((value) => !value)}>{replyExpanded ? "Read less" : "Read more"}</button>}
@@ -3188,11 +3410,13 @@ const ServicePost = memo(function ServicePost({
         )}
       </section>
 
-      {replyOpen && (
+      {replyOpen && typeof document !== "undefined" && createPortal(
+        <div className="reply-sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !replySending) setReplyOpen(false); }}>
         <form id={`reply-form-${postId}`} className="post-reply-chat-form" onSubmit={submitReply}>
           <div className="reply-chat-topline">
             <span>Reply to this post</span>
             <span>Step {replyStep + 1} of 4</span>
+            <button type="button" className="reply-sheet-close" aria-label="Close" onClick={() => setReplyOpen(false)} disabled={replySending}>✕</button>
           </div>
           <div className="reply-chat-progress"><span style={{ width: `${((replyStep + 1) / 4) * 100}%` }} /></div>
 
@@ -3259,8 +3483,10 @@ const ServicePost = memo(function ServicePost({
           )}
           {replyError && <p className="reply-chat-error" role="alert">{replyError}</p>}
         </form>
+        </div>,
+        document.body
       )}
-      {avatarZoomOpen && activeComment && (
+      {avatarZoomOpen && activeComment && commentAvatar && (
         <div className="reply-avatar-lightbox" role="dialog" aria-modal="true" aria-label={`${commentName} profile picture`} onClick={() => setAvatarZoomOpen(false)}>
           <button type="button" aria-label="Close profile picture" onClick={() => setAvatarZoomOpen(false)}>×</button>
           <img src={commentAvatar} alt={`${commentName}'s full profile picture`} onClick={(event) => event.stopPropagation()} />
@@ -5527,6 +5753,125 @@ function HomeStylesInner() {
       @media (min-width: 700px) { .voice-sheet-backdrop { align-items: center; } .voice-sheet { border-radius: 22px; } }
       @keyframes voice-sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
       .voice-entry-closed { align-items: center; }
+
+      /* ===== Open Conversation v3: people above media, shared media player, sheets, zoom ===== */
+      .online-voice-portal { --voice: #34d399; --voice-strong: #10b981; --voice-soft: rgba(52, 211, 153, 0.12); --voice-line: rgba(52, 211, 153, 0.28); --voice-dim: #a9b8d4; --amber: #ffb938; font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #f4f8ff; }
+      .online-voice-portal *, .online-voice-portal *::before, .online-voice-portal *::after { box-sizing: border-box; }
+
+      /* people: X-style round photos, no outer edge */
+      .vr-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--vr-size, 64px) + 20px), 1fr)); gap: 14px 6px; justify-items: center; max-height: 232px; overflow-y: auto; overscroll-behavior: contain; padding: 2px 0 4px; }
+      .vr-person { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      .vr-avatar-wrap { position: relative; line-height: 0; }
+      .online-voice-page .online-person-avatar { border: 0; box-shadow: none; border-radius: 50%; overflow: hidden; padding: 0; display: grid; place-items: center; }
+      .online-voice-page .online-person-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+      .online-voice-page .online-person-avatar.is-zoomable { cursor: zoom-in; -webkit-appearance: none; appearance: none; color: inherit; }
+      .online-voice-page .online-person-avatar.is-zoomable:focus-visible { outline: 2px solid var(--voice); outline-offset: 2px; }
+      .vr-badge { position: absolute; right: -3px; bottom: -3px; width: 22px; height: 22px; display: grid; place-items: center; border: 2px solid #0a1a24; border-radius: 50%; font-size: 11px; line-height: 1; background: #334155; }
+      .vr-badge.is-live { background: #10b981; }
+      .vr-badge.is-speaking { background: #10b981; }
+      .vr-bars { display: inline-flex; align-items: center; gap: 1.5px; height: 10px; }
+      .vr-bars i { width: 2px; height: 4px; border-radius: 2px; background: #03231a; animation: vr-bar 0.9s ease-in-out infinite; }
+      .vr-bars i:nth-child(2) { animation-delay: 0.15s; } .vr-bars i:nth-child(3) { animation-delay: 0.3s; }
+      @keyframes vr-bar { 0%, 100% { height: 3px; } 50% { height: 10px; } }
+      .vr-name { max-width: 100%; overflow: hidden; color: #f4f8ff; font-size: 12.5px; font-weight: 700; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+      .vr-person.is-speaking .vr-name { color: var(--voice); }
+
+      /* media */
+      .vr-media { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: min(46svh, 440px); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 18px; background: #000; }
+      .vr-media-video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+      .vr-media-audio { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(2, 9, 29, 0.78); }
+      .vr-music-art { font-size: 46px; line-height: 1; }
+      .vr-eq { display: inline-flex; align-items: flex-end; gap: 4px; height: 24px; }
+      .vr-eq i { width: 5px; height: 6px; border-radius: 3px; background: #34d399; opacity: 0.45; }
+      .vr-eq.is-on i { opacity: 1; animation: vr-eq 1s ease-in-out infinite; }
+      .vr-eq.is-on i:nth-child(2) { animation-delay: 0.12s; } .vr-eq.is-on i:nth-child(3) { animation-delay: 0.24s; } .vr-eq.is-on i:nth-child(4) { animation-delay: 0.36s; } .vr-eq.is-on i:nth-child(5) { animation-delay: 0.48s; }
+      @keyframes vr-eq { 0%, 100% { height: 6px; } 50% { height: 24px; } }
+      .vr-media-empty { width: 100%; height: 100%; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed rgba(52, 211, 153, 0.3); border-radius: 18px; background: rgba(2, 9, 29, 0.45); text-align: center; }
+      .vr-media-empty p { margin: 0; color: #d1fae5; font-size: 14.5px; font-weight: 600; }
+      .vr-sound-btn { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; color: #d1fae5; background: rgba(2, 9, 29, 0.85); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+      .vr-media-error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; color: #fecaca; background: rgba(2, 9, 29, 0.88); font-size: 14px; }
+      .vr-media-error button { min-height: 40px; padding: 0 16px; border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 999px; color: #6ee7b7; background: transparent; font-weight: 700; cursor: pointer; }
+      .vr-media-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .vr-now { flex: 1 1 140px; min-width: 0; display: flex; align-items: center; gap: 6px; color: #d1fae5; font-size: 13.5px; font-weight: 600; }
+      .vr-now > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .vr-chip { min-height: 40px; padding: 0 14px; border: 1px solid rgba(52, 211, 153, 0.28); border-radius: 999px; color: #6ee7b7; background: rgba(16, 185, 129, 0.12); font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+      .vr-chip:active { transform: scale(0.97); }
+      .vr-auto-note { color: var(--voice-dim); font-size: 12px; text-align: center; }
+
+      /* the join bar shares the sticky dock look of the live controls */
+      .vr-join-dock { gap: 8px; }
+      .vr-join-dock .online-join-button { max-width: none; width: 100%; }
+      .vr-join-dock .voice-banner { width: 100%; }
+
+      /* sheets: header and the action button stay on screen, only the middle scrolls */
+      .voice-sheet-backdrop { z-index: 3000; }
+      .voice-sheet { display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: min(92dvh, 760px); }
+      .voice-sheet-head { padding: 16px 18px 8px; flex: 0 0 auto; }
+      .voice-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 4px 18px 12px; display: flex; flex-direction: column; gap: 12px; }
+      .voice-sheet-foot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 18px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255, 255, 255, 0.08); background: #0b1426; }
+      .voice-sheet-foot .online-join-button { max-width: none; width: 100%; }
+      .voice-sheet-close { flex: 0 0 auto; }
+      .vr-file-btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 54px; padding: 0 14px; border: 1px dashed rgba(52, 211, 153, 0.4); border-radius: 14px; text-align: center; word-break: break-word; cursor: pointer; }
+      .vr-progress { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+      .vr-progress span { display: block; height: 100%; background: linear-gradient(135deg, #34d399, #10b981); transition: width 120ms linear; }
+      .vr-media-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+      .vr-media-list > strong { font-size: 13px; color: #d6e4ff; }
+      .vr-media-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+      .vr-media-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+
+      /* tap a photo to see it whole */
+      .voice-zoom { position: fixed; inset: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; background: rgba(0, 0, 0, 0.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); cursor: zoom-out; }
+      .voice-zoom img { width: min(92vw, 560px); max-width: 100%; max-height: 80svh; height: auto; object-fit: contain; border-radius: 14px; box-shadow: 0 18px 70px rgba(0, 0, 0, 0.5); cursor: default; }
+      .voice-zoom-name { color: #fff; font-size: 15px; font-weight: 700; }
+      .voice-zoom-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; width: 46px; height: 46px; border: 0; border-radius: 50%; color: #111; background: #fff; font-size: 30px; line-height: 1; cursor: pointer; }
+
+      /* layout for every screen size */
+      @media (max-width: 600px) {
+        .online-voice-page { padding-top: 16px; gap: 14px; }
+        .online-voice-icon { width: 56px; height: 56px; font-size: 28px; border-radius: 20px; }
+        .online-voice-header { gap: 8px; }
+        .online-media-stage { gap: 14px; }
+      }
+      @media (max-width: 360px) {
+        .vr-chip { padding: 0 11px; font-size: 12.5px; }
+        .voice-sheet-body, .voice-sheet-foot, .voice-sheet-head { padding-left: 14px; padding-right: 14px; }
+      }
+      @media (min-width: 1000px) {
+        .online-voice-page { max-width: 880px; }
+        .vr-media { max-height: 480px; }
+        .vr-people { max-height: 260px; }
+      }
+      @media (max-height: 700px) {
+        .online-voice-header p { display: none; }
+        .online-voice-icon { width: 46px; height: 46px; font-size: 24px; border-radius: 16px; }
+        .vr-join-dock .voice-mic-note { display: none; }
+        .vr-media { max-height: 40svh; }
+      }
+      @media (max-height: 560px) {
+        .online-voice-icon, .online-voice-header p { display: none; }
+        .vr-media { max-height: 58svh; }
+      }
+      @media (prefers-reduced-motion: reduce) { .vr-bars i, .vr-eq.is-on i { animation: none; } }
+
+      /* ===== Trendz social feedback: X-style post row (photo fits its circle, flag when no photo) ===== */
+      .home-page .home-post .post-replies-chat .comment-avatar-zoom {
+        width: 52px !important; height: 52px !important; min-width: 52px !important; min-height: 52px !important; flex: 0 0 52px !important;
+        border: 0 !important; box-shadow: none !important; border-radius: 50% !important;
+      }
+      .home-page .home-post .post-replies-chat .comment-avatar-zoom.is-flag { cursor: default !important; display: grid !important; place-items: center !important; background: rgba(255, 255, 255, 0.08) !important; }
+      .home-page .home-post .post-replies-chat .comment-flag-avatar { font-size: 30px; line-height: 1; }
+      .home-page .home-post .post-replies-chat .rotating-comment { align-items: flex-start; gap: 12px; }
+      .home-page .home-post .post-replies-chat .comment-author-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 2px; }
+      .home-page .home-post .post-replies-chat .comment-author-row strong { font-size: 15px; font-weight: 800; line-height: 1.2; }
+      .home-page .home-post .post-replies-chat .comment-when { color: #9fb5d3; font-size: 13.5px; font-weight: 500; }
+      .home-page .home-post .post-replies-chat .comment-copy p { font-size: 15px; line-height: 1.45; margin: 2px 0 0; }
+
+      /* the reply form is a bottom sheet: it can never be cut off, and Send/Back stay in reach */
+      .reply-sheet-backdrop { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-end; justify-content: center; background: rgba(2, 6, 18, 0.7); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+      .reply-sheet-backdrop .post-reply-chat-form { position: relative; margin: 0 !important; width: min(100%, 520px); max-height: min(92dvh, 720px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; border-radius: 22px 22px 0 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+      .reply-sheet-backdrop .reply-chat-buttons { position: sticky; bottom: calc(-14px - env(safe-area-inset-bottom)); padding: 14px 0 2px; background: linear-gradient(to top, #07152d 72%, rgba(7, 21, 45, 0)); }
+      .reply-sheet-close { width: 34px; height: 34px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #eaf2ff; background: rgba(255, 255, 255, 0.1); font-size: 16px; line-height: 1; cursor: pointer; }
+      @media (min-width: 700px) { .reply-sheet-backdrop { align-items: center; } .reply-sheet-backdrop .post-reply-chat-form { border-radius: 22px; } }
     `}</style>
   );
 }
