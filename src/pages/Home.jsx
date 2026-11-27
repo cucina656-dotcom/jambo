@@ -1906,26 +1906,80 @@ function VoiceZoom({ zoom, onClose }) {
   );
 }
 
-function VoicePeople({ people, live, onZoom }) {
-  if (!people.length) return null;
-  const size = people.length > 30 ? 44 : people.length > 12 ? 52 : 64;
+function VrMicIcon({ off, small }) {
+  const px = small ? 12 : 30;
   return (
-    <div className="vr-people" role="list" aria-label="People in the room" style={{ "--vr-size": `${size}px` }}>
-      {people.map((p, i) => {
+    <svg className="vr-mic-svg" width={px} height={px} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" />
+      {off && <path d="M4 4l16 16" stroke="#ff5c70" strokeWidth="2.6" />}
+    </svg>
+  );
+}
+
+function vrHash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 1000; }
+
+// Scatter the avatars along the two sides of the media so the picture in the middle stays visible.
+function vrSlots(n, keys) {
+  const lanes = n <= 10 ? 2 : 4;
+  const laneX = lanes === 2 ? [16, 84] : [11, 89, 32, 68];
+  const perLane = Math.ceil(n / lanes);
+  return keys.map((k, i) => {
+    const lane = i % lanes;
+    const row = Math.floor(i / lanes);
+    const j = vrHash(k) / 1000;
+    const off = lanes === 2 ? (lane ? 0.75 : 0.25) : (lane % 2 ? 0.75 : 0.25);
+    const y = (row + off) / perLane;
+    const x = laneX[lane] + (lane % 2 ? -1 : 1) * j * (lanes === 2 ? 7 : 3);
+    const lo = 0.25 / perLane, hi = (perLane - 0.25) / perLane;
+    return { x, y: perLane > 1 ? (y - lo) / (hi - lo) : 0.5 };
+  });
+}
+
+function VoicePeople({ people, live, onZoom }) {
+  const hostRef = useRef(null);
+  const [box, setBox] = useState({ w: 360, h: 300 });
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return undefined;
+    const read = () => { const r = el.getBoundingClientRect(); setBox((o) => (Math.abs(o.w - r.width) < 1 && Math.abs(o.h - r.height) < 1 ? o : { w: r.width, h: r.height })); };
+    read();
+    if (typeof ResizeObserver !== "undefined") { const ro = new ResizeObserver(read); ro.observe(el); return () => ro.disconnect(); }
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, [people.length > 0]);
+  const n = people.length;
+  const lanes = n <= 10 ? 2 : 4;
+  const perLane = Math.max(1, Math.ceil(n / lanes));
+  const base = n <= 6 ? 68 : n <= 10 ? 60 : 50;
+  const fit = Math.floor(Math.min((box.h - 20) / (1 + (perLane - 0.5) / 0.9), box.w * (lanes === 2 ? 0.26 : 0.19)));
+  const size = Math.min(base, fit);
+  const grid = n > 24 || size < 34;
+  const gridSize = Math.max(34, Math.min(48, Math.floor(box.w / 7.5)));
+  const keyOf = (p, i) => String(p.id || `${p.name}-${i}`);
+  const ordered = people.map((p, i) => ({ p, key: keyOf(p, i) })).sort((x, y) => (x.key < y.key ? -1 : 1));
+  const slots = grid ? [] : vrSlots(n, ordered.map((o) => o.key));
+  const px = grid ? gridSize : size;
+  return (
+    <div ref={hostRef} className={`vr-people${grid ? " is-grid" : ""}${n > 12 ? " is-still" : ""}`} role="list" aria-label="People in the room" style={{ "--vr-size": `${px}px`, "--vr-pad": `${Math.round(px / 2 + 10)}px` }}>
+      {n > 0 && ordered.map(({ p, key }, i) => {
         const state = p.speaking ? "is-speaking" : p.muted ? "is-muted" : "is-live";
+        const pos = grid ? undefined : { left: `${slots[i].x}%`, top: `calc(var(--vr-pad) + (100% - 2 * var(--vr-pad)) * ${slots[i].y.toFixed(4)})`, "--vr-delay": `${-(vrHash(key) % 40) / 10}s` };
         return (
-          <div role="listitem" className={`vr-person${p.speaking ? " is-speaking" : ""}`} key={p.id || `${p.name}-${i}`}>
-            <div className="vr-avatar-wrap">
-              <VoiceAvatar avatar={p.avatar} flag={p.flag} size={size} label={p.name} onZoom={onZoom} />
-              {live && (
-                <span className={`vr-badge ${state}`} aria-label={p.speaking ? "Speaking" : p.muted ? "Muted" : "Mic on"}>
-                  {p.speaking
-                    ? <span className="vr-bars" aria-hidden="true"><i></i><i></i><i></i></span>
-                    : <span aria-hidden="true">{p.muted ? "\u{1F507}" : "\u{1F399}\uFE0F"}</span>}
-                </span>
-              )}
+          <div role="listitem" className={`vr-person${p.speaking ? " is-speaking" : ""}`} key={key} style={pos}>
+            <div className="vr-float">
+              <div className="vr-avatar-wrap">
+                <VoiceAvatar avatar={p.avatar} flag={p.flag} size={px} label={p.name} onZoom={onZoom} />
+                {live && (
+                  <span className={`vr-badge ${state}`} aria-label={p.speaking ? "Speaking" : p.muted ? "Muted" : "Mic on"}>
+                    {p.speaking
+                      ? <span className="vr-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+                      : p.muted ? <VrMicIcon off small /> : <span className="vr-dot" aria-hidden="true"></span>}
+                  </span>
+                )}
+              </div>
+              <span className="vr-name">{p.name}{p.isLocal ? " (you)" : ""}</span>
             </div>
-            <span className="vr-name">{p.name}{p.isLocal ? " (you)" : ""}</span>
           </div>
         );
       })}
@@ -2465,59 +2519,49 @@ function OnlineVoiceLanding() {
   );
 
   return (
-    <section className="online-voice-page">
-      <header className="online-voice-header">
-        <span className="online-voice-icon" aria-hidden="true">{"\u{1F399}\uFE0F"}</span>
+    <section className="online-voice-page vr-full">
+      <div className="vr-bg">
+        {currentMedia ? (
+          currentMedia.kind === "video" ? (
+            <video key={currentMedia.id} ref={mediaRef} className="vr-media-video" src={currentMedia.url} autoPlay muted playsInline preload="auto"
+              loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
+          ) : (
+            <div className="vr-media-audio">
+              <span className={`vr-music-art${soundOn ? " is-on" : ""}`} aria-hidden="true">{"\u{1F3B5}"}</span>
+              <span className={`vr-eq${soundOn && !anySpeaking ? " is-on" : ""}`} aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+              <audio key={currentMedia.id} ref={mediaRef} src={currentMedia.url} autoPlay muted preload="auto"
+                loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
+            </div>
+          )
+        ) : (
+          <div className="vr-media-empty">
+            <span className="online-media-emoji" aria-hidden="true">{"\u{1F3B5}"}</span>
+            <p>Music or video will appear here</p>
+          </div>
+        )}
+        {mediaFailed && (
+          <div className="vr-media-error" role="status">
+            This {currentMedia && currentMedia.kind === "video" ? "video" : "music"} could not play.
+            {mediaItems.length > 1 && <button type="button" onClick={nextMedia}>Play next</button>}
+          </div>
+        )}
+      </div>
+      <div className="vr-shade" aria-hidden="true"></div>
+
+      <header className="vr-top">
+        <h1 className="vr-sr">Open Conversation</h1>
         <div className="online-live-status">
           <span className="online-live-dot"></span>
           {configured ? "LIVE CONVERSATION" : "OPENING SOON"}
         </div>
-        <h1>{"\u{1F30D}"} Open Conversation</h1>
-        <p>Join the live conversation and talk with people around the world.</p>
         <div className="online-participant-count" aria-live="polite">
-          {"\u{1F465}"} <span>{count === null || count === undefined ? "\u2013" : count}</span> {count === 1 ? "person" : "people"} online
+          <span aria-hidden="true">{"\u{1F465}"}</span>
+          <span className="vr-count-n">{count === null || count === undefined ? "\u2013" : count}</span>
+          <span>{count === 1 ? "person" : "people"} online</span>
         </div>
       </header>
 
-      <div className="online-media-stage">
-        <VoicePeople people={people} live={live} onZoom={setZoom} />
-
-        <div className="vr-media">
-          {currentMedia ? (
-            currentMedia.kind === "video" ? (
-              <video key={currentMedia.id} ref={mediaRef} className="vr-media-video" src={currentMedia.url} autoPlay muted playsInline preload="auto"
-                loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
-            ) : (
-              <div className="vr-media-audio">
-                <span className={`vr-music-art${soundOn ? " is-on" : ""}`} aria-hidden="true">{"\u{1F3B5}"}</span>
-                <span className={`vr-eq${soundOn && !anySpeaking ? " is-on" : ""}`} aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                <audio key={currentMedia.id} ref={mediaRef} src={currentMedia.url} autoPlay muted preload="auto"
-                  loop={mediaItems.length < 2} onEnded={nextMedia} onError={() => setMediaFailed(true)} />
-              </div>
-            )
-          ) : (
-            <div className="vr-media-empty">
-              <span className="online-media-emoji" aria-hidden="true">{"\u{1F3B5}"}</span>
-              <p>Music or video will appear here</p>
-            </div>
-          )}
-          {currentMedia && !soundOn && !mediaFailed && (
-            <button type="button" className="vr-sound-btn" onClick={() => setSoundOn(true)}>{"\u{1F50A}"} Tap for sound</button>
-          )}
-          {mediaFailed && (
-            <div className="vr-media-error" role="status">
-              This {currentMedia && currentMedia.kind === "video" ? "video" : "music"} could not play.
-              {mediaItems.length > 1 && <button type="button" onClick={nextMedia}>Play next</button>}
-            </div>
-          )}
-        </div>
-        <div className="vr-media-bar">
-          <span className="vr-now">{currentMedia ? <>{mediaIcon} <span>{currentMedia.name || (currentMedia.kind === "video" ? "Video" : "Music")}</span></> : <>{"\u{1F3B5}"} <span>Music &amp; video</span></>}</span>
-          {mediaItems.length > 1 && <button type="button" className="vr-chip" onClick={nextMedia}>{"\u23ED"} Next</button>}
-          <button type="button" className="vr-chip vr-add" onClick={() => setMediaAdminOpen(true)}>{"\uFF0B"} Add media</button>
-        </div>
-        {currentMedia && soundOn && <div className="vr-auto-note">{"\u{1F50A}"} Media goes quiet while someone is talking.</div>}
-
+      <div className="vr-notices">
         {live && status !== "connected" && (
           <div className={`voice-banner ${status === "lost" ? "is-bad" : "is-warn"}`} role="status">
             <span>{status === "reconnecting" ? "Reconnecting\u2026" : "Connection lost. Trying to get you back in\u2026"}</span>
@@ -2532,20 +2576,34 @@ function OnlineVoiceLanding() {
         {roomError && <div className="voice-banner is-warn" role="alert">{roomError}</div>}
       </div>
 
+      <div className="vr-field">
+        <VoicePeople people={people} live={live} onZoom={setZoom} />
+      </div>
+
+      {currentMedia && !soundOn && !mediaFailed && (
+        <div className="vr-sound-row"><button type="button" className="vr-sound-btn" onClick={() => setSoundOn(true)}>{"\u{1F50A}"} Tap for sound</button></div>
+      )}
+
+      <div className="vr-media-bar" title={currentMedia && soundOn ? "Media goes quiet while someone is talking." : undefined}>
+        <span className="vr-now">{currentMedia ? <>{mediaIcon} <span>{currentMedia.name || (currentMedia.kind === "video" ? "Video" : "Music")}</span></> : <>{"\u{1F3B5}"} <span>Music &amp; video</span></>}</span>
+        {mediaItems.length > 1 && <button type="button" className="vr-chip" onClick={nextMedia}>{"\u23ED"} Next</button>}
+        <button type="button" className="vr-chip vr-add" onClick={() => setMediaAdminOpen(true)}>{"\uFF0B"} Add media</button>
+      </div>
+
       {/* Remote audio elements are attached here (kept in the DOM, visually hidden). */}
       <div ref={audioHostRef} className="voice-audio-host" aria-hidden="true"></div>
 
       {live ? (
         <div className="voice-controls" role="group" aria-label="Microphone controls">
-          <div className={`voice-mic-state${muted ? "" : " is-live"}`}>
-            <span className="voice-mic-dot" aria-hidden="true"></span>
-            {muted ? "You are muted" : "Your microphone is live"}
+          <div className="vr-ctl">
+            <button type="button" className="online-leave-button vr-leave" onClick={leave} aria-label="Leave conversation">{"\u2715"}</button>
+            <span>Leave</span>
           </div>
-          <div className="voice-controls-row">
+          <div className="vr-ctl">
             <button type="button" className={`online-mic-button${muted ? " is-muted" : " is-live"}`} onClick={toggleMic} disabled={status !== "connected"} aria-pressed={!muted} aria-label={muted ? "Unmute microphone" : "Mute microphone"}>
-              {muted ? "\u{1F507}" : "\u{1F399}\uFE0F"}
+              <VrMicIcon off={muted} />
             </button>
-            <button type="button" className="online-leave-button" onClick={leave}>{"\u2715"} Leave conversation</button>
+            <span className={muted ? "" : "is-live"}>{muted ? "Tap to talk" : "Mic is live"}</span>
           </div>
         </div>
       ) : (
@@ -5872,6 +5930,96 @@ function HomeStylesInner() {
       .reply-sheet-backdrop .reply-chat-buttons { position: sticky; bottom: calc(-14px - env(safe-area-inset-bottom)); padding: 14px 0 2px; background: linear-gradient(to top, #07152d 72%, rgba(7, 21, 45, 0)); }
       .reply-sheet-close { width: 34px; height: 34px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #eaf2ff; background: rgba(255, 255, 255, 0.1); font-size: 16px; line-height: 1; cursor: pointer; }
       @media (min-width: 700px) { .reply-sheet-backdrop { align-items: center; } .reply-sheet-backdrop .post-reply-chat-form { border-radius: 22px; } }
+
+      /* ===== Open Conversation v4: full-screen media with floating avatars ===== */
+      /* The bottom bar is solid (no see-through / blur), so it is never faded or half-covered on low-memory phones. */
+      .home-page .bottom-nav { background: #030a1e !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; z-index: 500 !important; }
+      .home-page { --vr-nav: calc(66px + env(safe-area-inset-bottom, 0px)); }
+      .home-page:has(.online-voice-page.vr-full) { padding-bottom: 0; }
+
+      .online-voice-page.vr-full {
+        position: relative; display: flex; flex-direction: column; width: 100%; max-width: 560px; margin: 0 auto; padding: 0; gap: 0;
+        height: calc(100svh - var(--top-offset, 60px) - var(--vr-nav));
+        min-height: 360px; overflow: hidden; isolation: isolate; background: #02091d;
+      }
+      .vr-bg { position: absolute; inset: 0; z-index: 0; background: radial-gradient(120% 80% at 50% 0%, rgba(16, 185, 129, 0.18), transparent 60%), linear-gradient(160deg, #0c2624, #040c1c); }
+      .vr-media-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+      .vr-bg .vr-media-audio { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .vr-bg .vr-media-empty { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; background: transparent; }
+      .vr-bg .vr-media-error { z-index: 3; }
+      .vr-shade { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, rgba(2, 9, 29, 0.62) 0, rgba(2, 9, 29, 0) 26%, rgba(2, 9, 29, 0) 52%, rgba(2, 9, 29, 0.78) 100%); }
+
+      .vr-top { position: absolute; top: 12px; left: 0; right: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+      .vr-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; padding: 0; }
+      .online-voice-page.vr-full .online-live-status,
+      .online-voice-page.vr-full .online-participant-count { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; min-height: 40px; background: rgba(3, 12, 26, 0.74); -webkit-backdrop-filter: none; backdrop-filter: none; line-height: 1.2; white-space: nowrap; }
+      .online-voice-page.vr-full .online-live-dot { flex: 0 0 auto; margin: 0; }
+      .vr-count-n { color: #fff; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+      .vr-notices { position: absolute; top: 104px; left: 50%; z-index: 6; width: min(92%, 420px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; }
+      .vr-notices:empty { display: none; }
+      .vr-notices .voice-banner { background-color: rgba(3, 12, 26, 0.9); }
+
+      .vr-field { position: relative; flex: 1 1 auto; min-height: 0; margin-top: 104px; z-index: 4; pointer-events: none; }
+      .vr-people { position: absolute; inset: 0; display: block; max-height: none; padding: 0; overflow: visible; }
+      .vr-person { position: absolute; width: auto; transform: translate(-50%, -50%); pointer-events: auto; transition: left 600ms ease, top 600ms ease; }
+      .vr-float { display: flex; flex-direction: column; align-items: center; gap: 4px; animation: vr-bob 5s ease-in-out infinite; animation-delay: var(--vr-delay, 0s); }
+      .vr-people.is-still .vr-float { animation: none; }
+      @keyframes vr-bob { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
+      .vr-person .online-person-avatar { --vr-s: min(var(--vr-size, 64px), 12svh); width: var(--vr-s) !important; height: var(--vr-s) !important; font-size: calc(var(--vr-s) * 0.52) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); background: #12202e; }
+      .vr-person.is-speaking .online-person-avatar { box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.55), 0 0 26px rgba(52, 211, 153, 0.55); animation: vr-speak 1.2s ease-in-out infinite; }
+      @keyframes vr-speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+      .vr-badge { right: -2px; bottom: -2px; width: 22px; height: 22px; border: 2px solid #06101c; background: #22e58b; color: #fff; }
+      .vr-badge.is-muted { background: #1b2433; }
+      .vr-badge.is-live { background: #22e58b; }
+      .vr-badge.is-speaking { background: #22e58b; }
+      .vr-name { display: none; max-width: 110px; padding: 2px 9px; border-radius: 999px; color: #fff; background: rgba(3, 12, 26, 0.78); font-size: 12px; }
+      .vr-person.is-speaking .vr-name { display: block; }
+      .vr-people.is-grid { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 10px 8px; padding: 4px 10px; overflow-y: auto; pointer-events: auto; }
+      .vr-people.is-grid .vr-person { position: static; transform: none; }
+
+      .vr-sound-row { position: relative; z-index: 7; flex: 0 0 auto; display: flex; justify-content: center; padding: 0 0 8px; }
+      .vr-sound-btn { position: static; transform: none; }
+      .online-voice-page.vr-full .vr-media-bar { position: relative; flex: 0 0 auto; margin: 0 12px 4px; z-index: 7; flex-wrap: nowrap; gap: 6px; }
+      .online-voice-page.vr-full .vr-now { flex: 1 1 0; padding: 0 12px; min-height: 40px; border-radius: 999px; background: rgba(3, 12, 26, 0.74); }
+      .online-voice-page.vr-full .vr-chip { flex: 0 0 auto; min-height: 40px; background: rgba(3, 12, 26, 0.82); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+      .online-voice-page.vr-full .voice-controls { position: relative; flex: 0 0 auto; bottom: auto; z-index: 8; min-height: 0; flex-direction: row; justify-content: center; align-items: flex-start; gap: 34px; padding: 10px 14px calc(14px + 2px); border: 0; border-radius: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .online-voice-page.vr-full .vr-ctl { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #e8f0ff; font-size: 12.5px; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); }
+      .online-voice-page.vr-full .vr-ctl .is-live { color: #86efac; }
+      .online-voice-page.vr-full .vr-ctl .online-mic-button,
+      .online-voice-page.vr-full .vr-ctl .vr-leave { display: grid; place-items: center; padding: 0; width: 76px; height: 76px; max-width: none; min-height: 0; border-radius: 50%; font-size: 26px; color: #fff; }
+      .online-voice-page.vr-full .vr-ctl .vr-leave { flex: 0 0 auto; aspect-ratio: 1; width: 62px; height: 62px; margin-top: 7px; font-size: 22px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(34, 44, 62, 0.92); }
+      .online-voice-page.vr-full .vr-ctl .online-mic-button.is-muted { background: rgba(34, 44, 62, 0.92); border: 1px solid rgba(255, 255, 255, 0.22); box-shadow: none; }
+      .online-voice-page.vr-full .vr-ctl .online-mic-button.is-live { background: linear-gradient(145deg, #10b981, #047857); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.25); }
+      .vr-mic-svg { display: block; }
+
+      .online-voice-page.vr-full .vr-join-dock { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px calc(14px + 2px); background: linear-gradient(to top, rgba(2, 9, 29, 0.92) 55%, rgba(2, 9, 29, 0)); }
+      .online-voice-page.vr-full .vr-join-dock .online-join-button { width: 100%; max-width: none; }
+      .online-voice-page.vr-full .vr-join-dock .voice-mic-note { margin: 0; color: #cfe0f7; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); }
+
+      /* small / short screens: everything shrinks instead of getting covered */
+      @media (max-height: 700px) {
+        .online-voice-page.vr-full .vr-ctl .online-mic-button { width: 64px; height: 64px; }
+        .online-voice-page.vr-full .vr-ctl .vr-leave { width: 54px; height: 54px; flex: 0 0 auto; margin-top: 5px; }
+        .vr-notices { top: 96px; } .vr-field { margin-top: 96px; }
+        .online-voice-page.vr-full .vr-join-dock .voice-mic-note { display: none; }
+      }
+      @media (max-height: 560px) {
+        .vr-top { flex-direction: row; justify-content: center; top: 8px; gap: 6px; }
+        .online-voice-page.vr-full .online-live-status, .online-voice-page.vr-full .online-participant-count { padding: 5px 12px; min-height: 32px; font-size: 12px; }
+        .vr-notices { top: 50px; } .vr-field { margin-top: 50px; }
+      }
+      @media (max-width: 360px) {
+        .online-voice-page.vr-full .online-live-status { font-size: 12px; padding: 6px 12px; }
+        .online-voice-page.vr-full .online-participant-count { font-size: 13px; padding: 6px 12px; }
+      }
+      @media (min-width: 700px) {
+        .online-voice-page.vr-full { border-radius: 24px; margin-top: 8px; height: calc(100svh - var(--top-offset, 64px) - var(--vr-nav) - 8px); }
+        .home-page .bottom-nav { z-index: 500 !important; }
+      }
+      @media (prefers-reduced-motion: reduce) { .vr-float, .vr-person.is-speaking .online-person-avatar { animation: none; } }
+      .vr-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: 0; }
     `}</style>
   );
 }
