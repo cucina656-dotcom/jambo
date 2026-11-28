@@ -307,7 +307,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     setCoupleFormMessage("");
 
     if (!coupleNames.trim()) {
-      setCoupleFormMessage("Add the couple names.");
+      setCoupleFormMessage("Add the friends' names.");
       return;
     }
     if (!coupleWhatsapp.trim()) {
@@ -315,11 +315,11 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       return;
     }
     if (!coupleImageFile) {
-      setCoupleFormMessage("Upload one couple image.");
+      setCoupleFormMessage("Upload one photo of the friends.");
       return;
     }
     if (!couplePin.trim()) {
-      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      setCoupleFormMessage("Enter the Friendship Stories PIN.");
       return;
     }
 
@@ -337,7 +337,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success === false) {
-        throw new Error(data.error || data.message || "Could not add this couple.");
+        throw new Error(data.error || data.message || "Could not add these friends.");
       }
 
       const saved = data.couple;
@@ -357,7 +357,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       setCoupleImageFile(null);
       setCoupleFormMessage("");
       setShowAddCouple(false);
-      setBookNotice(`${newCouple.names} added to Romantic Stories.`);
+      setBookNotice(`${newCouple.names} added to Friendship Stories.`);
 
       window.setTimeout(() => {
         bookRef.current?.scrollIntoView({
@@ -370,12 +370,12 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
         setBookNotice("");
       }, 2800);
     } catch (error) {
-      setCoupleFormMessage(error.message || "Could not add this couple.");
+      setCoupleFormMessage(error.message || "Could not add these friends.");
     }
   }
   function unlockCoupleManager() {
     if (!couplePin.trim()) {
-      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      setCoupleFormMessage("Enter the Friendship Stories PIN.");
       return;
     }
 
@@ -388,7 +388,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   }
   async function deleteCouple(coupleId) {
     if (!couplePin.trim()) {
-      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      setCoupleFormMessage("Enter the Friendship Stories PIN.");
       return;
     }
     try {
@@ -402,25 +402,25 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success === false) {
-        throw new Error(data.error || data.message || "Could not remove this couple.");
+        throw new Error(data.error || data.message || "Could not remove these friends.");
       }
       setCouples((current) => current.filter((couple) => couple.id !== coupleId));
-      setCoupleFormMessage("Couple removed.");
+      setCoupleFormMessage("Removed.");
     } catch (error) {
-      setCoupleFormMessage(error.message || "Could not remove this couple.");
+      setCoupleFormMessage(error.message || "Could not remove these friends.");
     }
   }
 
   async function saveCoupleEdit(coupleId) {
     if (!couplePin.trim()) {
-      setCoupleFormMessage("Enter the Romantic Stories PIN.");
+      setCoupleFormMessage("Enter the Friendship Stories PIN.");
       return;
     }
     const names = editCoupleNames.trim();
     const flag = flagFromCode(editCoupleFlag);
 
     if (!names) {
-      setCoupleFormMessage("Couple names are required.");
+      setCoupleFormMessage("Names are required.");
       return;
     }
     if (!flag) {
@@ -443,7 +443,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.success === false) {
-        throw new Error(data.error || data.message || "Could not update this couple.");
+        throw new Error(data.error || data.message || "Could not update these friends.");
       }
 
       const saved = data.couple;
@@ -462,15 +462,15 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       setEditingCoupleId("");
       setEditCoupleNames("");
       setEditCoupleFlag("");
-      setCoupleFormMessage("Couple updated.");
+      setCoupleFormMessage("Updated.");
     } catch (error) {
-      setCoupleFormMessage(error.message || "Could not update this couple.");
+      setCoupleFormMessage(error.message || "Could not update these friends.");
     }
   }
 
   function unlockSongManager() {
     if (!songPin.trim()) {
-      setSongMessage("Enter the Romantic Stories PIN.");
+      setSongMessage("Enter the Friendship Stories PIN.");
       return;
     }
 
@@ -484,7 +484,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
     const selected = Array.from(files || []);
     if (!selected.length) return;
     if (!songPin.trim()) {
-      setSongMessage("Enter the Romantic Stories PIN.");
+      setSongMessage("Enter the Friendship Stories PIN.");
       return;
     }
 
@@ -535,7 +535,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
    async function deleteSong(songId) {
     if (!songPin.trim()) {
-      setSongMessage("Enter the Romantic Stories PIN.");
+      setSongMessage("Enter the Friendship Stories PIN.");
       return;
     }
     try {
@@ -576,9 +576,10 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
   return (
     <section className="romantic-stories-root">
+      <div className="romantic-vibe-dots" aria-hidden="true"><span /><span /><span /><span /><span /></div>
        <div className="romantic-top-bar">
         <button type="button" className="romantic-match-button" onClick={onPlayMatchGame}>
-          ❤️ Play Match
+          👋 Find Friends
         </button>
 
         <button
@@ -589,7 +590,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
             setShowSongManager(false);
           }}
         >
-          ＋ Couple
+          ＋ Friends
         </button>
 
         <button
@@ -607,13 +608,13 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
       {showAddCouple && (
         <>
         <form className="romantic-control-panel" onSubmit={handleAddCouple}>
-          <div className="romantic-panel-title">Add a couple to Romantic Stories</div>
+          <div className="romantic-panel-title">Add friends to Friendship Stories</div>
 
           <input
             className="romantic-input"
             value={coupleNames}
             onChange={(event) => setCoupleNames(event.target.value)}
-            placeholder="Couple names, e.g. John & Chantal"
+            placeholder="Friend names, e.g. John & Chantal"
           />
 
           <input
@@ -638,7 +639,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           </select>
 
           <label className="romantic-file-field">
-            <span>{coupleImageFile ? `📷 ${coupleImageFile.name}` : "📷 Upload exactly one couple image"}</span>
+            <span>{coupleImageFile ? `📷 ${coupleImageFile.name}` : "📷 Upload one photo of the friends"}</span>
             <input
               type="file"
               accept="image/*"
@@ -647,7 +648,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           </label>
 
           <button type="submit" className="romantic-panel-primary">
-            Add couple
+            Add friends
           </button>
 
           {coupleFormMessage && !coupleManagerUnlocked && (
@@ -656,7 +657,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
         </form>
 
         <div className="romantic-control-panel">
-          <div className="romantic-panel-title">Manage existing couples</div>
+          <div className="romantic-panel-title">Manage friends</div>
 
           {!coupleManagerUnlocked ? (
             <>
@@ -668,7 +669,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
                   setCouplePin(event.target.value);
                   setCoupleFormMessage("");
                 }}
-                placeholder="Romantic Stories PIN"
+                placeholder="Friendship Stories PIN"
                 inputMode="numeric"
               />
 
@@ -679,7 +680,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
               <a
                 className="romantic-ask-pin"
                 href={`https://wa.me/250788484446?text=${encodeURIComponent(
-                  "Hello Gwamo Admin, I need the Romantic Stories PIN to manage couples."
+                  "Hello Gwamo Admin, I need the Friendship Stories PIN to manage friends."
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -689,7 +690,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
             </>
           ) : (
             <div className="romantic-song-list">
-              {!couples.length && <div className="romantic-song-empty">No couples added yet.</div>}
+              {!couples.length && <div className="romantic-song-empty">No friends added yet.</div>}
 
               {couples.map((couple, index) => {
                 const isEditing = editingCoupleId === couple.id;
@@ -702,7 +703,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
                         style={{ marginBottom: 0 }}
                         value={editCoupleNames}
                         onChange={(event) => setEditCoupleNames(event.target.value)}
-                        placeholder="Couple names"
+                        placeholder="Friend names"
                       />
 
                       <select
@@ -782,7 +783,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
       {showSongManager && (
         <div className="romantic-control-panel">
-          <div className="romantic-panel-title">Romantic Stories background songs</div>
+          <div className="romantic-panel-title">Friendship Stories background songs</div>
 
           {!songManagerUnlocked ? (
             <>
@@ -794,7 +795,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
                   setSongPin(event.target.value);
                   setSongMessage("");
                 }}
-                placeholder="Romantic Stories PIN"
+                placeholder="Friendship Stories PIN"
                 inputMode="numeric"
               />
 
@@ -805,7 +806,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
               <a
                 className="romantic-ask-pin"
                 href={`https://wa.me/250788484446?text=${encodeURIComponent(
-                  "Hello Gwamo Admin, I need the Romantic Stories PIN to manage background songs."
+                  "Hello Gwamo Admin, I need the Friendship Stories PIN to manage background songs."
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -878,9 +879,9 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           <div className="romantic-book-inside">
             {visibleCouple ? (
               <>
-                <img className="romantic-couple-image" src={visibleCouple.image} alt="" />
+                <img className="romantic-couple-image is-page-in" key={`img-${visibleCouple.id}`} src={visibleCouple.image} alt="" />
                 <div className="romantic-image-shade" />
-                <div className="romantic-couple-overlay">
+                <div className="romantic-couple-overlay" key={`name-${visibleCouple.id}`}>
                   <div className="romantic-couple-name">
                     <span>{visibleCouple.names}</span>
                     <span className="romantic-couple-flag">{visibleCouple.flag}</span>
@@ -888,7 +889,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
                 </div>
               </>
             ) : (
-              <div className="romantic-empty-page">Add the first couple.</div>
+              <div className="romantic-empty-page">Add the first friends.</div>
             )}
           </div>
 
@@ -911,18 +912,18 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           <div className={`romantic-book-cover${coverOpen ? " is-open" : ""}`} aria-hidden="true">
             <div className="romantic-cover-front">
               <div className="romantic-cover-frame" />
-              <div className="romantic-cover-heart">♥</div>
+              <div className="romantic-cover-friends" aria-hidden="true"><span /><span /></div>
               <div className="romantic-cover-title">
-                <span>Romantic</span>
+                <span>Friendship</span>
                 <span>Stories</span>
               </div>
             </div>
 
             <div className="romantic-cover-back">
               <div className="romantic-cover-back-text">
-                Every love story
+                Every friendship
                 <br />
-                deserves a page.
+                has a story.
               </div>
             </div>
           </div>
@@ -942,7 +943,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
           {onBrowseMeetSomeone && (
         <button type="button" className="romantic-browse-link" onClick={onBrowseMeetSomeone}>
-          Browse Meet Someone →
+          Browse Make Friends →
         </button>
       )}
 
@@ -955,11 +956,13 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           margin: 0 auto;
           padding: calc(146px + env(safe-area-inset-top)) 16px 40px;
           box-sizing: border-box;
-          color: #fff8fb;
+          color: #f4f6fb;
           background:
-            radial-gradient(circle at 50% -3%, rgba(255,70,140,.14), transparent 31%),
-            #020711;
+            radial-gradient(circle at 50% -3%, rgba(255,181,71,.12), transparent 31%),
+            #0a0f1c;
           overflow-x: hidden;
+          position: relative;
+          isolation: isolate;
         }
 
       
@@ -974,11 +977,11 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   flex: 1 1 auto;
   min-height: 40px;
   padding: 0 16px;
-  border: 1px solid rgba(255,95,147,.55);
+  border: 0;
   border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(135deg, #e83670, #a91d50);
-  box-shadow: 0 8px 20px rgba(232,54,112,.22);
+  color: #1f1400;
+  background: #ffb547;
+  box-shadow: 0 8px 20px rgba(255,181,71,.22);
   font-size: 13px;
   font-weight: 900;
   white-space: nowrap;
@@ -989,10 +992,10 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   flex: 0 0 auto;
   min-height: 36px;
   padding: 0 12px;
-  border: 1px solid rgba(255,177,211,.26);
+  border: 1px solid #26304a;
   border-radius: 999px;
   color: rgba(255,255,255,.92);
-  background: rgba(77,19,46,.52);
+  background: #131a2b;
   font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
@@ -1005,9 +1008,9 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
         .romantic-control-panel {
           margin: 0 0 14px;
           padding: 14px;
-          border: 1px solid rgba(255,143,186,.24);
+          border: 1px solid #26304a;
           border-radius: 18px;
-          background: rgba(16,7,19,.94);
+          background: #131a2b;
           box-shadow: 0 16px 34px rgba(0,0,0,.26);
         }
 
@@ -1024,7 +1027,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           margin-bottom: 9px;
           padding: 0 13px;
           box-sizing: border-box;
-          border: 1px solid rgba(255,160,196,.20);
+          border: 1px solid #26304a;
           border-radius: 13px;
           outline: none;
           color: #fff;
@@ -1044,10 +1047,10 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           padding: 0 13px;
           display: flex;
           align-items: center;
-          border: 1px dashed rgba(255,143,186,.38);
+          border: 1px dashed rgba(255,181,71,.45);
           border-radius: 13px;
           color: rgba(255,255,255,.86);
-          background: rgba(79,20,48,.30);
+          background: rgba(255,181,71,.06);
           font-size: 13px;
           font-weight: 800;
           cursor: pointer;
@@ -1067,8 +1070,8 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           min-height: 47px;
           border: 0;
           border-radius: 13px;
-          color: #fff;
-          background: linear-gradient(135deg, #db2f68, #8d1745);
+          color: #1f1400;
+          background: #ffb547;
           font-size: 13px;
           font-weight: 900;
           cursor: pointer;
@@ -1076,7 +1079,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
 
         .romantic-panel-message {
           margin-top: 9px;
-          color: rgba(255,222,234,.82);
+          color: #c9d2e4;
           font-size: 11px;
           line-height: 1.45;
         }
@@ -1158,11 +1161,11 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           max-width: calc(100% - 44px);
           transform: translateX(-50%);
           padding: 8px 13px;
-          border: 1px solid rgba(255,180,211,.42);
+          border: 1px solid rgba(61,214,198,.45);
           border-radius: 999px;
           color: #fff;
-          background: rgba(71,14,42,.90);
-          box-shadow: 0 8px 22px rgba(0,0,0,.34), 0 0 18px rgba(255,75,147,.16);
+          background: rgba(9,40,40,.92);
+          box-shadow: 0 8px 22px rgba(0,0,0,.34), 0 0 18px rgba(61,214,198,.18);
           backdrop-filter: blur(8px);
           font-size: 11px;
           font-weight: 850;
@@ -1178,7 +1181,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           box-sizing: border-box;
           border-radius: 26px;
           background:
-            radial-gradient(ellipse at 42% 44%, rgba(91,26,60,.78), rgba(22,7,18,.98) 72%);
+            radial-gradient(ellipse at 42% 44%, rgba(30,44,76,.85), rgba(10,15,28,.98) 72%);
           box-shadow:
             inset 0 0 0 1px rgba(255,255,255,.04),
             0 28px 70px rgba(0,0,0,.50);
@@ -1355,13 +1358,12 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           font-style: italic;
           line-height: 1.1;
           text-shadow:
-            0 0 5px rgba(255,255,255,.95),
-            0 0 13px rgba(255,100,177,.95),
-            0 0 28px rgba(255,39,138,.75);
-          box-shadow: 0 0 15px rgba(255,72,150,.16);
+            0 2px 10px rgba(0,0,0,.55),
+            0 0 16px rgba(255,181,71,.45);
+          box-shadow: 0 0 15px rgba(255,181,71,.18);
           animation:
-            romanticNameFloat 4.8s ease-in-out infinite,
-            romanticNeonPulse 2.6s ease-in-out infinite;
+            romanticNameIn .6s cubic-bezier(.3,1.3,.5,1) .3s both,
+            romanticNameFloat 4.8s ease-in-out .9s infinite;
         }
 
         .romantic-couple-flag {
@@ -1411,12 +1413,12 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
           padding: 28px;
           box-sizing: border-box;
           color: #fff5f8;
-          border: 1px solid #74475a;
+          border: 1px solid #2e3b5c;
           background:
-            radial-gradient(circle at 72% 18%, rgba(255,187,210,.18), transparent 22%),
-            radial-gradient(circle at 25% 78%, rgba(112,47,92,.27), transparent 32%),
+            radial-gradient(circle at 72% 18%, rgba(255,181,71,.16), transparent 24%),
+            radial-gradient(circle at 25% 78%, rgba(61,214,198,.14), transparent 32%),
             repeating-linear-gradient(24deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px),
-            linear-gradient(145deg, #5b1734 0%, #310c20 46%, #190711 100%);
+            linear-gradient(145deg, #1d2a48 0%, #17223a 46%, #0f1628 100%);
           box-shadow:
             inset 14px 0 16px rgba(0,0,0,.42),
             inset -2px 0 0 rgba(255,226,236,.12),
@@ -1427,7 +1429,7 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
         .romantic-cover-frame {
           position: absolute;
           inset: 17px 16px 17px 22px;
-          border: 1px solid rgba(255,210,226,.30);
+          border: 1px solid rgba(255,181,71,.35);
           border-radius: 4px 10px 10px 4px;
           box-shadow: inset 0 0 30px rgba(255,160,200,.03);
         }
@@ -1520,6 +1522,31 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
   cursor: pointer;
 }
 
+        .romantic-cover-friends { position: relative; z-index: 1; display: flex; margin-bottom: 16px; }
+        .romantic-cover-friends span { width: 46px; height: 46px; border-radius: 50%; border: 3px solid #17223a; }
+        .romantic-cover-friends span:first-child { background: #ffb547; }
+        .romantic-cover-friends span:last-child { margin-left: -14px; background: #3dd6c6; }
+        /* High-five each time the book closes, just before it opens again */
+        .romantic-book-cover:not(.is-open) .romantic-cover-friends span:first-child { animation: romanticFiveLeft .7s cubic-bezier(.3,1.5,.5,1) .1s both; }
+        .romantic-book-cover:not(.is-open) .romantic-cover-friends span:last-child { animation: romanticFiveRight .7s cubic-bezier(.3,1.5,.5,1) .1s both; }
+        @keyframes romanticFiveLeft { from { transform: translateX(-26px); } to { transform: translateX(0); } }
+        @keyframes romanticFiveRight { from { transform: translateX(26px); } to { transform: translateX(0); } }
+
+        /* Each new page: photo fades in, then the name slides up */
+        .romantic-couple-image.is-page-in { animation: romanticPageIn .5s ease both; }
+        @keyframes romanticPageIn { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
+        @keyframes romanticNameIn { from { opacity: 0; transform: translate3d(0,16px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+
+        /* The five vibe colors drifting softly behind the page */
+        .romantic-vibe-dots { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+        .romantic-vibe-dots span { position: absolute; width: 110px; height: 110px; border-radius: 50%; filter: blur(28px); opacity: .22; animation: romanticDrift 18s ease-in-out infinite alternate; }
+        .romantic-vibe-dots span:nth-child(1) { top: 12%; left: -6%; background: #ffd23f; }
+        .romantic-vibe-dots span:nth-child(2) { top: 30%; right: -8%; background: #ff9f43; animation-delay: -4s; }
+        .romantic-vibe-dots span:nth-child(3) { top: 55%; left: 8%; background: #45d483; animation-delay: -8s; }
+        .romantic-vibe-dots span:nth-child(4) { top: 72%; right: 4%; background: #4da3ff; animation-delay: -12s; }
+        .romantic-vibe-dots span:nth-child(5) { top: 88%; left: 40%; background: #a879ff; animation-delay: -16s; }
+        @keyframes romanticDrift { from { transform: translate3d(0,0,0); } to { transform: translate3d(40px,-60px,0); } }
+
         @keyframes romanticNoticeIn {
           from { opacity: 0; transform: translate(-50%, -5px) scale(.98); }
           to { opacity: 1; transform: translate(-50%, 0) scale(1); }
@@ -1560,7 +1587,10 @@ export default function RomanticStories({ onPlayMatchGame, onBrowseMeetSomeone }
             animation-duration: 1ms !important;
           }
 
-          .romantic-couple-name {
+          .romantic-couple-name,
+          .romantic-couple-image.is-page-in,
+          .romantic-cover-friends span,
+          .romantic-vibe-dots span {
             animation: none !important;
           }
         }
