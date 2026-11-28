@@ -146,7 +146,7 @@ const noop = () => {};
 const CATEGORY_TABS = [
   { key: "time-market", label: "Trendz", emoji: "📈" },
   { key: "online", label: "Live", emoji: "🎙️" },
-  { key: "social-life", label: "Bae & Bae", emoji: "❤️" },
+  { key: "social-life", label: "Friends", emoji: "👋" },
 ];
 
 const CATEGORY_META = {
@@ -180,9 +180,9 @@ const INFO_CONTENT = {
           "Explore what people are sharing, discover interesting stories, and connect with conversations happening around you.",
       },
       {
-        title: "❤️ Bae & Bae",
+        title: "👋 Friends",
         body:
-          "Explore meaningful connections, celebrate couples, discover romantic stories, and enjoy interactive relationship experiences.",
+          "Find people who share your vibe and interests, play the Friend Game, discover friendship stories, and make plans together.",
       },
       {
         title: "🎵 Music & Entertainment",
