@@ -423,6 +423,17 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
     };
   }, [screen]);
 
+  // Snap the page so one card sits fully on screen at a time.
+  useEffect(() => {
+    if (screen !== "browse") return undefined;
+    const root = document.documentElement;
+    const previous = root.style.scrollSnapType;
+    root.style.scrollSnapType = editingVideoId ? "none" : "y mandatory";
+    return () => {
+      root.style.scrollSnapType = previous;
+    };
+  }, [screen, editingVideoId]);
+
   function toggleInterest(key) {
     setInterests((current) => {
       if (current.includes(key)) return current.filter((item) => item !== key);
@@ -1488,15 +1499,15 @@ function MeetSomeoneStyles() {
         width: min(100%, 560px);
         min-height: 100svh;
         margin: 0 auto;
-        padding: calc(150px + env(safe-area-inset-top)) 16px calc(42px + env(safe-area-inset-bottom));
+        padding: 14px 16px calc(var(--nav-h, 64px) + 28px);
         color: #f4f6fb;
         background: radial-gradient(circle at 50% -12%, rgba(255,181,71,.12), transparent 34%), #0a0f1c;
         overflow-x: hidden;
       }
-      .meet-fixed-bar { position: fixed; left: 50%; top: calc(124px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 20; width: min(100%, 560px); box-sizing: border-box; padding: 8px 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: linear-gradient(180deg, rgba(10,15,28,.94) 70%, transparent); backdrop-filter: blur(10px); }
+      .meet-fixed-bar { position: fixed; left: 50%; top: var(--top-offset, calc(64px + env(safe-area-inset-top))); transform: translateX(-50%); z-index: 20; width: min(100%, 560px); height: 46px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; background: #0a0f1c; border-bottom: 1px solid #1c2438; }
       .meet-fixed-bar::-webkit-scrollbar { display: none; }
       .meet-fixed-bar-spacer { height: 46px; }
-      .meet-back { padding: 8px 0; border: 0; color: rgba(220,230,250,.7); background: transparent; font-weight: 750; font-size: 14px; white-space: nowrap; cursor: pointer; }
+      .meet-back { min-height: 44px; padding: 0 4px; border: 0; color: rgba(220,230,250,.7); background: transparent; font-weight: 750; font-size: 14px; white-space: nowrap; cursor: pointer; }
       .meet-kicker { margin-bottom: 10px; color: #3dd6c6; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
       .meet-someone-panel h1 { margin: 0 0 10px; font-size: clamp(28px, 8vw, 40px); line-height: 1.06; letter-spacing: -.03em; color: #fff; }
       .meet-someone-panel h2 { margin: 0 0 16px; font-size: clamp(22px, 6.5vw, 30px); line-height: 1.14; color: #fff; }
@@ -1598,9 +1609,14 @@ function MeetSomeoneStyles() {
 
       /* --- Friend card: two trading panels (video / profile photo) --- */
       .love-card-list { display: grid; gap: 18px; margin-top: 18px; }
-      .love-connection-card { overflow: hidden; border: 1px solid #26304a; border-radius: 26px; background: #131a2b; box-shadow: 0 20px 46px rgba(0,0,0,.32); animation: friendCardIn .5s ease both; }
+      .love-connection-card { overflow: hidden; border: 1px solid #26304a; border-radius: 26px; background: #131a2b; box-shadow: 0 10px 24px rgba(0,0,0,.28); animation: friendCardIn .5s ease both; scroll-snap-align: start; scroll-margin-top: calc(var(--top-offset, 64px) + 54px); }
+      .meet-browse-heading { scroll-snap-align: start; scroll-margin-top: calc(var(--top-offset, 64px) + 60px); }
       @keyframes friendCardIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-      .love-card-stage { position: relative; width: 100%; aspect-ratio: 3/4; min-height: 360px; max-height: 640px; overflow: hidden; background: #05070d; }
+      /* Exactly one card fills the space between the Back bar and the bottom tabs */
+      .love-card-stage { position: relative; width: 100%; height: calc(100svh - var(--top-offset, 64px) - 46px - var(--nav-h, 64px) - 16px); min-height: 340px; overflow: hidden; background: #05070d; }
+      @supports (height: 100dvh) {
+        .love-card-stage { height: calc(100dvh - var(--top-offset, 64px) - 46px - var(--nav-h, 64px) - 16px); }
+      }
       .love-card-video-section { position: absolute; top: 0; left: 0; right: 0; height: 55%; overflow: hidden; z-index: 1; background: #05070d; animation: loveVideoTrade 12s ease-in-out infinite; transition: height .4s ease; }
       .love-card-video-section video { width: 100%; height: 100%; display: block; object-fit: cover; background: #000; }
       .love-video-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: rgba(255,255,255,.45); background: #0d1324; }
