@@ -55,7 +55,126 @@ function rememberMe(interests, vibe) {
   } catch {}
 }
 
-const REVEAL_MS = 2200;
+const SEARCH_MIN_MS = 900; // "Looking for your people..." shows at least this long
+const ORBIT_MS = 4600; // whole spin: fast start, slow-motion finish
+const ORBIT_MAX = 10; // photos in the ring
+const ORBIT_TURNS = 4; // full turns before landing
+
+function easeOutQuint(t) {
+  return 1 - Math.pow(1 - t, 5);
+}
+
+function interestsOf(profile) {
+  const list = profile?.public_data?.interests || profile?.public_data?.answers?.interests || profile?.interests || [];
+  return Array.isArray(list) ? list : [];
+}
+
+// Chooses who lands at the front of the orbit: someone who shares an interest
+// if possible, otherwise a random new face. This is NOT the private friend
+// match (that stays admin-approved in King) — just a friendly suggestion.
+function planOrbit(allItems, ownId, myInterests) {
+  const others = (allItems || []).filter((p) => p && p.id !== ownId && p.creator_photo_url);
+  if (others.length < 3) return null;
+  const shared = others.find((p) => interestsOf(p).some((k) => myInterests.includes(k)));
+  const target = shared || others[Math.floor(Math.random() * others.length)];
+  const sharedKey = shared ? interestsOf(shared).find((k) => myInterests.includes(k)) : "";
+  const pool = others.filter((p) => p.id !== target.id).slice(0, ORBIT_MAX - 1);
+  const targetIndex = Math.floor(Math.random() * (pool.length + 1));
+  pool.splice(targetIndex, 0, target);
+  return {
+    people: pool,
+    targetIndex,
+    target,
+    label: sharedKey ? `You both like ${interestLabel(sharedKey)}` : "A new face to say hi to",
+  };
+}
+
+// Photos orbit around the center (tilted ring, front ones bigger and on top),
+// spinning fast with a little motion blur, then slowing into slow motion and
+// stopping with the chosen person at the front. Driven by requestAnimationFrame
+// and direct style writes, so React doesn't re-render every frame.
+function OrbitReveal({ people, targetIndex, centerPhoto, onDone }) {
+  const stageRef = useRef(null);
+  const faceRefs = useRef([]);
+  const onDoneRef = useRef(onDone);
+  const [landed, setLanded] = useState(false);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const n = people.length;
+    if (!n) return undefined;
+    const step = (Math.PI * 2) / n;
+    // Front of the ring is angle PI/2 (bottom, closest to the viewer).
+    const finalBase = ORBIT_TURNS * Math.PI * 2 + (Math.PI / 2 - targetIndex * step);
+    let raf = 0;
+    let start = null;
+    let prevBase = 0;
+    let prevTime = 0;
+
+    function place(base, speed) {
+      const width = stageRef.current?.clientWidth || 320;
+      const radius = Math.min(width * 0.4, 160);
+      const blur = Math.min(3, speed * 100);
+      for (let i = 0; i < n; i += 1) {
+        const el = faceRefs.current[i];
+        if (!el) continue;
+        const angle = base + i * step;
+        const depth = (Math.sin(angle) + 1) / 2; // 1 = front, 0 = back
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius * 0.42;
+        const scale = 0.55 + 0.45 * depth;
+        el.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+        el.style.zIndex = String(Math.round(depth * 100));
+        el.style.opacity = String((0.4 + 0.6 * depth).toFixed(2));
+        el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
+      }
+    }
+
+    function tick(now) {
+      if (start === null) {
+        start = now;
+        prevTime = now;
+      }
+      const t = Math.min(1, (now - start) / ORBIT_MS);
+      const base = finalBase * easeOutQuint(t);
+      const speed = Math.abs(base - prevBase) / Math.max(1, now - prevTime);
+      prevBase = base;
+      prevTime = now;
+      place(base, speed);
+      if (t < 1) {
+        raf = window.requestAnimationFrame(tick);
+      } else {
+        place(finalBase, 0);
+        setLanded(true);
+        if (typeof onDoneRef.current === "function") onDoneRef.current();
+      }
+    }
+
+    place(0, 0);
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className={`orbit-stage${landed ? " is-landed" : ""}`} ref={stageRef} aria-hidden="true">
+      <div className="orbit-center">
+        <img src={centerPhoto || "/favicon.ico"} alt="" />
+      </div>
+      {people.map((person, i) => (
+        <div
+          key={person.id}
+          className={`orbit-face${landed && i === targetIndex ? " is-picked" : ""}`}
+          ref={(el) => {
+            faceRefs.current[i] = el;
+          }}
+        >
+          <img src={person.creator_photo_url} alt="" decoding="async" />
+        </div>
+      ))}
+    </div>
+  );
+}
 const CONFETTI = Array.from({ length: 14 }, (_, i) => i);
 
 const INTERESTS = [
@@ -250,7 +369,9 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
   const [createdProfile, setCreatedProfile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [revealing, setRevealing] = useState(false);
+  const [revealPhase, setRevealPhase] = useState("done"); // "searching" | "orbit" | "done"
+  const [orbitData, setOrbitData] = useState(null);
+  const [focusId, setFocusId] = useState("");
   const [vibeFlashKey, setVibeFlashKey] = useState(0);
   const [myInterests, setMyInterests] = useState(() => readMe().interests);
   const revealTimerRef = useRef(null);
@@ -664,6 +785,17 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  // After "See their card": once Browse has loaded, jump to that person.
+  useEffect(() => {
+    if (screen !== "browse" || !focusId || !items.length) return undefined;
+    const timer = window.setTimeout(() => {
+      scrollToCard(focusId);
+      setFocusId("");
+    }, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, focusId, items]);
+
   async function finishProfile() {
     if (busy) return;
     setBusy(true);
@@ -699,14 +831,31 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
       rememberMe(interests, vibe);
       setMyInterests(interests);
       setCreatedProfile(data.profile || null);
-      // Short "Looking for your people..." moment before the result.
+      setOrbitData(null);
       const skipReveal =
         typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      setRevealing(!skipReveal);
       setStep(9);
-      if (!skipReveal) {
+      if (skipReveal) {
+        setRevealPhase("done");
+      } else {
+        // "Looking for your people..." while the feed loads, then the orbit.
+        setRevealPhase("searching");
+        const startedAt = Date.now();
+        let plan = null;
+        try {
+          const list = await connectApi("/api/connect/love?limit=50");
+          plan = planOrbit(list.items || [], data.profile?.id, interests);
+        } catch {}
+        const wait = Math.max(0, SEARCH_MIN_MS - (Date.now() - startedAt));
         window.clearTimeout(revealTimerRef.current);
-        revealTimerRef.current = window.setTimeout(() => setRevealing(false), REVEAL_MS);
+        revealTimerRef.current = window.setTimeout(() => {
+          if (plan) {
+            setOrbitData(plan);
+            setRevealPhase("orbit");
+          } else {
+            setRevealPhase("done");
+          }
+        }, wait);
       }
     } catch (err) {
       setError(err.message || "Could not create your friend card.");
@@ -1223,7 +1372,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         </>
       )}
 
-      {step === 9 && revealing && (
+      {step === 9 && revealPhase === "searching" && (
         <div className="meet-searching" role="status">
           <div className="meet-searching-orbit" aria-hidden="true">
             {VIBES.map((item, i) => (
@@ -1241,7 +1390,53 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         </div>
       )}
 
-      {step === 9 && !revealing && (
+      {step === 9 && revealPhase !== "searching" && orbitData && (
+        <div className="meet-orbit-result">
+          <OrbitReveal
+            people={orbitData.people}
+            targetIndex={orbitData.targetIndex}
+            centerPhoto={createdProfile?.creator_photo_url}
+            onDone={() => setRevealPhase("done")}
+          />
+          {revealPhase === "done" ? (
+            <div className="meet-orbit-caption" role="status">
+              <strong>{orbitData.target.creator_name || "Gwamo member"}</strong>
+              <span>{orbitData.label}</span>
+              {orbitData.target.location && <small>📍 {orbitData.target.location}</small>}
+            </div>
+          ) : (
+            <div className="meet-orbit-caption is-spinning">Finding someone for you…</div>
+          )}
+          {revealPhase === "done" && (
+            <div className="meet-result-card">
+              <div className="meet-kicker">YOUR CARD IS LIVE</div>
+              <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Friends.</h2>
+              <p>
+                Your status changes from Looking to Friend match found when someone shares your vibe color or one of
+                your interests.
+              </p>
+              <div className="meet-safety">
+                🛡️ Safety first: meet new friends in a public place the first time, and tell someone you trust where
+                you're going.
+              </div>
+              <button
+                className="meet-primary"
+                onClick={() => {
+                  setFocusId(orbitData.target.id);
+                  setScreen("browse");
+                }}
+              >
+                See {orbitData.target.creator_name || "their"}'s card
+              </button>
+              <button type="button" className="meet-browse-link" onClick={() => setScreen("browse")}>
+                Browse Gwamo Friends →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 9 && revealPhase === "done" && !orbitData && (
         <div className="meet-result-card">
           <div className="meet-confetti" aria-hidden="true">
             {CONFETTI.map((i) => (
@@ -1354,6 +1549,21 @@ function MeetSomeoneStyles() {
       .meet-searching-tags span { padding: 7px 12px; border-radius: 999px; background: rgba(61,214,198,.14); color: #7ff0e3; font-size: 13px; font-weight: 800; animation: meetFadeUp .45s ease both; }
       @keyframes meetFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+      /* Orbit reveal */
+      .meet-orbit-result { display: flex; flex-direction: column; gap: 14px; }
+      .orbit-stage { position: relative; height: 300px; margin: 0 -8px; overflow: visible; }
+      .orbit-center { position: absolute; left: 50%; top: 50%; z-index: 50; width: 118px; height: 118px; transform: translate(-50%, -50%); border-radius: 50%; padding: 4px; box-sizing: border-box; background: conic-gradient(#ffb547, #3dd6c6, #ffb547); box-shadow: 0 0 40px rgba(255,181,71,.25); }
+      .orbit-center img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 3px solid #0a0f1c; box-sizing: border-box; background: #131a2b; }
+      .orbit-face { position: absolute; left: 50%; top: 50%; width: 78px; height: 78px; transform: translate(-50%, -50%); will-change: transform, opacity, filter; }
+      .orbit-face img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 3px solid #26304a; box-sizing: border-box; background: #131a2b; transition: transform .5s cubic-bezier(.3,1.5,.5,1), border-color .4s ease, box-shadow .4s ease; }
+      .orbit-face.is-picked img { transform: scale(1.3); border-color: #3dd6c6; box-shadow: 0 0 0 4px rgba(61,214,198,.25), 0 0 34px rgba(61,214,198,.75); }
+      .orbit-stage.is-landed .orbit-face:not(.is-picked) { opacity: .35 !important; transition: opacity .5s ease; }
+      .meet-orbit-caption { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 64px; text-align: center; animation: meetFadeUp .45s ease both; }
+      .meet-orbit-caption strong { font-size: 22px; color: #fff; }
+      .meet-orbit-caption span { padding: 5px 12px; border-radius: 999px; background: #3dd6c6; color: #04211f; font-size: 13px; font-weight: 800; }
+      .meet-orbit-caption small { color: #9aa6bf; font-size: 12px; }
+      .meet-orbit-caption.is-spinning { justify-content: center; color: #9aa6bf; font-size: 14px; font-weight: 700; }
+
       /* Result */
       .meet-result-card { position: relative; overflow: hidden; margin-top: 12px; padding: 22px; border: 1px solid #26304a; border-radius: 24px; background: #131a2b; animation: meetFadeUp .45s ease both; }
       .meet-result-faces { display: flex; margin-bottom: 14px; }
@@ -1449,7 +1659,7 @@ function MeetSomeoneStyles() {
         .love-connection-card, .friend-face-ring, .love-card-interest.is-shared,
         .meet-vibe-flash, .meet-progress-dot.is-done, .meet-vibe-button.is-active,
         .meet-interest-grid .meet-line-option.is-active, .meet-result-card,
-        .meet-result-faces span, .meet-searching h2, .meet-searching-dot, .meet-searching-tags span { animation: none !important; }
+        .meet-result-faces span, .meet-searching h2, .meet-orbit-caption, .meet-searching-dot, .meet-searching-tags span { animation: none !important; }
         .meet-confetti { display: none; }
       }
 
