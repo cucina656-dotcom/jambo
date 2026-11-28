@@ -1,48 +1,52 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import RomanticStories from "./RomanticStories";
 
-// Meet Someone — adapted from the original Connect "LoveGame"/"BrowseLove" flow,
-// wired in under Social Life > Meet Someone.
+// Make Friends — the friendship version of the old Meet Someone flow,
+// wired in under Social Life.
 //
-// IMPORTANT: the Match Game itself (steps 0-8 below: adult confirm, location,
-// gender, preference, heart, free day, matters-most, profile, result) is
-// UNCHANGED from the previous version of this file — including the gender
-// question, the Mr/Miss wording, the matching rules sent to the backend, the
-// owner token, and the API calls. Only the Browse experience was rewritten.
+// Friend Game (steps 0-9): adult confirm, location, own gender, who to meet
+// (Anyone / Women only / Men only), interests (up to 3), vibe color, free day,
+// kind of friend, profile, result.
 //
-// What Browse restores from the original design:
-//   1. Every card is a tall (3:4) "living" connection card with TWO trading
-//      sections — a video section (top, ~55%) and the person's profile photo
-//      (bottom, ~45%). The photo never disappears just because a video
-//      exists — see .love-card-video-section / .love-card-profile-section.
-//   2. The two sections automatically and smoothly trade space on a ~9s
-//      cycle (video shrinks to 0%, photo grows to 100%, then back), using
-//      the loveVideoTrade / loveProfileTrade CSS animations — paused
-//      automatically for anyone with prefers-reduced-motion, and paused
-//      while that card's video editor is open.
-//   3. Only the single most-visible card's video plays (muted) at a time;
-//      scrolling it away pauses it, the next visible card's video plays.
-//      The tab going to background pauses whatever's active; coming back
-//      resumes it. Leaving Browse tears everything down.
-//   4. Videos can be a direct file/link or a YouTube link (played through
-//      the real YouTube IFrame API so it can be muted/played/paused
-//      programmatically) — YouTube players for cards below the fold mount
-//      lazily as they scroll near view, so a long feed doesn't pay for
-//      every embed up front.
-//   5. Every card has "Add video" / "Change video". Saving a video always
-//      requires the Connect video PIN (CONNECT_VIDEO_PIN) — sent to the
-//      Worker via the `X-Connect-Video-Pin` header on PATCH
-//      /api/connect/video, and as a `pin` form field on the /api/connect/
-//      upload (kind: "video") call. The PIN is never checked in the
-//      frontend — the Worker is what accepts or rejects it. Wrong PIN shows
-//      "Ask for PIN", which opens WhatsApp to the admin with the profile ID.
-//      Creating a normal Meet Someone profile never asks for this PIN —
-//      only video add/change does, so it can't be used to bypass it.
+// MATCHING RULES (enforced by the Worker, not here):
+//   Two active profiles are a friend match when EITHER
+//     a) they picked the same vibe color (sent in the `heart` field, so the
+//        Worker's existing same-heart matching keeps working), OR
+//     b) they share at least one interest (`interests` array).
+//   AND both people's "who to meet" choice allows the other:
+//     "anyone" allows everyone; "woman" / "man" only allow that gender.
+//   Same-gender pairs ARE allowed — the old "never match the same gender"
+//   rule must be removed from the Worker.
+//
+// Browse is unchanged except for wording, the interest chips on each card,
+// and the match-status text.
 
 const CONNECT_API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const LOVE_OWNER_KEY = "gwamo_connect_love_owner";
 const ADMIN_WHATSAPP = "250788484446";
-const HEARTS = ["💛", "🧡", "💚", "💙", "💜"];
+
+// "Your vibe today" — replaces the old hearts. Still sent as `heart` so the
+// Worker's same-value matching works without renaming the field.
+const VIBES = ["🟡", "🟠", "🟢", "🔵", "🟣"];
+
+const INTERESTS = [
+  { key: "sports", label: "⚽ Sports" },
+  { key: "music", label: "🎵 Music" },
+  { key: "reading", label: "📚 Reading" },
+  { key: "cooking", label: "🍳 Cooking" },
+  { key: "games", label: "🎮 Games" },
+  { key: "faith", label: "🙏 Faith" },
+  { key: "business", label: "💼 Business" },
+  { key: "art", label: "🎨 Art" },
+  { key: "outdoors", label: "🌳 Outdoors" },
+  { key: "movies", label: "🎬 Movies" },
+];
+const MAX_INTERESTS = 3;
+const INTEREST_LABELS = Object.fromEntries(INTERESTS.map((item) => [item.key, item.label]));
+
+function interestLabel(key) {
+  return INTEREST_LABELS[key] || String(key || "");
+}
 
 async function connectApi(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -100,12 +104,12 @@ function rememberLoveOwner(profileId, ownerToken) {
 }
 
 function adminWhatsAppUrl(profile) {
-  const text = `Hello Gwamo Admin,\nI want to view my heart match.\nProfile: ${profile?.creator_name || "Meet Someone"}\nProfile ID: ${profile?.id || ""}`;
+  const text = `Hello Gwamo Admin,\nI want to see my friend match.\nProfile: ${profile?.creator_name || "Make Friends"}\nProfile ID: ${profile?.id || ""}`;
   return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
 }
 
 function adminVideoPinWhatsAppUrl(profile) {
-  const text = `Hello Gwamo Admin, I need the Connect video PIN for a Meet Someone card. Profile: ${profile?.creator_name || ""}. Profile ID: ${profile?.id || ""}`;
+  const text = `Hello Gwamo Admin, I need the Connect video PIN for a Make Friends card. Profile: ${profile?.creator_name || ""}. Profile ID: ${profile?.id || ""}`;
   return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(text)}`;
 }
 
@@ -158,23 +162,35 @@ function loadYouTubeApi() {
   return youTubeApiPromise;
 }
 
-// Own gender / preference choices — plain text, exactly two each, no "other"
-// catch-all. The internal `key` stays "woman"/"man" (that's the value sent to
-// the backend — see the Worker's LOVE_GENDERS set); only the visible label
-// changed to "Miss"/"Mr". UNCHANGED from the previous version of this file.
+// Own gender — still needed so "Women only" / "Men only" choices can be
+// respected. The internal key stays "woman"/"man" (what the Worker expects).
 const GENDER_CHOICES = [
   { key: "woman", label: "Miss" },
   { key: "man", label: "Mr" },
 ];
 
+// Who to meet — "anyone" is new; the Worker must accept it.
 const PREFERENCE_CHOICES = [
-  { key: "woman", label: "Miss" },
-  { key: "man", label: "Mr" },
+  { key: "anyone", label: "🌍 Anyone" },
+  { key: "woman", label: "Women only" },
+  { key: "man", label: "Men only" },
 ];
+
+const FREE_DAY_CHOICES = ["🌳 Outside", "🎵 Music", "🍽️ Food together", "🎬 Relaxing", "🚶 Walking"];
+
+const LOOKING_FOR_CHOICES = [
+  "🏃 Activity buddy",
+  "📖 Study or work partner",
+  "🏙️ New in town",
+  "🎉 Weekend plans",
+  "💬 Someone to talk to",
+];
+
+// Old profiles say "View heart match"; new ones may say "Friend match found".
+const MATCH_STATUS_VALUES = ["View heart match", "Friend match found", "View friend match"];
 
 // The Back control, fixed above the scrolling background instead of scrolling
 // away with the page — same treatment as the Connect screen's fixed CTA bar.
-// UNCHANGED from the previous version of this file.
 function MeetFixedBar({ onBack }) {
   return (
     <>
@@ -195,9 +211,10 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
   const [location, setLocation] = useState("");
   const [ownGender, setOwnGender] = useState("");
   const [preference, setPreference] = useState("");
-  const [heart, setHeart] = useState("");
+  const [interests, setInterests] = useState([]);
+  const [vibe, setVibe] = useState("");
   const [freeDay, setFreeDay] = useState("");
-  const [matters, setMatters] = useState("");
+  const [lookingFor, setLookingFor] = useState("");
   const [profileName, setProfileName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
@@ -242,7 +259,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         if (live) setItems(data.items || []);
       })
       .catch((err) => {
-        if (live) setBrowseError(err.message || "Could not load Gwamo Connections.");
+        if (live) setBrowseError(err.message || "Could not load Gwamo Friends.");
       })
       .finally(() => {
         if (live) setBrowseBusy(false);
@@ -251,6 +268,14 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
       live = false;
     };
   }, [screen]);
+
+  function toggleInterest(key) {
+    setInterests((current) => {
+      if (current.includes(key)) return current.filter((item) => item !== key);
+      if (current.length >= MAX_INTERESTS) return current;
+      return [...current, key];
+    });
+  }
 
   function isMuted(id) {
     return mutedMapRef.current[id] !== false; // muted by default — browsers require this for autoplay
@@ -321,9 +346,8 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
     if (id) playMedia(id);
   }
 
-  // Sound on/off badge — the "mic sign" toggle. Every card starts muted (that's
-  // what lets it autoplay at all); tapping the badge lets that one viewer turn
-  // that one card's sound on.
+  // Sound on/off badge. Every card starts muted (that's what lets it autoplay
+  // at all); tapping the badge lets that one viewer turn that one card's sound on.
   function toggleMute(id) {
     const nextMuted = !isMuted(id);
     mutedMapRef.current[id] = nextMuted;
@@ -434,8 +458,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
 
   // Create/update/tear down YouTube IFrame players as the video on each card
   // changes. The first couple of YouTube cards mount immediately for perceived
-  // speed; the rest mount lazily as they scroll near the viewport so a long
-  // feed doesn't pay for every YouTube embed up front.
+  // speed; the rest mount lazily as they scroll near the viewport.
   useEffect(() => {
     if (screen !== "browse") return undefined;
     let cancelled = false;
@@ -579,7 +602,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
-  // Leaving Meet Someone entirely: stop everything and free the YouTube players.
+  // Leaving Make Friends entirely: stop everything and free the YouTube players.
   useEffect(() => {
     return () => {
       Object.values(ytPlayers.current).forEach((player) => {
@@ -610,30 +633,29 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
           name: profileName.trim(),
           whatsapp: whatsapp.trim(),
           location: location.trim(),
-          // Both fields below are required for gender-aware matching.
-          // MATCHING NOTE (backend): two profiles must never be matched if they
-          // report the same gender — unconditionally, with no opt-out, since
-          // neither step here has an "other"/opt-out choice. (The Worker patch
-          // sent earlier has a now fully unreachable "Open to Neither" bypass
-          // around this check — harmless dead code, safe to delete whenever
-          // convenient.)
+          // Own gender + who to meet. preference is "anyone" | "woman" | "man".
           gender: ownGender,
           preference,
-          heart,
+          // The vibe color goes in `heart` so the Worker's same-value matching
+          // keeps working. It stays private, like the heart did.
+          heart: vibe,
+          vibe,
+          // Interests are public (shown on the card) and also create a match
+          // when two people share at least one.
+          interests,
           photo_url: photo.url,
           photo_key: photo.key,
-          // Note: a video is intentionally NOT part of normal profile creation.
-          // Adding/changing a card's video always goes through "Add video" /
-          // "Change video" in Browse, which requires the Connect video PIN —
-          // letting this form set a video directly would bypass that.
-          answers: { perfect_free_day: freeDay, matters_most: matters },
+          // A video is intentionally NOT part of profile creation. Adding a
+          // card's video always goes through Browse and needs the Connect
+          // video PIN — letting this form set a video would bypass that.
+          answers: { perfect_free_day: freeDay, looking_for: lookingFor, interests },
         }),
       });
       rememberLoveOwner(data.profile?.id, data.owner_token);
       setCreatedProfile(data.profile || null);
-      setStep(8);
+      setStep(9);
     } catch (err) {
-      setError(err.message || "Could not create your connection card.");
+      setError(err.message || "Could not create your friend card.");
     } finally {
       setBusy(false);
     }
@@ -645,8 +667,8 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         <MeetFixedBar onBack={() => setScreen("play")} />
         <div className="meet-browse-heading">
           <div>
-            <div className="meet-kicker">❤️ GWAMO CONNECTIONS</div>
-            <h1>Browse Meet Someone</h1>
+            <div className="meet-kicker">👋 GWAMO FRIENDS</div>
+            <h1>Browse Make Friends</h1>
           </div>
           <button
             type="button"
@@ -659,14 +681,14 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
             ＋ Add yours
           </button>
         </div>
-        <p className="meet-lead">Public cards show the person, area, perfect free day and heart-match status.</p>
+        <p className="meet-lead">Public cards show the person, area, interests, perfect free day and friend-match status.</p>
 
         {browseError && <div className="meet-error">{browseError}</div>}
-        {browseBusy && <div className="meet-browse-empty">Loading connections...</div>}
+        {browseBusy && <div className="meet-browse-empty">Loading friends...</div>}
         {!browseBusy && !browseError && !items.length && (
           <div className="meet-browse-empty">
-            <strong>No connection cards yet.</strong>
-            <span>Be the first person to join Meet Someone.</span>
+            <strong>No friend cards yet.</strong>
+            <span>Be the first person to join Make Friends.</span>
           </div>
         )}
 
@@ -676,7 +698,9 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
               profile.public_data?.perfect_free_day ||
               profile.public_data?.answers?.perfect_free_day ||
               "Not added";
-            const hasMatch = profile.match_status === "View heart match";
+            const cardInterests =
+              profile.public_data?.interests || profile.public_data?.answers?.interests || profile.interests || [];
+            const hasMatch = MATCH_STATUS_VALUES.includes(profile.match_status);
             const editingVideo = editingVideoId === profile.id;
             const hasVideo = Boolean(profile.video_url);
             const ytId = getYouTubeId(profile.video_url);
@@ -756,6 +780,15 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
                       <h2>{profile.creator_name || "Gwamo member"}</h2>
                       <span className="love-card-area">📍 {profile.location || "Location not added"}</span>
                       <span className="love-card-freeday">{freeDay2}</span>
+                      {Array.isArray(cardInterests) && cardInterests.length > 0 && (
+                        <div className="love-card-interests">
+                          {cardInterests.map((key) => (
+                            <span className="love-card-interest" key={key}>
+                              {interestLabel(key)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <div className="love-card-status-row">
                         {hasMatch ? (
                           <a
@@ -764,10 +797,10 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Ask admin your match info
+                            Friend match found · Ask admin
                           </a>
                         ) : (
-                          <span className="heart-match-status">Waiting</span>
+                          <span className="heart-match-status">Looking</span>
                         )}
                       </div>
                     </div>
@@ -865,18 +898,18 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
 
       {step === 0 && (
         <>
-          <div className="meet-kicker">❤️ MEET SOMEONE</div>
-          <h1>Maybe somebody is looking for someone like you.</h1>
+          <div className="meet-kicker">👋 MAKE FRIENDS</div>
+          <h1>Your next friend might be nearby.</h1>
           <label className="meet-adult-check">
             <input type="checkbox" checked={adult} onChange={(event) => setAdult(event.target.checked)} />
             <span>I am 18 or older.</span>
           </label>
           <button className="meet-primary" disabled={!adult} onClick={() => setStep(1)}>
-            Play the Match Game
+            Find a Friend
           </button>
-          <p className="meet-fine">Your heart choice is the only thing Gwamo uses to find a heart match.</p>
+          <p className="meet-fine">Gwamo finds you a friend match when you share a vibe color or an interest.</p>
           <button type="button" className="meet-browse-link" onClick={() => setScreen("browse")}>
-            Browse Meet Someone →
+            Browse Make Friends →
           </button>
         </>
       )}
@@ -900,8 +933,8 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
       {step === 2 && (
         <>
           <div className="meet-step">Step 2</div>
-          <h2>About you — what's your gender?</h2>
-          <p className="meet-lead">Gwamo uses this only to keep your matches accurate.</p>
+          <h2>About you</h2>
+          <p className="meet-lead">Gwamo uses this only so everyone's "who to meet" choice is respected.</p>
           <div className="meet-option-stack">
             {GENDER_CHOICES.map((choice) => (
               <button
@@ -923,7 +956,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
       {step === 3 && (
         <>
           <div className="meet-step">Step 3</div>
-          <h2>❤️ Who would you like to meet?</h2>
+          <h2>👋 Who would you like to meet?</h2>
           <div className="meet-option-stack">
             {PREFERENCE_CHOICES.map((choice) => (
               <button
@@ -945,32 +978,64 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
       {step === 4 && (
         <>
           <div className="meet-step">Step 4</div>
-          <h2>Choose the heart that feels like you today.</h2>
-          <p className="meet-lead">This heart alone decides your heart match.</p>
-          <div className="meet-heart-row">
-            {HEARTS.map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={`meet-heart-button${heart === item ? " is-active" : ""}`}
-                onClick={() => setHeart(item)}
-              >
-                {item}
-              </button>
-            ))}
+          <h2>What are you into?</h2>
+          <p className="meet-pick-count">
+            Pick up to {MAX_INTERESTS}. {interests.length}/{MAX_INTERESTS} chosen.
+          </p>
+          <div className="meet-interest-grid">
+            {INTERESTS.map((item) => {
+              const active = interests.includes(item.key);
+              const full = !active && interests.length >= MAX_INTERESTS;
+              return (
+                <button
+                  type="button"
+                  key={item.key}
+                  className={`meet-line-option${active ? " is-active" : ""}`}
+                  onClick={() => toggleInterest(item.key)}
+                  disabled={full}
+                  aria-pressed={active}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
-          <button className="meet-primary" disabled={!heart} onClick={() => setStep(5)}>
-            Continue
+          <button className="meet-primary" disabled={!interests.length} onClick={() => setStep(5)}>
+            Next
           </button>
         </>
       )}
 
       {step === 5 && (
         <>
+          <div className="meet-step">Step 5</div>
+          <h2>✨ Your vibe today</h2>
+          <p className="meet-lead">Pick the color that matches your mood. Same color as someone else? That's a friend match.</p>
+          <div className="meet-vibe-row">
+            {VIBES.map((item) => (
+              <button
+                type="button"
+                key={item}
+                className={`meet-vibe-button${vibe === item ? " is-active" : ""}`}
+                onClick={() => setVibe(item)}
+                aria-pressed={vibe === item}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button className="meet-primary" disabled={!vibe} onClick={() => setStep(6)}>
+            Continue
+          </button>
+        </>
+      )}
+
+      {step === 6 && (
+        <>
           <div className="meet-step">Quick question 1 of 2</div>
           <h2>Your perfect free day?</h2>
           <div className="meet-option-stack">
-            {["🌳 Outside", "🎵 Music", "🍽️ Food together", "🎬 Relaxing", "🚶 Walking"].map((item) => (
+            {FREE_DAY_CHOICES.map((item) => (
               <button
                 type="button"
                 key={item}
@@ -981,29 +1046,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
               </button>
             ))}
           </div>
-          <button className="meet-primary" disabled={!freeDay} onClick={() => setStep(6)}>
-            Next
-          </button>
-        </>
-      )}
-
-      {step === 6 && (
-        <>
-          <div className="meet-step">Quick question 2 of 2</div>
-          <h2>What matters most to you?</h2>
-          <div className="meet-option-stack">
-            {["❤️ Love", "🤝 Trust", "😂 Fun", "💬 Good conversation", "🏠 Building a future"].map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={`meet-line-option${matters === item ? " is-active" : ""}`}
-                onClick={() => setMatters(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          <button className="meet-primary" disabled={!matters} onClick={() => setStep(7)}>
+          <button className="meet-primary" disabled={!freeDay} onClick={() => setStep(7)}>
             Next
           </button>
         </>
@@ -1011,9 +1054,34 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
 
       {step === 7 && (
         <>
+          <div className="meet-step">Quick question 2 of 2</div>
+          <h2>What kind of friend are you looking for?</h2>
+          <div className="meet-option-stack">
+            {LOOKING_FOR_CHOICES.map((item) => (
+              <button
+                type="button"
+                key={item}
+                className={`meet-line-option${lookingFor === item ? " is-active" : ""}`}
+                onClick={() => setLookingFor(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button className="meet-primary" disabled={!lookingFor} onClick={() => setStep(8)}>
+            Next
+          </button>
+        </>
+      )}
+
+      {step === 8 && (
+        <>
           <div className="meet-step">Your profile</div>
-          <h2>Create your connection card.</h2>
-          <p className="meet-lead">Your WhatsApp number and heart stay private. They are not shown on the public card.</p>
+          <h2>Create your friend card.</h2>
+          <p className="meet-lead">
+            Your WhatsApp number and vibe color stay private. Your name, area, interests and free day are shown on the
+            public card.
+          </p>
           <input
             className="meet-input"
             value={profileName}
@@ -1038,19 +1106,26 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
             disabled={busy || !profileName.trim() || !whatsapp.trim() || !photoFile}
             onClick={finishProfile}
           >
-            {busy ? "Creating..." : "Create My Connection Card"}
+            {busy ? "Creating..." : "Create My Friend Card"}
           </button>
         </>
       )}
 
-      {step === 8 && (
+      {step === 9 && (
         <div className="meet-result-card">
-          <div className="meet-result-symbol">❤️</div>
+          <div className="meet-result-symbol">👋</div>
           <div className="meet-kicker">YOUR CARD IS LIVE</div>
-          <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Connections.</h2>
-          <p>Your heart stays hidden. Your public status changes from Waiting to View heart match when another active profile has the same heart.</p>
+          <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Friends.</h2>
+          <p>
+            Your vibe color stays hidden. Your status changes from Looking to Friend match found when someone shares
+            your vibe color or one of your interests.
+          </p>
+          <div className="meet-safety">
+            🛡️ Safety first: meet new friends in a public place the first time, and tell someone you trust where
+            you're going.
+          </div>
           <button className="meet-primary" onClick={() => setScreen("browse")}>
-            Browse Gwamo Connections
+            Browse Gwamo Friends
           </button>
         </div>
       )}
@@ -1089,15 +1164,19 @@ function MeetSomeoneStyles() {
       .meet-input { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; border: 1px solid rgba(145,188,235,.20); border-radius: 16px; outline: none; color: #fff; background: rgba(3,12,27,.80); font-size: 15px; }
       .meet-photo-field { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; display: flex; align-items: center; border: 1px dashed rgba(255,119,160,.42); border-radius: 16px; color: rgba(255,255,255,.82); background: rgba(30,8,21,.58); font-size: 14px; font-weight: 750; cursor: pointer; position: relative; }
       .meet-photo-field input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-      .meet-heart-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; margin: 16px 0 6px; }
-      .meet-heart-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); cursor: pointer; }
-      .meet-heart-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(255,90,145,.12); }
+      .meet-vibe-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; margin: 16px 0 6px; }
+      .meet-vibe-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); cursor: pointer; }
+      .meet-vibe-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(120,240,255,.14); }
+      .meet-pick-count { margin: -8px 0 14px; color: rgba(255,255,255,.5); font-size: 12px; }
+      .meet-interest-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin-bottom: 6px; }
+      .meet-interest-grid .meet-line-option:disabled { opacity: .38; cursor: not-allowed; }
       .meet-option-stack { display: flex; flex-direction: column; gap: 9px; margin-bottom: 6px; }
       .meet-line-option { width: 100%; min-height: 52px; padding: 0 16px; border: 1px solid rgba(153,190,229,.14); border-radius: 16px; color: rgba(255,255,255,.90); background: rgba(8,22,44,.72); text-align: left; font-weight: 750; font-size: 14px; cursor: pointer; }
       .meet-line-option.is-active { border-color: rgba(255,95,147,.7); background: rgba(70,17,39,.68); }
       .meet-error { margin: 0 0 14px; padding: 11px 13px; border: 1px solid rgba(255,95,115,.35); border-radius: 13px; color: #ffd6dd; background: rgba(93,16,34,.46); font-size: 12px; }
       .meet-result-card { margin-top: 12px; padding: 22px; border: 1px solid rgba(255,106,151,.22); border-radius: 24px; background: radial-gradient(circle at top right, rgba(255,78,137,.18), transparent 34%), linear-gradient(145deg, rgba(43,13,31,.86), rgba(9,9,23,.94)); }
       .meet-result-symbol { margin-bottom: 10px; font-size: 48px; }
+      .meet-safety { margin: 14px 0 8px; padding: 11px 13px; border: 1px solid rgba(120,240,255,.22); border-radius: 13px; background: rgba(20,60,80,.25); color: rgba(220,245,255,.86); font-size: 12px; line-height: 1.45; }
       .meet-browse-empty { min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; border: 1px dashed rgba(255,255,255,.12); border-radius: 22px; color: rgba(255,255,255,.52); background: rgba(255,255,255,.025); text-align: center; font-size: 12px; }
       .meet-browse-empty strong { color: #fff; font-size: 15px; }
 
@@ -1105,7 +1184,7 @@ function MeetSomeoneStyles() {
       .meet-browse-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
       .meet-add-yours { flex: 0 0 auto; min-height: 38px; padding: 0 14px; border: 1px solid rgba(86,183,255,.35); border-radius: 999px; color: #bce4ff; background: rgba(86,183,255,.10); font-size: 11.5px; font-weight: 900; cursor: pointer; white-space: nowrap; }
 
-      /* --- Meet Someone connection card: two trading panels (video / profile photo) --- */
+      /* --- Friend card: two trading panels (video / profile photo) --- */
       .love-card-list { display: grid; gap: 18px; margin-top: 18px; }
       .love-connection-card { overflow: hidden; border: 1px solid rgba(255,109,153,.22); border-radius: 26px; background: linear-gradient(160deg, rgba(35,12,28,.96), rgba(5,12,27,.98)); box-shadow: 0 20px 46px rgba(0,0,0,.32); }
       .love-card-stage { position: relative; width: 100%; aspect-ratio: 3/4; min-height: 360px; max-height: 640px; overflow: hidden; background: #05070d; }
@@ -1117,7 +1196,6 @@ function MeetSomeoneStyles() {
       .love-change-video { position: absolute; right: 10px; bottom: 10px; min-height: 36px; padding: 0 12px; border: 1px solid rgba(255,255,255,.20); border-radius: 999px; color: #fff; background: rgba(3,7,15,.78); backdrop-filter: blur(10px); font-size: 10px; font-weight: 900; z-index: 3; cursor: pointer; }
       .love-yt-wrap { position: absolute; inset: 0; }
       .love-yt-wrap [id^="love-yt-"] { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; border: 0; }
-      .love-media-error { position: absolute; left: 10px; right: 10px; top: 10px; z-index: 4; padding: 8px 12px; border-radius: 12px; color: #ffd6dd; background: rgba(93,16,34,.82); backdrop-filter: blur(6px); font-size: 11px; font-weight: 750; }
       .love-media-playbtn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4; display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; color: #fff; background: rgba(3,7,15,.72); backdrop-filter: blur(8px); font-size: 12px; font-weight: 900; cursor: pointer; }
       /* Sound is muted for autoplay (browsers require it) — a centered neon badge makes that obvious and lets a tap unmute. */
       .love-mute-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(120,240,255,.55); background: rgba(4,10,20,.40); backdrop-filter: blur(3px); font-size: 23px; line-height: 1; color: #fff; cursor: pointer; box-shadow: 0 0 8px rgba(95,242,255,.85), 0 0 20px rgba(95,242,255,.55), 0 0 42px rgba(95,242,255,.30); animation: loveNeonMutePulse 2.2s ease-in-out infinite; }
@@ -1128,15 +1206,17 @@ function MeetSomeoneStyles() {
       .love-card-photo-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 16px 15px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
       .love-card-photo-info h2 { margin: 0 0 2px !important; color: #fff; font-size: 21px !important; text-shadow: 0 0 4px #fff, 0 0 11px #ff6fb0, 0 0 22px #ff2d95, 0 0 40px rgba(255,45,149,.65); animation: loveNeonText 2.6s ease-in-out infinite; }
       .love-card-area, .love-card-freeday { color: #eaf7ff; font-size: 12.5px; text-shadow: 0 0 3px #fff, 0 0 8px #7fd7ff, 0 0 16px rgba(71,178,255,.85), 0 0 30px rgba(71,178,255,.4); animation: loveNeonText 2.6s ease-in-out infinite; }
+      .love-card-interests { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+      .love-card-interest { padding: 3px 9px; border-radius: 999px; color: #fff; background: rgba(255,255,255,.14); backdrop-filter: blur(6px); font-size: 10.5px; font-weight: 800; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
       .love-card-status-row { margin-top: 7px; }
-     @keyframes loveVideoTrade {
-  0%, 45%   { height: 100%; }
-  55%, 100% { height: 0%; }
-}
-@keyframes loveProfileTrade {
-  0%, 45%   { height: 0%; }
-  55%, 100% { height: 100%; }
-} 
+      @keyframes loveVideoTrade {
+        0%, 45%   { height: 100%; }
+        55%, 100% { height: 0%; }
+      }
+      @keyframes loveProfileTrade {
+        0%, 45%   { height: 0%; }
+        55%, 100% { height: 100%; }
+      }
       @keyframes loveNeonText { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
       /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
       .love-card-stage.is-editing .love-card-video-section { animation: none; height: 55%; }
@@ -1145,27 +1225,7 @@ function MeetSomeoneStyles() {
         .love-card-video-section, .love-card-profile-section { animation: none !important; transition: none !important; }
         .love-card-video-section { height: 55%; }
         .love-card-profile-section { height: 45%; }
-         .love-mute-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 4;
-  width: 54px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid rgba(120,240,255,.55);
-  background: rgba(4,10,20,.40);
-  backdrop-filter: blur(3px);
-  font-size: 23px;
-  line-height: 1;
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 0 8px rgba(95,242,255,.85), 0 0 20px rgba(95,242,255,.55), 0 0 42px rgba(95,242,255,.30);
-  animation: loveNeonMutePulse 2.2s ease-in-out infinite;
-}
+        .love-mute-badge { top: 12px; right: 12px; left: auto; transform: none; }
         .love-card-photo-info h2, .love-card-area, .love-card-freeday { animation: none; }
       }
       .heart-match-status { width: fit-content; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; color: rgba(255,255,255,.92); background: rgba(255,255,255,.16); backdrop-filter: blur(6px); font-size: 10px; font-weight: 900; text-decoration: none; text-shadow: 0 0 6px rgba(255,255,255,.85); box-shadow: 0 0 10px rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.25); }
