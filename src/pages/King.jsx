@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const API_URL = "https://kitchenbrain.cucina656.workers.dev";
 const TYPES = [
-  ["love", "Meet Someone", "Love profiles and matching"],
+  ["love", "Make Friends", "Friend profiles and matching"],
   ["walk", "Walk Together", "Walks and people interested"],
   ["money", "Make Money Together", "Missions and Mission Rooms"],
   ["voice", "Open Conversation", "Live voice room: remove, block and delete visitors"],
@@ -787,7 +787,7 @@ export default function King() {
       <section className="guide">
         <b>How to manage:</b>
         <span>
-          <strong>Meet Someone:</strong> use Match Desk to pair two
+          <strong>Make Friends:</strong> use Match Desk to pair two
           people and choose what private details each person can see.
         </span>
         <span>
@@ -1427,4 +1427,3 @@ const CSS = `
   .headBtns{flex-direction:column}
 }
 `;
-
