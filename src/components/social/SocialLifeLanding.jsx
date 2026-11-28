@@ -28,6 +28,35 @@ const ADMIN_WHATSAPP = "250788484446";
 // "Your vibe today" — replaces the old hearts. Still sent as `heart` so the
 // Worker's same-value matching works without renaming the field.
 const VIBES = ["🟡", "🟠", "🟢", "🔵", "🟣"];
+const VIBE_COLORS = {
+  "🟡": "#FFD23F",
+  "🟠": "#FF9F43",
+  "🟢": "#45D483",
+  "🔵": "#4DA3FF",
+  "🟣": "#A879FF",
+};
+const AMBER = "#FFB547";
+const TEAL = "#3DD6C6";
+
+// What this device's own card picked, kept locally so Browse can light up
+// the interests a viewer shares with each card. Never sent anywhere.
+const FRIEND_ME_KEY = "gwamo_friends_me";
+function readMe() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FRIEND_ME_KEY) || "{}");
+    return { interests: Array.isArray(raw.interests) ? raw.interests : [], vibe: raw.vibe || "" };
+  } catch {
+    return { interests: [], vibe: "" };
+  }
+}
+function rememberMe(interests, vibe) {
+  try {
+    localStorage.setItem(FRIEND_ME_KEY, JSON.stringify({ interests, vibe }));
+  } catch {}
+}
+
+const REVEAL_MS = 2200;
+const CONFETTI = Array.from({ length: 14 }, (_, i) => i);
 
 const INTERESTS = [
   { key: "sports", label: "⚽ Sports" },
@@ -221,6 +250,10 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
   const [createdProfile, setCreatedProfile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [revealing, setRevealing] = useState(false);
+  const [vibeFlashKey, setVibeFlashKey] = useState(0);
+  const [myInterests, setMyInterests] = useState(() => readMe().interests);
+  const revealTimerRef = useRef(null);
 
   const [items, setItems] = useState([]);
   const [browseBusy, setBrowseBusy] = useState(false);
@@ -617,8 +650,19 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         } catch {}
       });
       activeIdRef.current = "";
+      window.clearTimeout(revealTimerRef.current);
     };
   }, []);
+
+  function pickVibe(item) {
+    setVibe(item);
+    setVibeFlashKey((current) => current + 1);
+  }
+
+  function scrollToCard(id) {
+    const el = stageRefs.current[id];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   async function finishProfile() {
     if (busy) return;
@@ -652,8 +696,18 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         }),
       });
       rememberLoveOwner(data.profile?.id, data.owner_token);
+      rememberMe(interests, vibe);
+      setMyInterests(interests);
       setCreatedProfile(data.profile || null);
+      // Short "Looking for your people..." moment before the result.
+      const skipReveal =
+        typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      setRevealing(!skipReveal);
       setStep(9);
+      if (!skipReveal) {
+        window.clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = window.setTimeout(() => setRevealing(false), REVEAL_MS);
+      }
     } catch (err) {
       setError(err.message || "Could not create your friend card.");
     } finally {
@@ -662,6 +716,16 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
   }
 
   if (screen === "browse") {
+    // "New today" row: profiles created in the last 24h when the Worker sends
+    // created_at; otherwise the first few cards (the feed is newest-first).
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const newToday = items.filter((p) => {
+      const t = p.created_at ? new Date(p.created_at).getTime() : NaN;
+      return Number.isFinite(t) && t >= dayAgo;
+    });
+    const faces = (newToday.length ? newToday : items).slice(0, 10);
+    const facesLabel = newToday.length ? "New today" : "New faces";
+
     return (
       <section className="meet-someone-panel" style={{ colorScheme: "dark" }}>
         <MeetFixedBar onBack={() => setScreen("play")} />
@@ -681,7 +745,28 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
             ＋ Add yours
           </button>
         </div>
-        <p className="meet-lead">Public cards show the person, area, interests, perfect free day and friend-match status.</p>
+        <p className="meet-lead">Matched by vibe color or a shared interest.</p>
+
+        {faces.length > 0 && (
+          <div className="friend-faces">
+            <div className="friend-faces-label">{facesLabel}</div>
+            <div className="friend-faces-row">
+              {faces.map((profile) => (
+                <button
+                  type="button"
+                  key={profile.id}
+                  className="friend-face"
+                  onClick={() => scrollToCard(profile.id)}
+                  aria-label={`Go to ${profile.creator_name || "this person"}'s card`}
+                >
+                  <span className="friend-face-ring" aria-hidden="true" />
+                  <img src={profile.creator_photo_url || "/favicon.ico"} alt="" loading="lazy" decoding="async" />
+                  <span className="friend-face-name">{profile.creator_name || "Member"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {browseError && <div className="meet-error">{browseError}</div>}
         {browseBusy && <div className="meet-browse-empty">Loading friends...</div>}
@@ -693,7 +778,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         )}
 
         <div className="love-card-list">
-          {items.map((profile) => {
+          {items.map((profile, index) => {
             const freeDay2 =
               profile.public_data?.perfect_free_day ||
               profile.public_data?.answers?.perfect_free_day ||
@@ -709,7 +794,11 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
             const muted = isMuted(profile.id);
 
             return (
-              <article className="love-connection-card" key={profile.id}>
+              <article
+                className="love-connection-card"
+                key={profile.id}
+                style={{ animationDelay: `${Math.min(index, 6) * 70}ms` }}
+              >
                 <div
                   className={`love-card-stage${editingVideo ? " is-editing" : ""}`}
                   data-profile-id={profile.id}
@@ -783,7 +872,11 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
                       {Array.isArray(cardInterests) && cardInterests.length > 0 && (
                         <div className="love-card-interests">
                           {cardInterests.map((key) => (
-                            <span className="love-card-interest" key={key}>
+                            <span
+                              className={`love-card-interest${myInterests.includes(key) ? " is-shared" : ""}`}
+                              key={key}
+                              title={myInterests.includes(key) ? "You both like this" : undefined}
+                            >
                               {interestLabel(key)}
                             </span>
                           ))}
@@ -894,6 +987,25 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
   return (
     <section className="meet-someone-panel" style={{ colorScheme: "dark" }}>
       <MeetFixedBar onBack={onBack} />
+      {vibeFlashKey > 0 && step === 5 && (
+        <div
+          key={vibeFlashKey}
+          className="meet-vibe-flash"
+          style={{ background: `radial-gradient(circle at 50% 45%, ${VIBE_COLORS[vibe] || AMBER}55, transparent 62%)` }}
+          aria-hidden="true"
+        />
+      )}
+      {step >= 1 && step <= 8 && (
+        <div className="meet-progress" aria-label={`Step ${step} of 8`}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <span
+              key={i}
+              className={`meet-progress-dot${i < step ? " is-done" : ""}`}
+              style={i < step ? { background: VIBE_COLORS[vibe] || AMBER } : undefined}
+            />
+          ))}
+        </div>
+      )}
       {error && <div className="meet-error">{error}</div>}
 
       {step === 0 && (
@@ -1017,7 +1129,7 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
                 type="button"
                 key={item}
                 className={`meet-vibe-button${vibe === item ? " is-active" : ""}`}
-                onClick={() => setVibe(item)}
+                onClick={() => pickVibe(item)}
                 aria-pressed={vibe === item}
               >
                 {item}
@@ -1111,10 +1223,48 @@ function MeetSomeoneGame({ onBack, initialScreen = "play" }) {
         </>
       )}
 
-      {step === 9 && (
+      {step === 9 && revealing && (
+        <div className="meet-searching" role="status">
+          <div className="meet-searching-orbit" aria-hidden="true">
+            {VIBES.map((item, i) => (
+              <span key={item} className="meet-searching-dot" style={{ background: VIBE_COLORS[item], animationDelay: `${i * 120}ms` }} />
+            ))}
+          </div>
+          <div className="meet-searching-tags" aria-hidden="true">
+            {interests.map((key, i) => (
+              <span key={key} style={{ animationDelay: `${300 + i * 180}ms` }}>
+                {interestLabel(key)}
+              </span>
+            ))}
+          </div>
+          <h2>Looking for your people…</h2>
+        </div>
+      )}
+
+      {step === 9 && !revealing && (
         <div className="meet-result-card">
-          <div className="meet-result-symbol">👋</div>
-          <div className="meet-kicker">YOUR CARD IS LIVE</div>
+          <div className="meet-confetti" aria-hidden="true">
+            {CONFETTI.map((i) => (
+              <span
+                key={i}
+                style={{
+                  background: [VIBE_COLORS[vibe] || AMBER, AMBER, TEAL][i % 3],
+                  left: `${8 + ((i * 47) % 84)}%`,
+                  animationDelay: `${(i % 7) * 60}ms`,
+                  "--drift": `${((i % 5) - 2) * 18}px`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="meet-result-faces" aria-hidden="true">
+            <span style={{ background: VIBE_COLORS[vibe] || AMBER }} />
+            <span style={{ background: TEAL }} />
+          </div>
+          {MATCH_STATUS_VALUES.includes(createdProfile?.match_status) ? (
+            <div className="meet-kicker">✨ FRIEND MATCH FOUND</div>
+          ) : (
+            <div className="meet-kicker">YOUR CARD IS LIVE</div>
+          )}
           <h2>{createdProfile?.creator_name || profileName}, you are now in Gwamo Friends.</h2>
           <p>
             Your vibe color stays hidden. Your status changes from Looking to Friend match found when someone shares
@@ -1139,110 +1289,169 @@ function MeetSomeoneStyles() {
   return (
     <style>{`
       .meet-someone-panel {
+        position: relative;
         width: min(100%, 560px);
         min-height: 100svh;
         margin: 0 auto;
         padding: calc(150px + env(safe-area-inset-top)) 16px calc(42px + env(safe-area-inset-bottom));
-        color: #f7fbff;
-        background: radial-gradient(circle at 50% -12%, rgba(255,86,140,.16), transparent 34%), #020711;
+        color: #f4f6fb;
+        background: radial-gradient(circle at 50% -12%, rgba(255,181,71,.12), transparent 34%), #0a0f1c;
+        overflow-x: hidden;
       }
-      .meet-fixed-bar { position: fixed; left: 50%; top: calc(124px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 20; width: min(100%, 560px); box-sizing: border-box; padding: 8px 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: linear-gradient(180deg, rgba(2,7,17,.92) 70%, transparent); backdrop-filter: blur(10px); }
+      .meet-fixed-bar { position: fixed; left: 50%; top: calc(124px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 20; width: min(100%, 560px); box-sizing: border-box; padding: 8px 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: linear-gradient(180deg, rgba(10,15,28,.94) 70%, transparent); backdrop-filter: blur(10px); }
       .meet-fixed-bar::-webkit-scrollbar { display: none; }
       .meet-fixed-bar-spacer { height: 46px; }
-      .meet-back { padding: 8px 0; border: 0; color: rgba(220,236,250,.68); background: transparent; font-weight: 750; font-size: 14px; white-space: nowrap; cursor: pointer; }
-      .meet-kicker { margin-bottom: 10px; color: #ff86a6; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
+      .meet-back { padding: 8px 0; border: 0; color: rgba(220,230,250,.7); background: transparent; font-weight: 750; font-size: 14px; white-space: nowrap; cursor: pointer; }
+      .meet-kicker { margin-bottom: 10px; color: #3dd6c6; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
       .meet-someone-panel h1 { margin: 0 0 10px; font-size: clamp(28px, 8vw, 40px); line-height: 1.06; letter-spacing: -.03em; color: #fff; }
       .meet-someone-panel h2 { margin: 0 0 16px; font-size: clamp(22px, 6.5vw, 30px); line-height: 1.14; color: #fff; }
-      .meet-lead { margin: 0 0 20px; color: rgba(230,239,249,.70); font-size: 14px; line-height: 1.5; }
-      .meet-fine { margin-top: 14px; color: rgba(255,255,255,.42); font-size: 11px; line-height: 1.45; text-align: center; }
-      .meet-step { margin-bottom: 8px; color: rgba(255,134,166,.75); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
-      .meet-adult-check { display: flex; align-items: center; gap: 10px; margin: 16px 2px 20px; color: rgba(255,255,255,.76); font-size: 13px; }
-      .meet-adult-check input { width: 18px; height: 18px; accent-color: #e83670; }
-      .meet-primary { width: 100%; min-height: 54px; margin-top: 6px; border: 1px solid rgba(255,95,147,.5); border-radius: 16px; color: #fff; background: linear-gradient(135deg, #e83670, #b62358); box-shadow: 0 12px 30px rgba(232,54,112,.22); font-weight: 900; font-size: 15px; cursor: pointer; }
+      .meet-lead { margin: 0 0 20px; color: #9aa6bf; font-size: 14px; line-height: 1.5; }
+      .meet-fine { margin-top: 14px; color: rgba(255,255,255,.5); font-size: 11px; line-height: 1.45; text-align: center; }
+      .meet-step { margin-bottom: 8px; color: #7ff0e3; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+      .meet-adult-check { display: flex; align-items: center; gap: 10px; margin: 16px 2px 20px; color: rgba(255,255,255,.78); font-size: 13px; }
+      .meet-adult-check input { width: 18px; height: 18px; accent-color: #ffb547; }
+      .meet-primary { width: 100%; min-height: 54px; margin-top: 6px; border: 0; border-radius: 16px; color: #1f1400; background: #ffb547; box-shadow: 0 12px 30px rgba(255,181,71,.2); font-weight: 900; font-size: 15px; cursor: pointer; transition: transform .15s ease; }
+      .meet-primary:active:not(:disabled) { transform: scale(.98); }
       .meet-primary:disabled { opacity: .36; cursor: not-allowed; box-shadow: none; }
-      .meet-browse-link { display: block; width: 100%; margin-top: 16px; padding: 10px 0; border: 0; background: transparent; color: #87dcff; font-size: 12px; font-weight: 800; text-align: center; cursor: pointer; }
-      .meet-input { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; border: 1px solid rgba(145,188,235,.20); border-radius: 16px; outline: none; color: #fff; background: rgba(3,12,27,.80); font-size: 15px; }
-      .meet-photo-field { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; display: flex; align-items: center; border: 1px dashed rgba(255,119,160,.42); border-radius: 16px; color: rgba(255,255,255,.82); background: rgba(30,8,21,.58); font-size: 14px; font-weight: 750; cursor: pointer; position: relative; }
+      .meet-browse-link { display: block; width: 100%; margin-top: 16px; padding: 10px 0; border: 0; background: transparent; color: #ffb547; font-size: 12px; font-weight: 800; text-align: center; cursor: pointer; }
+      .meet-input { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; box-sizing: border-box; border: 1px solid #26304a; border-radius: 16px; outline: none; color: #fff; background: #131a2b; font-size: 15px; }
+      .meet-input:focus { border-color: #ffb547; }
+      .meet-photo-field { width: 100%; min-height: 54px; margin: 2px 0 10px; padding: 0 16px; box-sizing: border-box; display: flex; align-items: center; border: 1px dashed rgba(255,181,71,.45); border-radius: 16px; color: rgba(255,255,255,.85); background: rgba(255,181,71,.06); font-size: 14px; font-weight: 750; cursor: pointer; position: relative; }
       .meet-photo-field input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+      /* Progress dots — fill with the chosen vibe color once picked */
+      .meet-progress { display: flex; gap: 6px; margin: 0 0 18px; }
+      .meet-progress-dot { flex: 1; height: 5px; border-radius: 999px; background: #1c2438; transition: background .35s ease; }
+      .meet-progress-dot.is-done { animation: meetDotFill .35s ease both; }
+      @keyframes meetDotFill { from { transform: scaleX(.3); opacity: .4; } to { transform: scaleX(1); opacity: 1; } }
+
+      /* Vibe step */
       .meet-vibe-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; margin: 16px 0 6px; }
-      .meet-vibe-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); font-size: clamp(28px, 9vw, 43px); cursor: pointer; }
-      .meet-vibe-button.is-active { transform: translateY(-4px) scale(1.04); background: rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.32), 0 0 24px rgba(120,240,255,.14); }
-      .meet-pick-count { margin: -8px 0 14px; color: rgba(255,255,255,.5); font-size: 12px; }
+      .meet-vibe-button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid #1c2438; border-radius: 18px; background: #131a2b; font-size: clamp(28px, 9vw, 43px); cursor: pointer; transition: transform .2s ease; }
+      .meet-vibe-button.is-active { transform: translateY(-4px) scale(1.06); background: #1a2338; box-shadow: 0 12px 30px rgba(0,0,0,.32); animation: meetPop .35s cubic-bezier(.3,1.6,.5,1); }
+      .meet-vibe-flash { position: fixed; inset: 0; z-index: 1; pointer-events: none; animation: meetVibeFlash .9s ease-out forwards; }
+      @keyframes meetVibeFlash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+      /* Interests */
+      .meet-pick-count { margin: -8px 0 14px; color: #9aa6bf; font-size: 12px; }
       .meet-interest-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin-bottom: 6px; }
       .meet-interest-grid .meet-line-option:disabled { opacity: .38; cursor: not-allowed; }
+      .meet-interest-grid .meet-line-option.is-active { animation: meetPop .35s cubic-bezier(.3,1.6,.5,1); }
+      @keyframes meetPop { 0% { transform: scale(.92); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
       .meet-option-stack { display: flex; flex-direction: column; gap: 9px; margin-bottom: 6px; }
-      .meet-line-option { width: 100%; min-height: 52px; padding: 0 16px; border: 1px solid rgba(153,190,229,.14); border-radius: 16px; color: rgba(255,255,255,.90); background: rgba(8,22,44,.72); text-align: left; font-weight: 750; font-size: 14px; cursor: pointer; }
-      .meet-line-option.is-active { border-color: rgba(255,95,147,.7); background: rgba(70,17,39,.68); }
+      .meet-line-option { position: relative; z-index: 2; width: 100%; min-height: 52px; padding: 0 16px; border: 1px solid #26304a; border-radius: 16px; color: rgba(255,255,255,.92); background: #131a2b; text-align: left; font-weight: 750; font-size: 14px; cursor: pointer; transition: border-color .2s ease, background .2s ease; }
+      .meet-line-option.is-active { border-color: #ffb547; background: rgba(255,181,71,.12); color: #fff; }
       .meet-error { margin: 0 0 14px; padding: 11px 13px; border: 1px solid rgba(255,95,115,.35); border-radius: 13px; color: #ffd6dd; background: rgba(93,16,34,.46); font-size: 12px; }
-      .meet-result-card { margin-top: 12px; padding: 22px; border: 1px solid rgba(255,106,151,.22); border-radius: 24px; background: radial-gradient(circle at top right, rgba(255,78,137,.18), transparent 34%), linear-gradient(145deg, rgba(43,13,31,.86), rgba(9,9,23,.94)); }
-      .meet-result-symbol { margin-bottom: 10px; font-size: 48px; }
-      .meet-safety { margin: 14px 0 8px; padding: 11px 13px; border: 1px solid rgba(120,240,255,.22); border-radius: 13px; background: rgba(20,60,80,.25); color: rgba(220,245,255,.86); font-size: 12px; line-height: 1.45; }
-      .meet-browse-empty { min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; border: 1px dashed rgba(255,255,255,.12); border-radius: 22px; color: rgba(255,255,255,.52); background: rgba(255,255,255,.025); text-align: center; font-size: 12px; }
+
+      /* "Looking for your people..." */
+      .meet-searching { min-height: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; }
+      .meet-searching h2 { margin: 0 !important; animation: meetFadeUp .5s ease both; }
+      .meet-searching-orbit { display: flex; gap: 10px; }
+      .meet-searching-dot { width: 26px; height: 26px; border-radius: 50%; animation: meetBounce 1s ease-in-out infinite; }
+      @keyframes meetBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+      .meet-searching-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+      .meet-searching-tags span { padding: 7px 12px; border-radius: 999px; background: rgba(61,214,198,.14); color: #7ff0e3; font-size: 13px; font-weight: 800; animation: meetFadeUp .45s ease both; }
+      @keyframes meetFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+      /* Result */
+      .meet-result-card { position: relative; overflow: hidden; margin-top: 12px; padding: 22px; border: 1px solid #26304a; border-radius: 24px; background: #131a2b; animation: meetFadeUp .45s ease both; }
+      .meet-result-faces { display: flex; margin-bottom: 14px; }
+      .meet-result-faces span { width: 52px; height: 52px; border-radius: 50%; border: 3px solid #131a2b; }
+      .meet-result-faces span:first-child { animation: meetMeetLeft .6s cubic-bezier(.3,1.4,.5,1) both; }
+      .meet-result-faces span:last-child { margin-left: -14px; animation: meetMeetRight .6s cubic-bezier(.3,1.4,.5,1) both; }
+      @keyframes meetMeetLeft { from { transform: translateX(-40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      @keyframes meetMeetRight { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .meet-confetti { position: absolute; inset: 0; pointer-events: none; }
+      .meet-confetti span { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; opacity: 0; animation: meetConfetti 1.6s ease-out forwards; }
+      @keyframes meetConfetti { 0% { opacity: 1; transform: translate(0, 0) rotate(0deg); } 100% { opacity: 0; transform: translate(var(--drift, 0px), 320px) rotate(540deg); } }
+      .meet-result-card p { color: #c9d2e4; line-height: 1.5; }
+      .meet-safety { margin: 14px 0 8px; padding: 11px 13px; border: 1px solid rgba(61,214,198,.25); border-radius: 13px; background: rgba(61,214,198,.08); color: #d9f7f3; font-size: 12px; line-height: 1.45; }
+
+      .meet-browse-empty { min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; border: 1px dashed #26304a; border-radius: 22px; color: #9aa6bf; background: #131a2b; text-align: center; font-size: 12px; }
       .meet-browse-empty strong { color: #fff; font-size: 15px; }
 
       /* --- Browse heading row --- */
       .meet-browse-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-      .meet-add-yours { flex: 0 0 auto; min-height: 38px; padding: 0 14px; border: 1px solid rgba(86,183,255,.35); border-radius: 999px; color: #bce4ff; background: rgba(86,183,255,.10); font-size: 11.5px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+      .meet-add-yours { flex: 0 0 auto; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; color: #1f1400; background: #ffb547; font-size: 12px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+
+      /* --- "New today" faces row --- */
+      .friend-faces { margin: -4px 0 6px; }
+      .friend-faces-label { margin-bottom: 8px; color: #7ff0e3; font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+      .friend-faces-row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: none; }
+      .friend-faces-row::-webkit-scrollbar { display: none; }
+      .friend-face { position: relative; flex: 0 0 auto; width: 66px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: #c9d2e4; cursor: pointer; }
+      .friend-face-ring { position: absolute; top: 0; left: 0; width: 66px; height: 66px; border-radius: 50%; background: conic-gradient(#ffb547, #3dd6c6, #ffb547); animation: friendRing 6s linear infinite; }
+      @keyframes friendRing { to { transform: rotate(360deg); } }
+      .friend-face img { position: relative; width: 60px; height: 60px; margin-top: 3px; border-radius: 50%; object-fit: cover; border: 3px solid #0a0f1c; box-sizing: border-box; background: #131a2b; }
+      .friend-face-name { max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }
 
       /* --- Friend card: two trading panels (video / profile photo) --- */
       .love-card-list { display: grid; gap: 18px; margin-top: 18px; }
-      .love-connection-card { overflow: hidden; border: 1px solid rgba(255,109,153,.22); border-radius: 26px; background: linear-gradient(160deg, rgba(35,12,28,.96), rgba(5,12,27,.98)); box-shadow: 0 20px 46px rgba(0,0,0,.32); }
+      .love-connection-card { overflow: hidden; border: 1px solid #26304a; border-radius: 26px; background: #131a2b; box-shadow: 0 20px 46px rgba(0,0,0,.32); animation: friendCardIn .5s ease both; }
+      @keyframes friendCardIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
       .love-card-stage { position: relative; width: 100%; aspect-ratio: 3/4; min-height: 360px; max-height: 640px; overflow: hidden; background: #05070d; }
-      .love-card-video-section { position: absolute; top: 0; left: 0; right: 0; height: 55%; overflow: hidden; z-index: 1; background: #05070d; animation: loveVideoTrade 9s ease-in-out infinite; transition: height .4s ease; }
+      .love-card-video-section { position: absolute; top: 0; left: 0; right: 0; height: 55%; overflow: hidden; z-index: 1; background: #05070d; animation: loveVideoTrade 12s ease-in-out infinite; transition: height .4s ease; }
       .love-card-video-section video { width: 100%; height: 100%; display: block; object-fit: cover; background: #000; }
-      .love-video-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: rgba(255,255,255,.42); background: #070a11; }
+      .love-video-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: rgba(255,255,255,.45); background: #0d1324; }
       .love-video-placeholder span { font-size: 30px; }
       .love-video-placeholder small { font-size: 10px; font-weight: 800; text-align: center; padding: 0 12px; }
       .love-change-video { position: absolute; right: 10px; bottom: 10px; min-height: 36px; padding: 0 12px; border: 1px solid rgba(255,255,255,.20); border-radius: 999px; color: #fff; background: rgba(3,7,15,.78); backdrop-filter: blur(10px); font-size: 10px; font-weight: 900; z-index: 3; cursor: pointer; }
       .love-yt-wrap { position: absolute; inset: 0; }
       .love-yt-wrap [id^="love-yt-"] { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; border: 0; }
       .love-media-playbtn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4; display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; color: #fff; background: rgba(3,7,15,.72); backdrop-filter: blur(8px); font-size: 12px; font-weight: 900; cursor: pointer; }
-      /* Sound is muted for autoplay (browsers require it) — a centered neon badge makes that obvious and lets a tap unmute. */
-      .love-mute-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(120,240,255,.55); background: rgba(4,10,20,.40); backdrop-filter: blur(3px); font-size: 23px; line-height: 1; color: #fff; cursor: pointer; box-shadow: 0 0 8px rgba(95,242,255,.85), 0 0 20px rgba(95,242,255,.55), 0 0 42px rgba(95,242,255,.30); animation: loveNeonMutePulse 2.2s ease-in-out infinite; }
-      @keyframes loveNeonMutePulse { 0%,100% { box-shadow: 0 0 8px rgba(95,242,255,.85), 0 0 20px rgba(95,242,255,.55), 0 0 42px rgba(95,242,255,.30); } 50% { box-shadow: 0 0 14px rgba(95,242,255,1), 0 0 32px rgba(95,242,255,.85), 0 0 60px rgba(95,242,255,.5); } }
-      .love-card-profile-section { position: absolute; left: 0; right: 0; bottom: 0; height: 45%; overflow: hidden; z-index: 2; animation: loveProfileTrade 9s ease-in-out infinite; transition: height .4s ease; }
+      .love-mute-badge { position: absolute; top: 12px; right: 12px; z-index: 4; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(61,214,198,.55); background: rgba(4,10,20,.55); backdrop-filter: blur(3px); font-size: 20px; line-height: 1; color: #fff; cursor: pointer; box-shadow: 0 0 14px rgba(61,214,198,.35); }
+      .love-card-profile-section { position: absolute; left: 0; right: 0; bottom: 0; height: 45%; overflow: hidden; z-index: 2; animation: loveProfileTrade 12s ease-in-out infinite; transition: height .4s ease; }
       .love-card-profile-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-      .love-card-photo-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(4,3,9,.94) 0%, rgba(4,3,9,.62) 34%, rgba(4,3,9,.08) 64%, rgba(4,3,9,0) 80%); pointer-events: none; }
+      .love-card-photo-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(6,9,18,.95) 0%, rgba(6,9,18,.6) 34%, rgba(6,9,18,.08) 64%, rgba(6,9,18,0) 80%); pointer-events: none; }
       .love-card-photo-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 16px 15px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
-      .love-card-photo-info h2 { margin: 0 0 2px !important; color: #fff; font-size: 21px !important; text-shadow: 0 0 4px #fff, 0 0 11px #ff6fb0, 0 0 22px #ff2d95, 0 0 40px rgba(255,45,149,.65); animation: loveNeonText 2.6s ease-in-out infinite; }
-      .love-card-area, .love-card-freeday { color: #eaf7ff; font-size: 12.5px; text-shadow: 0 0 3px #fff, 0 0 8px #7fd7ff, 0 0 16px rgba(71,178,255,.85), 0 0 30px rgba(71,178,255,.4); animation: loveNeonText 2.6s ease-in-out infinite; }
+      .love-card-photo-info h2 { margin: 0 0 2px !important; color: #fff; font-size: 22px !important; text-shadow: 0 2px 12px rgba(0,0,0,.6), 0 0 18px rgba(255,181,71,.35); }
+      .love-card-area, .love-card-freeday { color: #dfe6f3; font-size: 12.5px; text-shadow: 0 1px 6px rgba(0,0,0,.7); }
       .love-card-interests { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
-      .love-card-interest { padding: 3px 9px; border-radius: 999px; color: #fff; background: rgba(255,255,255,.14); backdrop-filter: blur(6px); font-size: 10.5px; font-weight: 800; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+      .love-card-interest { padding: 4px 10px; border-radius: 999px; color: #ffe2b0; background: rgba(255,181,71,.18); backdrop-filter: blur(6px); font-size: 11px; font-weight: 800; box-shadow: inset 0 0 0 1px rgba(255,181,71,.3); }
+      .love-card-interest.is-shared { color: #04211f; background: #3dd6c6; box-shadow: none; animation: friendSharedGlow 1.2s ease-in-out 2; }
+      @keyframes friendSharedGlow { 0%,100% { box-shadow: 0 0 0 rgba(61,214,198,0); } 50% { box-shadow: 0 0 18px rgba(61,214,198,.9); } }
       .love-card-status-row { margin-top: 7px; }
+      /* Smooth both ways: video, fade to photo, hold, fade back to video */
       @keyframes loveVideoTrade {
-        0%, 45%   { height: 100%; }
-        55%, 100% { height: 0%; }
+        0%, 40%   { height: 100%; }
+        50%, 90%  { height: 0%; }
+        100%      { height: 100%; }
       }
       @keyframes loveProfileTrade {
-        0%, 45%   { height: 0%; }
-        55%, 100% { height: 100%; }
+        0%, 40%   { height: 0%; }
+        50%, 90%  { height: 100%; }
+        100%      { height: 0%; }
       }
-      @keyframes loveNeonText { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.22); } }
       /* Pause the takeover while any viewer is editing this card's video (upload/link/PIN) */
       .love-card-stage.is-editing .love-card-video-section { animation: none; height: 55%; }
       .love-card-stage.is-editing .love-card-profile-section { animation: none; height: 45%; }
-      @media (prefers-reduced-motion: reduce) {
-        .love-card-video-section, .love-card-profile-section { animation: none !important; transition: none !important; }
-        .love-card-video-section { height: 55%; }
-        .love-card-profile-section { height: 45%; }
-        .love-mute-badge { top: 12px; right: 12px; left: auto; transform: none; }
-        .love-card-photo-info h2, .love-card-area, .love-card-freeday { animation: none; }
-      }
-      .heart-match-status { width: fit-content; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; color: rgba(255,255,255,.92); background: rgba(255,255,255,.16); backdrop-filter: blur(6px); font-size: 10px; font-weight: 900; text-decoration: none; text-shadow: 0 0 6px rgba(255,255,255,.85); box-shadow: 0 0 10px rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.25); }
-      .heart-match-status.found { color: #fff; background: linear-gradient(135deg,#ee3e79,#b9285c); text-shadow: 0 0 8px #fff, 0 0 16px rgba(255,255,255,.7); box-shadow: 0 0 18px rgba(238,62,121,.65), 0 0 34px rgba(238,62,121,.35); }
-      .love-video-editor { margin: 0 14px 14px; padding: 14px; border: 1px solid rgba(255,108,153,.22); border-radius: 18px; background: rgba(20,8,19,.78); }
+      .heart-match-status { width: fit-content; display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; color: #fff; background: rgba(255,255,255,.16); backdrop-filter: blur(6px); font-size: 11px; font-weight: 900; text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+      .heart-match-status.found { color: #04211f; background: #3dd6c6; box-shadow: 0 0 18px rgba(61,214,198,.45); }
+      .love-video-editor { margin: 0 14px 14px; padding: 14px; border: 1px solid #26304a; border-radius: 18px; background: #0d1324; }
       .love-video-editor-title { display: flex; flex-direction: column; gap: 3px; margin-bottom: 11px; }
       .love-video-editor-title strong { font-size: 13px; }
-      .love-video-editor-title small { color: rgba(255,255,255,.48); font-size: 10px; }
-      .love-video-file { min-height: 48px; display: flex; align-items: center; padding: 0 13px; border: 1px dashed rgba(255,118,160,.42); border-radius: 14px; color: #ffe4ec; background: rgba(70,17,39,.38); font-size: 11px; font-weight: 850; cursor: pointer; position: relative; margin-bottom: 8px; }
+      .love-video-editor-title small { color: #9aa6bf; font-size: 10px; }
+      .love-video-file { min-height: 48px; display: flex; align-items: center; padding: 0 13px; border: 1px dashed rgba(255,181,71,.45); border-radius: 14px; color: #ffe2b0; background: rgba(255,181,71,.06); font-size: 11px; font-weight: 850; cursor: pointer; position: relative; margin-bottom: 8px; }
       .love-video-file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-      .love-video-or { margin: 8px 0; color: rgba(255,255,255,.30); font-size: 9px; font-weight: 900; text-align: center; }
+      .love-video-or { margin: 8px 0; color: rgba(255,255,255,.35); font-size: 9px; font-weight: 900; text-align: center; }
       .love-save-video { min-height: 48px; margin-top: 4px; }
       .love-ask-pin { min-height: 44px; margin-top: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(80,215,126,.35); border-radius: 14px; color: #bff5cf; background: rgba(24,92,50,.32); font-size: 11px; font-weight: 900; text-decoration: none; }
       .love-video-error { margin-top: 3px; margin-bottom: 8px; }
       .love-upload-progress { position: relative; height: 22px; margin-top: 6px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); }
-      .love-upload-progress-bar { height: 100%; border-radius: 999px; background: linear-gradient(135deg,#087cff,#e83670); transition: width .2s ease; }
+      .love-upload-progress-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#3dd6c6,#ffb547); transition: width .2s ease; }
       .love-upload-progress-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .love-card-video-section, .love-card-profile-section { animation: none !important; transition: none !important; }
+        .love-card-video-section { height: 55%; }
+        .love-card-profile-section { height: 45%; }
+        .love-connection-card, .friend-face-ring, .love-card-interest.is-shared,
+        .meet-vibe-flash, .meet-progress-dot.is-done, .meet-vibe-button.is-active,
+        .meet-interest-grid .meet-line-option.is-active, .meet-result-card,
+        .meet-result-faces span, .meet-searching h2, .meet-searching-dot, .meet-searching-tags span { animation: none !important; }
+        .meet-confetti { display: none; }
+      }
 
       @media (max-width: 390px) {
         .meet-someone-panel { padding-left: 12px; padding-right: 12px; }
